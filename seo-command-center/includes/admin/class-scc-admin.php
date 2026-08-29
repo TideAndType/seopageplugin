@@ -52,7 +52,7 @@ class SCC_Admin {
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
 			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' ),
-			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_placeholder' ),
@@ -318,6 +318,24 @@ class SCC_Admin {
 			array(
 				'cannibalization' => $detector->detect(),
 				'has_analysis'    => (bool) SCC_Analyzer::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Internal Links page.
+	 */
+	public function render_internal_links() {
+		$graph = new SCC_Link_Graph();
+		$data  = $graph->build( 500 );
+		$this->view(
+			'internal-links',
+			array(
+				'totals'          => $data['totals'],
+				'orphans'         => array_slice( $data['orphans'], 0, 50 ),
+				'under_linked'    => array_slice( $data['under_linked'], 0, 50 ),
+				'over_linked'     => array_slice( $data['over_linked'], 0, 50 ),
+				'recommendations' => SCC_Link_Recommender::list_recommendations( 'recommended', 200 ),
 			)
 		);
 	}

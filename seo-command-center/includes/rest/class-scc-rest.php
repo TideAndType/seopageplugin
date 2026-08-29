@@ -282,6 +282,40 @@ class SCC_REST {
 				'permission_callback' => $perm,
 			)
 		);
+
+		// ---- Phase 5: internal links ----------------------------------
+		register_rest_route(
+			self::NS,
+			'/internal-links',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_internal_links' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/internal-links/recommend',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'recommend_links' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/internal-links/apply',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'apply_link' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'id' => array( 'sanitize_callback' => 'absint', 'required' => true ),
+				),
+			)
+		);
 	}
 
 	/**
@@ -667,6 +701,56 @@ class SCC_REST {
 	public function delete_mapping( WP_REST_Request $request ) {
 		SCC_Template_Mapping::delete( (int) $request->get_param( 'id' ) );
 		return $this->ok( array( 'mappings' => SCC_Template_Mapping::all() ) );
+	}
+
+	/**
+	 * GET /internal-links — graph report + pending recommendations.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_internal_links() {
+		$graph = new SCC_Link_Graph();
+		$data  = $graph->build( 500 );
+		return $this->ok(
+			array(
+				'totals'          => $data['totals'],
+				'orphans'         => array_slice( $data['orphans'], 0, 50 ),
+				'under_linked'    => array_slice( $data['under_linked'], 0, 50 ),
+				'over_linked'     => array_slice( $data['over_linked'], 0, 50 ),
+				'recommendations' => SCC_Link_Recommender::list_recommendations( 'recommended', 200 ),
+			)
+		);
+	}
+
+	/**
+	 * POST /internal-links/recommend — regenerate recommendations.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function recommend_links() {
+		$recommender = new SCC_Link_Recommender();
+		$result      = $recommender->generate( 300 );
+		return $this->ok(
+			array(
+				'created'         => $result['created'],
+				'recommendations' => SCC_Link_Recommender::list_recommendations( 'recommended', 200 ),
+			)
+		);
+	}
+
+	/**
+	 * POST /internal-links/apply — insert one approved link.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function apply_link( WP_REST_Request $request ) {
+		$inserter = new SCC_Link_Inserter();
+		$result   = $inserter->apply( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
 	}
 
 	/**

@@ -54,11 +54,14 @@ The functional base everything else builds on.
 - ✅ Populate Elementor `_elementor_data` while preserving design (tree walk,
   regenerated element IDs, only text settings touched); wired into the generator
 
-## Phase 5 — Internal Linking ⬜
-- Content graph model
-- Link recommendations (orphans, under/over-linked, opportunities)
-- Natural link insertion (anti-spam guards)
-- Internal-link dashboard
+## Phase 5 — Internal Linking ✅
+- ✅ Content graph model (parses posts, resolves internal hrefs to post IDs,
+  inbound/outbound counts)
+- ✅ Link recommendations (topical overlap, prioritizes under-linked/orphan
+  targets, natural anchor that already appears in the source)
+- ✅ Natural link insertion with anti-spam guards (per-page cap, first
+  occurrence only, never inside headings/existing anchors, phrase must exist)
+- ✅ Internal-link dashboard (orphans, under-linked, over-linked, apply flow)
 
 ## Phase 6 — Data Integrations ⬜
 - Google Search Console (queries, impressions, clicks, CTR, position, pages)

@@ -401,6 +401,52 @@
 		} );
 	}
 
+	// ---- Internal links ------------------------------------------------
+	function bindInternalLinks() {
+		var msg = document.getElementById( 'scc-links-msg' );
+		var recBtn = document.getElementById( 'scc-recommend-links' );
+		if ( recBtn ) {
+			recBtn.addEventListener( 'click', function () {
+				recBtn.disabled = true;
+				setStatus( msg, 'Analyzing the link graph…' );
+				request( '/internal-links/recommend', { method: 'POST' } )
+					.then( function ( res ) {
+						var created = ( res.data && res.data.created ) || 0;
+						setStatus( msg, created + ' recommendation(s) found. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						recBtn.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		var table = document.getElementById( 'scc-links-table' );
+		if ( ! table ) {
+			return;
+		}
+		table.addEventListener( 'click', function ( e ) {
+			if ( ! e.target.classList.contains( 'scc-apply-link' ) ) {
+				return;
+			}
+			var row = e.target.closest( 'tr' );
+			var id = row.getAttribute( 'data-id' );
+			e.target.disabled = true;
+			setStatus( msg, 'Applying…' );
+			request( '/internal-links/apply', { method: 'POST', data: { id: id } } )
+				.then( function () {
+					row.parentNode.removeChild( row );
+					setStatus( msg, 'Link inserted.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					e.target.disabled = false;
+					e.target.textContent = 'Retry';
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -410,5 +456,6 @@
 		bindContentPlan();
 		bindGenerate();
 		bindTemplates();
+		bindInternalLinks();
 	} );
 } )();

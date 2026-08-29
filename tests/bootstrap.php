@@ -174,3 +174,8 @@ require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-plac
 // SCC_Elementor_Builder::build_replacements is pure; the file references
 // SCC_Elementor only inside build_tree/apply_to_post, not at load time.
 require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor-builder.php';
+
+// --- Phase 5 classes under test -------------------------------------------
+// Only the protected DOM helpers are exercised (via reflection); apply() and
+// its WP dependencies are covered by integration tests.
+require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-link-inserter.php';

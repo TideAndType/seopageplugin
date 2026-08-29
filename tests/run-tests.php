@@ -247,6 +247,31 @@ assert_eq( 'First para here.', $repl['INTRO'], 'intro from first paragraph' );
 assert_eq( 'Call today', $repl['CTA'], 'cta carried' );
 assert_true( strpos( $repl['FAQ'], 'Q?' ) !== false, 'faq html built' );
 
+echo "\n== Internal link insertion (DOM) ==\n";
+$inserter = new SCC_Link_Inserter();
+$insert = new ReflectionMethod( 'SCC_Link_Inserter', 'insert_anchor' );
+$insert->setAccessible( true );
+
+$content = '<h2>Local SEO tips</h2><p>Our local SEO service helps small businesses. Ask about local SEO again.</p>';
+$out = $insert->invoke( $inserter, $content, 'local SEO', 'https://example.com/local-seo/' );
+assert_true( is_string( $out ), 'returns string when anchor found' );
+assert_true( substr_count( $out, '<a href="https://example.com/local-seo/">' ) === 1, 'exactly one link inserted (first occurrence only)' );
+// The H2 mention must NOT be linked.
+assert_true( strpos( $out, '<h2>Local SEO tips</h2>' ) !== false, 'heading occurrence left untouched' );
+
+$none = $insert->invoke( $inserter, '<p>Nothing relevant here.</p>', 'local SEO', 'https://example.com/x/' );
+assert_eq( null, $none, 'returns null when anchor phrase absent' );
+
+// Never link inside an existing anchor.
+$already = '<p>See our <a href="https://example.com/other/">local SEO</a> page.</p>';
+$out2 = $insert->invoke( $inserter, $already, 'local SEO', 'https://example.com/local-seo/' );
+assert_eq( null, $out2, 'does not link inside an existing anchor' );
+
+$countm = new ReflectionMethod( 'SCC_Link_Inserter', 'count_internal_links' );
+$countm->setAccessible( true );
+$c = $countm->invoke( $inserter, '<a href="/a">a</a> <a href="https://example.com/b">b</a> <a href="https://other.com/c">c</a> <a href="#top">t</a>' );
+assert_eq( 2, $c, 'counts internal links only (relative + same host)' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
