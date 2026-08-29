@@ -48,6 +48,118 @@ class SCC_GSC {
 	}
 
 	/**
+	 * Which of the three OAuth fields are present (for diagnostics).
+	 *
+	 * @return array {client_id:bool, client_secret:bool, refresh_token:bool}
+	 */
+	public static function field_status() {
+		$c = self::creds();
+		return array(
+			'client_id'     => ! empty( $c['gsc_client_id'] ),
+			'client_secret' => ! empty( $c['gsc_client_secret'] ),
+			'refresh_token' => ! empty( $c['gsc_refresh_token'] ),
+		);
+	}
+
+	/**
+	 * The GSC property to query. Uses the configured property, else the site URL.
+	 *
+	 * @return string
+	 */
+	public static function property() {
+		$configured = trim( (string) SCC_Settings::get( 'gsc_site_url', '' ) );
+		return '' !== $configured ? $configured : home_url( '/' );
+	}
+
+	/**
+	 * List the verified Search Console properties this token can access.
+	 *
+	 * @return array|WP_Error List of {siteUrl, permissionLevel}.
+	 */
+	public static function sites() {
+		$token = self::access_token();
+		if ( is_wp_error( $token ) ) {
+			return $token;
+		}
+		$response = wp_remote_get(
+			self::API_BASE . '/sites',
+			array(
+				'timeout' => 20,
+				'headers' => array( 'authorization' => 'Bearer ' . $token ),
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( 200 !== (int) $code ) {
+			$msg = isset( $body['error']['message'] ) ? $body['error']['message'] : sprintf( 'HTTP %d', $code );
+			return new WP_Error( 'scc_gsc_api', $msg, array( 'status' => $code ) );
+		}
+		$out = array();
+		foreach ( (array) ( $body['siteEntry'] ?? array() ) as $entry ) {
+			$out[] = array(
+				'siteUrl'         => (string) ( $entry['siteUrl'] ?? '' ),
+				'permissionLevel' => (string) ( $entry['permissionLevel'] ?? '' ),
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * End-to-end connection check: token exchange + accessible properties, and
+	 * whether the configured property is among them. Never throws.
+	 *
+	 * @return array
+	 */
+	public static function verify() {
+		$fields = self::field_status();
+		$result = array(
+			'fields'             => $fields,
+			'has_all_fields'     => $fields['client_id'] && $fields['client_secret'] && $fields['refresh_token'],
+			'token_ok'           => false,
+			'properties'         => array(),
+			'configured_property'=> self::property(),
+			'property_matches'   => false,
+			'error'              => '',
+		);
+
+		if ( ! $result['has_all_fields'] ) {
+			$missing = array();
+			foreach ( $fields as $key => $ok ) {
+				if ( ! $ok ) {
+					$missing[] = $key;
+				}
+			}
+			$result['error'] = sprintf(
+				/* translators: %s: comma-separated field names */
+				__( 'Missing OAuth field(s): %s. All three (Client ID, Client secret, Refresh token) are required.', 'seo-command-center' ),
+				implode( ', ', $missing )
+			);
+			return $result;
+		}
+
+		// Force a fresh token so we truly test the refresh exchange.
+		delete_transient( self::TOKEN_CACHE );
+		$sites = self::sites();
+		if ( is_wp_error( $sites ) ) {
+			$result['error'] = $sites->get_error_message();
+			return $result;
+		}
+
+		$result['token_ok']   = true;
+		$result['properties'] = $sites;
+		foreach ( $sites as $s ) {
+			if ( untrailingslashit( $s['siteUrl'] ) === untrailingslashit( $result['configured_property'] ) ) {
+				$result['property_matches'] = true;
+				break;
+			}
+		}
+		return $result;
+	}
+
+	/**
 	 * Get a valid access token (cached), refreshing when needed.
 	 *
 	 * @return string|WP_Error
@@ -108,7 +220,7 @@ class SCC_GSC {
 			return $token;
 		}
 
-		$site_url = $site_url ? $site_url : home_url( '/' );
+		$site_url = $site_url ? $site_url : self::property();
 		$end      = gmdate( 'Y-m-d' );
 		$start    = gmdate( 'Y-m-d', time() - SCC_Security::sanitize_int( $days, 1, 480 ) * DAY_IN_SECONDS );
 

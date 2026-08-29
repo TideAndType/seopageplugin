@@ -25,6 +25,15 @@ $val = function ( $inputs, $key ) {
 		<p class="scc-sub"><?php esc_html_e( 'Describe the business and let the AI build a structured topical map — clusters, primary and supporting terms, intent, and recommended URLs. These are strategic recommendations, not measured search volume.', 'seo-command-center' ); ?></p>
 	</div>
 
+	<div class="scc-card">
+		<div class="scc-card__head">
+			<h2><?php esc_html_e( 'Build from my site', 'seo-command-center' ); ?></h2>
+			<button class="button button-primary" id="scc-keyword-auto"><?php esc_html_e( 'Analyze my site &amp; build the plan', 'seo-command-center' ); ?></button>
+		</div>
+		<span class="scc-inline-status" id="scc-keyword-auto-status"></span>
+		<p class="scc-note"><?php esc_html_e( 'Reads your site name, tagline, and existing page/post titles, infers your services and locations, and builds the topical map automatically — no manual input needed. You can still refine it with the form below. Then open Site Architecture to see the structure and send pages to your Content Plan.', 'seo-command-center' ); ?></p>
+	</div>
+
 	<div class="scc-columns">
 		<form id="scc-keyword-form" class="scc-card">
 			<h2><?php esc_html_e( 'Business inputs', 'seo-command-center' ); ?></h2>

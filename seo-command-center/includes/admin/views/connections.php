@@ -81,14 +81,28 @@ $field = function ( $field, $label, $hints ) {
 		</table>
 
 		<h2><?php esc_html_e( 'Google Search Console (optional)', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'Imports real query, impression, click, CTR and position data to surface quick wins. Provide an OAuth client (installed-app) plus a refresh token generated for the searchconsole.readonly scope.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( 'Imports real query, impression, click, CTR and position data to surface quick wins. Provide an OAuth client (installed-app) plus a refresh token generated for the https://www.googleapis.com/auth/webmasters.readonly scope. Leave a field blank to keep the saved value.', 'seo-command-center' ); ?></p>
 		<table class="form-table" role="presentation">
 			<?php
 			$field( 'gsc_client_id', __( 'OAuth client ID', 'seo-command-center' ), $hints );
 			$field( 'gsc_client_secret', __( 'OAuth client secret', 'seo-command-center' ), $hints );
 			$field( 'gsc_refresh_token', __( 'OAuth refresh token', 'seo-command-center' ), $hints );
 			?>
+			<tr>
+				<th scope="row"><label for="scc-gsc-site"><?php esc_html_e( 'Property (site URL)', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="text" class="regular-text" id="scc-gsc-site" value="<?php echo esc_attr( isset( $data['gsc_site_url'] ) ? $data['gsc_site_url'] : '' ); ?>" placeholder="sc-domain:example.com  or  https://example.com/">
+					<p class="description"><?php esc_html_e( 'Must EXACTLY match a verified property in Search Console. Domain properties look like “sc-domain:example.com”; URL-prefix properties look like “https://example.com/” (with the trailing slash). Verify below to see your exact options.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
 		</table>
+
+		<p>
+			<button type="button" class="button" id="scc-gsc-verify"><?php esc_html_e( 'Verify Search Console connection', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-gsc-verify-status"></span>
+		</p>
+		<div id="scc-gsc-verify-out"></div>
+		<p class="scc-note"><?php esc_html_e( 'Verify tests the saved credentials, so click “Save connections” first if you just pasted a new key or token.', 'seo-command-center' ); ?></p>
 
 		<p class="submit">
 			<button type="submit" class="button button-primary"><?php esc_html_e( 'Save connections', 'seo-command-center' ); ?></button>

@@ -41,8 +41,10 @@
 		Array.prototype.forEach.call( buttons, function ( btn ) {
 			btn.addEventListener( 'click', function () {
 				btn.disabled = true;
-				setStatus( status, i18n.analyzing || 'Analyzing…' );
-				request( '/analyze', { method: 'POST', data: { limit: 300 } } )
+				var deepEl = document.getElementById( 'scc-deep-scan' );
+				var deep = deepEl ? !! deepEl.checked : false;
+				setStatus( status, deep ? 'Deep scanning (fetching rendered pages)…' : ( i18n.analyzing || 'Analyzing…' ) );
+				request( '/analyze', { method: 'POST', data: { limit: 300, deep: deep } } )
 					.then( function ( res ) {
 						setStatus( status, 'Done. Reloading…', 'is-ok' );
 						window.location.reload();
@@ -112,8 +114,14 @@
 					credentials[ field + '_clear' ] = true;
 				}
 			} );
+			// The GSC property is a setting, not a credential — save it alongside.
+			var payload = { credentials: credentials };
+			var gscSite = document.getElementById( 'scc-gsc-site' );
+			if ( gscSite ) {
+				payload.settings = { gsc_site_url: gscSite.value };
+			}
 			setStatus( status, '…' );
-			request( '/settings', { method: 'POST', data: { credentials: credentials } } )
+			request( '/settings', { method: 'POST', data: payload } )
 				.then( function () {
 					setStatus( status, ( i18n.saved || 'Saved.' ) + ' Reloading…', 'is-ok' );
 					window.location.reload();
@@ -122,6 +130,63 @@
 					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
 				} );
 		} );
+
+		// GSC verify button.
+		var gscVerify = document.getElementById( 'scc-gsc-verify' );
+		if ( gscVerify ) {
+			var gscStatus = document.getElementById( 'scc-gsc-verify-status' );
+			var gscOut = document.getElementById( 'scc-gsc-verify-out' );
+			gscVerify.addEventListener( 'click', function () {
+				gscVerify.disabled = true;
+				setStatus( gscStatus, 'Checking…' );
+				gscOut.innerHTML = '';
+				request( '/gsc/verify', { method: 'GET' } )
+					.then( function ( res ) {
+						gscVerify.disabled = false;
+						var v = ( res.data && res.data.verify ) || {};
+						if ( ! v.has_all_fields ) {
+							setStatus( gscStatus, v.error || 'Missing OAuth fields.', 'is-error' );
+							return;
+						}
+						if ( ! v.token_ok ) {
+							setStatus( gscStatus, 'Token refresh failed: ' + ( v.error || 'unknown error' ), 'is-error' );
+							gscOut.appendChild( el( 'p', 'Google rejected the refresh token. Re-generate it for the webmasters.readonly scope and make sure the Client ID/secret belong to the same OAuth client.', 'scc-note' ) );
+							return;
+						}
+						setStatus( gscStatus, 'Connected — token works.', 'is-ok' );
+						if ( ! v.properties || ! v.properties.length ) {
+							gscOut.appendChild( el( 'p', 'The token works but this Google account has no Search Console properties.', 'scc-note' ) );
+							return;
+						}
+						gscOut.appendChild( el( 'div', 'Verified properties this account can access:', 'scc-label' ) );
+						var ul = el( 'ul', null, 'scc-options' );
+						v.properties.forEach( function ( p ) {
+							var li = el( 'li' );
+							var code = el( 'code', p.siteUrl );
+							li.appendChild( code );
+							li.appendChild( document.createTextNode( ' (' + p.permissionLevel + ')' ) );
+							var useBtn = el( 'button', 'Use this', 'button button-small' );
+							useBtn.style.marginLeft = '8px';
+							useBtn.addEventListener( 'click', function () {
+								var input = document.getElementById( 'scc-gsc-site' );
+								if ( input ) { input.value = p.siteUrl; }
+							} );
+							li.appendChild( useBtn );
+							ul.appendChild( li );
+						} );
+						gscOut.appendChild( ul );
+						if ( ! v.property_matches ) {
+							gscOut.appendChild( el( 'p', '⚠ Your configured property (' + v.configured_property + ') is not in the list above. Pick one of these exact values (click “Use this”), then Save connections.', 'scc-note is-bad' ) );
+						} else {
+							gscOut.appendChild( el( 'p', '✓ Your configured property matches — Search Console data will load.', 'scc-note' ) );
+						}
+					} )
+					.catch( function ( err ) {
+						gscVerify.disabled = false;
+						setStatus( gscStatus, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
 
 		// Provider test buttons.
 		Array.prototype.forEach.call( form.querySelectorAll( '[data-test-provider]' ), function ( btn ) {
@@ -146,6 +211,25 @@
 
 	// ---- Keyword strategy generation -----------------------------------
 	function bindKeywordStrategy() {
+		// "Build from my site" — infers inputs and generates in one click.
+		var autoBtn = document.getElementById( 'scc-keyword-auto' );
+		if ( autoBtn ) {
+			var autoStatus = document.getElementById( 'scc-keyword-auto-status' );
+			autoBtn.addEventListener( 'click', function () {
+				autoBtn.disabled = true;
+				setStatus( autoStatus, 'Analyzing your site and building the topical map… this can take up to a minute.' );
+				request( '/keywords/auto', { method: 'POST' } )
+					.then( function () {
+						setStatus( autoStatus, 'Done. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						autoBtn.disabled = false;
+						setStatus( autoStatus, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
 		var form = document.getElementById( 'scc-keyword-form' );
 		if ( ! form ) {
 			return;

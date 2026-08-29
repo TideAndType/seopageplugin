@@ -282,8 +282,9 @@ class SCC_Admin {
 		$this->view(
 			'connections',
 			array(
-				'hints'     => SCC_Settings::credential_hints(),
-				'providers' => $this->ai->get_providers(),
+				'hints'        => SCC_Settings::credential_hints(),
+				'providers'    => $this->ai->get_providers(),
+				'gsc_site_url' => SCC_Settings::get( 'gsc_site_url', '' ),
 			)
 		);
 	}

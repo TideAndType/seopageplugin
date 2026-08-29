@@ -20,6 +20,15 @@ class SCC_Analyzer {
 
 	const THIN_CONTENT_WORDS = 300;
 
+	/** Max rendered-page fetches per analysis (to confirm H1 on themed pages). */
+	const RENDER_BUDGET = 60;
+
+	/** @var int Remaining rendered fetches for the current run. */
+	protected $render_budget = 0;
+
+	/** @var bool Whether to deep-scan (fetch rendered pages) for every post. */
+	protected $deep = false;
+
 	/**
 	 * Post types to analyze.
 	 *
@@ -48,6 +57,12 @@ class SCC_Analyzer {
 	public function run( array $args = array() ) {
 		$post_types = ! empty( $args['post_types'] ) ? array_map( 'sanitize_key', (array) $args['post_types'] ) : self::analyzable_post_types();
 		$limit      = isset( $args['limit'] ) ? SCC_Security::sanitize_int( $args['limit'], 1, 2000 ) : 200;
+
+		// Rendered-page verification lets us confirm H1s that themes/Elementor
+		// output outside post_content. "deep" fetches every post; otherwise we
+		// fetch only when a page would otherwise be flagged, within a budget.
+		$this->deep          = ! empty( $args['deep'] );
+		$this->render_budget = self::RENDER_BUDGET;
 
 		$analysis_id = SCC_DB::insert(
 			'analyses',
@@ -195,6 +210,33 @@ class SCC_Analyzer {
 		// Parse HTML for headings/links/images.
 		$parsed = $this->parse_html( $content_raw, $post->ID );
 
+		// Elementor pages keep their headings in _elementor_data, not in
+		// post_content — pull H1 heading widgets from there too.
+		if ( $is_elementor && empty( $parsed['h1'] ) ) {
+			$el_h1 = $this->extract_elementor_headings( $post->ID );
+			if ( ! empty( $el_h1 ) ) {
+				$parsed['h1'] = $el_h1;
+			}
+		}
+
+		// Rendered-page verification: themes commonly output the page title as
+		// the <h1> (outside post_content/Elementor data). Confirm against the
+		// real rendered HTML — always in deep mode, otherwise only when the page
+		// would otherwise be flagged and we still have fetch budget. Also picks
+		// up schema output by the theme/SEO plugin.
+		$need_render = $this->deep || ( empty( $parsed['h1'] ) && 'publish' === $post->post_status );
+		if ( $need_render && $this->render_budget > 0 ) {
+			$rendered = $this->rendered_signals( $post );
+			if ( is_array( $rendered ) ) {
+				if ( ! empty( $rendered['h1'] ) ) {
+					$parsed['h1'] = $rendered['h1'];
+				}
+				if ( ! empty( $rendered['has_schema'] ) ) {
+					$parsed['has_schema'] = true;
+				}
+			}
+		}
+
 		$meta_title = SCC_SEO_Meta::get_title( $post->ID );
 		$meta_desc  = SCC_SEO_Meta::get_description( $post->ID );
 
@@ -228,6 +270,91 @@ class SCC_Analyzer {
 			'has_schema'         => $parsed['has_schema'] ? 1 : 0,
 			'is_elementor'       => $is_elementor ? 1 : 0,
 			'flags'              => $flags,
+		);
+	}
+
+	/**
+	 * Extract H1 heading texts from a post's Elementor data.
+	 *
+	 * Looks for heading widgets whose header_size is h1, plus Elementor's page/
+	 * post title widgets (which render as h1 by default).
+	 *
+	 * @param int $post_id Post id.
+	 * @return string[]
+	 */
+	protected function extract_elementor_headings( $post_id ) {
+		$data = get_post_meta( $post_id, '_elementor_data', true );
+		if ( empty( $data ) || ! is_string( $data ) ) {
+			return array();
+		}
+		$decoded = json_decode( $data, true );
+		if ( ! is_array( $decoded ) ) {
+			return array();
+		}
+		$h1 = array();
+		$this->walk_elementor_headings( $decoded, $h1, get_the_title( $post_id ) );
+		return $h1;
+	}
+
+	/**
+	 * Recursively collect H1 headings from an Elementor element tree.
+	 *
+	 * @param array  $elements   Elements.
+	 * @param array  $h1         Collected H1 texts (by ref).
+	 * @param string $post_title Current post title (for title widgets).
+	 */
+	protected function walk_elementor_headings( array $elements, array &$h1, $post_title = '' ) {
+		foreach ( $elements as $el ) {
+			if ( ! is_array( $el ) ) {
+				continue;
+			}
+			$widget   = isset( $el['widgetType'] ) ? $el['widgetType'] : '';
+			$settings = isset( $el['settings'] ) && is_array( $el['settings'] ) ? $el['settings'] : array();
+
+			if ( 'heading' === $widget ) {
+				$size  = isset( $settings['header_size'] ) ? strtolower( (string) $settings['header_size'] ) : 'h2';
+				$title = isset( $settings['title'] ) ? trim( wp_strip_all_tags( (string) $settings['title'] ) ) : '';
+				if ( 'h1' === $size && '' !== $title ) {
+					$h1[] = $title;
+				}
+			} elseif ( in_array( $widget, array( 'theme-page-title', 'theme-post-title' ), true ) ) {
+				// Elementor title widgets render the current post title as h1
+				// unless the size is overridden.
+				$size = isset( $settings['header_size'] ) ? strtolower( (string) $settings['header_size'] ) : 'h1';
+				if ( 'h1' === $size && '' !== $post_title ) {
+					$h1[] = $post_title;
+				}
+			}
+
+			if ( ! empty( $el['elements'] ) && is_array( $el['elements'] ) ) {
+				$this->walk_elementor_headings( $el['elements'], $h1, $post_title );
+			}
+		}
+	}
+
+	/**
+	 * Fetch the rendered permalink and read authoritative on-page signals
+	 * (real H1s, schema). Consumes the per-run fetch budget.
+	 *
+	 * @param WP_Post $post Post.
+	 * @return array|null {h1:string[], has_schema:bool}
+	 */
+	protected function rendered_signals( $post ) {
+		$url = get_permalink( $post );
+		if ( ! $url ) {
+			return null;
+		}
+		$this->render_budget--;
+
+		$crawler = new SCC_Crawler();
+		// Internal URL: no robots restriction needed.
+		$data = $crawler->fetch( $url, false );
+		if ( is_wp_error( $data ) ) {
+			return null;
+		}
+		return array(
+			'h1'         => isset( $data['h1'] ) ? (array) $data['h1'] : array(),
+			'has_schema' => ! empty( $data['schema_types'] ),
 		);
 	}
 

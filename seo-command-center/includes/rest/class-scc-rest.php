@@ -154,6 +154,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/keywords/auto',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'auto_keywords' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/architecture',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -329,6 +339,16 @@ class SCC_REST {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'gsc_quick_wins' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/gsc/verify',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'gsc_verify' ),
 				'permission_callback' => $perm,
 			)
 		);
@@ -701,8 +721,9 @@ class SCC_REST {
 	 */
 	public function analyze( WP_REST_Request $request ) {
 		$limit = SCC_Security::sanitize_int( $request->get_param( 'limit' ), 1, 2000 );
+		$deep  = SCC_Security::sanitize_bool( $request->get_param( 'deep' ) );
 		$analyzer = new SCC_Analyzer();
-		$result   = $analyzer->run( array( 'limit' => $limit ) );
+		$result   = $analyzer->run( array( 'limit' => $limit, 'deep' => $deep ) );
 		return $this->ok( $result );
 	}
 
@@ -765,6 +786,22 @@ class SCC_REST {
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /keywords/auto — infer inputs from the site, then build the map.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function auto_keywords() {
+		$inputs  = SCC_Keyword_Strategy::infer_inputs_from_site();
+		$service = new SCC_Keyword_Strategy( $this->ai );
+		$result  = $service->generate( $inputs );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		$result['inferred'] = true;
 		return $this->ok( $result );
 	}
 
@@ -1016,6 +1053,15 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /gsc/verify — end-to-end connection diagnostics.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function gsc_verify() {
+		return $this->ok( array( 'verify' => SCC_GSC::verify() ) );
 	}
 
 	/**

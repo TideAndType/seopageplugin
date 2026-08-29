@@ -24,6 +24,9 @@ $items  = ( $latest && ! empty( $latest['items'] ) ) ? $latest['items'] : array(
 			<h2><?php esc_html_e( 'Analyzed content', 'seo-command-center' ); ?></h2>
 			<button class="button button-primary" id="scc-run-analysis"><?php esc_html_e( 'Run analysis', 'seo-command-center' ); ?></button>
 		</div>
+		<p>
+			<label><input type="checkbox" id="scc-deep-scan"> <?php esc_html_e( 'Deep scan — fetch each rendered page for accurate H1/schema detection (slower; recommended for Elementor and page-builder sites).', 'seo-command-center' ); ?></label>
+		</p>
 		<span class="scc-inline-status" id="scc-analysis-status"></span>
 
 		<?php if ( empty( $items ) ) : ?>

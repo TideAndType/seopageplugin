@@ -60,7 +60,47 @@ class SCC_Keyword_Strategy {
 			'audience'      => SCC_Security::sanitize_textarea( $raw['audience'] ?? '' ),
 			'competitors'   => $list( $raw['competitors'] ?? '' ),
 			'seed_keywords' => $list( $raw['seed_keywords'] ?? '' ),
+			'existing_pages'=> array_slice( $list( $raw['existing_pages'] ?? '' ), 0, 200 ),
 			'website'       => esc_url_raw( $raw['website'] ?? home_url() ),
+		);
+	}
+
+	/**
+	 * Infer strategy inputs from the existing site (site identity + published
+	 * page/post titles), so a user can build a plan with one click. The AI then
+	 * derives services, locations, and clusters from what the site actually has.
+	 *
+	 * @return array Raw inputs (unsanitized; generate() sanitizes).
+	 */
+	public static function infer_inputs_from_site() {
+		$titles = array();
+
+		// Prefer the content index (fast, already built); fall back to WP_Query.
+		if ( class_exists( 'SCC_Content_Index' ) && SCC_Content_Index::count() > 0 ) {
+			foreach ( SCC_Content_Index::all( 500 ) as $row ) {
+				if ( ! empty( $row['title'] ) ) {
+					$titles[] = $row['title'];
+				}
+			}
+		} else {
+			$q = new WP_Query( array(
+				'post_type'      => array( 'page', 'post' ),
+				'post_status'    => 'publish',
+				'posts_per_page' => 300,
+				'no_found_rows'  => true,
+				'fields'         => 'ids',
+			) );
+			foreach ( $q->posts as $pid ) {
+				$titles[] = get_the_title( $pid );
+			}
+		}
+		$titles = array_values( array_unique( array_filter( array_map( 'trim', $titles ) ) ) );
+
+		return array(
+			'business_name'  => get_bloginfo( 'name' ),
+			'description'    => get_bloginfo( 'description' ),
+			'website'        => home_url(),
+			'existing_pages' => $titles,
 		);
 	}
 
@@ -79,6 +119,9 @@ class SCC_Keyword_Strategy {
 			. 'Only propose location+service pages where they would carry genuinely unique local value — '
 			. 'never propose near-duplicate doorway pages. Do not invent search volume or difficulty numbers; '
 			. 'you are giving strategic recommendations, not measured data. '
+			. 'If an "existing_pages" list is provided, infer the business\'s real services, products and locations '
+			. 'from those page titles, map the CURRENT site architecture, and prioritize clusters that strengthen or '
+			. 'fill gaps in what already exists rather than duplicating existing pages. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
 			. '"intent":str,"recommended_url":str,"related":[str],"page_type":"pillar|service|location|article",'
@@ -109,8 +152,8 @@ class SCC_Keyword_Strategy {
 	public function generate( array $raw ) {
 		$inputs = self::sanitize_inputs( $raw );
 
-		if ( '' === $inputs['business_name'] && empty( $inputs['services'] ) && empty( $inputs['seed_keywords'] ) ) {
-			return new WP_Error( 'scc_missing_inputs', __( 'Enter at least a business name, a service, or a seed keyword.', 'seo-command-center' ), array( 'status' => 400 ) );
+		if ( '' === $inputs['business_name'] && empty( $inputs['services'] ) && empty( $inputs['seed_keywords'] ) && empty( $inputs['existing_pages'] ) ) {
+			return new WP_Error( 'scc_missing_inputs', __( 'Enter at least a business name, a service, or a seed keyword — or use “Build from my site”.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 
 		$response = $this->ai->complete( $this->build_prompt( $inputs ), 'keyword-strategy' );

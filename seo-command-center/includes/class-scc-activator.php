@@ -80,6 +80,8 @@ class SCC_Activator {
 			'meta_storage'           => 'auto',
 			// Rendering.
 			'default_renderer'       => 'gutenberg',
+			// Google Search Console property (e.g. sc-domain:example.com or https://example.com/).
+			'gsc_site_url'           => '',
 			// Publishing.
 			'draft_by_default'      => true,
 			'auto_publish'          => false,

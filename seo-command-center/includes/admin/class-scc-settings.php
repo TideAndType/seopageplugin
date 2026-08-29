@@ -65,6 +65,7 @@ class SCC_Settings {
 			'link_vary_anchor'         => 'bool',
 			'meta_storage'             => 'text',
 			'default_renderer'         => 'text',
+			'gsc_site_url'             => 'text',
 			'draft_by_default'         => 'bool',
 			'auto_publish'             => 'bool',
 			'monthly_budget'           => 'float',

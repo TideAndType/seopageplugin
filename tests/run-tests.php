@@ -459,6 +459,17 @@ $lbase = new ReflectionMethod( 'SCC_LMStudio_Provider', 'base_url' );
 $lbase->setAccessible( true );
 assert_eq( 'http://localhost:1234/v1', $lbase->invoke( $lm ), 'default base url, trailing slash trimmed' );
 
+echo "\n== GSC field-status diagnostics ==\n";
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'x' );
+$fs = SCC_GSC::field_status();
+assert_true( $fs['client_id'] === true, 'client_id detected' );
+assert_true( $fs['client_secret'] === false && $fs['refresh_token'] === false, 'missing fields flagged' );
+assert_eq( false, SCC_GSC::is_connected(), 'not connected with only client_id' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'a', 'gsc_client_secret' => 'b', 'gsc_refresh_token' => 'c' );
+$fs2 = SCC_GSC::field_status();
+assert_true( $fs2['client_id'] && $fs2['client_secret'] && $fs2['refresh_token'], 'all fields present' );
+assert_true( SCC_GSC::is_connected(), 'connected with all three fields' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
