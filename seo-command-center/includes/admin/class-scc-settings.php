@@ -51,6 +51,9 @@ class SCC_Settings {
 			'fallback_provider'        => 'provider_or_empty',
 			'claude_model'             => 'text',
 			'openai_model'             => 'text',
+			'gemini_model'             => 'text',
+			'lmstudio_model'           => 'text',
+			'lmstudio_base_url'        => 'url',
 			'default_word_count'       => 'int',
 			'max_internal_links'       => 'int',
 			'autopilot_enabled'        => 'bool',
@@ -77,10 +80,13 @@ class SCC_Settings {
 			$value = $input[ $key ];
 			switch ( $type ) {
 				case 'provider':
-					$value = in_array( $value, array( 'claude', 'openai' ), true ) ? $value : 'claude';
+					$value = in_array( $value, array( 'claude', 'openai', 'gemini', 'lmstudio' ), true ) ? $value : 'claude';
 					break;
 				case 'provider_or_empty':
-					$value = in_array( $value, array( 'claude', 'openai', '' ), true ) ? $value : '';
+					$value = in_array( $value, array( 'claude', 'openai', 'gemini', 'lmstudio', '' ), true ) ? $value : '';
+					break;
+				case 'url':
+					$value = esc_url_raw( trim( (string) $value ) );
 					break;
 				case 'int':
 					$value = SCC_Security::sanitize_int( $value, 0, 100000 );
@@ -114,7 +120,7 @@ class SCC_Settings {
 			$creds = array();
 		}
 
-		$fields = array( 'claude_key', 'openai_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token' );
+		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token' );
 		foreach ( $fields as $field ) {
 			if ( ! array_key_exists( $field, $input ) ) {
 				continue;
@@ -140,7 +146,7 @@ class SCC_Settings {
 	 */
 	public static function credential_hints() {
 		$creds  = get_option( 'scc_credentials', array() );
-		$fields = array( 'claude_key', 'openai_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token' );
+		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token' );
 		$out    = array();
 		foreach ( $fields as $field ) {
 			$value = isset( $creds[ $field ] ) ? (string) $creds[ $field ] : '';

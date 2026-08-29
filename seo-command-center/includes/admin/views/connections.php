@@ -51,13 +51,25 @@ $field = function ( $field, $label, $hints ) {
 			<?php
 			$field( 'claude_key', __( 'Anthropic Claude API key', 'seo-command-center' ), $hints );
 			$field( 'openai_key', __( 'OpenAI API key', 'seo-command-center' ), $hints );
+			$field( 'gemini_key', __( 'Google Gemini API key', 'seo-command-center' ), $hints );
 			?>
 		</table>
+		<p class="scc-note"><?php esc_html_e( 'Get a Gemini key at aistudio.google.com/apikey. Get an Anthropic key at console.anthropic.com, and an OpenAI key at platform.openai.com.', 'seo-command-center' ); ?></p>
 		<p>
 			<button type="button" class="button" data-test-provider="claude"><?php esc_html_e( 'Test Claude', 'seo-command-center' ); ?></button>
 			<button type="button" class="button" data-test-provider="openai"><?php esc_html_e( 'Test OpenAI', 'seo-command-center' ); ?></button>
+			<button type="button" class="button" data-test-provider="gemini"><?php esc_html_e( 'Test Gemini', 'seo-command-center' ); ?></button>
+			<button type="button" class="button" data-test-provider="lmstudio"><?php esc_html_e( 'Test LM Studio', 'seo-command-center' ); ?></button>
 			<span class="scc-inline-status" id="scc-test-status"></span>
 		</p>
+
+		<h2><?php esc_html_e( 'LM Studio (local, optional)', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Run models on your own computer with LM Studio — free and private. Set the server URL and model under Settings → AI (default http://localhost:1234/v1). An API key is optional; only add one if you configured LM Studio to require it. Note: WordPress must be able to reach the LM Studio server, so “localhost” only works when WordPress runs on the same machine.', 'seo-command-center' ); ?></p>
+		<table class="form-table" role="presentation">
+			<?php
+			$field( 'lmstudio_key', __( 'LM Studio API key (optional)', 'seo-command-center' ), $hints );
+			?>
+		</table>
 
 		<h2><?php esc_html_e( 'DataForSEO (optional)', 'seo-command-center' ); ?></h2>
 		<p class="scc-note"><?php esc_html_e( 'Adds real keyword volume, competition, and related keywords. The plugin works without it.', 'seo-command-center' ); ?></p>

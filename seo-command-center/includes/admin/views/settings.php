@@ -27,6 +27,8 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 					<select id="scc-default-provider" name="default_provider">
 						<option value="claude" <?php selected( $s['default_provider'], 'claude' ); ?>>Anthropic Claude</option>
 						<option value="openai" <?php selected( $s['default_provider'], 'openai' ); ?>>OpenAI</option>
+						<option value="gemini" <?php selected( $s['default_provider'], 'gemini' ); ?>>Google Gemini</option>
+						<option value="lmstudio" <?php selected( $s['default_provider'], 'lmstudio' ); ?>>LM Studio (local)</option>
 					</select>
 				</td>
 			</tr>
@@ -37,6 +39,8 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 						<option value="" <?php selected( $s['fallback_provider'], '' ); ?>><?php esc_html_e( 'None', 'seo-command-center' ); ?></option>
 						<option value="claude" <?php selected( $s['fallback_provider'], 'claude' ); ?>>Anthropic Claude</option>
 						<option value="openai" <?php selected( $s['fallback_provider'], 'openai' ); ?>>OpenAI</option>
+						<option value="gemini" <?php selected( $s['fallback_provider'], 'gemini' ); ?>>Google Gemini</option>
+						<option value="lmstudio" <?php selected( $s['fallback_provider'], 'lmstudio' ); ?>>LM Studio (local)</option>
 					</select>
 					<p class="description"><?php esc_html_e( 'Used automatically if the primary provider fails.', 'seo-command-center' ); ?></p>
 				</td>
@@ -59,6 +63,30 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 							<option value="<?php echo esc_attr( $id ); ?>" <?php selected( $s['openai_model'], $id ); ?>><?php echo esc_html( $label ); ?></option>
 						<?php endforeach; ?>
 					</select>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-gemini-model"><?php esc_html_e( 'Gemini model', 'seo-command-center' ); ?></label></th>
+				<td>
+					<select id="scc-gemini-model" name="gemini_model">
+						<?php foreach ( $data['providers']['gemini']->list_models() as $id => $label ) : ?>
+							<option value="<?php echo esc_attr( $id ); ?>" <?php selected( $s['gemini_model'], $id ); ?>><?php echo esc_html( $label ); ?></option>
+						<?php endforeach; ?>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-lmstudio-base"><?php esc_html_e( 'LM Studio server URL', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="url" class="regular-text" id="scc-lmstudio-base" name="lmstudio_base_url" value="<?php echo esc_attr( $s['lmstudio_base_url'] ); ?>" placeholder="http://localhost:1234/v1">
+					<p class="description"><?php esc_html_e( 'The OpenAI-compatible endpoint LM Studio exposes (Developer → Start Server). If WordPress runs on a different machine than LM Studio, use your computer’s LAN IP or a tunnel instead of localhost.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-lmstudio-model"><?php esc_html_e( 'LM Studio model', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="text" class="regular-text" id="scc-lmstudio-model" name="lmstudio_model" value="<?php echo esc_attr( $s['lmstudio_model'] ); ?>" placeholder="local-model">
+					<p class="description"><?php esc_html_e( 'The model identifier loaded in LM Studio (copy it from the LM Studio server panel). “local-model” tells LM Studio to use whatever model is currently loaded.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 		</table>

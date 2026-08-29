@@ -24,6 +24,8 @@ class SCC_AI_Manager {
 	public function __construct() {
 		$this->register( new SCC_Claude_Provider() );
 		$this->register( new SCC_OpenAI_Provider() );
+		$this->register( new SCC_Gemini_Provider() );
+		$this->register( new SCC_LMStudio_Provider() );
 
 		/**
 		 * Allow add-ons to register additional providers.
@@ -74,6 +76,12 @@ class SCC_AI_Manager {
 		}
 		if ( 'openai' === $provider_id ) {
 			return isset( $settings['openai_model'] ) ? $settings['openai_model'] : 'gpt-4o-mini';
+		}
+		if ( 'gemini' === $provider_id ) {
+			return isset( $settings['gemini_model'] ) ? $settings['gemini_model'] : 'gemini-2.5-flash';
+		}
+		if ( 'lmstudio' === $provider_id ) {
+			return isset( $settings['lmstudio_model'] ) ? $settings['lmstudio_model'] : 'local-model';
 		}
 		return '';
 	}

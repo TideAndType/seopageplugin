@@ -81,7 +81,7 @@ class SCC_REST {
 						'required'          => true,
 						'sanitize_callback' => 'sanitize_key',
 						'validate_callback' => function ( $v ) {
-							return in_array( $v, array( 'claude', 'openai' ), true );
+							return in_array( $v, array( 'claude', 'openai', 'gemini', 'lmstudio' ), true );
 						},
 					),
 				),
@@ -658,17 +658,26 @@ class SCC_REST {
 			return $this->fail( 'not_configured', __( 'Add an API key for this provider first.', 'seo-command-center' ), 400 );
 		}
 
+		// Resolve the model for whichever provider was clicked.
+		$models = array(
+			'claude'   => SCC_Settings::get( 'claude_model' ),
+			'openai'   => SCC_Settings::get( 'openai_model' ),
+			'gemini'   => SCC_Settings::get( 'gemini_model' ),
+			'lmstudio' => SCC_Settings::get( 'lmstudio_model' ),
+		);
+
+		// Call the selected provider DIRECTLY so Test always exercises that
+		// provider (not the configured default), then record usage.
 		$start    = microtime( true );
-		$response = $this->ai->complete(
+		$response = $provider->complete(
 			array(
 				'system'     => 'You are a connectivity test. Reply with the single word: OK',
 				'messages'   => array( array( 'role' => 'user', 'content' => 'Say OK' ) ),
 				'max_tokens' => 16,
-				'provider'   => $provider_id,
-				'model'      => ( 'claude' === $provider_id ) ? SCC_Settings::get( 'claude_model' ) : SCC_Settings::get( 'openai_model' ),
-			),
-			'connectivity-test'
+				'model'      => isset( $models[ $provider_id ] ) ? $models[ $provider_id ] : '',
+			)
 		);
+		SCC_AI_Usage::record( $response, 'connectivity-test' );
 		$latency = round( ( microtime( true ) - $start ) * 1000 );
 
 		if ( $response->is_error() ) {

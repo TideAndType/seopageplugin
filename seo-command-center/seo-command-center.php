@@ -45,6 +45,8 @@ require_once SCC_PLUGIN_DIR . 'includes/ai/interface-scc-ai-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-usage.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-claude-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-openai-provider.php';
+require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-gemini-provider.php';
+require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-lmstudio-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-manager.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-seo-meta.php';

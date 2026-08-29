@@ -117,6 +117,13 @@ provider translates that to its own wire format. `SCC_AI_Response` carries
 Adding a provider later = implement the interface + register it; no other file
 changes.
 
+**Shipped providers:** `claude` (Anthropic Messages API), `openai` (Chat
+Completions), `gemini` (Google Generative Language `generateContent`), and
+`lmstudio` (a local, OpenAI-compatible server — e.g. LM Studio at
+`http://localhost:1234/v1`; no per-token cost, key optional, base URL
+configurable so WordPress can reach it on localhost/LAN/tunnel). Any of them can
+be the primary or fallback provider.
+
 ---
 
 ## 4. Analysis Engine

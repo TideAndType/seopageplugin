@@ -434,6 +434,31 @@ $wp->render( $co, $tpl );
 $gb->render( $co, $tpl );
 assert_eq( $before, wp_json_encode( $tpl->sections() ), 'template structure unchanged after rendering' );
 
+echo "\n== Gemini provider ==\n";
+$gem = new SCC_Gemini_Provider();
+assert_eq( 'gemini', $gem->get_id(), 'gemini id' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array();
+assert_eq( false, $gem->is_configured(), 'not configured without key' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gemini_key' => 'AIzaTESTKEY' );
+assert_true( $gem->is_configured(), 'configured with key' );
+assert_true( array_key_exists( 'gemini-2.5-flash', $gem->list_models() ), 'lists a flash model' );
+assert_true( $gem->estimate_cost( 1000000, 1000000, 'gemini-2.5-flash' ) > 0, 'cost estimate positive' );
+$gnorm = new ReflectionMethod( 'SCC_Gemini_Provider', 'normalize_messages' );
+$gnorm->setAccessible( true );
+$gmsgs = $gnorm->invoke( $gem, array( 'messages' => array( array( 'role' => 'user', 'content' => 'hi' ), array( 'role' => 'assistant', 'content' => 'yo' ) ) ) );
+assert_eq( 'user', $gmsgs[0]['role'], 'user role kept' );
+assert_eq( 'model', $gmsgs[1]['role'], 'assistant mapped to model role' );
+assert_eq( 'hi', $gmsgs[0]['parts'][0]['text'], 'gemini parts text shape' );
+
+echo "\n== LM Studio provider ==\n";
+$lm = new SCC_LMStudio_Provider();
+assert_eq( 'lmstudio', $lm->get_id(), 'lmstudio id' );
+assert_true( $lm->is_configured(), 'always configured (local, key optional)' );
+assert_eq( 0.0, $lm->estimate_cost( 999999, 999999, 'local-model' ), 'local inference is free' );
+$lbase = new ReflectionMethod( 'SCC_LMStudio_Provider', 'base_url' );
+$lbase->setAccessible( true );
+assert_eq( 'http://localhost:1234/v1', $lbase->invoke( $lm ), 'default base url, trailing slash trimmed' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -160,6 +160,17 @@ if ( ! isset( $GLOBALS['wpdb'] ) ) {
 }
 require_once __DIR__ . '/../seo-command-center/includes/logging/class-scc-logger.php';
 
+// AI providers (pure config/normalization logic is unit-tested; HTTP is not).
+require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-response.php';
+require_once __DIR__ . '/../seo-command-center/includes/ai/interface-scc-ai-provider.php';
+require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-gemini-provider.php';
+if ( ! function_exists( 'untrailingslashit' ) ) {
+	function untrailingslashit( $string ) {
+		return rtrim( (string) $string, '/\\' );
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-lmstudio-provider.php';
+
 // --- Phase 2 stubs + classes under test -----------------------------------
 if ( ! class_exists( 'SCC_Analyzer' ) ) {
 	// Minimal stub: architecture/cannibalization call ::latest().

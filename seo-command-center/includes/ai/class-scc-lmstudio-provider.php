@@ -1,0 +1,176 @@
+<?php
+/**
+ * LM Studio provider (local, OpenAI-compatible server).
+ *
+ * LM Studio exposes an OpenAI-compatible API (default
+ * http://localhost:1234/v1). Runs on the user's own machine, so there is no
+ * per-token cost and the API key is optional. The base URL is configurable so
+ * WordPress can reach LM Studio on localhost, a LAN IP, or a tunnel.
+ *
+ * @see https://lmstudio.ai/docs/app/api/endpoints/openai
+ * @package SEO_Command_Center
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * LM Studio provider.
+ */
+class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
+
+	const DEFAULT_BASE    = 'http://localhost:1234/v1';
+	const DEFAULT_TIMEOUT = 120; // Local models can be slower to first token.
+
+	/**
+	 * @inheritDoc
+	 */
+	public function get_id() {
+		return 'lmstudio';
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function get_label() {
+		return __( 'LM Studio (local)', 'seo-command-center' );
+	}
+
+	/**
+	 * Configured base URL (trailing slash trimmed), from settings.
+	 *
+	 * @return string
+	 */
+	protected function base_url() {
+		$base = (string) SCC_Settings::get( 'lmstudio_base_url', self::DEFAULT_BASE );
+		$base = trim( $base );
+		return '' !== $base ? untrailingslashit( $base ) : self::DEFAULT_BASE;
+	}
+
+	/**
+	 * Optional API key (LM Studio ignores it by default).
+	 *
+	 * @return string
+	 */
+	protected function get_key() {
+		$creds = get_option( 'scc_credentials', array() );
+		return isset( $creds['lmstudio_key'] ) ? (string) $creds['lmstudio_key'] : '';
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function is_configured() {
+		// A base URL is always present (default localhost); LM Studio needs no key.
+		return '' !== $this->base_url();
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function list_models() {
+		// The actual model id is whatever is loaded in LM Studio; the user sets it
+		// in Settings. 'local-model' is accepted by LM Studio as "use the loaded model".
+		$configured = (string) SCC_Settings::get( 'lmstudio_model', 'local-model' );
+		return array( $configured => $configured );
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function estimate_cost( $input_tokens, $output_tokens, $model ) {
+		return 0.0; // Local inference — no API cost.
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function complete( array $request ) {
+		$response = new SCC_AI_Response();
+		$response->provider = $this->get_id();
+
+		$model = ! empty( $request['model'] ) ? $request['model'] : (string) SCC_Settings::get( 'lmstudio_model', 'local-model' );
+		$response->model = $model;
+
+		// Build OpenAI-compatible chat messages.
+		$messages = array();
+		$system   = isset( $request['system'] ) ? (string) $request['system'] : '';
+		if ( ! empty( $request['json'] ) ) {
+			$system .= "\n\nRespond ONLY with valid JSON.";
+		}
+		if ( '' !== $system ) {
+			$messages[] = array( 'role' => 'system', 'content' => $system );
+		}
+		$req_messages = isset( $request['messages'] ) && is_array( $request['messages'] ) ? $request['messages'] : array();
+		foreach ( $req_messages as $m ) {
+			$role = ( isset( $m['role'] ) && 'assistant' === $m['role'] ) ? 'assistant' : 'user';
+			$messages[] = array( 'role' => $role, 'content' => (string) ( $m['content'] ?? '' ) );
+		}
+		if ( empty( $req_messages ) ) {
+			$messages[] = array( 'role' => 'user', 'content' => (string) ( $request['prompt'] ?? 'Hello' ) );
+		}
+
+		$body = array(
+			'model'      => $model,
+			'messages'   => $messages,
+			'max_tokens' => isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024,
+			'stream'     => false,
+		);
+		if ( isset( $request['temperature'] ) ) {
+			$body['temperature'] = (float) $request['temperature'];
+		}
+		if ( ! empty( $request['json'] ) ) {
+			$body['response_format'] = array( 'type' => 'json_object' );
+		}
+
+		$headers = array( 'content-type' => 'application/json' );
+		$key     = $this->get_key();
+		if ( '' !== $key ) {
+			$headers['authorization'] = 'Bearer ' . $key;
+		}
+
+		$url = $this->base_url() . '/chat/completions';
+
+		$http = wp_remote_post(
+			$url,
+			array(
+				'timeout'   => self::DEFAULT_TIMEOUT,
+				'headers'   => $headers,
+				'body'      => wp_json_encode( $body ),
+				// Local endpoints are typically plain HTTP; only verify for HTTPS.
+				'sslverify' => ( 0 === strpos( $url, 'https://' ) ),
+			)
+		);
+
+		if ( is_wp_error( $http ) ) {
+			SCC_Logger::error( 'lmstudio', 'Transport error: ' . $http->get_error_message() );
+			$response->error = new WP_Error(
+				'scc_transport',
+				sprintf(
+					/* translators: %s: error message */
+					__( 'Could not reach LM Studio (%s). Make sure the local server is running and its address is reachable from your WordPress server.', 'seo-command-center' ),
+					$http->get_error_message()
+				)
+			);
+			return $response;
+		}
+
+		$code = wp_remote_retrieve_response_code( $http );
+		$data = json_decode( wp_remote_retrieve_body( $http ), true );
+
+		if ( 200 !== (int) $code ) {
+			$msg = isset( $data['error']['message'] ) ? $data['error']['message'] : sprintf( 'HTTP %d', $code );
+			SCC_Logger::error( 'lmstudio', 'API error: ' . $msg, array( 'status' => $code ) );
+			$response->error = new WP_Error( 'scc_api_error', $msg, array( 'status' => $code ) );
+			return $response;
+		}
+
+		$response->content       = isset( $data['choices'][0]['message']['content'] ) ? (string) $data['choices'][0]['message']['content'] : '';
+		$response->input_tokens  = isset( $data['usage']['prompt_tokens'] ) ? (int) $data['usage']['prompt_tokens'] : 0;
+		$response->output_tokens = isset( $data['usage']['completion_tokens'] ) ? (int) $data['usage']['completion_tokens'] : 0;
+		$response->cost          = 0.0;
+
+		return $response;
+	}
+}
