@@ -78,7 +78,7 @@ class SCC_AI_Manager {
 			return isset( $settings['openai_model'] ) ? $settings['openai_model'] : 'gpt-4o-mini';
 		}
 		if ( 'gemini' === $provider_id ) {
-			return isset( $settings['gemini_model'] ) ? $settings['gemini_model'] : 'gemini-2.5-flash';
+			return isset( $settings['gemini_model'] ) ? $settings['gemini_model'] : 'gemini-flash-latest';
 		}
 		if ( 'lmstudio' === $provider_id ) {
 			return isset( $settings['lmstudio_model'] ) ? $settings['lmstudio_model'] : 'local-model';

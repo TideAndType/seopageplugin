@@ -84,6 +84,7 @@ class SCC_Plugin {
 		$this->loader->add_action( 'admin_enqueue_scripts', $this->admin, 'enqueue_assets' );
 		$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
 		$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
+		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
 
 		// REST.
 		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );

@@ -131,6 +131,42 @@
 				} );
 		} );
 
+		// GSC connect (OAuth) button.
+		var gscConnect = document.getElementById( 'scc-gsc-connect' );
+		if ( gscConnect ) {
+			gscConnect.addEventListener( 'click', function () {
+				gscConnect.disabled = true;
+				request( '/gsc/auth-url', { method: 'GET' } )
+					.then( function ( res ) {
+						var url = res.data && res.data.url;
+						if ( url ) {
+							window.location.href = url;
+						} else {
+							gscConnect.disabled = false;
+						}
+					} )
+					.catch( function ( err ) {
+						gscConnect.disabled = false;
+						window.alert( ( err && err.message ) || 'Save your Client ID and secret first.' );
+					} );
+			} );
+		}
+
+		// Copy redirect URI.
+		var copyRedirect = document.getElementById( 'scc-gsc-copy-redirect' );
+		if ( copyRedirect ) {
+			copyRedirect.addEventListener( 'click', function () {
+				var codeEl = document.getElementById( 'scc-gsc-redirect' );
+				var text = codeEl ? codeEl.textContent : '';
+				if ( navigator.clipboard && text ) {
+					navigator.clipboard.writeText( text ).then( function () {
+						copyRedirect.textContent = 'Copied';
+						setTimeout( function () { copyRedirect.textContent = 'Copy'; }, 1500 );
+					} );
+				}
+			} );
+		}
+
 		// GSC verify button.
 		var gscVerify = document.getElementById( 'scc-gsc-verify' );
 		if ( gscVerify ) {

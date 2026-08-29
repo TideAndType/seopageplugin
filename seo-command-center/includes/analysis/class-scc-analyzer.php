@@ -224,10 +224,12 @@ class SCC_Analyzer {
 		// real rendered HTML — always in deep mode, otherwise only when the page
 		// would otherwise be flagged and we still have fetch budget. Also picks
 		// up schema output by the theme/SEO plugin.
+		$rendered_ok = false;
 		$need_render = $this->deep || ( empty( $parsed['h1'] ) && 'publish' === $post->post_status );
 		if ( $need_render && $this->render_budget > 0 ) {
 			$rendered = $this->rendered_signals( $post );
 			if ( is_array( $rendered ) ) {
+				$rendered_ok = true; // The fetch succeeded — its H1 result is authoritative.
 				if ( ! empty( $rendered['h1'] ) ) {
 					$parsed['h1'] = $rendered['h1'];
 				}
@@ -240,6 +242,20 @@ class SCC_Analyzer {
 		$meta_title = SCC_SEO_Meta::get_title( $post->ID );
 		$meta_desc  = SCC_SEO_Meta::get_description( $post->ID );
 
+		// If we still found no H1 but could NOT confirm via a rendered fetch,
+		// assume the theme renders the title as the H1 (the overwhelmingly common
+		// case) rather than raising a false "no H1" flag. Only flag no_h1 when a
+		// successful rendered fetch actually found zero <h1> elements.
+		$h1_display = '';
+		$flag_no_h1 = false;
+		if ( ! empty( $parsed['h1'] ) ) {
+			$h1_display = $parsed['h1'][0];
+		} elseif ( $rendered_ok ) {
+			$flag_no_h1 = true; // Confirmed: the live page has no <h1>.
+		} else {
+			$h1_display = get_the_title( $post ); // Assume theme title = H1.
+		}
+
 		$flags = array();
 		if ( '' === trim( $meta_desc ) ) {
 			$flags[] = 'missing_meta';
@@ -247,7 +263,7 @@ class SCC_Analyzer {
 		if ( $word_count < self::THIN_CONTENT_WORDS ) {
 			$flags[] = 'thin_content';
 		}
-		if ( empty( $parsed['h1'] ) ) {
+		if ( $flag_no_h1 ) {
 			$flags[] = 'no_h1';
 		}
 		if ( 0 === $parsed['internal_links'] ) {
@@ -259,7 +275,7 @@ class SCC_Analyzer {
 			'url'                => get_permalink( $post ),
 			'post_type'          => $post->post_type,
 			'title'              => get_the_title( $post ),
-			'h1'                 => ! empty( $parsed['h1'] ) ? $parsed['h1'][0] : '',
+			'h1'                 => $h1_display,
 			'meta_title'         => $meta_title,
 			'meta_description'   => $meta_desc,
 			'word_count'         => $word_count,

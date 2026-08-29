@@ -24,8 +24,133 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SCC_GSC {
 
 	const TOKEN_URL   = 'https://oauth2.googleapis.com/token';
+	const AUTH_URL    = 'https://accounts.google.com/o/oauth2/v2/auth';
 	const API_BASE    = 'https://searchconsole.googleapis.com/webmasters/v3';
 	const TOKEN_CACHE = 'scc_gsc_access_token';
+	const SCOPE       = 'https://www.googleapis.com/auth/webmasters.readonly';
+	const STATE_KEY   = 'scc_gsc_oauth_state';
+
+	/**
+	 * The OAuth redirect URI (must be added to the Google OAuth client).
+	 *
+	 * @return string
+	 */
+	public static function redirect_uri() {
+		return admin_url( 'admin.php?page=seo-command-center-connections' );
+	}
+
+	/**
+	 * Whether an OAuth client (id + secret) is configured — enough to start the
+	 * connect flow (the refresh token is obtained by the flow itself).
+	 *
+	 * @return bool
+	 */
+	public static function has_client() {
+		$c = self::creds();
+		return ! empty( $c['gsc_client_id'] ) && ! empty( $c['gsc_client_secret'] );
+	}
+
+	/**
+	 * Build the Google consent URL to start the connect flow.
+	 *
+	 * @return string|WP_Error
+	 */
+	public static function auth_url() {
+		$c = self::creds();
+		if ( empty( $c['gsc_client_id'] ) ) {
+			return new WP_Error( 'scc_no_client', __( 'Enter your OAuth Client ID and secret first, then Save.', 'seo-command-center' ) );
+		}
+		$state = wp_generate_password( 32, false );
+		set_transient( self::STATE_KEY, $state, 15 * MINUTE_IN_SECONDS );
+
+		$args = array(
+			'client_id'              => $c['gsc_client_id'],
+			'redirect_uri'           => self::redirect_uri(),
+			'response_type'          => 'code',
+			'scope'                  => self::SCOPE,
+			'access_type'            => 'offline',
+			'include_granted_scopes' => 'true',
+			'prompt'                 => 'consent', // Force a refresh_token every time.
+			'state'                  => $state,
+		);
+		return self::AUTH_URL . '?' . http_build_query( $args );
+	}
+
+	/**
+	 * Handle the OAuth callback: exchange the code for tokens and store the
+	 * refresh token. Runs on the Connections admin page.
+	 *
+	 * @return array {ok:bool, message:string}
+	 */
+	public static function handle_callback() {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- OAuth uses its own state token, validated below.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return array( 'ok' => false, 'message' => __( 'Insufficient permissions.', 'seo-command-center' ) );
+		}
+		if ( isset( $_GET['error'] ) ) {
+			return array( 'ok' => false, 'message' => sprintf( /* translators: %s: error */ __( 'Google returned an error: %s', 'seo-command-center' ), sanitize_text_field( wp_unslash( $_GET['error'] ) ) ) );
+		}
+		$code  = isset( $_GET['code'] ) ? sanitize_text_field( wp_unslash( $_GET['code'] ) ) : '';
+		$state = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+		if ( '' === $code ) {
+			return array( 'ok' => false, 'message' => '' ); // Not a callback.
+		}
+		$expected = get_transient( self::STATE_KEY );
+		if ( ! $expected || ! hash_equals( (string) $expected, $state ) ) {
+			return array( 'ok' => false, 'message' => __( 'Security check failed (state mismatch). Please try connecting again.', 'seo-command-center' ) );
+		}
+		delete_transient( self::STATE_KEY );
+
+		$c = self::creds();
+		$response = wp_remote_post(
+			self::TOKEN_URL,
+			array(
+				'timeout' => 25,
+				'body'    => array(
+					'code'          => $code,
+					'client_id'     => $c['gsc_client_id'] ?? '',
+					'client_secret' => $c['gsc_client_secret'] ?? '',
+					'redirect_uri'  => self::redirect_uri(),
+					'grant_type'    => 'authorization_code',
+				),
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return array( 'ok' => false, 'message' => $response->get_error_message() );
+		}
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( empty( $body['refresh_token'] ) ) {
+			$msg = isset( $body['error_description'] ) ? $body['error_description'] : __( 'Google did not return a refresh token. Remove the app under your Google Account → Security → Third-party access, then connect again.', 'seo-command-center' );
+			return array( 'ok' => false, 'message' => $msg );
+		}
+
+		// Store the refresh token.
+		$creds = get_option( 'scc_credentials', array() );
+		$creds = is_array( $creds ) ? $creds : array();
+		$creds['gsc_refresh_token'] = self::sanitize_token( $body['refresh_token'] );
+		update_option( 'scc_credentials', $creds, false );
+		delete_transient( self::TOKEN_CACHE );
+
+		// Auto-select the property when the account has exactly one.
+		$sites = self::sites();
+		if ( ! is_wp_error( $sites ) && 1 === count( $sites ) ) {
+			SCC_Settings::update( array( 'gsc_site_url' => $sites[0]['siteUrl'] ) );
+		}
+
+		SCC_Logger::info( 'gsc', 'OAuth connected; refresh token stored.' );
+		return array( 'ok' => true, 'message' => __( 'Google Search Console connected.', 'seo-command-center' ) );
+	}
+
+	/**
+	 * Sanitize an OAuth token (keep its full charset, strip only whitespace).
+	 *
+	 * @param string $token Token.
+	 * @return string
+	 */
+	protected static function sanitize_token( $token ) {
+		return trim( preg_replace( '/\s+/', '', (string) $token ) );
+	}
 
 	/**
 	 * Read credentials.

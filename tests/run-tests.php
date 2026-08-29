@@ -439,10 +439,12 @@ $gem = new SCC_Gemini_Provider();
 assert_eq( 'gemini', $gem->get_id(), 'gemini id' );
 $GLOBALS['scc_test_options']['scc_credentials'] = array();
 assert_eq( false, $gem->is_configured(), 'not configured without key' );
+// With no key, list_models returns the curated list without any network call.
+assert_true( array_key_exists( 'gemini-flash-latest', $gem->list_models() ), 'lists the latest flash alias' );
+assert_true( $gem->estimate_cost( 1000000, 1000000, 'gemini-flash-latest' ) > 0, 'cost estimate positive' );
+assert_true( abs( $gem->estimate_cost( 1000000, 0, 'gemini-pro-latest' ) - 1.25 ) < 0.001, 'pro cost via name heuristic' );
 $GLOBALS['scc_test_options']['scc_credentials'] = array( 'gemini_key' => 'AIzaTESTKEY' );
 assert_true( $gem->is_configured(), 'configured with key' );
-assert_true( array_key_exists( 'gemini-2.5-flash', $gem->list_models() ), 'lists a flash model' );
-assert_true( $gem->estimate_cost( 1000000, 1000000, 'gemini-2.5-flash' ) > 0, 'cost estimate positive' );
 $gnorm = new ReflectionMethod( 'SCC_Gemini_Provider', 'normalize_messages' );
 $gnorm->setAccessible( true );
 $gmsgs = $gnorm->invoke( $gem, array( 'messages' => array( array( 'role' => 'user', 'content' => 'hi' ), array( 'role' => 'assistant', 'content' => 'yo' ) ) ) );

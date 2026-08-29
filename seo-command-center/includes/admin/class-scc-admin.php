@@ -276,15 +276,52 @@ class SCC_Admin {
 	}
 
 	/**
+	 * Handle the Google Search Console OAuth redirect (runs on admin_init).
+	 *
+	 * Exchanges the returned code for a refresh token, then redirects to a clean
+	 * URL so a refresh does not re-process the callback.
+	 */
+	public function maybe_handle_gsc_oauth() {
+		if ( ! is_admin() || ! SCC_Security::current_user_can() ) {
+			return;
+		}
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- OAuth state token is validated in handle_callback().
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		if ( self::SLUG . '-connections' !== $page ) {
+			return;
+		}
+		if ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) ) {
+			return;
+		}
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
+
+		$result = SCC_GSC::handle_callback();
+		if ( '' === $result['message'] ) {
+			return;
+		}
+		set_transient( 'scc_gsc_notice_' . get_current_user_id(), $result, 60 );
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-connections' ) );
+		exit;
+	}
+
+	/**
 	 * API Connections page.
 	 */
 	public function render_connections() {
+		$notice = get_transient( 'scc_gsc_notice_' . get_current_user_id() );
+		if ( $notice ) {
+			delete_transient( 'scc_gsc_notice_' . get_current_user_id() );
+		}
 		$this->view(
 			'connections',
 			array(
-				'hints'        => SCC_Settings::credential_hints(),
-				'providers'    => $this->ai->get_providers(),
-				'gsc_site_url' => SCC_Settings::get( 'gsc_site_url', '' ),
+				'hints'         => SCC_Settings::credential_hints(),
+				'providers'     => $this->ai->get_providers(),
+				'gsc_site_url'  => SCC_Settings::get( 'gsc_site_url', '' ),
+				'gsc_connected' => SCC_GSC::is_connected(),
+				'gsc_has_client'=> SCC_GSC::has_client(),
+				'gsc_redirect'  => SCC_GSC::redirect_uri(),
+				'gsc_notice'    => is_array( $notice ) ? $notice : null,
 			)
 		);
 	}

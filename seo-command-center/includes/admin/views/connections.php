@@ -81,28 +81,61 @@ $field = function ( $field, $label, $hints ) {
 		</table>
 
 		<h2><?php esc_html_e( 'Google Search Console (optional)', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'Imports real query, impression, click, CTR and position data to surface quick wins. Provide an OAuth client (installed-app) plus a refresh token generated for the https://www.googleapis.com/auth/webmasters.readonly scope. Leave a field blank to keep the saved value.', 'seo-command-center' ); ?></p>
+
+		<?php if ( ! empty( $data['gsc_notice'] ) ) : ?>
+			<div class="notice notice-<?php echo ! empty( $data['gsc_notice']['ok'] ) ? 'success' : 'error'; ?> inline">
+				<p><?php echo esc_html( $data['gsc_notice']['message'] ); ?></p>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $data['gsc_connected'] ) ) : ?>
+			<p class="scc-ok"><strong><?php esc_html_e( '✓ Connected.', 'seo-command-center' ); ?></strong> <?php esc_html_e( 'Click Verify below to confirm data access and pick your property.', 'seo-command-center' ); ?></p>
+		<?php endif; ?>
+
+		<p class="scc-note">
+			<?php esc_html_e( 'Imports real query, impression, click, CTR and position data. Google Search Console has no simple API key — it requires a one-time OAuth setup. Follow these steps once:', 'seo-command-center' ); ?>
+		</p>
+		<ol class="scc-options">
+			<li><?php echo wp_kses_post( sprintf( /* translators: %s: URL */ __( 'In <a href="%s" target="_blank" rel="noopener">Google Cloud Console</a>, create (or pick) a project and enable the “Google Search Console API”.', 'seo-command-center' ), 'https://console.cloud.google.com/apis/library/searchconsole.googleapis.com' ) ); ?></li>
+			<li><?php esc_html_e( 'APIs & Services → Credentials → Create credentials → OAuth client ID → Application type: Web application.', 'seo-command-center' ); ?></li>
+			<li>
+				<?php esc_html_e( 'Under “Authorized redirect URIs”, add this exact URL:', 'seo-command-center' ); ?><br>
+				<code id="scc-gsc-redirect"><?php echo esc_html( isset( $data['gsc_redirect'] ) ? $data['gsc_redirect'] : '' ); ?></code>
+				<button type="button" class="button button-small" id="scc-gsc-copy-redirect"><?php esc_html_e( 'Copy', 'seo-command-center' ); ?></button>
+			</li>
+			<li><?php esc_html_e( 'Paste the Client ID and Client secret below, click “Save connections”, then click “Connect Google Search Console”.', 'seo-command-center' ); ?></li>
+		</ol>
+
 		<table class="form-table" role="presentation">
 			<?php
 			$field( 'gsc_client_id', __( 'OAuth client ID', 'seo-command-center' ), $hints );
 			$field( 'gsc_client_secret', __( 'OAuth client secret', 'seo-command-center' ), $hints );
-			$field( 'gsc_refresh_token', __( 'OAuth refresh token', 'seo-command-center' ), $hints );
 			?>
 			<tr>
 				<th scope="row"><label for="scc-gsc-site"><?php esc_html_e( 'Property (site URL)', 'seo-command-center' ); ?></label></th>
 				<td>
 					<input type="text" class="regular-text" id="scc-gsc-site" value="<?php echo esc_attr( isset( $data['gsc_site_url'] ) ? $data['gsc_site_url'] : '' ); ?>" placeholder="sc-domain:example.com  or  https://example.com/">
-					<p class="description"><?php esc_html_e( 'Must EXACTLY match a verified property in Search Console. Domain properties look like “sc-domain:example.com”; URL-prefix properties look like “https://example.com/” (with the trailing slash). Verify below to see your exact options.', 'seo-command-center' ); ?></p>
+					<p class="description"><?php esc_html_e( 'Set automatically after connecting when your account has one property. Otherwise click Verify and choose. Domain properties look like “sc-domain:example.com”; URL-prefix like “https://example.com/”.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 		</table>
 
 		<p>
-			<button type="button" class="button" id="scc-gsc-verify"><?php esc_html_e( 'Verify Search Console connection', 'seo-command-center' ); ?></button>
+			<button type="button" class="button button-primary" id="scc-gsc-connect" <?php echo empty( $data['gsc_has_client'] ) ? 'disabled' : ''; ?>><?php echo ! empty( $data['gsc_connected'] ) ? esc_html__( 'Reconnect Google Search Console', 'seo-command-center' ) : esc_html__( 'Connect Google Search Console', 'seo-command-center' ); ?></button>
+			<button type="button" class="button" id="scc-gsc-verify"><?php esc_html_e( 'Verify connection', 'seo-command-center' ); ?></button>
 			<span class="scc-inline-status" id="scc-gsc-verify-status"></span>
 		</p>
+		<?php if ( empty( $data['gsc_has_client'] ) ) : ?>
+			<p class="scc-note"><?php esc_html_e( 'Enter the Client ID + secret and Save first — then the Connect button activates.', 'seo-command-center' ); ?></p>
+		<?php endif; ?>
 		<div id="scc-gsc-verify-out"></div>
-		<p class="scc-note"><?php esc_html_e( 'Verify tests the saved credentials, so click “Save connections” first if you just pasted a new key or token.', 'seo-command-center' ); ?></p>
+
+		<details style="margin-top:10px;">
+			<summary class="scc-note"><?php esc_html_e( 'Advanced: paste a refresh token manually instead', 'seo-command-center' ); ?></summary>
+			<table class="form-table" role="presentation">
+				<?php $field( 'gsc_refresh_token', __( 'OAuth refresh token', 'seo-command-center' ), $hints ); ?>
+			</table>
+		</details>
 
 		<p class="submit">
 			<button type="submit" class="button button-primary"><?php esc_html_e( 'Save connections', 'seo-command-center' ); ?></button>

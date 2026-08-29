@@ -355,6 +355,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/gsc/auth-url',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'gsc_auth_url' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/dataforseo/keywords',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -693,7 +703,9 @@ class SCC_REST {
 			array(
 				'system'     => 'You are a connectivity test. Reply with the single word: OK',
 				'messages'   => array( array( 'role' => 'user', 'content' => 'Say OK' ) ),
-				'max_tokens' => 16,
+				// Generous budget so "thinking" models (Gemini 3.x, etc.) still
+				// produce visible output after their internal reasoning tokens.
+				'max_tokens' => 256,
 				'model'      => isset( $models[ $provider_id ] ) ? $models[ $provider_id ] : '',
 			)
 		);
@@ -1062,6 +1074,19 @@ class SCC_REST {
 	 */
 	public function gsc_verify() {
 		return $this->ok( array( 'verify' => SCC_GSC::verify() ) );
+	}
+
+	/**
+	 * GET /gsc/auth-url — start the OAuth connect flow.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function gsc_auth_url() {
+		$url = SCC_GSC::auth_url();
+		if ( is_wp_error( $url ) ) {
+			return $url;
+		}
+		return $this->ok( array( 'url' => $url ) );
 	}
 
 	/**

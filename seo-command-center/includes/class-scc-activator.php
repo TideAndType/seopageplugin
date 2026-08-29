@@ -62,7 +62,7 @@ class SCC_Activator {
 			'fallback_provider'     => '',
 			'claude_model'          => 'claude-sonnet-5',
 			'openai_model'          => 'gpt-4o',
-			'gemini_model'          => 'gemini-2.5-flash',
+			'gemini_model'          => 'gemini-flash-latest',
 			'lmstudio_model'        => 'local-model',
 			'lmstudio_base_url'     => 'http://localhost:1234/v1',
 			// SEO.
