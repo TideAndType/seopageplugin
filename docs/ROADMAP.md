@@ -46,12 +46,13 @@ The functional base everything else builds on.
   guarantee)
 - ✅ Regenerate-section support (intro/conclusion/faq/cta/meta title/description)
 
-## Phase 4 — Elementor ⬜
-- Elementor detection
-- Template detection + "designate as SEO template"
-- Template → content-type mapping UI
-- Placeholder system (`{{TITLE}}`, `{{CITY}}`, custom …) with detection
-- Populate Elementor `_elementor_data` while preserving design
+## Phase 4 — Elementor ✅
+- ✅ Elementor detection (graceful fallback to standard content when absent)
+- ✅ Template detection (elementor_library) + "designate as SEO template" meta box
+- ✅ Template → content-type mapping UI + store (one active per type)
+- ✅ Placeholder system (`{{TITLE}}`, `{{CITY}}`, custom …) with detection
+- ✅ Populate Elementor `_elementor_data` while preserving design (tree walk,
+  regenerated element IDs, only text settings touched); wired into the generator
 
 ## Phase 5 — Internal Linking ⬜
 - Content graph model

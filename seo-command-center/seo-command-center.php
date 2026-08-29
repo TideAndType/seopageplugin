@@ -62,6 +62,11 @@ require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-metadata.php';
 require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-quality-score.php';
 require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-generator.php';
 
+require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-elementor.php';
+require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-placeholders.php';
+require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-template-mapping.php';
+require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-elementor-builder.php';
+
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';
 require_once SCC_PLUGIN_DIR . 'includes/rest/class-scc-rest.php';

@@ -363,6 +363,44 @@
 		} );
 	}
 
+	// ---- Elementor template mapping ------------------------------------
+	function bindTemplates() {
+		var table = document.getElementById( 'scc-template-table' );
+		if ( ! table ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-template-msg' );
+		table.addEventListener( 'change', function ( e ) {
+			if ( ! e.target.classList.contains( 'scc-template-select' ) ) {
+				return;
+			}
+			var row = e.target.closest( 'tr' );
+			var contentType = row.getAttribute( 'data-content-type' );
+			var opt = e.target.options[ e.target.selectedIndex ];
+			var templateId = e.target.value;
+			var statusCell = row.querySelector( '.scc-map-status' );
+			setStatus( msg, '…' );
+
+			if ( ! templateId ) {
+				setStatus( msg, 'Select a template to map, or remove the mapping from the list.', 'is-ok' );
+				return;
+			}
+			request( '/templates/map', {
+				method: 'POST',
+				data: { content_type: contentType, template_id: templateId, template_name: opt.getAttribute( 'data-name' ) },
+			} )
+				.then( function () {
+					if ( statusCell ) {
+						statusCell.innerHTML = '<span class="scc-badge scc-badge--ok">Mapped</span>';
+					}
+					setStatus( msg, i18n.saved || 'Saved.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -371,5 +409,6 @@
 		bindSeedPlan();
 		bindContentPlan();
 		bindGenerate();
+		bindTemplates();
 	} );
 } )();

@@ -74,6 +74,8 @@ class SCC_Plugin {
 		// Admin.
 		$this->loader->add_action( 'admin_menu', $this->admin, 'register_menu' );
 		$this->loader->add_action( 'admin_enqueue_scripts', $this->admin, 'enqueue_assets' );
+		$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
+		$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
 
 		// REST.
 		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );

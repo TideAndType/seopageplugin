@@ -51,7 +51,7 @@ class SCC_Admin {
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
-			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
@@ -112,6 +112,65 @@ class SCC_Admin {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Register the "designate as SEO template" meta box on Elementor pages.
+	 */
+	public function register_meta_boxes() {
+		if ( ! SCC_Elementor::is_active() ) {
+			return;
+		}
+		foreach ( array( 'page', 'post' ) as $type ) {
+			add_meta_box(
+				'scc_seo_template',
+				__( 'SEO Command: SEO template', 'seo-command-center' ),
+				array( $this, 'render_meta_box' ),
+				$type,
+				'side',
+				'default'
+			);
+		}
+	}
+
+	/**
+	 * Render the SEO template meta box.
+	 *
+	 * @param WP_Post $post Post.
+	 */
+	public function render_meta_box( $post ) {
+		if ( ! SCC_Elementor::is_elementor_post( $post->ID ) ) {
+			echo '<p>' . esc_html__( 'Build this page with Elementor to use it as an SEO template.', 'seo-command-center' ) . '</p>';
+			return;
+		}
+		$on = '1' === get_post_meta( $post->ID, '_scc_is_seo_template', true );
+		wp_nonce_field( 'scc_seo_template_' . $post->ID, 'scc_seo_template_nonce' );
+		echo '<label><input type="checkbox" name="scc_is_seo_template" value="1" ' . checked( $on, true, false ) . '> ';
+		echo esc_html__( 'Use this Elementor page as a reusable SEO template', 'seo-command-center' ) . '</label>';
+		echo '<p class="description">' . esc_html__( 'Add {{PLACEHOLDER}} tokens to text widgets, then map it to a content type under Elementor Templates.', 'seo-command-center' ) . '</p>';
+	}
+
+	/**
+	 * Save the SEO template meta box.
+	 *
+	 * @param int $post_id Post id.
+	 */
+	public function save_meta_box( $post_id ) {
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+		if ( ! isset( $_POST['scc_seo_template_nonce'] ) ) {
+			return;
+		}
+		$nonce = sanitize_text_field( wp_unslash( $_POST['scc_seo_template_nonce'] ) );
+		if ( ! wp_verify_nonce( $nonce, 'scc_seo_template_' . $post_id ) ) {
+			return;
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+		$on = isset( $_POST['scc_is_seo_template'] );
+		SCC_Elementor::designate_template( $post_id, $on );
 	}
 
 	/**
@@ -259,6 +318,22 @@ class SCC_Admin {
 			array(
 				'cannibalization' => $detector->detect(),
 				'has_analysis'    => (bool) SCC_Analyzer::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Elementor Templates page.
+	 */
+	public function render_elementor() {
+		$this->view(
+			'elementor',
+			array(
+				'active'        => SCC_Elementor::is_active(),
+				'templates'     => SCC_Elementor::is_active() ? SCC_Elementor::list_templates() : array(),
+				'mappings'      => SCC_Template_Mapping::all(),
+				'content_types' => SCC_Template_Mapping::CONTENT_TYPES,
+				'placeholders'  => SCC_Placeholders::BUILTIN,
 			)
 		);
 	}

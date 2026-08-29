@@ -199,6 +199,54 @@ $poor = SCC_Quality_Score::score( array(
 ) );
 assert_true( $poor['score'] < 30, 'thin content scores low (' . $poor['score'] . ')' );
 
+echo "\n== Elementor placeholder detection + replacement ==\n";
+$tree = array(
+	array(
+		'id'       => 'aaa1111',
+		'elType'   => 'section',
+		'settings' => array( 'padding' => array( 'top' => '10' ) ),
+		'elements' => array(
+			array(
+				'id'       => 'bbb2222',
+				'elType'   => 'widget',
+				'widgetType' => 'heading',
+				'settings' => array( 'title' => '{{TITLE}}', 'align' => 'center' ),
+				'elements' => array(),
+			),
+			array(
+				'id'       => 'ccc3333',
+				'elType'   => 'widget',
+				'widgetType' => 'text-editor',
+				'settings' => array( 'editor' => 'Intro: {{INTRO}} — {{UNKNOWN}}' ),
+				'elements' => array(),
+			),
+		),
+	),
+);
+$detected = SCC_Placeholders::detect( $tree );
+sort( $detected );
+assert_eq( array( 'INTRO', 'TITLE', 'UNKNOWN' ), $detected, 'tokens detected across tree' );
+
+$replaced = SCC_Placeholders::replace( $tree, array( 'TITLE' => 'Hello World', 'INTRO' => 'welcome' ) );
+assert_eq( 'Hello World', $replaced[0]['elements'][0]['settings']['title'], 'TITLE replaced in heading' );
+assert_eq( 'Intro: welcome — ', $replaced[0]['elements'][1]['settings']['editor'], 'INTRO replaced, UNKNOWN cleared' );
+assert_eq( 'center', $replaced[0]['elements'][0]['settings']['align'], 'non-token settings preserved' );
+assert_eq( array( 'top' => '10' ), $replaced[0]['settings']['padding'], 'design settings preserved' );
+// Original tree not mutated.
+assert_eq( '{{TITLE}}', $tree[0]['elements'][0]['settings']['title'], 'input tree not mutated' );
+
+echo "\n== Elementor builder replacement map ==\n";
+$repl = SCC_Elementor_Builder::build_replacements(
+	array( 'title' => 'Local SEO — Daytona Beach', 'primary_keyword' => 'local seo daytona beach', 'parent' => 'Local SEO' ),
+	array( 'title' => 'Local SEO — Daytona Beach', 'content_html' => '<p>First para here.</p><p>Second.</p>', 'faqs' => array( array( 'question' => 'Q?', 'answer' => 'A.' ) ), 'meta_title' => 'MT', 'meta_description' => 'MD' ),
+	array( 'cta' => 'Call today' )
+);
+assert_eq( 'Daytona Beach', $repl['CITY'], 'city derived from title' );
+assert_eq( 'Local SEO', $repl['SERVICE'], 'service from parent' );
+assert_eq( 'First para here.', $repl['INTRO'], 'intro from first paragraph' );
+assert_eq( 'Call today', $repl['CTA'], 'cta carried' );
+assert_true( strpos( $repl['FAQ'], 'Q?' ) !== false, 'faq html built' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

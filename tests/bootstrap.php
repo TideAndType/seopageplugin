@@ -163,3 +163,14 @@ if ( ! function_exists( 'is_wp_error' ) ) {
 require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-seo-meta.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-schema.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-quality-score.php';
+
+// --- Phase 4 stubs + classes under test -----------------------------------
+if ( ! function_exists( 'esc_html' ) ) {
+	function esc_html( $t ) {
+		return htmlspecialchars( (string) $t, ENT_QUOTES );
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-placeholders.php';
+// SCC_Elementor_Builder::build_replacements is pure; the file references
+// SCC_Elementor only inside build_tree/apply_to_post, not at load time.
+require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor-builder.php';

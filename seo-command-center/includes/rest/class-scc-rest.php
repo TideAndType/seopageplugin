@@ -251,6 +251,37 @@ class SCC_REST {
 				),
 			)
 		);
+
+		// ---- Phase 4: Elementor templates -----------------------------
+		register_rest_route(
+			self::NS,
+			'/templates',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_templates' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/map',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'map_template' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/map/(?P<id>\d+)',
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( $this, 'delete_mapping' ),
+				'permission_callback' => $perm,
+			)
+		);
 	}
 
 	/**
@@ -593,6 +624,49 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /templates — Elementor templates + current mappings.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_templates() {
+		return $this->ok(
+			array(
+				'elementor'     => SCC_Elementor::is_active(),
+				'templates'     => SCC_Elementor::is_active() ? SCC_Elementor::list_templates() : array(),
+				'mappings'      => SCC_Template_Mapping::all(),
+				'content_types' => SCC_Template_Mapping::CONTENT_TYPES,
+			)
+		);
+	}
+
+	/**
+	 * POST /templates/map — map a template to a content type.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function map_template( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$id     = SCC_Template_Mapping::save( is_array( $params ) ? $params : array() );
+		if ( ! $id ) {
+			return $this->fail( 'map_failed', __( 'Provide a valid template and content type.', 'seo-command-center' ), 400 );
+		}
+		return $this->ok( array( 'id' => $id, 'mappings' => SCC_Template_Mapping::all() ) );
+	}
+
+	/**
+	 * DELETE /templates/map/{id}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function delete_mapping( WP_REST_Request $request ) {
+		SCC_Template_Mapping::delete( (int) $request->get_param( 'id' ) );
+		return $this->ok( array( 'mappings' => SCC_Template_Mapping::all() ) );
 	}
 
 	/**

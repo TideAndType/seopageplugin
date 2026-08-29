@@ -73,6 +73,10 @@ class SCC_Generator {
 			return $post_id;
 		}
 
+		// If an Elementor template is mapped to this content type, populate it
+		// (preserving the design) instead of relying on raw post_content.
+		$used_elementor = $this->maybe_apply_elementor( $post_id, $entry, $body, $brief );
+
 		// Metadata (non-destructive).
 		SCC_Metadata::apply(
 			$post_id,
@@ -125,16 +129,43 @@ class SCC_Generator {
 			);
 		}
 
-		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'] ) );
+		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'elementor' => $used_elementor ) );
 
 		return array(
-			'post_id'  => $post_id,
-			'edit_url' => get_edit_post_link( $post_id, 'raw' ),
-			'view_url' => get_permalink( $post_id ),
-			'status'   => $status,
-			'score'    => $score,
-			'title'    => $body['title'],
+			'post_id'   => $post_id,
+			'edit_url'  => get_edit_post_link( $post_id, 'raw' ),
+			'view_url'  => get_permalink( $post_id ),
+			'status'    => $status,
+			'score'     => $score,
+			'title'     => $body['title'],
+			'elementor' => $used_elementor,
 		);
+	}
+
+	/**
+	 * Apply a mapped Elementor template to the post if one exists.
+	 *
+	 * @param int   $post_id Post id.
+	 * @param array $entry   Plan entry.
+	 * @param array $body    Generated body.
+	 * @param array $brief   Brief.
+	 * @return bool Whether an Elementor template was applied.
+	 */
+	protected function maybe_apply_elementor( $post_id, array $entry, array $body, array $brief ) {
+		if ( ! SCC_Elementor::is_active() ) {
+			return false;
+		}
+		$mapping = SCC_Template_Mapping::for_content_type( $entry['page_type'] ?? 'article' );
+		if ( ! $mapping || empty( $mapping['template_id'] ) ) {
+			return false;
+		}
+		$replacements = SCC_Elementor_Builder::build_replacements( $entry, $body, $brief );
+		$applied      = SCC_Elementor_Builder::apply_to_post( $post_id, (int) $mapping['template_id'], $replacements );
+		if ( is_wp_error( $applied ) ) {
+			SCC_Logger::error( 'generator', 'Elementor apply failed: ' . $applied->get_error_message(), array( 'post_id' => $post_id ) );
+			return false;
+		}
+		return true;
 	}
 
 	/**
