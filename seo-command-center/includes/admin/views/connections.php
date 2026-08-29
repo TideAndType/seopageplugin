@@ -1,0 +1,77 @@
+<?php
+/**
+ * API Connections view. Keys are write-only; only masked hints are shown.
+ *
+ * @package SEO_Command_Center
+ * @var array $data View data (hints, providers).
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+$hints = isset( $data['hints'] ) ? $data['hints'] : array();
+
+/**
+ * Render one key field.
+ *
+ * @param string $field Field key.
+ * @param string $label Label.
+ * @param array  $hints Hints map.
+ */
+$field = function ( $field, $label, $hints ) {
+	$configured = ! empty( $hints[ $field ]['configured'] );
+	$hint       = isset( $hints[ $field ]['hint'] ) ? $hints[ $field ]['hint'] : '';
+	?>
+	<tr>
+		<th scope="row"><label for="scc-<?php echo esc_attr( $field ); ?>"><?php echo esc_html( $label ); ?></label></th>
+		<td>
+			<input type="password" autocomplete="off" class="regular-text" id="scc-<?php echo esc_attr( $field ); ?>" data-field="<?php echo esc_attr( $field ); ?>"
+				placeholder="<?php echo $configured ? esc_attr( $hint ) : esc_attr__( 'Not set', 'seo-command-center' ); ?>">
+			<?php if ( $configured ) : ?>
+				<span class="scc-badge scc-badge--ok"><?php esc_html_e( 'Configured', 'seo-command-center' ); ?></span>
+				<label class="scc-clear"><input type="checkbox" data-clear="<?php echo esc_attr( $field ); ?>"> <?php esc_html_e( 'Clear', 'seo-command-center' ); ?></label>
+			<?php else : ?>
+				<span class="scc-badge"><?php esc_html_e( 'Not set', 'seo-command-center' ); ?></span>
+			<?php endif; ?>
+		</td>
+	</tr>
+	<?php
+};
+?>
+<div class="wrap scc-wrap">
+	<div class="scc-header">
+		<h1><?php esc_html_e( 'API Connections', 'seo-command-center' ); ?></h1>
+		<p class="scc-sub"><?php esc_html_e( 'Keys are stored securely and never shown again or sent to your browser. Leave a field blank to keep the existing key.', 'seo-command-center' ); ?></p>
+	</div>
+
+	<form id="scc-connections-form" class="scc-card">
+		<h2><?php esc_html_e( 'AI providers', 'seo-command-center' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<?php
+			$field( 'claude_key', __( 'Anthropic Claude API key', 'seo-command-center' ), $hints );
+			$field( 'openai_key', __( 'OpenAI API key', 'seo-command-center' ), $hints );
+			?>
+		</table>
+		<p>
+			<button type="button" class="button" data-test-provider="claude"><?php esc_html_e( 'Test Claude', 'seo-command-center' ); ?></button>
+			<button type="button" class="button" data-test-provider="openai"><?php esc_html_e( 'Test OpenAI', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-test-status"></span>
+		</p>
+
+		<h2><?php esc_html_e( 'Data integrations (optional, used in Phase 6)', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'These can be stored now; the features that use them arrive in Phase 6. The plugin works without them.', 'seo-command-center' ); ?></p>
+		<table class="form-table" role="presentation">
+			<?php
+			$field( 'dataforseo_login', __( 'DataForSEO login', 'seo-command-center' ), $hints );
+			$field( 'dataforseo_key', __( 'DataForSEO password/key', 'seo-command-center' ), $hints );
+			$field( 'gsc_key', __( 'Google Search Console key', 'seo-command-center' ), $hints );
+			?>
+		</table>
+
+		<p class="submit">
+			<button type="submit" class="button button-primary"><?php esc_html_e( 'Save connections', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-connections-status"></span>
+		</p>
+	</form>
+</div>

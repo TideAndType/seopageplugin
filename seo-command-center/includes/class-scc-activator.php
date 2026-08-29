@@ -1,0 +1,74 @@
+<?php
+/**
+ * Plugin activation: create tables, default settings, capability.
+ *
+ * @package SEO_Command_Center
+ */
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+/**
+ * Activation routine.
+ */
+class SCC_Activator {
+
+	/**
+	 * Run on activation.
+	 */
+	public static function activate() {
+		SCC_DB::install();
+
+		// Default settings (non-secret) if none exist.
+		if ( false === get_option( 'scc_settings' ) ) {
+			add_option( 'scc_settings', self::default_settings() );
+		} else {
+			// Merge any new defaults into existing settings.
+			$existing = get_option( 'scc_settings' );
+			update_option( 'scc_settings', wp_parse_args( $existing, self::default_settings() ) );
+		}
+
+		// Credentials option is autoload=no so keys are not loaded on every request.
+		if ( false === get_option( 'scc_credentials' ) ) {
+			add_option( 'scc_credentials', array(), '', 'no' );
+		}
+
+		update_option( 'scc_db_version', SCC_DB_VERSION );
+
+		// Ensure administrators have the plugin capability (a real cap, not just the map).
+		$role = get_role( 'administrator' );
+		if ( $role && ! $role->has_cap( 'manage_options' ) ) {
+			$role->add_cap( 'manage_options' );
+		}
+
+		flush_rewrite_rules();
+	}
+
+	/**
+	 * Default non-secret settings.
+	 *
+	 * @return array
+	 */
+	public static function default_settings() {
+		return array(
+			// AI.
+			'default_provider'      => 'claude',
+			'fallback_provider'     => '',
+			'claude_model'          => 'claude-sonnet-5',
+			'openai_model'          => 'gpt-4o',
+			// SEO.
+			'default_word_count'    => 1200,
+			'max_internal_links'    => 5,
+			// Publishing.
+			'draft_by_default'      => true,
+			'auto_publish'          => false,
+			// Limits.
+			'monthly_budget'        => 0, // 0 = no limit.
+			'max_pages_per_batch'   => 25,
+			'max_articles_per_batch'=> 25,
+			// Housekeeping.
+			'remove_data_on_uninstall' => false,
+		);
+	}
+}
