@@ -162,6 +162,43 @@ assert_eq( 'high', $clean['priority'], 'valid priority kept' );
 assert_eq( 20000, $clean['word_count'], 'word count clamped to max' );
 assert_eq( array( 'a', 'b', 'c' ), json_decode( $clean['secondary'], true ), 'secondary list parsed' );
 
+echo "\n== Schema build + validation ==\n";
+$article = SCC_Schema::build( 'BlogPosting', array( 'name' => 'My Title', 'description' => 'Desc', 'url' => 'https://example.com/p' ) );
+assert_true( is_array( $article ) && 'BlogPosting' === $article['@type'], 'BlogPosting built' );
+assert_eq( 'My Title', $article['headline'], 'headline set' );
+$bad = SCC_Schema::build( 'BlogPosting', array( 'name' => '', 'description' => 'x' ) );
+assert_true( $bad instanceof WP_Error, 'article without headline rejected' );
+$faq = SCC_Schema::build( 'FAQPage', array( 'faqs' => array( array( 'question' => 'Q?', 'answer' => 'A.' ) ) ) );
+assert_true( is_array( $faq ) && ! empty( $faq['mainEntity'] ), 'FAQPage built with entities' );
+$faq_empty = SCC_Schema::build( 'FAQPage', array( 'faqs' => array() ) );
+assert_true( $faq_empty instanceof WP_Error, 'empty FAQPage rejected' );
+$unsupported = SCC_Schema::build( 'HowTo', array( 'name' => 'x' ) );
+assert_true( $unsupported instanceof WP_Error, 'unsupported type rejected' );
+assert_eq( 'LocalBusiness', SCC_Schema::type_for( 'location' ), 'location -> LocalBusiness' );
+assert_eq( 'BlogPosting', SCC_Schema::type_for( 'article' ), 'article -> BlogPosting' );
+
+echo "\n== Quality score ==\n";
+$good = SCC_Quality_Score::score( array(
+	'html'             => '<h2>One</h2><p>local seo helps</p><h2>Two</h2><p>more</p><h2>Three</h2><p>' . str_repeat( 'word ', 500 ) . '</p>',
+	'brief'            => array( 'recommended_words' => 500, 'context' => array( 'primary_keyword' => 'local seo' ), 'entities' => array( 'local seo' ) ),
+	'meta_title'       => 'A concise SEO title',
+	'meta_description' => str_repeat( 'x', 130 ),
+	'faqs'             => array( array( 'question' => 'Q', 'answer' => 'A' ) ),
+	'has_schema'       => true,
+	'cta'              => 'Contact us',
+) );
+assert_true( $good['score'] >= 80, 'well-formed content scores high (' . $good['score'] . ')' );
+$poor = SCC_Quality_Score::score( array(
+	'html'             => '<p>short</p>',
+	'brief'            => array( 'recommended_words' => 1500, 'context' => array( 'primary_keyword' => 'missing kw' ), 'entities' => array( 'x' ) ),
+	'meta_title'       => '',
+	'meta_description' => '',
+	'faqs'             => array(),
+	'has_schema'       => false,
+	'cta'              => '',
+) );
+assert_true( $poor['score'] < 30, 'thin content scores low (' . $poor['score'] . ')' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

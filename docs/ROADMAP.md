@@ -32,16 +32,19 @@ The functional base everything else builds on.
 - ✅ Keyword → URL mapping (recommended slugs per cluster)
 - ✅ Keyword cannibalization detection (token-overlap heuristic + recommendation options)
 
-## Phase 3 — Content Generation ⬜
-- Multi-step AI content generator (brief → intent → outline → coverage →
-  links → draft → SEO → QA → metadata → schema)
-- Content briefs (approve before generate)
-- SEO metadata generation (respecting active SEO plugin)
-- Schema generation (validated, non-duplicate)
-- Draft creation via `wp_insert_post`
-- Content types: blog article, service page, unique location page, landing page
-- Content quality score (labelled internal optimization score)
-- Regenerate-section support
+## Phase 3 — Content Generation ✅
+- ✅ Multi-step AI content generator (brief → outline/entities/questions →
+  draft body + metadata → validated schema → draft → quality score)
+- ✅ Content briefs (approve before generate)
+- ✅ SEO metadata generation, non-destructively written to the active SEO
+  plugin's keys (Yoast/Rank Math) or `_scc_*` fallback
+- ✅ Schema generation (validated, duplicate-aware) + front-end JSON-LD output
+- ✅ Draft creation via `wp_insert_post` (draft by default; content via wp_kses)
+- ✅ Content types: blog article, service, location (locally-specific prompt),
+  landing/page
+- ✅ Content quality score (labelled internal optimization score, not a ranking
+  guarantee)
+- ✅ Regenerate-section support (intro/conclusion/faq/cta/meta title/description)
 
 ## Phase 4 — Elementor ⬜
 - Elementor detection

@@ -56,6 +56,12 @@ require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-architecture.php';
 require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-content-plan.php';
 require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-cannibalization.php';
 
+require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-content-brief.php';
+require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-schema.php';
+require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-metadata.php';
+require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-quality-score.php';
+require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-generator.php';
+
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';
 require_once SCC_PLUGIN_DIR . 'includes/rest/class-scc-rest.php';

@@ -245,6 +245,124 @@
 		} );
 	}
 
+	// ---- Generate content (brief + draft) ------------------------------
+	function el( tag, text, cls ) {
+		var e = document.createElement( tag );
+		if ( text ) {
+			e.textContent = text;
+		}
+		if ( cls ) {
+			e.className = cls;
+		}
+		return e;
+	}
+
+	function renderBrief( panel, brief ) {
+		panel.innerHTML = '';
+		panel.appendChild( el( 'h3', 'Content brief' ) );
+		if ( brief.summary ) {
+			panel.appendChild( el( 'p', brief.summary ) );
+		}
+		var meta = el( 'div' );
+		meta.appendChild( el( 'span', 'Intent: ' + ( brief.search_intent || '—' ), 'scc-flag' ) );
+		meta.appendChild( el( 'span', 'Target: ' + ( brief.recommended_words || '—' ) + ' words', 'scc-flag' ) );
+		panel.appendChild( meta );
+
+		function list( title, items ) {
+			if ( ! items || ! items.length ) {
+				return;
+			}
+			panel.appendChild( el( 'div', title, 'scc-label' ) );
+			var ul = el( 'ul' );
+			items.forEach( function ( it ) {
+				if ( typeof it === 'object' ) {
+					ul.appendChild( el( 'li', ( it.heading || '' ) + ( it.purpose ? ' — ' + it.purpose : '' ) ) );
+				} else {
+					ul.appendChild( el( 'li', it ) );
+				}
+			} );
+			panel.appendChild( ul );
+		}
+		list( 'Outline', brief.outline );
+		list( 'Questions to answer', brief.questions );
+		list( 'Entities', brief.entities );
+		list( 'Internal link targets', brief.internal_link_targets );
+		if ( brief.cta ) {
+			panel.appendChild( el( 'div', 'CTA', 'scc-label' ) );
+			panel.appendChild( el( 'p', brief.cta ) );
+		}
+	}
+
+	function bindGenerate() {
+		var table = document.getElementById( 'scc-generate-table' );
+		if ( ! table ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-generate-msg' );
+
+		table.addEventListener( 'click', function ( e ) {
+			var isBrief = e.target.classList.contains( 'scc-brief-btn' );
+			var isGen = e.target.classList.contains( 'scc-generate-btn' );
+			if ( ! isBrief && ! isGen ) {
+				return;
+			}
+			var row = e.target.closest( 'tr' );
+			var id = row.getAttribute( 'data-id' );
+			var briefRow = row.nextElementSibling;
+			var panel = briefRow ? briefRow.querySelector( '.scc-brief-panel' ) : null;
+			e.target.disabled = true;
+
+			if ( isBrief ) {
+				setStatus( msg, 'Generating brief…' );
+				request( '/brief', { method: 'POST', data: { entry_id: id } } )
+					.then( function ( res ) {
+						briefRow.hidden = false;
+						renderBrief( panel, ( res.data && res.data.brief ) || {} );
+						setStatus( msg, i18n.saved || '', 'is-ok' );
+						e.target.disabled = false;
+					} )
+					.catch( function ( err ) {
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+						e.target.disabled = false;
+					} );
+			} else {
+				setStatus( msg, 'Generating draft… this can take up to a minute.' );
+				var statusCell = row.querySelector( '.scc-gen-status' );
+				if ( statusCell ) {
+					statusCell.textContent = 'generating';
+				}
+				request( '/generate', { method: 'POST', data: { entry_id: id } } )
+					.then( function ( res ) {
+						var d = res.data || {};
+						if ( statusCell ) {
+							statusCell.textContent = d.status || 'draft';
+						}
+						if ( panel && briefRow ) {
+							briefRow.hidden = false;
+							panel.innerHTML = '';
+							var score = ( d.score && d.score.score ) || 0;
+							panel.appendChild( el( 'p', 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) );
+							if ( d.edit_url ) {
+								var a = el( 'a', 'Edit draft in WordPress' );
+								a.href = d.edit_url;
+								a.className = 'button button-primary';
+								panel.appendChild( a );
+							}
+						}
+						setStatus( msg, 'Draft created.', 'is-ok' );
+						e.target.disabled = false;
+					} )
+					.catch( function ( err ) {
+						if ( statusCell ) {
+							statusCell.textContent = 'failed';
+						}
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+						e.target.disabled = false;
+					} );
+			}
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -252,5 +370,6 @@
 		bindKeywordStrategy();
 		bindSeedPlan();
 		bindContentPlan();
+		bindGenerate();
 	} );
 } )();

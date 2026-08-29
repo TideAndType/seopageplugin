@@ -48,6 +48,17 @@ class SCC_Content_Plan {
 	}
 
 	/**
+	 * Fetch a single decoded entry by id.
+	 *
+	 * @param int $id Entry id.
+	 * @return array|null
+	 */
+	public static function find( $id ) {
+		$row = SCC_DB::get( 'content_plan', $id );
+		return $row ? self::decode( $row ) : null;
+	}
+
+	/**
 	 * Sanitize an incoming plan entry.
 	 *
 	 * @param array $raw Raw entry.

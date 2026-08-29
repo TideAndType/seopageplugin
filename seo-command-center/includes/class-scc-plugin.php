@@ -78,6 +78,9 @@ class SCC_Plugin {
 		// REST.
 		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );
 
+		// Front-end: output stored JSON-LD schema for generated posts.
+		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
+
 		$this->loader->run();
 	}
 
@@ -86,6 +89,34 @@ class SCC_Plugin {
 	 */
 	public function load_textdomain() {
 		load_plugin_textdomain( 'seo-command-center', false, dirname( SCC_PLUGIN_BASENAME ) . '/languages' );
+	}
+
+	/**
+	 * Output stored JSON-LD schema for a singular generated post.
+	 */
+	public function output_schema() {
+		if ( ! is_singular() ) {
+			return;
+		}
+		$post_id = get_queried_object_id();
+		$stored  = get_post_meta( $post_id, '_scc_schema', true );
+		if ( empty( $stored ) ) {
+			return;
+		}
+		$nodes = json_decode( (string) $stored, true );
+		if ( ! is_array( $nodes ) || empty( $nodes ) ) {
+			return;
+		}
+		foreach ( $nodes as $node ) {
+			if ( ! is_array( $node ) || is_wp_error( SCC_Schema::validate( $node ) ) ) {
+				continue;
+			}
+			// Default encoding escapes forward slashes (\/), so a "</script>"
+			// inside any string value cannot break out of this inline script.
+			echo "\n" . '<script type="application/ld+json">'
+				. wp_json_encode( $node )
+				. '</script>' . "\n";
+		}
 	}
 
 	/**

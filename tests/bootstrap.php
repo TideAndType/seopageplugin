@@ -148,3 +148,18 @@ if ( ! class_exists( 'SCC_Settings' ) ) {
 require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-architecture.php';
 require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-cannibalization.php';
 require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-content-plan.php';
+
+// --- Phase 3 stubs + classes under test -----------------------------------
+if ( ! function_exists( 'esc_html__' ) ) {
+	function esc_html__( $text, $domain = 'default' ) {
+		return $text;
+	}
+}
+if ( ! function_exists( 'is_wp_error' ) ) {
+	function is_wp_error( $thing ) {
+		return $thing instanceof WP_Error;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-seo-meta.php';
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-schema.php';
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-quality-score.php';

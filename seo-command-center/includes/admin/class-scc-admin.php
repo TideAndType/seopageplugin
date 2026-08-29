@@ -50,11 +50,11 @@ class SCC_Admin {
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
-			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
 			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
-			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
 			self::SLUG . '-connections'      => array( __( 'API Connections', 'seo-command-center' ), 'render_connections' ),
@@ -229,7 +229,28 @@ class SCC_Admin {
 	}
 
 	/**
-	 * SEO Audit page (cannibalization for now; expands in Phase 3).
+	 * Generate Content page.
+	 */
+	public function render_generate() {
+		$entries = SCC_Content_Plan::all();
+		// Generatable = not yet turned into a post.
+		$generatable = array_filter(
+			$entries,
+			function ( $e ) {
+				return empty( $e['post_id'] ) && in_array( $e['status'], array( 'recommended', 'approved', 'review', 'needs_update' ), true );
+			}
+		);
+		$this->view(
+			'generate',
+			array(
+				'entries'      => array_values( $generatable ),
+				'auto_publish' => (bool) SCC_Settings::get( 'auto_publish', false ),
+			)
+		);
+	}
+
+	/**
+	 * SEO Audit page (cannibalization for now; expands in later phases).
 	 */
 	public function render_seo_audit() {
 		$detector = new SCC_Cannibalization();
@@ -238,6 +259,19 @@ class SCC_Admin {
 			array(
 				'cannibalization' => $detector->detect(),
 				'has_analysis'    => (bool) SCC_Analyzer::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Schema info page.
+	 */
+	public function render_schema_info() {
+		$this->view(
+			'schema',
+			array(
+				'seo_plugin' => SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ),
+				'allowed'    => SCC_Schema::ALLOWED,
 			)
 		);
 	}

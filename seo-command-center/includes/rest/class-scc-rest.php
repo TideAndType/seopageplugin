@@ -210,6 +210,47 @@ class SCC_REST {
 				'permission_callback' => $perm,
 			)
 		);
+
+		// ---- Phase 3: generation --------------------------------------
+		register_rest_route(
+			self::NS,
+			'/brief',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'brief' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'entry_id' => array( 'sanitize_callback' => 'absint', 'required' => true ),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/generate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'generate' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'entry_id' => array( 'sanitize_callback' => 'absint', 'required' => true ),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/regenerate-section',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'regenerate_section' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'post_id' => array( 'sanitize_callback' => 'absint', 'required' => true ),
+					'section' => array( 'sanitize_callback' => 'sanitize_key', 'required' => true ),
+				),
+			)
+		);
 	}
 
 	/**
@@ -491,6 +532,67 @@ class SCC_REST {
 	public function cannibalization() {
 		$detector = new SCC_Cannibalization();
 		return $this->ok( array( 'groups' => $detector->detect() ) );
+	}
+
+	/**
+	 * POST /brief — generate a content brief for approval.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function brief( WP_REST_Request $request ) {
+		$entry = SCC_Content_Plan::find( (int) $request->get_param( 'entry_id' ) );
+		if ( ! $entry ) {
+			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
+		}
+		$service = new SCC_Content_Brief( $this->ai );
+		$brief   = $service->generate( $entry );
+		if ( is_wp_error( $brief ) ) {
+			return $brief;
+		}
+		return $this->ok( array( 'brief' => $brief, 'entry' => $entry ) );
+	}
+
+	/**
+	 * POST /generate — run the pipeline and create a draft.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function generate( WP_REST_Request $request ) {
+		$entry = SCC_Content_Plan::find( (int) $request->get_param( 'entry_id' ) );
+		if ( ! $entry ) {
+			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
+		}
+
+		$params = $request->get_json_params();
+		$brief  = ( is_array( $params ) && ! empty( $params['brief'] ) && is_array( $params['brief'] ) ) ? $params['brief'] : null;
+
+		$generator = new SCC_Generator( $this->ai );
+		$result    = $generator->generate( $entry, $brief );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /regenerate-section.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function regenerate_section( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot edit this post.', 'seo-command-center' ), 403 );
+		}
+		$generator = new SCC_Generator( $this->ai );
+		$result    = $generator->regenerate_section( $post_id, $request->get_param( 'section' ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
 	}
 
 	/**
