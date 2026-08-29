@@ -30,6 +30,9 @@ class SCC_Plugin {
 	/** @var SCC_REST */
 	protected $rest;
 
+	/** @var SCC_Jobs */
+	protected $jobs;
+
 	/**
 	 * Singleton accessor.
 	 *
@@ -48,8 +51,9 @@ class SCC_Plugin {
 	protected function __construct() {
 		$this->loader = new SCC_Loader();
 		$this->ai     = new SCC_AI_Manager();
+		$this->jobs   = new SCC_Jobs( $this->ai );
 		$this->admin  = new SCC_Admin( $this->ai );
-		$this->rest   = new SCC_REST( $this->ai );
+		$this->rest   = new SCC_REST( $this->ai, $this->jobs );
 	}
 
 	/**
@@ -82,6 +86,9 @@ class SCC_Plugin {
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
+
+		// Background jobs dispatcher.
+		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
 
 		$this->loader->run();
 	}

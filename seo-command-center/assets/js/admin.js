@@ -544,6 +544,131 @@
 		} );
 	}
 
+	// ---- Batch jobs + publishing queue ---------------------------------
+	function bindJobs() {
+		var msg = document.getElementById( 'scc-jobs-msg' );
+		var pauseBtn = document.getElementById( 'scc-jobs-pause' );
+		if ( pauseBtn ) {
+			pauseBtn.addEventListener( 'click', function () {
+				var action = pauseBtn.textContent.indexOf( 'Resume' ) !== -1 ? 'resume' : 'pause';
+				request( '/jobs/' + action, { method: 'POST' } )
+					.then( function () {
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		var retryBtn = document.getElementById( 'scc-jobs-retry' );
+		if ( retryBtn ) {
+			retryBtn.addEventListener( 'click', function () {
+				setStatus( msg, 'Requeuing failed jobs…' );
+				request( '/jobs/retry', { method: 'POST' } )
+					.then( function () {
+						setStatus( msg, 'Failed jobs requeued.', 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		var batchBtn = document.getElementById( 'scc-jobs-batch' );
+		if ( batchBtn ) {
+			batchBtn.addEventListener( 'click', function () {
+				batchBtn.disabled = true;
+				setStatus( msg, 'Finding approved entries…' );
+				request( '/content-plan?status=approved', { method: 'GET' } )
+					.then( function ( res ) {
+						var entries = ( res.data && res.data.entries ) || [];
+						batchBtn.disabled = false;
+						if ( ! entries.length ) {
+							setStatus( msg, 'No entries are marked Approved in your Content Plan.', 'is-error' );
+							return;
+						}
+						var ids = entries.map( function ( e ) { return e.id; } );
+						var estimate = ( ids.length * 0.05 ).toFixed( 2 );
+						if ( ! window.confirm( 'You are about to generate ' + ids.length + ' page(s) in the background. Rough estimated AI cost: $' + estimate + ' (varies by model and length). Proceed?' ) ) {
+							return;
+						}
+						setStatus( msg, 'Queuing…' );
+						request( '/jobs/batch', { method: 'POST', data: { entry_ids: ids } } )
+							.then( function ( r ) {
+								var q = ( r.data && r.data.queued ) || 0;
+								setStatus( msg, q + ' job(s) queued. They will generate in the background.', 'is-ok' );
+							} )
+							.catch( function ( err ) {
+								setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+							} );
+					} )
+					.catch( function ( err ) {
+						batchBtn.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+	}
+
+	function bindPublishing() {
+		var table = document.getElementById( 'scc-publish-table' );
+		if ( ! table ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-publish-msg' );
+
+		function act( id, action, data ) {
+			return request( '/publishing/' + action, { method: 'POST', data: Object.assign( { post_id: id }, data || {} ) } );
+		}
+
+		table.addEventListener( 'click', function ( e ) {
+			var row = e.target.closest( 'tr' );
+			if ( ! row ) {
+				return;
+			}
+			var id = row.getAttribute( 'data-id' );
+
+			if ( e.target.classList.contains( 'scc-publish' ) ) {
+				if ( ! window.confirm( 'Publish this page now?' ) ) {
+					return;
+				}
+				e.target.disabled = true;
+				setStatus( msg, 'Publishing…' );
+				act( id, 'publish' ).then( function () {
+					var s = row.querySelector( '.scc-pub-status' );
+					if ( s ) { s.textContent = 'publish'; }
+					setStatus( msg, 'Published.', 'is-ok' );
+				} ).catch( function ( err ) {
+					e.target.disabled = false;
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+			} else if ( e.target.classList.contains( 'scc-approve' ) ) {
+				var on = e.target.getAttribute( 'data-on' ) === '1';
+				act( id, on ? 'approve' : 'unapprove' ).then( function () {
+					window.location.reload();
+				} ).catch( function ( err ) {
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+			} else if ( e.target.classList.contains( 'scc-schedule' ) ) {
+				var dt = row.querySelector( '.scc-schedule-dt' );
+				if ( ! dt || ! dt.value ) {
+					setStatus( msg, 'Pick a date and time first.', 'is-error' );
+					return;
+				}
+				var value = dt.value.replace( 'T', ' ' ) + ':00';
+				setStatus( msg, 'Scheduling…' );
+				act( id, 'schedule', { datetime: value } ).then( function () {
+					var s = row.querySelector( '.scc-pub-status' );
+					if ( s ) { s.textContent = 'future'; }
+					setStatus( msg, 'Scheduled.', 'is-ok' );
+				} ).catch( function ( err ) {
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+			}
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -556,5 +681,7 @@
 		bindInternalLinks();
 		bindGscQuickWins();
 		bindCompetitor();
+		bindJobs();
+		bindPublishing();
 	} );
 } )();

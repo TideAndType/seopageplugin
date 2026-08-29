@@ -55,7 +55,7 @@ class SCC_Admin {
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
-			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
 			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
 			self::SLUG . '-connections'      => array( __( 'API Connections', 'seo-command-center' ), 'render_connections' ),
 		);
@@ -283,6 +283,22 @@ class SCC_Admin {
 			array(
 				'entries'  => SCC_Content_Plan::all(),
 				'statuses' => SCC_Content_Plan::STATUSES,
+			)
+		);
+	}
+
+	/**
+	 * Publishing Queue page.
+	 */
+	public function render_publishing() {
+		$this->view(
+			'publishing',
+			array(
+				'queue'        => SCC_Publishing::queue(),
+				'jobs'         => SCC_Jobs::status(),
+				'usage'        => SCC_AI_Usage::month_summary(),
+				'budget'       => (float) SCC_Settings::get( 'monthly_budget', 0 ),
+				'auto_publish' => (bool) SCC_Settings::get( 'auto_publish', false ),
 			)
 		);
 	}

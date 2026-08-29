@@ -22,13 +22,18 @@ class SCC_REST {
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
+	/** @var SCC_Jobs|null */
+	protected $jobs;
+
 	/**
 	 * Constructor.
 	 *
-	 * @param SCC_AI_Manager $ai AI manager.
+	 * @param SCC_AI_Manager $ai   AI manager.
+	 * @param SCC_Jobs|null  $jobs Job queue.
 	 */
-	public function __construct( SCC_AI_Manager $ai ) {
-		$this->ai = $ai;
+	public function __construct( SCC_AI_Manager $ai, $jobs = null ) {
+		$this->ai   = $ai;
+		$this->jobs = $jobs;
 	}
 
 	/**
@@ -347,6 +352,60 @@ class SCC_REST {
 				'permission_callback' => $perm,
 				'args'                => array(
 					'url' => array( 'sanitize_callback' => 'esc_url_raw', 'required' => true ),
+				),
+			)
+		);
+
+		// ---- Phase 7: batch jobs + publishing -------------------------
+		register_rest_route(
+			self::NS,
+			'/jobs',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'jobs_status' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/jobs/batch',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'jobs_batch' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/jobs/(?P<action>pause|resume|retry)',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'jobs_control' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/publishing',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'publishing_queue' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/publishing/(?P<action>approve|unapprove|publish|schedule)',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'publishing_action' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'post_id' => array( 'sanitize_callback' => 'absint', 'required' => true ),
 				),
 			)
 		);
@@ -837,6 +896,107 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( array( 'analysis' => $result ) );
+	}
+
+	/**
+	 * GET /jobs — queue status.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function jobs_status() {
+		return $this->ok( array( 'jobs' => SCC_Jobs::status() ) );
+	}
+
+	/**
+	 * POST /jobs/batch — enqueue a batch of approved entries.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function jobs_batch( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$ids    = isset( $params['entry_ids'] ) ? (array) $params['entry_ids'] : array();
+
+		// Enforce batch cap from settings.
+		$max = (int) SCC_Settings::get( 'max_pages_per_batch', 25 );
+		if ( count( $ids ) > $max ) {
+			return $this->fail( 'batch_too_large', sprintf(
+				/* translators: %d: max batch size */
+				__( 'That exceeds the batch limit of %d. Reduce the selection or raise the limit in Settings.', 'seo-command-center' ),
+				$max
+			), 400 );
+		}
+		if ( ! $this->jobs ) {
+			return $this->fail( 'no_queue', __( 'Job queue unavailable.', 'seo-command-center' ), 500 );
+		}
+		$result = $this->jobs->enqueue_generation_batch( $ids );
+		return $this->ok( array_merge( $result, array( 'jobs' => SCC_Jobs::status() ) ) );
+	}
+
+	/**
+	 * POST /jobs/{pause|resume|retry}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function jobs_control( WP_REST_Request $request ) {
+		switch ( $request->get_param( 'action' ) ) {
+			case 'pause':
+				SCC_Jobs::pause();
+				break;
+			case 'resume':
+				SCC_Jobs::resume();
+				break;
+			case 'retry':
+				SCC_Jobs::retry_failed();
+				break;
+		}
+		return $this->ok( array( 'jobs' => SCC_Jobs::status() ) );
+	}
+
+	/**
+	 * GET /publishing — the queue.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function publishing_queue() {
+		return $this->ok( array( 'queue' => SCC_Publishing::queue() ) );
+	}
+
+	/**
+	 * POST /publishing/{approve|unapprove|publish|schedule}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function publishing_action( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		$action  = $request->get_param( 'action' );
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : array();
+
+		switch ( $action ) {
+			case 'approve':
+				SCC_Publishing::set_approved( $post_id, true );
+				break;
+			case 'unapprove':
+				SCC_Publishing::set_approved( $post_id, false );
+				break;
+			case 'publish':
+				$r = SCC_Publishing::publish( $post_id );
+				if ( is_wp_error( $r ) ) {
+					return $r;
+				}
+				break;
+			case 'schedule':
+				$r = SCC_Publishing::schedule( $post_id, (string) ( $params['datetime'] ?? '' ) );
+				if ( is_wp_error( $r ) ) {
+					return $r;
+				}
+				break;
+		}
+		return $this->ok( array( 'queue' => SCC_Publishing::queue() ) );
 	}
 
 	/**

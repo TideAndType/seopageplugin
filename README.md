@@ -11,25 +11,31 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Phase 1 (Foundation) is implemented.** See [`docs/ROADMAP.md`](docs/ROADMAP.md)
-for the full plan.
+**All seven phases are implemented.** See [`docs/ROADMAP.md`](docs/ROADMAP.md)
+for the detailed breakdown.
 
-Phase 1 delivers:
+- **Phase 1 — Foundation:** bootstrap/loader/lifecycle, versioned custom tables,
+  security helpers, secret-redacting logger, provider-independent AI layer
+  (Claude + OpenAI, primary/fallback, budget guard), usage/cost tracking,
+  WordPress content analyzer, robots-aware crawler, SEO-plugin detection, admin
+  dashboard/analysis/settings/connections, internal REST API.
+- **Phase 2 — Strategy:** AI topical-map builder, site architecture engine
+  (Pillar → Service → Location → Supporting), content plan, cannibalization
+  detection.
+- **Phase 3 — Content Generation:** multi-step generator (brief → body →
+  metadata → schema → draft → quality score), non-destructive metadata,
+  validated schema, regenerate-section.
+- **Phase 4 — Elementor:** detection, template mapping, `{{PLACEHOLDER}}`
+  system, design-preserving page population.
+- **Phase 5 — Internal Linking:** content graph, recommendations, natural
+  insertion with anti-spam guards, dashboard.
+- **Phase 6 — Data Integrations:** Google Search Console, DataForSEO, and
+  robots-respecting competitor analysis (all optional).
+- **Phase 7 — Scale & Operations:** background job queue (WP-Cron, resumable,
+  retry, auto-pause on budget), batch generation, usage tiles, publishing queue
+  + workflow (approve / publish / schedule).
 
-- Plugin foundation (bootstrap, singleton, loader, activation/deactivation/uninstall lifecycle)
-- Custom database tables + versioned upgrades
-- Security helpers (capabilities, nonces, typed sanitizers, secret masking)
-- Secret-redacting diagnostic logger
-- **Provider-independent AI layer** — interface + manager with primary/fallback
-  routing and a monthly budget guard; **Claude** and **OpenAI** providers
-- AI usage / estimated-cost tracking
-- WordPress content analyzer (posts, pages, CPTs, headings, links, images/alt,
-  word count, metadata, schema, Elementor detection, thin-content &
-  cannibalization heuristics)
-- HTTP crawler (rendered fetch + parse, robots-aware for external URLs)
-- SEO-plugin detection (Yoast / Rank Math / AIOSEO), read-only
-- Admin dashboard, Site Analysis, Settings, and API Connections pages
-- Internal REST API (`/wp-json/seo-command/v1/*`)
+Internal REST API at `/wp-json/seo-command/v1/*`; **87** passing unit tests.
 
 ## Documentation
 

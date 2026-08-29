@@ -75,6 +75,9 @@ require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-competitor-analysis.php';
 
+require_once SCC_PLUGIN_DIR . 'includes/jobs/class-scc-jobs.php';
+require_once SCC_PLUGIN_DIR . 'includes/publishing/class-scc-publishing.php';
+
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';
 require_once SCC_PLUGIN_DIR . 'includes/rest/class-scc-rest.php';

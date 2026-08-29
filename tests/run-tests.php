@@ -300,6 +300,23 @@ $their = array( 'local', 'seo', 'audits', 'schema' );
 $ours = array( 'local', 'seo' );
 assert_eq( array( 'audits', 'schema' ), array_values( array_diff( $their, $ours ) ), 'content gap diff correct' );
 
+echo "\n== Job queue pause/resume state ==\n";
+unset( $GLOBALS['scc_test_options'][ SCC_Jobs::PAUSED_OPTION ] );
+assert_eq( false, SCC_Jobs::is_paused(), 'not paused by default' );
+SCC_Jobs::pause();
+assert_true( SCC_Jobs::is_paused(), 'paused after pause()' );
+SCC_Jobs::resume();
+assert_eq( false, SCC_Jobs::is_paused(), 'not paused after resume()' );
+
+echo "\n== Publishing schedule date validation ==\n";
+$past = SCC_Publishing::schedule( 1, gmdate( 'Y-m-d H:i:s', time() - 3600 ) );
+assert_true( $past instanceof WP_Error, 'past date rejected' );
+assert_eq( 'scc_bad_date', $past->code, 'past date error code' );
+$bad = SCC_Publishing::schedule( 1, 'not-a-date' );
+assert_true( $bad instanceof WP_Error, 'invalid date rejected' );
+$future = SCC_Publishing::schedule( 1, gmdate( 'Y-m-d H:i:s', time() + 86400 ) );
+assert_eq( true, $future, 'future date accepted' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

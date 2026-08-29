@@ -72,11 +72,14 @@ The functional base everything else builds on.
 - ✅ Competitor analysis (public structure + topic coverage via the
   robots-respecting crawler; content-gap diff vs. own site)
 
-## Phase 7 — Scale & Operations ⬜
-- Batch generation (one / selected / all-approved, queue, pause/resume/retry)
-- Background jobs (WP-Cron dispatcher, resumable, retry, logging)
-- Usage tracking dashboards + monthly budget enforcement
-- Publishing queue + workflow (preview, approve, publish, schedule)
+## Phase 7 — Scale & Operations ✅
+- ✅ Batch generation (all-approved from the plan, with a cost-confirmation
+  prompt and a per-batch size cap)
+- ✅ Background jobs (WP-Cron dispatcher, bounded per tick, resumable,
+  retry with attempt cap, auto-pause on budget, failure logging)
+- ✅ Usage tracking dashboard tiles + monthly budget enforcement (queue pauses
+  automatically when reached)
+- ✅ Publishing queue + workflow (preview, approve/unapprove, publish, schedule)
 
 ---
 

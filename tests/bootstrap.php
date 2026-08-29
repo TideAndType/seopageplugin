@@ -15,6 +15,12 @@ error_reporting( E_ALL & ~E_DEPRECATED );
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', __DIR__ . '/' );
 }
+if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
+	define( 'HOUR_IN_SECONDS', 3600 );
+}
+if ( ! defined( 'DAY_IN_SECONDS' ) ) {
+	define( 'DAY_IN_SECONDS', 86400 );
+}
 
 // --- Minimal WP function stubs --------------------------------------------
 if ( ! function_exists( 'sanitize_text_field' ) ) {
@@ -196,3 +202,27 @@ if ( ! function_exists( 'update_option' ) ) {
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-competitor-analysis.php';
+
+// --- Phase 7 stubs + classes under test -----------------------------------
+if ( ! function_exists( 'wp_next_scheduled' ) ) {
+	function wp_next_scheduled( $hook ) {
+		return false;
+	}
+}
+if ( ! function_exists( 'wp_schedule_single_event' ) ) {
+	function wp_schedule_single_event( $ts, $hook ) {
+		return true;
+	}
+}
+if ( ! function_exists( 'current_user_can' ) ) {
+	function current_user_can( $cap, $id = 0 ) {
+		return true;
+	}
+}
+if ( ! function_exists( 'wp_update_post' ) ) {
+	function wp_update_post( $args, $wp_error = false ) {
+		return is_array( $args ) && ! empty( $args['ID'] ) ? (int) $args['ID'] : 1;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/jobs/class-scc-jobs.php';
+require_once __DIR__ . '/../seo-command-center/includes/publishing/class-scc-publishing.php';

@@ -36,6 +36,11 @@ class SCC_Activator {
 
 		update_option( 'scc_db_version', SCC_DB_VERSION );
 
+		// Recurring safety-net dispatcher for the background job queue.
+		if ( ! wp_next_scheduled( 'scc_run_jobs' ) ) {
+			wp_schedule_event( time() + 300, 'hourly', 'scc_run_jobs' );
+		}
+
 		// Ensure administrators have the plugin capability (a real cap, not just the map).
 		$role = get_role( 'administrator' );
 		if ( $role && ! $role->has_cap( 'manage_options' ) ) {
