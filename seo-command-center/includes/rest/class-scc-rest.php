@@ -316,6 +316,40 @@ class SCC_REST {
 				),
 			)
 		);
+
+		// ---- Phase 6: data integrations -------------------------------
+		register_rest_route(
+			self::NS,
+			'/gsc/quick-wins',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'gsc_quick_wins' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/dataforseo/keywords',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'dataforseo_keywords' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/competitors/analyze',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'analyze_competitor' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'url' => array( 'sanitize_callback' => 'esc_url_raw', 'required' => true ),
+				),
+			)
+		);
 	}
 
 	/**
@@ -751,6 +785,58 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /gsc/quick-wins.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function gsc_quick_wins( WP_REST_Request $request ) {
+		if ( ! SCC_GSC::is_connected() ) {
+			return $this->ok( array( 'connected' => false, 'wins' => array() ) );
+		}
+		$site = SCC_Security::sanitize_text( (string) $request->get_param( 'site' ) );
+		$wins = SCC_GSC::quick_wins( $site, 50 );
+		if ( is_wp_error( $wins ) ) {
+			return $wins;
+		}
+		return $this->ok( array( 'connected' => true, 'wins' => $wins ) );
+	}
+
+	/**
+	 * POST /dataforseo/keywords.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function dataforseo_keywords( WP_REST_Request $request ) {
+		if ( ! SCC_DataForSEO::is_connected() ) {
+			return $this->ok( array( 'connected' => false, 'keywords' => array() ) );
+		}
+		$params   = $request->get_json_params();
+		$keywords = ( is_array( $params ) && ! empty( $params['keywords'] ) ) ? (array) $params['keywords'] : array();
+		$result   = SCC_DataForSEO::search_volume( $keywords );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'connected' => true, 'keywords' => $result ) );
+	}
+
+	/**
+	 * POST /competitors/analyze.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function analyze_competitor( WP_REST_Request $request ) {
+		$analyzer = new SCC_Competitor_Analysis();
+		$result   = $analyzer->analyze( (string) $request->get_param( 'url' ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'analysis' => $result ) );
 	}
 
 	/**

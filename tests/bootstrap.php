@@ -179,3 +179,20 @@ require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elem
 // Only the protected DOM helpers are exercised (via reflection); apply() and
 // its WP dependencies are covered by integration tests.
 require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-link-inserter.php';
+
+// --- Phase 6 stubs + classes under test -----------------------------------
+$GLOBALS['scc_test_options'] = array();
+if ( ! function_exists( 'get_option' ) ) {
+	function get_option( $key, $default = false ) {
+		return array_key_exists( $key, $GLOBALS['scc_test_options'] ) ? $GLOBALS['scc_test_options'][ $key ] : $default;
+	}
+}
+if ( ! function_exists( 'update_option' ) ) {
+	function update_option( $key, $value, $autoload = null ) {
+		$GLOBALS['scc_test_options'][ $key ] = $value;
+		return true;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php';
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php';
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-competitor-analysis.php';

@@ -447,6 +447,103 @@
 		} );
 	}
 
+	// ---- SEO Audit: GSC quick wins + competitor analysis ---------------
+	function bindGscQuickWins() {
+		var btn = document.getElementById( 'scc-gsc-load' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-gsc-status' );
+		var out = document.getElementById( 'scc-gsc-results' );
+		btn.addEventListener( 'click', function () {
+			btn.disabled = true;
+			setStatus( status, 'Loading Search Console data…' );
+			request( '/gsc/quick-wins', { method: 'GET' } )
+				.then( function ( res ) {
+					btn.disabled = false;
+					var d = res.data || {};
+					out.innerHTML = '';
+					if ( ! d.wins || ! d.wins.length ) {
+						setStatus( status, 'No quick wins found in positions 4–20.', 'is-ok' );
+						return;
+					}
+					setStatus( status, '', 'is-ok' );
+					var table = el( 'table', null, 'widefat striped scc-table' );
+					var thead = el( 'thead' );
+					var hr = el( 'tr' );
+					[ 'Query', 'Impressions', 'Clicks', 'CTR %', 'Position' ].forEach( function ( h ) {
+						hr.appendChild( el( 'th', h ) );
+					} );
+					thead.appendChild( hr );
+					table.appendChild( thead );
+					var tb = el( 'tbody' );
+					d.wins.forEach( function ( w ) {
+						var tr = el( 'tr' );
+						tr.appendChild( el( 'td', w.query ) );
+						tr.appendChild( el( 'td', String( w.impressions ) ) );
+						tr.appendChild( el( 'td', String( w.clicks ) ) );
+						tr.appendChild( el( 'td', String( w.ctr ) ) );
+						tr.appendChild( el( 'td', String( w.position ) ) );
+						tb.appendChild( tr );
+					} );
+					table.appendChild( tb );
+					out.appendChild( table );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
+	function bindCompetitor() {
+		var btn = document.getElementById( 'scc-competitor-go' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-competitor-status' );
+		var out = document.getElementById( 'scc-competitor-results' );
+		btn.addEventListener( 'click', function () {
+			var url = ( document.getElementById( 'scc-competitor-url' ) || {} ).value;
+			if ( ! url ) {
+				setStatus( status, 'Enter a URL first.', 'is-error' );
+				return;
+			}
+			btn.disabled = true;
+			setStatus( status, 'Fetching…' );
+			request( '/competitors/analyze', { method: 'POST', data: { url: url } } )
+				.then( function ( res ) {
+					btn.disabled = false;
+					setStatus( status, '', 'is-ok' );
+					var a = ( res.data && res.data.analysis ) || {};
+					out.innerHTML = '';
+					out.appendChild( el( 'h3', a.title || url ) );
+					if ( a.meta_description ) {
+						out.appendChild( el( 'p', a.meta_description ) );
+					}
+					var stats = el( 'p' );
+					stats.appendChild( el( 'span', 'Internal links: ' + ( a.internal_links || 0 ), 'scc-flag' ) );
+					stats.appendChild( el( 'span', 'Images: ' + ( a.images || 0 ), 'scc-flag' ) );
+					if ( a.schema_types && a.schema_types.length ) {
+						stats.appendChild( el( 'span', 'Schema: ' + a.schema_types.join( ', ' ), 'scc-flag' ) );
+					}
+					out.appendChild( stats );
+					if ( a.content_gaps && a.content_gaps.length ) {
+						out.appendChild( el( 'div', 'Topics they cover that you may not:', 'scc-label' ) );
+						var ul = el( 'ul', null, 'scc-options' );
+						a.content_gaps.forEach( function ( g ) {
+							ul.appendChild( el( 'li', g ) );
+						} );
+						out.appendChild( ul );
+					}
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -457,5 +554,7 @@
 		bindGenerate();
 		bindTemplates();
 		bindInternalLinks();
+		bindGscQuickWins();
+		bindCompetitor();
 	} );
 } )();

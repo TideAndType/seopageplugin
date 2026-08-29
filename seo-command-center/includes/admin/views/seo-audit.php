@@ -10,8 +10,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$groups       = isset( $data['cannibalization'] ) ? $data['cannibalization'] : array();
-$has_analysis = ! empty( $data['has_analysis'] );
+$groups        = isset( $data['cannibalization'] ) ? $data['cannibalization'] : array();
+$has_analysis  = ! empty( $data['has_analysis'] );
+$gsc_connected = ! empty( $data['gsc_connected'] );
+$connections_url = admin_url( 'admin.php?page=seo-command-center-connections' );
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
@@ -47,5 +49,34 @@ $has_analysis = ! empty( $data['has_analysis'] );
 				</div>
 			<?php endforeach; ?>
 		<?php endif; ?>
+	</div>
+
+	<div class="scc-card">
+		<div class="scc-card__head">
+			<h2><?php esc_html_e( 'Search Console quick wins', 'seo-command-center' ); ?></h2>
+			<?php if ( $gsc_connected ) : ?>
+				<button class="button button-primary" id="scc-gsc-load"><?php esc_html_e( 'Load quick wins', 'seo-command-center' ); ?></button>
+			<?php endif; ?>
+		</div>
+		<?php if ( ! $gsc_connected ) : ?>
+			<p class="scc-note">
+				<?php esc_html_e( 'Google Search Console is not connected, so no query data is shown. When connected, this surfaces real queries with impressions that rank in positions 4–20 — your best optimization opportunities.', 'seo-command-center' ); ?>
+				<a href="<?php echo esc_url( $connections_url ); ?>"><?php esc_html_e( 'Connect it', 'seo-command-center' ); ?></a>
+			</p>
+		<?php else : ?>
+			<span class="scc-inline-status" id="scc-gsc-status"></span>
+			<div id="scc-gsc-results"></div>
+		<?php endif; ?>
+	</div>
+
+	<div class="scc-card">
+		<h2><?php esc_html_e( 'Competitor analysis', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Analyze a competitor’s public page structure and topic coverage for strategic comparison. Respects robots.txt; no private data or copying.', 'seo-command-center' ); ?></p>
+		<p>
+			<input type="url" class="regular-text" id="scc-competitor-url" placeholder="https://competitor.com/services/">
+			<button class="button button-primary" id="scc-competitor-go"><?php esc_html_e( 'Analyze', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-competitor-status"></span>
+		</p>
+		<div id="scc-competitor-results"></div>
 	</div>
 </div>

@@ -272,6 +272,34 @@ $countm->setAccessible( true );
 $c = $countm->invoke( $inserter, '<a href="/a">a</a> <a href="https://example.com/b">b</a> <a href="https://other.com/c">c</a> <a href="#top">t</a>' );
 assert_eq( 2, $c, 'counts internal links only (relative + same host)' );
 
+echo "\n== Integration connection state ==\n";
+$GLOBALS['scc_test_options']['scc_credentials'] = array();
+assert_eq( false, SCC_GSC::is_connected(), 'GSC not connected when empty' );
+assert_eq( false, SCC_DataForSEO::is_connected(), 'DataForSEO not connected when empty' );
+
+$GLOBALS['scc_test_options']['scc_credentials'] = array(
+	'gsc_client_id'     => 'id',
+	'gsc_client_secret' => 'secret',
+	'gsc_refresh_token' => 'refresh',
+	'dataforseo_login'  => 'user',
+	'dataforseo_key'    => 'pass',
+);
+assert_true( SCC_GSC::is_connected(), 'GSC connected with client+refresh token' );
+assert_true( SCC_DataForSEO::is_connected(), 'DataForSEO connected with login+key' );
+
+echo "\n== Competitor topic extraction + content gaps ==\n";
+$comp = new SCC_Competitor_Analysis();
+$topics = new ReflectionMethod( 'SCC_Competitor_Analysis', 'topics' );
+$topics->setAccessible( true );
+$t = $topics->invoke( $comp, array( 'Local SEO Services', 'Google Business Profile Optimization' ) );
+assert_true( in_array( 'local', $t, true ), 'topic token extracted' );
+assert_true( in_array( 'optimization', $t, true ), 'multi-word heading tokenized' );
+assert_true( ! in_array( 'the', $t, true ), 'stop word excluded' );
+// Content gap = their topics minus ours.
+$their = array( 'local', 'seo', 'audits', 'schema' );
+$ours = array( 'local', 'seo' );
+assert_eq( array( 'audits', 'schema' ), array_values( array_diff( $their, $ours ) ), 'content gap diff correct' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

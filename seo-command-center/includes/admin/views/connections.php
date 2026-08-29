@@ -59,13 +59,22 @@ $field = function ( $field, $label, $hints ) {
 			<span class="scc-inline-status" id="scc-test-status"></span>
 		</p>
 
-		<h2><?php esc_html_e( 'Data integrations (optional, used in Phase 6)', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'These can be stored now; the features that use them arrive in Phase 6. The plugin works without them.', 'seo-command-center' ); ?></p>
+		<h2><?php esc_html_e( 'DataForSEO (optional)', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Adds real keyword volume, competition, and related keywords. The plugin works without it.', 'seo-command-center' ); ?></p>
 		<table class="form-table" role="presentation">
 			<?php
 			$field( 'dataforseo_login', __( 'DataForSEO login', 'seo-command-center' ), $hints );
 			$field( 'dataforseo_key', __( 'DataForSEO password/key', 'seo-command-center' ), $hints );
-			$field( 'gsc_key', __( 'Google Search Console key', 'seo-command-center' ), $hints );
+			?>
+		</table>
+
+		<h2><?php esc_html_e( 'Google Search Console (optional)', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Imports real query, impression, click, CTR and position data to surface quick wins. Provide an OAuth client (installed-app) plus a refresh token generated for the searchconsole.readonly scope.', 'seo-command-center' ); ?></p>
+		<table class="form-table" role="presentation">
+			<?php
+			$field( 'gsc_client_id', __( 'OAuth client ID', 'seo-command-center' ), $hints );
+			$field( 'gsc_client_secret', __( 'OAuth client secret', 'seo-command-center' ), $hints );
+			$field( 'gsc_refresh_token', __( 'OAuth refresh token', 'seo-command-center' ), $hints );
 			?>
 		</table>
 

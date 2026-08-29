@@ -316,8 +316,10 @@ class SCC_Admin {
 		$this->view(
 			'seo-audit',
 			array(
-				'cannibalization' => $detector->detect(),
-				'has_analysis'    => (bool) SCC_Analyzer::latest(),
+				'cannibalization'      => $detector->detect(),
+				'has_analysis'         => (bool) SCC_Analyzer::latest(),
+				'gsc_connected'        => SCC_GSC::is_connected(),
+				'dataforseo_connected' => SCC_DataForSEO::is_connected(),
 			)
 		);
 	}

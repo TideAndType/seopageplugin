@@ -63,10 +63,14 @@ The functional base everything else builds on.
   occurrence only, never inside headings/existing anchors, phrase must exist)
 - ✅ Internal-link dashboard (orphans, under-linked, over-linked, apply flow)
 
-## Phase 6 — Data Integrations ⬜
-- Google Search Console (queries, impressions, clicks, CTR, position, pages)
-- DataForSEO (volume, difficulty, SERP, related) — optional
-- Competitor analysis (public, robots-respecting)
+## Phase 6 — Data Integrations ✅
+- ✅ Google Search Console (OAuth refresh-token exchange + Search Analytics
+  query; quick-win detection for positions 4–20 with impressions) — optional,
+  honest disconnected state, no fabricated data
+- ✅ DataForSEO (search volume, competition, CPC, related keywords via Basic
+  auth) — optional
+- ✅ Competitor analysis (public structure + topic coverage via the
+  robots-respecting crawler; content-gap diff vs. own site)
 
 ## Phase 7 — Scale & Operations ⬜
 - Batch generation (one / selected / all-approved, queue, pause/resume/retry)
