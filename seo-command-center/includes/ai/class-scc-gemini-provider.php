@@ -152,25 +152,32 @@ class SCC_Gemini_Provider implements SCC_AI_Provider_Interface {
 	}
 
 	/**
-	 * @inheritDoc
+	 * Map a retired/blocked model id to a working one. Old saved settings
+	 * (e.g. gemini-2.5-flash, now retired for new users) must not wedge calls.
+	 *
+	 * @param string $model Requested model.
+	 * @return string
 	 */
-	public function complete( array $request ) {
-		$response = new SCC_AI_Response();
-		$response->provider = $this->get_id();
-
-		$key = $this->get_key();
-		if ( '' === $key ) {
-			$response->error = new WP_Error( 'scc_no_key', __( 'Gemini API key is not configured.', 'seo-command-center' ) );
-			return $response;
+	public static function resolve_model( $model ) {
+		$model = trim( (string) $model );
+		if ( '' === $model ) {
+			return 'gemini-flash-latest';
 		}
+		// The 1.5 / 2.0 / 2.5 families are retired or blocked for new users.
+		if ( preg_match( '/^gemini-(1\.5|2\.0|2\.5)/i', $model ) ) {
+			return ( false !== stripos( $model, 'pro' ) ) ? 'gemini-pro-latest' : 'gemini-flash-latest';
+		}
+		return $model;
+	}
 
-		$model = ! empty( $request['model'] ) ? $request['model'] : 'gemini-flash-latest';
-		$response->model = $model;
-
-		// Build request body.
-		$body = array(
-			'contents' => $this->normalize_messages( $request ),
-		);
+	/**
+	 * Build the Gemini request body from a normalized request.
+	 *
+	 * @param array $request Request.
+	 * @return array
+	 */
+	protected function build_body( array $request ) {
+		$body = array( 'contents' => $this->normalize_messages( $request ) );
 
 		$system = isset( $request['system'] ) ? (string) $request['system'] : '';
 		if ( '' !== $system ) {
@@ -190,31 +197,82 @@ class SCC_Gemini_Provider implements SCC_AI_Provider_Interface {
 		if ( ! empty( $gen ) ) {
 			$body['generationConfig'] = $gen;
 		}
+		return $body;
+	}
 
-		$url = self::API_BASE . '/models/' . rawurlencode( $model ) . ':generateContent';
-
+	/**
+	 * POST a generateContent request. Returns [http_code, decoded, WP_Error|null].
+	 *
+	 * @param string $model Model id.
+	 * @param string $key   API key.
+	 * @param array  $body  Request body.
+	 * @return array
+	 */
+	protected function post_generate( $model, $key, array $body ) {
+		$url  = self::API_BASE . '/models/' . rawurlencode( $model ) . ':generateContent';
 		$http = wp_remote_post(
 			$url,
 			array(
 				'timeout' => self::DEFAULT_TIMEOUT,
 				'headers' => array(
-					'content-type'     => 'application/json',
-					// Key travels in a header, not the URL/query string, so it is
-					// not captured in server access logs.
-					'x-goog-api-key'   => $key,
+					'content-type'   => 'application/json',
+					// Key travels in a header, not the URL/query string.
+					'x-goog-api-key' => $key,
 				),
 				'body'    => wp_json_encode( $body ),
 			)
 		);
-
 		if ( is_wp_error( $http ) ) {
 			SCC_Logger::error( 'gemini', 'Transport error: ' . $http->get_error_message() );
-			$response->error = new WP_Error( 'scc_transport', $http->get_error_message() );
+			return array( 0, null, new WP_Error( 'scc_transport', $http->get_error_message() ) );
+		}
+		$code = wp_remote_retrieve_response_code( $http );
+		$data = json_decode( wp_remote_retrieve_body( $http ), true );
+		return array( $code, $data, null );
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function complete( array $request ) {
+		$response = new SCC_AI_Response();
+		$response->provider = $this->get_id();
+
+		$key = $this->get_key();
+		if ( '' === $key ) {
+			$response->error = new WP_Error( 'scc_no_key', __( 'Gemini API key is not configured.', 'seo-command-center' ) );
 			return $response;
 		}
 
-		$code = wp_remote_retrieve_response_code( $http );
-		$data = json_decode( wp_remote_retrieve_body( $http ), true );
+		// Retired/blocked model ids are transparently mapped to a working model
+		// so an old saved setting can never wedge the provider.
+		$model = self::resolve_model( ! empty( $request['model'] ) ? $request['model'] : 'gemini-flash-latest' );
+		$response->model = $model;
+
+		$body = $this->build_body( $request );
+
+		list( $code, $data, $err ) = $this->post_generate( $model, $key, $body );
+		if ( $err instanceof WP_Error ) {
+			$response->error = $err;
+			return $response;
+		}
+
+		// Self-heal: if the chosen model is not found / retired at Google, retry
+		// once on the always-current alias (the request still worked at the API
+		// level, so usage may appear even though nothing was generated).
+		if ( 404 === (int) $code && 'gemini-flash-latest' !== $model ) {
+			$msg = isset( $data['error']['message'] ) ? $data['error']['message'] : '';
+			if ( preg_match( '/not found|no longer available|not supported/i', $msg ) ) {
+				SCC_Logger::info( 'gemini', 'Model unavailable, retrying on gemini-flash-latest', array( 'model' => $model ) );
+				$model = 'gemini-flash-latest';
+				$response->model = $model;
+				list( $code, $data, $err ) = $this->post_generate( $model, $key, $body );
+				if ( $err instanceof WP_Error ) {
+					$response->error = $err;
+					return $response;
+				}
+			}
+		}
 
 		if ( 200 !== (int) $code ) {
 			$msg = isset( $data['error']['message'] ) ? $data['error']['message'] : sprintf( 'HTTP %d', $code );

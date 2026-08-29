@@ -443,6 +443,11 @@ assert_eq( false, $gem->is_configured(), 'not configured without key' );
 assert_true( array_key_exists( 'gemini-flash-latest', $gem->list_models() ), 'lists the latest flash alias' );
 assert_true( $gem->estimate_cost( 1000000, 1000000, 'gemini-flash-latest' ) > 0, 'cost estimate positive' );
 assert_true( abs( $gem->estimate_cost( 1000000, 0, 'gemini-pro-latest' ) - 1.25 ) < 0.001, 'pro cost via name heuristic' );
+// Retired model ids self-heal to a working alias.
+assert_eq( 'gemini-flash-latest', SCC_Gemini_Provider::resolve_model( 'gemini-2.5-flash' ), 'retired 2.5-flash -> latest' );
+assert_eq( 'gemini-pro-latest', SCC_Gemini_Provider::resolve_model( 'gemini-1.5-pro' ), 'retired 1.5-pro -> pro latest' );
+assert_eq( 'gemini-flash-latest', SCC_Gemini_Provider::resolve_model( '' ), 'empty -> latest' );
+assert_eq( 'gemini-3.6-flash', SCC_Gemini_Provider::resolve_model( 'gemini-3.6-flash' ), 'current model left as-is' );
 $GLOBALS['scc_test_options']['scc_credentials'] = array( 'gemini_key' => 'AIzaTESTKEY' );
 assert_true( $gem->is_configured(), 'configured with key' );
 $gnorm = new ReflectionMethod( 'SCC_Gemini_Provider', 'normalize_messages' );

@@ -143,7 +143,32 @@ class SCC_Plugin {
 	public function maybe_upgrade_db() {
 		if ( get_option( 'scc_db_version' ) !== SCC_DB_VERSION ) {
 			SCC_DB::install();
+			$this->migrate_settings();
 			update_option( 'scc_db_version', SCC_DB_VERSION );
+		}
+	}
+
+	/**
+	 * One-time settings migrations on upgrade.
+	 */
+	protected function migrate_settings() {
+		$settings = get_option( 'scc_settings', array() );
+		if ( ! is_array( $settings ) ) {
+			return;
+		}
+		$changed = false;
+
+		// Replace a retired Gemini model saved by an older version.
+		if ( ! empty( $settings['gemini_model'] ) && class_exists( 'SCC_Gemini_Provider' ) ) {
+			$resolved = SCC_Gemini_Provider::resolve_model( $settings['gemini_model'] );
+			if ( $resolved !== $settings['gemini_model'] ) {
+				$settings['gemini_model'] = $resolved;
+				$changed = true;
+			}
+		}
+
+		if ( $changed ) {
+			update_option( 'scc_settings', $settings );
 		}
 	}
 }
