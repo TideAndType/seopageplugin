@@ -83,6 +83,30 @@ The functional base everything else builds on.
 
 ---
 
+## v1.1 — Advanced Internal Linking, Meta Optimization & Schema ✅
+Built on the existing architecture (AI layer, DB, REST, jobs, Elementor, settings).
+
+- **Searchable content index** (`scc_content_index`): per-post tokens, headings,
+  existing anchors, outbound links, keyword/intent — built incrementally on
+  `save_post`, refreshable in the background. No full-site crawl per request.
+- **Internal Link Autopilot**: contextual (TF-vector) relevance, not keyword
+  match; new→existing and existing→new opportunities with confidence, reason,
+  natural anchor, and the exact sentence; anchor-variation engine; confidence
+  thresholds; auto-insert high-confidence via the job queue; site-wide
+  reoptimization scan; orphan/under/over-linked dashboard; full change history
+  with one-click revert. Anti-spam guards throughout.
+- **AI Meta Optimizer**: classified variants (keyword/CTR/benefit/local/
+  commercial/brand) with reasons, optionally informed by real Search Console
+  performance; non-destructive apply with a 30-day cooldown; metadata history;
+  configurable storage (active SEO plugin vs. plugin keys).
+- **Automatic Schema Engine**: page-appropriate type detection, JSON-LD
+  generation from dynamic WP + user-provided business data (never invented),
+  conflict detection vs. SEO-plugin/rendered-page schema, validation with
+  warnings, and a per-post editor workflow (generate/preview/validate/save/
+  disable). Added `Person` and `NewsArticle` types.
+- **Unified SEO Command Center editor panel** (meta box) with a readiness score
+  (labelled internal, not a ranking guarantee) tying all three systems together.
+
 ## Cross-cutting (every phase)
 - Follow WPCS; sanitize input, escape output, prepared queries.
 - No destructive actions without explicit approval.

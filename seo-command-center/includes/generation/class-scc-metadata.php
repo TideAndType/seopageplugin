@@ -32,28 +32,9 @@ class SCC_Metadata {
 		$title   = SCC_Security::sanitize_text( $meta['meta_title'] ?? '' );
 		$desc    = SCC_Security::sanitize_textarea( $meta['meta_description'] ?? '' );
 		$plugin  = SCC_SEO_Meta::detect();
-
-		$title_key = null;
-		$desc_key  = null;
-		switch ( $plugin ) {
-			case SCC_SEO_Meta::PLUGIN_YOAST:
-				$title_key = '_yoast_wpseo_title';
-				$desc_key  = '_yoast_wpseo_metadesc';
-				break;
-			case SCC_SEO_Meta::PLUGIN_RANKMATH:
-				$title_key = 'rank_math_title';
-				$desc_key  = 'rank_math_description';
-				break;
-			case SCC_SEO_Meta::PLUGIN_AIOSEO:
-				// AIOSEO stores in its own table; we do not write there directly.
-				// Fall back to our own keys and let a later mapping sync if desired.
-				$title_key = '_scc_meta_title';
-				$desc_key  = '_scc_meta_description';
-				break;
-			default:
-				$title_key = '_scc_meta_title';
-				$desc_key  = '_scc_meta_description';
-		}
+		$keys    = self::keys();
+		$title_key = $keys['title'];
+		$desc_key  = $keys['description'];
 
 		if ( '' !== $title ) {
 			self::maybe_set( $post_id, $title_key, $title, $overwrite );
@@ -77,6 +58,65 @@ class SCC_Metadata {
 		}
 
 		SCC_Logger::info( 'metadata', 'Metadata applied', array( 'post_id' => $post_id, 'seo_plugin' => $plugin, 'overwrite' => $overwrite ) );
+	}
+
+	/**
+	 * Resolve the meta keys to write, honoring the meta_storage setting.
+	 *
+	 * meta_storage: 'auto' (active SEO plugin, else plugin keys), 'seo_plugin'
+	 * (force active plugin keys), or 'plugin' (always _scc_* keys).
+	 *
+	 * @return array {title, description}
+	 */
+	public static function keys() {
+		$storage = SCC_Settings::get( 'meta_storage', 'auto' );
+		$plugin  = SCC_SEO_Meta::detect();
+
+		if ( 'plugin' === $storage ) {
+			return array( 'title' => '_scc_meta_title', 'description' => '_scc_meta_description' );
+		}
+
+		if ( SCC_SEO_Meta::PLUGIN_YOAST === $plugin ) {
+			return array( 'title' => '_yoast_wpseo_title', 'description' => '_yoast_wpseo_metadesc' );
+		}
+		if ( SCC_SEO_Meta::PLUGIN_RANKMATH === $plugin ) {
+			return array( 'title' => 'rank_math_title', 'description' => 'rank_math_description' );
+		}
+		// AIOSEO uses its own table; write to our keys for safety.
+		return array( 'title' => '_scc_meta_title', 'description' => '_scc_meta_description' );
+	}
+
+	/**
+	 * Current stored metadata for a post (reads via the SEO-plugin bridge).
+	 *
+	 * @param int $post_id Post id.
+	 * @return array {title, description}
+	 */
+	public static function current( $post_id ) {
+		return array(
+			'title'       => SCC_SEO_Meta::get_title( $post_id ),
+			'description' => SCC_SEO_Meta::get_description( $post_id ),
+		);
+	}
+
+	/**
+	 * Restore a single field value (used by revert). Writes the active key and
+	 * the plugin-owned copy.
+	 *
+	 * @param int    $post_id Post id.
+	 * @param string $field   'title' or 'description'.
+	 * @param string $value   Previous value.
+	 * @return void
+	 */
+	public static function restore_field( $post_id, $field, $value ) {
+		$keys = self::keys();
+		if ( 'title' === $field ) {
+			update_post_meta( $post_id, $keys['title'], $value );
+			update_post_meta( $post_id, '_scc_meta_title', $value );
+		} else {
+			update_post_meta( $post_id, $keys['description'], $value );
+			update_post_meta( $post_id, '_scc_meta_description', $value );
+		}
 	}
 
 	/**

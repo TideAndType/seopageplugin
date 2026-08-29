@@ -64,7 +64,17 @@ class SCC_Activator {
 			'openai_model'          => 'gpt-4o',
 			// SEO.
 			'default_word_count'    => 1200,
-			'max_internal_links'    => 5,
+			'max_internal_links'    => 8,
+			// Internal Link Autopilot.
+			'autopilot_enabled'      => false,
+			'autopilot_auto_insert'  => true,
+			'link_high_confidence'   => 80,
+			'link_medium_confidence' => 55,
+			'link_max_per_destination' => 1,
+			'link_avoid_headings'    => true,
+			'link_vary_anchor'       => true,
+			// Metadata.
+			'meta_storage'           => 'auto',
 			// Publishing.
 			'draft_by_default'      => true,
 			'auto_publish'          => false,

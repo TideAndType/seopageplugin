@@ -96,6 +96,20 @@
 .scc-options { margin: 4px 0 0 18px; list-style: disc; }
 .scc-options li { margin-bottom: 4px; font-size: 13px; }
 
+/* Editor SEO panel (meta box) */
+.scc-panel__score { display: flex; align-items: baseline; gap: 8px; }
+.scc-panel__num { font-size: 28px; font-weight: 700; color: #2271b1; }
+.scc-panel__label { color: #646970; font-size: 12px; }
+.scc-panel__rows { margin: 10px 0; }
+.scc-panel__row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; border-bottom: 1px solid #f0f0f1; }
+.scc-panel__val.is-ok { color: #007017; }
+.scc-panel__val.is-bad { color: #b32d2e; }
+.scc-panel__actions { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.scc-panel__out { margin-top: 8px; }
+.scc-panel__item { border: 1px solid #e0e0e2; border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+.scc-panel__item-h { font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+.is-bad { color: #b32d2e; }
+
 /* Brief / generate panel */
 .scc-brief-panel { background: #f6f7f8; border: 1px solid #e0e0e2; border-radius: 8px; padding: 14px 16px; }
 .scc-brief-panel h3 { margin-top: 0; }

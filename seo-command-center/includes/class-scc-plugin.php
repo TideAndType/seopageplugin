@@ -33,6 +33,9 @@ class SCC_Plugin {
 	/** @var SCC_Jobs */
 	protected $jobs;
 
+	/** @var SCC_Autopilot */
+	protected $autopilot;
+
 	/**
 	 * Singleton accessor.
 	 *
@@ -51,9 +54,10 @@ class SCC_Plugin {
 	protected function __construct() {
 		$this->loader = new SCC_Loader();
 		$this->ai     = new SCC_AI_Manager();
-		$this->jobs   = new SCC_Jobs( $this->ai );
-		$this->admin  = new SCC_Admin( $this->ai );
-		$this->rest   = new SCC_REST( $this->ai, $this->jobs );
+		$this->jobs      = new SCC_Jobs( $this->ai );
+		$this->autopilot = new SCC_Autopilot();
+		$this->admin     = new SCC_Admin( $this->ai );
+		$this->rest      = new SCC_REST( $this->ai, $this->jobs );
 	}
 
 	/**
@@ -89,6 +93,10 @@ class SCC_Plugin {
 
 		// Background jobs dispatcher.
 		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
+
+		// Internal Link Autopilot: keep the index fresh + analyze new content.
+		$this->loader->add_action( 'save_post', $this->autopilot, 'on_save_post', 20, 3 );
+		$this->loader->add_action( 'before_delete_post', $this->autopilot, 'on_delete_post', 10, 1 );
 
 		$this->loader->run();
 	}

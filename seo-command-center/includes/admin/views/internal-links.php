@@ -59,13 +59,31 @@ $list_block = function ( $title, $nodes, $empty ) {
 
 	<div class="scc-card">
 		<div class="scc-card__head">
-			<h2><?php esc_html_e( 'Link recommendations', 'seo-command-center' ); ?></h2>
-			<button class="button button-primary" id="scc-recommend-links"><?php esc_html_e( 'Generate recommendations', 'seo-command-center' ); ?></button>
+			<h2><?php esc_html_e( 'Internal Link Autopilot', 'seo-command-center' ); ?></h2>
+			<div>
+				<button class="button" id="scc-links-scan"><?php esc_html_e( 'Scan site for opportunities', 'seo-command-center' ); ?></button>
+				<button class="button button-primary" id="scc-links-apply-high"><?php esc_html_e( 'Apply high-confidence links', 'seo-command-center' ); ?></button>
+			</div>
 		</div>
 		<span class="scc-inline-status" id="scc-links-msg"></span>
+		<p class="scc-note">
+			<?php
+			echo esc_html( sprintf(
+				/* translators: 1: on/off, 2: indexed count, 3: threshold */
+				__( 'Autopilot is %1$s · %2$d pages indexed · high-confidence threshold %3$d%%. Relevance is prioritized over link quantity; nothing is inserted below the medium threshold.', 'seo-command-center' ),
+				! empty( $data['autopilot'] ) ? __( 'ON', 'seo-command-center' ) : __( 'OFF', 'seo-command-center' ),
+				(int) ( $data['indexed'] ?? 0 ),
+				(int) ( $data['high'] ?? 80 )
+			) );
+			?>
+			<a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-settings' ) ); ?>"><?php esc_html_e( 'Autopilot settings', 'seo-command-center' ); ?></a>
+		</p>
+	</div>
 
+	<div class="scc-card">
+		<h2><?php esc_html_e( 'Link recommendations', 'seo-command-center' ); ?></h2>
 		<?php if ( empty( $recs ) ) : ?>
-			<p class="scc-note"><?php esc_html_e( 'No pending recommendations. Click “Generate recommendations” to find contextual internal links.', 'seo-command-center' ); ?></p>
+			<p class="scc-note"><?php esc_html_e( 'No pending recommendations. Run a site scan to find genuinely relevant internal links.', 'seo-command-center' ); ?></p>
 		<?php else : ?>
 			<table class="widefat striped scc-table" id="scc-links-table">
 				<thead>
@@ -73,6 +91,8 @@ $list_block = function ( $title, $nodes, $empty ) {
 						<th><?php esc_html_e( 'From', 'seo-command-center' ); ?></th>
 						<th><?php esc_html_e( 'Anchor', 'seo-command-center' ); ?></th>
 						<th><?php esc_html_e( 'To', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Conf.', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Reason', 'seo-command-center' ); ?></th>
 						<th></th>
 					</tr>
 				</thead>
@@ -82,7 +102,9 @@ $list_block = function ( $title, $nodes, $empty ) {
 							<td><?php echo esc_html( $r['source_title'] ); ?></td>
 							<td>“<?php echo esc_html( $r['anchor'] ); ?>”</td>
 							<td><a href="<?php echo esc_url( $r['target_url'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $r['target_title'] ); ?></a></td>
-							<td><button class="button scc-apply-link"><?php esc_html_e( 'Apply', 'seo-command-center' ); ?></button></td>
+							<td><strong><?php echo esc_html( (int) $r['confidence'] ); ?>%</strong></td>
+							<td class="scc-note"><?php echo esc_html( $r['reason'] ); ?></td>
+							<td><button class="button scc-apply-link"><?php esc_html_e( 'Insert', 'seo-command-center' ); ?></button></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>
@@ -100,4 +122,43 @@ $list_block = function ( $title, $nodes, $empty ) {
 	<?php if ( ! empty( $data['over_linked'] ) ) : ?>
 		<?php $list_block( __( 'Over-linked pages (receiving a lot of links)', 'seo-command-center' ), $data['over_linked'], '' ); ?>
 	<?php endif; ?>
+
+	<div class="scc-card">
+		<h2><?php esc_html_e( 'Change history', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Every automatic change (links, metadata, schema) is logged and can be reverted.', 'seo-command-center' ); ?></p>
+		<?php $history = isset( $data['history'] ) ? $data['history'] : array(); ?>
+		<?php if ( empty( $history ) ) : ?>
+			<p class="scc-note"><?php esc_html_e( 'No changes recorded yet.', 'seo-command-center' ); ?></p>
+		<?php else : ?>
+			<table class="widefat striped scc-table" id="scc-history-table">
+				<thead>
+					<tr>
+						<th><?php esc_html_e( 'When', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Page', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Type', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Source', 'seo-command-center' ); ?></th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ( $history as $h ) : ?>
+						<tr data-id="<?php echo esc_attr( $h['id'] ); ?>">
+							<td><?php echo esc_html( $h['created_at'] ); ?></td>
+							<td><?php echo esc_html( $h['post_title'] ); ?></td>
+							<td><?php echo esc_html( str_replace( '_', ' ', $h['change_type'] ) ); ?></td>
+							<td><?php echo esc_html( $h['trigger_source'] ); ?></td>
+							<td>
+								<?php if ( (int) $h['reverted'] === 1 ) : ?>
+									<span class="scc-badge"><?php esc_html_e( 'Reverted', 'seo-command-center' ); ?></span>
+								<?php else : ?>
+									<button class="button button-small scc-revert"><?php esc_html_e( 'Revert', 'seo-command-center' ); ?></button>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+			<span class="scc-inline-status" id="scc-history-msg"></span>
+		<?php endif; ?>
+	</div>
 </div>

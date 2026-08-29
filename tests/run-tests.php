@@ -317,6 +317,64 @@ assert_true( $bad instanceof WP_Error, 'invalid date rejected' );
 $future = SCC_Publishing::schedule( 1, gmdate( 'Y-m-d H:i:s', time() + 86400 ) );
 assert_eq( true, $future, 'future date accepted' );
 
+echo "\n== Content index: tokenize + semantic relevance ==\n";
+$tk = SCC_Content_Index::tokenize( 'Local SEO services help small local businesses rank in local search' );
+assert_true( isset( $tk['local'] ) && $tk['local'] >= 3, 'term frequency counted (local x3)' );
+assert_true( ! isset( $tk['the'] ) && ! isset( $tk['in'] ), 'stop words excluded from tokens' );
+
+$a = array(
+	'title' => 'How Much Does Local SEO Cost?', 'primary_keyword' => 'local seo cost', 'intent' => 'informational',
+	'url' => 'https://example.com/blog/local-seo-cost/',
+	'tokens' => SCC_Content_Index::tokenize( 'local seo cost pricing factors budget small business local search optimization' ),
+);
+$related = array(
+	'title' => 'Local SEO Services', 'primary_keyword' => 'local seo', 'intent' => 'commercial',
+	'url' => 'https://example.com/local-seo/',
+	'tokens' => SCC_Content_Index::tokenize( 'local seo services optimization local search small business rankings' ),
+);
+$unrelated = array(
+	'title' => 'Wedding Photography Packages', 'primary_keyword' => 'wedding photography', 'intent' => 'commercial',
+	'url' => 'https://example.com/weddings/',
+	'tokens' => SCC_Content_Index::tokenize( 'wedding photography packages portraits albums engagement bride' ),
+);
+$rel_related   = SCC_Content_Index::relevance( $a, $related );
+$rel_unrelated = SCC_Content_Index::relevance( $a, $unrelated );
+assert_true( $rel_related > $rel_unrelated, 'related page scores higher than unrelated (' . $rel_related . ' > ' . $rel_unrelated . ')' );
+assert_true( $rel_related >= 40, 'related page meets a meaningful relevance floor (' . $rel_related . ')' );
+assert_true( $rel_unrelated < 30, 'unrelated page scores low (' . $rel_unrelated . ')' );
+
+echo "\n== Anchor engine ==\n";
+$cands = SCC_Anchor_Engine::candidates( array( 'title' => 'Local SEO Services | Tide & Type', 'primary_keyword' => 'local seo', 'tokens' => array( 'local' => 5, 'seo' => 4 ) ) );
+assert_true( in_array( 'local seo', $cands, true ), 'keyword candidate present' );
+assert_true( in_array( 'Local SEO Services', $cands, true ), 'brand suffix stripped from title candidate' );
+$chosen = SCC_Anchor_Engine::choose(
+	array( 'title' => 'Local SEO Services', 'primary_keyword' => 'local seo', 'tokens' => array() ),
+	'Our team provides local SEO for clinics and shops across the county.',
+	array()
+);
+assert_true( $chosen && $chosen['present'] === true, 'chooses an anchor phrase present in the text' );
+assert_eq( 'local seo', strtolower( $chosen['anchor'] ), 'natural anchor matches text' );
+
+echo "\n== Link engine: sentence extraction ==\n";
+$engine = new SCC_Link_Engine();
+$m = new ReflectionMethod( 'SCC_Link_Engine', 'sentence_with' );
+$m->setAccessible( true );
+$sentence = $m->invoke( $engine, 'First sentence here. This one mentions local SEO clearly. Third one.', 'local seo' );
+assert_eq( 'This one mentions local SEO clearly.', $sentence, 'extracts the sentence containing the phrase' );
+assert_eq( '', $m->invoke( $engine, 'Nothing relevant at all.', 'local seo' ), 'empty when phrase absent' );
+
+echo "\n== Schema: Person / NewsArticle + URL validation ==\n";
+$person = SCC_Schema::build( 'Person', array( 'name' => 'Jane Doe', 'url' => 'https://example.com/author/jane/', 'sameAs' => array( 'https://twitter.com/jane' ) ) );
+assert_true( is_array( $person ) && 'Person' === $person['@type'] && 'Jane Doe' === $person['name'], 'Person schema built' );
+$news = SCC_Schema::build( 'NewsArticle', array( 'name' => 'Headline', 'description' => 'x', 'url' => 'https://example.com/n/' ) );
+assert_true( is_array( $news ) && 'NewsArticle' === $news['@type'] && 'Headline' === $news['headline'], 'NewsArticle built' );
+$bad_url = SCC_Schema::validate( array( '@context' => 'https://schema.org', '@type' => 'WebPage', 'name' => 'x', 'url' => 'not a url' ) );
+assert_true( $bad_url instanceof WP_Error, 'invalid URL rejected by validation' );
+
+echo "\n== Change history: type guard ==\n";
+assert_eq( false, SCC_Change_History::record( array( 'change_type' => 'bogus', 'post_id' => 1 ) ), 'invalid change type rejected' );
+assert_true( false !== SCC_Change_History::record( array( 'change_type' => 'internal_link', 'post_id' => 1, 'previous_value' => 'x', 'new_value' => 'y' ) ), 'valid change type recorded' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

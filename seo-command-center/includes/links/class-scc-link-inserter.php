@@ -27,10 +27,11 @@ class SCC_Link_Inserter {
 	/**
 	 * Apply a stored recommendation.
 	 *
-	 * @param int $link_id scc_internal_links row id.
+	 * @param int    $link_id scc_internal_links row id.
+	 * @param string $trigger Trigger source (manual|autopilot|batch).
 	 * @return array|WP_Error {source_post_id, target_post_id, anchor}
 	 */
-	public function apply( $link_id ) {
+	public function apply( $link_id, $trigger = 'manual' ) {
 		$row = SCC_DB::get( 'internal_links', $link_id );
 		if ( ! $row ) {
 			return new WP_Error( 'scc_no_link', __( 'Recommendation not found.', 'seo-command-center' ), array( 'status' => 404 ) );
@@ -61,10 +62,11 @@ class SCC_Link_Inserter {
 			return new WP_Error( 'scc_cap', __( 'This page already has the maximum number of internal links.', 'seo-command-center' ), array( 'status' => 409 ) );
 		}
 
-		// Guard: already links to target.
-		if ( false !== strpos( $content, $target_url ) ) {
+		// Guard: max links to the SAME destination (avoid over-linking one page).
+		$per_dest = (int) SCC_Settings::get( 'link_max_per_destination', 1 );
+		if ( $per_dest > 0 && substr_count( $content, $target_url ) >= $per_dest ) {
 			SCC_DB::update( 'internal_links', array( 'status' => 'applied' ), array( 'id' => (int) $link_id ) );
-			return new WP_Error( 'scc_exists', __( 'The source already links to the target.', 'seo-command-center' ), array( 'status' => 409 ) );
+			return new WP_Error( 'scc_exists', __( 'The source already links to the target the allowed number of times.', 'seo-command-center' ), array( 'status' => 409 ) );
 		}
 
 		$new_content = $this->insert_anchor( $content, $anchor, $target_url );
@@ -85,7 +87,28 @@ class SCC_Link_Inserter {
 		}
 
 		SCC_DB::update( 'internal_links', array( 'status' => 'applied' ), array( 'id' => (int) $link_id ) );
-		SCC_Logger::info( 'link-inserter', 'Internal link applied', array( 'source' => $source_id, 'target' => $target_id ) );
+
+		// Record for revert (previous_value = full content before insertion).
+		if ( class_exists( 'SCC_Change_History' ) ) {
+			SCC_Change_History::record(
+				array(
+					'post_id'        => $source_id,
+					'change_type'    => 'internal_link',
+					'previous_value' => $content,
+					'new_value'      => sprintf( 'Linked “%s” -> %s', $anchor, $target_url ),
+					'reason'         => (string) ( $row['reason'] ?? '' ),
+					'confidence'     => (int) ( $row['confidence'] ?? 0 ),
+					'trigger_source' => $trigger,
+				)
+			);
+		}
+
+		// Keep the index fresh for the modified source.
+		if ( class_exists( 'SCC_Content_Index' ) ) {
+			SCC_Content_Index::index_post( $source_id );
+		}
+
+		SCC_Logger::info( 'link-inserter', 'Internal link applied', array( 'source' => $source_id, 'target' => $target_id, 'trigger' => $trigger ) );
 
 		return array(
 			'source_post_id' => $source_id,

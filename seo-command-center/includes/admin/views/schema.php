@@ -10,7 +10,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-$allowed = isset( $data['allowed'] ) ? $data['allowed'] : array();
+$allowed  = isset( $data['allowed'] ) ? $data['allowed'] : array();
+$business = isset( $data['business'] ) ? $data['business'] : array();
+$b = function ( $business, $key ) {
+	$v = isset( $business[ $key ] ) ? $business[ $key ] : '';
+	return is_array( $v ) ? implode( "\n", $v ) : $v;
+};
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
@@ -44,4 +49,37 @@ $allowed = isset( $data['allowed'] ) ? $data['allowed'] : array();
 			<?php endforeach; ?>
 		</p>
 	</div>
+
+	<form class="scc-card" id="scc-schema-settings-form">
+		<h2><?php esc_html_e( 'Organization &amp; business information', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Used to build Organization and LocalBusiness schema. Only fields you provide are included — nothing is invented.', 'seo-command-center' ); ?></p>
+		<table class="form-table" role="presentation">
+			<tr><th scope="row"><label for="scc-org-name"><?php esc_html_e( 'Organization name', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" class="regular-text" id="scc-org-name" name="organization_name" value="<?php echo esc_attr( $b( $business, 'organization_name' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-logo"><?php esc_html_e( 'Logo URL', 'seo-command-center' ); ?></label></th>
+				<td><input type="url" class="regular-text" id="scc-logo" name="logo" value="<?php echo esc_attr( $b( $business, 'logo' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-phone"><?php esc_html_e( 'Phone', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" id="scc-phone" name="phone" value="<?php echo esc_attr( $b( $business, 'phone' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-street"><?php esc_html_e( 'Street address', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" class="regular-text" id="scc-street" name="street" value="<?php echo esc_attr( $b( $business, 'street' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-city"><?php esc_html_e( 'City', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" id="scc-city" name="city" value="<?php echo esc_attr( $b( $business, 'city' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-region"><?php esc_html_e( 'Region/State', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" id="scc-region" name="region" value="<?php echo esc_attr( $b( $business, 'region' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-postal"><?php esc_html_e( 'Postal code', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" id="scc-postal" name="postal_code" value="<?php echo esc_attr( $b( $business, 'postal_code' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-country"><?php esc_html_e( 'Country', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" id="scc-country" name="country" value="<?php echo esc_attr( $b( $business, 'country' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-author"><?php esc_html_e( 'Default author', 'seo-command-center' ); ?></label></th>
+				<td><input type="text" id="scc-author" name="default_author" value="<?php echo esc_attr( $b( $business, 'default_author' ) ); ?>"></td></tr>
+			<tr><th scope="row"><label for="scc-social"><?php esc_html_e( 'Social profile URLs (one per line)', 'seo-command-center' ); ?></label></th>
+				<td><textarea id="scc-social" name="social_profiles" rows="3" class="large-text"><?php echo esc_textarea( $b( $business, 'social_profiles' ) ); ?></textarea></td></tr>
+			<tr><th scope="row"><label for="scc-areas"><?php esc_html_e( 'Service areas (one per line)', 'seo-command-center' ); ?></label></th>
+				<td><textarea id="scc-areas" name="service_areas" rows="3" class="large-text"><?php echo esc_textarea( $b( $business, 'service_areas' ) ); ?></textarea></td></tr>
+		</table>
+		<p class="submit">
+			<button type="submit" class="button button-primary"><?php esc_html_e( 'Save business information', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-schema-settings-status"></span>
+		</p>
+	</form>
 </div>

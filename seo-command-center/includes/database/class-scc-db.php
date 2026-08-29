@@ -47,6 +47,9 @@ class SCC_DB {
 		$jobs            = self::table( 'jobs' );
 		$usage           = self::table( 'api_usage' );
 		$logs            = self::table( 'logs' );
+		$content_index   = self::table( 'content_index' );
+		$change_history  = self::table( 'change_history' );
+		$meta_history    = self::table( 'meta_history' );
 
 		$sql = array();
 
@@ -122,11 +125,16 @@ class SCC_DB {
 			target_post_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			anchor TEXT NULL,
 			context TEXT NULL,
+			direction VARCHAR(20) NOT NULL DEFAULT 'existing',
+			confidence INT NOT NULL DEFAULT 0,
+			reason TEXT NULL,
+			sentence TEXT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'recommended',
 			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
 			PRIMARY KEY  (id),
 			KEY source_post_id (source_post_id),
-			KEY target_post_id (target_post_id)
+			KEY target_post_id (target_post_id),
+			KEY status (status)
 		) {$charset_collate};";
 
 		$sql[] = "CREATE TABLE {$templates} (
@@ -170,6 +178,53 @@ class SCC_DB {
 			KEY created_at (created_at)
 		) {$charset_collate};";
 
+		$sql[] = "CREATE TABLE {$content_index} (
+			post_id BIGINT UNSIGNED NOT NULL,
+			url TEXT NULL,
+			post_type VARCHAR(40) NULL,
+			title TEXT NULL,
+			primary_keyword VARCHAR(200) NULL,
+			intent VARCHAR(40) NULL,
+			tokens LONGTEXT NULL,
+			headings LONGTEXT NULL,
+			anchors LONGTEXT NULL,
+			outbound LONGTEXT NULL,
+			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (post_id),
+			KEY post_type (post_type)
+		) {$charset_collate};";
+
+		$sql[] = "CREATE TABLE {$change_history} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			post_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			change_type VARCHAR(30) NOT NULL DEFAULT '',
+			previous_value LONGTEXT NULL,
+			new_value LONGTEXT NULL,
+			reason TEXT NULL,
+			confidence INT NOT NULL DEFAULT 0,
+			trigger_source VARCHAR(40) NULL,
+			reverted TINYINT(1) NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY post_id (post_id),
+			KEY change_type (change_type)
+		) {$charset_collate};";
+
+		$sql[] = "CREATE TABLE {$meta_history} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			post_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			field VARCHAR(20) NOT NULL DEFAULT 'title',
+			previous_value TEXT NULL,
+			new_value TEXT NULL,
+			variants LONGTEXT NULL,
+			reason TEXT NULL,
+			perf_before LONGTEXT NULL,
+			perf_after LONGTEXT NULL,
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY post_id (post_id)
+		) {$charset_collate};";
+
 		$sql[] = "CREATE TABLE {$logs} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -201,6 +256,9 @@ class SCC_DB {
 			'jobs',
 			'api_usage',
 			'logs',
+			'content_index',
+			'change_history',
+			'meta_history',
 		);
 		foreach ( $tables as $t ) {
 			$name = self::table( $t );

@@ -73,6 +73,51 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 				<th scope="row"><label for="scc-max-links"><?php esc_html_e( 'Max internal links per page', 'seo-command-center' ); ?></label></th>
 				<td><input type="number" min="0" max="50" id="scc-max-links" name="max_internal_links" value="<?php echo esc_attr( $s['max_internal_links'] ); ?>"></td>
 			</tr>
+			<tr>
+				<th scope="row"><label for="scc-meta-storage"><?php esc_html_e( 'Metadata storage', 'seo-command-center' ); ?></label></th>
+				<td>
+					<select id="scc-meta-storage" name="meta_storage">
+						<option value="auto" <?php selected( $s['meta_storage'], 'auto' ); ?>><?php esc_html_e( 'Auto (active SEO plugin, else this plugin)', 'seo-command-center' ); ?></option>
+						<option value="seo_plugin" <?php selected( $s['meta_storage'], 'seo_plugin' ); ?>><?php esc_html_e( 'Active SEO plugin keys', 'seo-command-center' ); ?></option>
+						<option value="plugin" <?php selected( $s['meta_storage'], 'plugin' ); ?>><?php esc_html_e( 'This plugin only', 'seo-command-center' ); ?></option>
+					</select>
+				</td>
+			</tr>
+		</table>
+
+		<h2><?php esc_html_e( 'Internal Link Autopilot', 'seo-command-center' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Autopilot', 'seo-command-center' ); ?></th>
+				<td>
+					<label><input type="checkbox" name="autopilot_enabled" <?php checked( $s['autopilot_enabled'] ); ?>> <?php esc_html_e( 'Automatically analyze new/updated content for internal-link opportunities (runs in the background).', 'seo-command-center' ); ?></label>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Auto-insert', 'seo-command-center' ); ?></th>
+				<td>
+					<label><input type="checkbox" name="autopilot_auto_insert" <?php checked( $s['autopilot_auto_insert'] ); ?>> <?php esc_html_e( 'Automatically insert high-confidence links. Medium confidence becomes a recommendation; low confidence is ignored.', 'seo-command-center' ); ?></label>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-high-conf"><?php esc_html_e( 'High-confidence threshold (%)', 'seo-command-center' ); ?></label></th>
+				<td><input type="number" min="50" max="100" id="scc-high-conf" name="link_high_confidence" value="<?php echo esc_attr( $s['link_high_confidence'] ); ?>"></td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-med-conf"><?php esc_html_e( 'Medium-confidence threshold (%)', 'seo-command-center' ); ?></label></th>
+				<td><input type="number" min="1" max="99" id="scc-med-conf" name="link_medium_confidence" value="<?php echo esc_attr( $s['link_medium_confidence'] ); ?>"></td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-max-dest"><?php esc_html_e( 'Max links to the same destination', 'seo-command-center' ); ?></label></th>
+				<td><input type="number" min="1" max="10" id="scc-max-dest" name="link_max_per_destination" value="<?php echo esc_attr( $s['link_max_per_destination'] ); ?>"></td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Safety', 'seo-command-center' ); ?></th>
+				<td>
+					<label><input type="checkbox" name="link_avoid_headings" <?php checked( $s['link_avoid_headings'] ); ?>> <?php esc_html_e( 'Never place links inside headings', 'seo-command-center' ); ?></label><br>
+					<label><input type="checkbox" name="link_vary_anchor" <?php checked( $s['link_vary_anchor'] ); ?>> <?php esc_html_e( 'Vary anchor text (avoid exact-match repetition)', 'seo-command-center' ); ?></label>
+				</td>
+			</tr>
 		</table>
 
 		<h2><?php esc_html_e( 'Publishing', 'seo-command-center' ); ?></h2>

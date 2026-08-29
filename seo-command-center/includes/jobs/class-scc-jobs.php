@@ -200,6 +200,15 @@ class SCC_Jobs {
 				$result    = $generator->generate( $entry );
 				return is_wp_error( $result ) ? $result : true;
 
+			case 'link_autopilot':
+				$post_id = (int) ( $payload['post_id'] ?? 0 );
+				if ( ! $post_id || ! get_post( $post_id ) ) {
+					return true; // Post gone; nothing to do (idempotent).
+				}
+				$autopilot = new SCC_Autopilot();
+				$autopilot->run_for_post( $post_id );
+				return true;
+
 			default:
 				return new WP_Error( 'scc_unknown_job', 'Unknown job type.' );
 		}

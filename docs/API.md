@@ -50,6 +50,27 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 6 | POST | `/competitors/analyze` | Public competitor analysis. |
 | 7 | POST | `/jobs`, GET `/jobs/{id}` | Batch job control. |
 
+## v1.1 routes — advanced linking / meta / schema
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| POST | `/index/reindex`, GET `/index/status` | Build/inspect the content index. |
+| POST | `/links/analyze` | New→existing + existing→new opportunities for a post. |
+| GET  | `/links/recommendations` | Stored recommendations (filter by direction/confidence). |
+| POST | `/links/apply` | Insert one recommendation (records revert history). |
+| POST | `/links/apply-high` | Insert all high-confidence recommendations. |
+| POST | `/links/scan` | Site-wide reoptimization scan. |
+| POST | `/meta/variants` | Generate classified metadata variants (GSC-aware). |
+| POST | `/meta/apply` | Apply a variant (cooldown-guarded; `force` to override). |
+| GET  | `/meta/opportunities` | GSC pages at position 4–20 with low CTR. |
+| GET  | `/meta/history` | Metadata change history for a post. |
+| POST | `/schema/recommend` | Recommended + not-recommended types + conflicts. |
+| POST | `/schema/generate` | Generate validated JSON-LD nodes + warnings. |
+| POST | `/schema/save`, `/schema/disable` | Persist/remove a post's schema. |
+| GET/POST | `/schema/settings` | Organization/business info (never invented). |
+| GET  | `/history`, POST `/history/revert` | Change history + revert (links/meta/schema). |
+| GET  | `/seo-report` | Unified per-page readiness (internal score). |
+
 ## Error handling
 
 - `401`/`403` — missing capability or nonce.

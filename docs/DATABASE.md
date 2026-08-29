@@ -78,6 +78,25 @@ actively writes to `scc_analyses`, `scc_analysis_items`, `scc_api_usage`, and
 | id, type, status, payload(JSON), cursor, attempts, max_attempts,
   scheduled_at, started_at, finished_at, last_error, created_at |
 
+### `scc_content_index` — searchable content index (v1.1)
+| post_id (PK), url, post_type, title, primary_keyword, intent, tokens(JSON
+term-freq), headings(JSON), anchors(JSON), outbound(JSON post ids), updated_at |
+Built incrementally on `save_post`; powers relevance/link analysis without a
+per-request crawl.
+
+### `scc_change_history` — revert log (v1.1)
+| id, post_id, change_type(internal_link/meta_title/meta_description/schema),
+previous_value, new_value, reason, confidence, trigger_source, reverted,
+created_at | Every automatic change is reversible.
+
+### `scc_meta_history` — metadata experiments (v1.1)
+| id, post_id, field, previous_value, new_value, variants(JSON), reason,
+perf_before(JSON), perf_after(JSON), created_at | Backs the 30-day cooldown and
+before/after comparison.
+
+> `scc_internal_links` gained `direction`, `confidence`, `reason`, `sentence`
+> columns in v1.1 (added via `dbDelta` on upgrade to DB version 1.1.0).
+
 ### `scc_api_usage` — usage/cost ledger (written from Phase 1)
 | Column | Type | Notes |
 |--------|------|-------|

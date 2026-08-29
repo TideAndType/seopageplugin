@@ -23,8 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.0.0' );
-define( 'SCC_DB_VERSION', '1.0.0' );
+define( 'SCC_VERSION', '1.1.0' );
+define( 'SCC_DB_VERSION', '1.1.0' );
 define( 'SCC_PLUGIN_FILE', __FILE__ );
 define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SCC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -67,9 +67,21 @@ require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-placeholders.php';
 require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-template-mapping.php';
 require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-elementor-builder.php';
 
+require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-content-index.php';
+require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-change-history.php';
+require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-seo-report.php';
+
 require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-graph.php';
 require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-recommender.php';
 require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-inserter.php';
+require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-anchor-engine.php';
+require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-engine.php';
+require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-autopilot.php';
+
+require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-history.php';
+require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-optimizer.php';
+
+require_once SCC_PLUGIN_DIR . 'includes/schema/class-scc-schema-engine.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';

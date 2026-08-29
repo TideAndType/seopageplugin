@@ -226,3 +226,14 @@ if ( ! function_exists( 'wp_update_post' ) ) {
 }
 require_once __DIR__ . '/../seo-command-center/includes/jobs/class-scc-jobs.php';
 require_once __DIR__ . '/../seo-command-center/includes/publishing/class-scc-publishing.php';
+
+// --- Advanced linking / meta / schema stubs + classes under test ----------
+if ( ! function_exists( 'wp_http_validate_url' ) ) {
+	function wp_http_validate_url( $url ) {
+		return filter_var( $url, FILTER_VALIDATE_URL ) ? $url : false;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/index/class-scc-content-index.php';
+require_once __DIR__ . '/../seo-command-center/includes/index/class-scc-change-history.php';
+require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-anchor-engine.php';
+require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-link-engine.php';

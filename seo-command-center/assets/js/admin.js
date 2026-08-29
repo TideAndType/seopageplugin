@@ -401,50 +401,95 @@
 		} );
 	}
 
-	// ---- Internal links ------------------------------------------------
+	// ---- Internal links (advanced engine) ------------------------------
 	function bindInternalLinks() {
 		var msg = document.getElementById( 'scc-links-msg' );
-		var recBtn = document.getElementById( 'scc-recommend-links' );
-		if ( recBtn ) {
-			recBtn.addEventListener( 'click', function () {
-				recBtn.disabled = true;
-				setStatus( msg, 'Analyzing the link graph…' );
-				request( '/internal-links/recommend', { method: 'POST' } )
+
+		var scanBtn = document.getElementById( 'scc-links-scan' );
+		if ( scanBtn ) {
+			scanBtn.addEventListener( 'click', function () {
+				scanBtn.disabled = true;
+				setStatus( msg, 'Indexing and scanning the site… this can take a moment.' );
+				request( '/links/scan', { method: 'POST' } )
 					.then( function ( res ) {
-						var created = ( res.data && res.data.created ) || 0;
-						setStatus( msg, created + ' recommendation(s) found. Reloading…', 'is-ok' );
+						var n = ( res.data && res.data.opportunities ) || 0;
+						setStatus( msg, n + ' opportunity(ies) found. Reloading…', 'is-ok' );
 						window.location.reload();
 					} )
 					.catch( function ( err ) {
-						recBtn.disabled = false;
+						scanBtn.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		var highBtn = document.getElementById( 'scc-links-apply-high' );
+		if ( highBtn ) {
+			highBtn.addEventListener( 'click', function () {
+				if ( ! window.confirm( 'Insert all high-confidence links now? Each change can be reverted from the history below.' ) ) {
+					return;
+				}
+				highBtn.disabled = true;
+				setStatus( msg, 'Applying high-confidence links…' );
+				request( '/links/apply-high', { method: 'POST' } )
+					.then( function ( res ) {
+						var d = res.data || {};
+						setStatus( msg, ( d.applied || 0 ) + ' inserted, ' + ( d.skipped || 0 ) + ' skipped. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						highBtn.disabled = false;
 						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
 					} );
 			} );
 		}
 
 		var table = document.getElementById( 'scc-links-table' );
-		if ( ! table ) {
-			return;
+		if ( table ) {
+			table.addEventListener( 'click', function ( e ) {
+				if ( ! e.target.classList.contains( 'scc-apply-link' ) ) {
+					return;
+				}
+				var row = e.target.closest( 'tr' );
+				var id = row.getAttribute( 'data-id' );
+				e.target.disabled = true;
+				setStatus( msg, 'Inserting…' );
+				request( '/links/apply', { method: 'POST', data: { id: id } } )
+					.then( function () {
+						row.parentNode.removeChild( row );
+						setStatus( msg, 'Link inserted.', 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						e.target.disabled = false;
+						e.target.textContent = 'Retry';
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
 		}
-		table.addEventListener( 'click', function ( e ) {
-			if ( ! e.target.classList.contains( 'scc-apply-link' ) ) {
-				return;
-			}
-			var row = e.target.closest( 'tr' );
-			var id = row.getAttribute( 'data-id' );
-			e.target.disabled = true;
-			setStatus( msg, 'Applying…' );
-			request( '/internal-links/apply', { method: 'POST', data: { id: id } } )
-				.then( function () {
-					row.parentNode.removeChild( row );
-					setStatus( msg, 'Link inserted.', 'is-ok' );
-				} )
-				.catch( function ( err ) {
-					e.target.disabled = false;
-					e.target.textContent = 'Retry';
-					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
-				} );
-		} );
+
+		// Change-history revert.
+		var hist = document.getElementById( 'scc-history-table' );
+		if ( hist ) {
+			var hmsg = document.getElementById( 'scc-history-msg' );
+			hist.addEventListener( 'click', function ( e ) {
+				if ( ! e.target.classList.contains( 'scc-revert' ) ) {
+					return;
+				}
+				var row = e.target.closest( 'tr' );
+				var id = row.getAttribute( 'data-id' );
+				e.target.disabled = true;
+				setStatus( hmsg, 'Reverting…' );
+				request( '/history/revert', { method: 'POST', data: { id: id } } )
+					.then( function () {
+						setStatus( hmsg, 'Reverted.', 'is-ok' );
+						e.target.outerHTML = '<span class="scc-badge">Reverted</span>';
+					} )
+					.catch( function ( err ) {
+						e.target.disabled = false;
+						setStatus( hmsg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
 	}
 
 	// ---- SEO Audit: GSC quick wins + competitor analysis ---------------
@@ -669,6 +714,148 @@
 		} );
 	}
 
+	// ---- Unified editor SEO panel --------------------------------------
+	function bindSeoPanel() {
+		var panel = document.querySelector( '.scc-panel' );
+		if ( ! panel ) {
+			return;
+		}
+		var postId = panel.getAttribute( 'data-post-id' );
+		var status = document.getElementById( 'scc-panel-status' );
+		var out = document.getElementById( 'scc-panel-out' );
+
+		function loadReport() {
+			request( '/seo-report?post_id=' + postId, { method: 'GET' } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					var scoreEl = document.getElementById( 'scc-panel-score' );
+					if ( scoreEl ) {
+						scoreEl.textContent = ( d.score || 0 ) + '/100';
+					}
+					var rows = document.getElementById( 'scc-panel-rows' );
+					rows.innerHTML = '';
+					( d.items || [] ).forEach( function ( it ) {
+						var row = el( 'div', null, 'scc-panel__row' );
+						row.appendChild( el( 'span', it.label ) );
+						var v = el( 'span', String( it.value ) + ( it.note ? ' ' + it.note : '' ), 'scc-panel__val' );
+						if ( it.ok === true ) { v.classList.add( 'is-ok' ); }
+						if ( it.ok === false ) { v.classList.add( 'is-bad' ); }
+						row.appendChild( v );
+						rows.appendChild( row );
+					} );
+				} )
+				.catch( function () {} );
+		}
+
+		document.getElementById( 'scc-panel-links' ).addEventListener( 'click', function () {
+			setStatus( status, 'Analyzing links…' );
+			out.innerHTML = '';
+			request( '/links/analyze', { method: 'POST', data: { post_id: postId } } )
+				.then( function () {
+					return request( '/links/recommendations', { method: 'GET' } );
+				} )
+				.then( function ( res ) {
+					setStatus( status, '', 'is-ok' );
+					var recs = ( ( res.data && res.data.recommendations ) || [] ).filter( function ( r ) {
+						return String( r.source_post_id ) === String( postId ) || String( r.target_post_id ) === String( postId );
+					} );
+					if ( ! recs.length ) {
+						out.appendChild( el( 'p', 'No high-relevance link opportunities found.', 'scc-note' ) );
+						return;
+					}
+					recs.slice( 0, 12 ).forEach( function ( r ) {
+						var dir = String( r.source_post_id ) === String( postId ) ? '→ ' + r.target_title : '← ' + r.source_title;
+						var box = el( 'div', null, 'scc-panel__item' );
+						box.appendChild( el( 'div', dir + ' (' + r.confidence + '%)', 'scc-panel__item-h' ) );
+						box.appendChild( el( 'div', 'Anchor: “' + r.anchor + '” — ' + ( r.reason || '' ), 'scc-note' ) );
+						var b = el( 'button', 'Insert', 'button button-small' );
+						b.addEventListener( 'click', function () {
+							b.disabled = true;
+							request( '/links/apply', { method: 'POST', data: { id: r.id } } )
+								.then( function () { b.textContent = 'Inserted'; loadReport(); } )
+								.catch( function ( e ) { b.disabled = false; setStatus( status, ( e && e.message ) || i18n.error, 'is-error' ); } );
+						} );
+						box.appendChild( b );
+						out.appendChild( box );
+					} );
+				} )
+				.catch( function ( err ) { setStatus( status, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		} );
+
+		document.getElementById( 'scc-panel-meta' ).addEventListener( 'click', function () {
+			setStatus( status, 'Generating metadata variants…' );
+			out.innerHTML = '';
+			request( '/meta/variants', { method: 'POST', data: { post_id: postId } } )
+				.then( function ( res ) {
+					setStatus( status, '', 'is-ok' );
+					var d = res.data || {};
+					( d.variants || [] ).forEach( function ( v ) {
+						var box = el( 'div', null, 'scc-panel__item' );
+						box.appendChild( el( 'div', '[' + v.type + '] ' + v.title, 'scc-panel__item-h' ) );
+						box.appendChild( el( 'div', v.description, 'scc-note' ) );
+						if ( v.reason ) { box.appendChild( el( 'div', v.reason, 'scc-note' ) ); }
+						var b = el( 'button', 'Apply', 'button button-small' );
+						b.addEventListener( 'click', function () {
+							b.disabled = true;
+							request( '/meta/apply', { method: 'POST', data: { post_id: postId, title: v.title, description: v.description, reason: v.reason, force: true } } )
+								.then( function () { b.textContent = 'Applied'; loadReport(); } )
+								.catch( function ( e ) { b.disabled = false; setStatus( status, ( e && e.message ) || i18n.error, 'is-error' ); } );
+						} );
+						box.appendChild( b );
+						out.appendChild( box );
+					} );
+				} )
+				.catch( function ( err ) { setStatus( status, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		} );
+
+		document.getElementById( 'scc-panel-schema' ).addEventListener( 'click', function () {
+			setStatus( status, 'Checking schema…' );
+			out.innerHTML = '';
+			request( '/schema/recommend', { method: 'POST', data: { post_id: postId } } )
+				.then( function ( res ) {
+					setStatus( status, '', 'is-ok' );
+					var d = res.data || {};
+					out.appendChild( el( 'div', 'Recommended: ' + ( d.recommended || [] ).join( ', ' ), 'scc-note' ) );
+					if ( d.conflicts && d.conflicts.conflicts && d.conflicts.conflicts.length ) {
+						out.appendChild( el( 'div', '⚠ Possible duplicate with existing: ' + d.conflicts.conflicts.join( ', ' ), 'scc-note is-bad' ) );
+					}
+					var gen = el( 'button', 'Generate & save schema', 'button button-small button-primary' );
+					gen.addEventListener( 'click', function () {
+						gen.disabled = true;
+						request( '/schema/save', { method: 'POST', data: { post_id: postId, types: d.recommended } } )
+							.then( function () { gen.textContent = 'Saved'; loadReport(); } )
+							.catch( function ( e ) { gen.disabled = false; setStatus( status, ( e && e.message ) || i18n.error, 'is-error' ); } );
+					} );
+					out.appendChild( gen );
+				} )
+				.catch( function ( err ) { setStatus( status, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		} );
+
+		loadReport();
+	}
+
+	// ---- Schema business settings --------------------------------------
+	function bindSchemaSettings() {
+		var form = document.getElementById( 'scc-schema-settings-form' );
+		if ( ! form ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-schema-settings-status' );
+		form.addEventListener( 'submit', function ( e ) {
+			e.preventDefault();
+			var data = {};
+			Array.prototype.forEach.call( form.elements, function ( el ) {
+				if ( el.name ) {
+					data[ el.name ] = el.value;
+				}
+			} );
+			setStatus( status, '…' );
+			request( '/schema/settings', { method: 'POST', data: data } )
+				.then( function () { setStatus( status, i18n.saved || 'Saved.', 'is-ok' ); } )
+				.catch( function ( err ) { setStatus( status, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -683,5 +870,7 @@
 		bindCompetitor();
 		bindJobs();
 		bindPublishing();
+		bindSeoPanel();
+		bindSchemaSettings();
 	} );
 } )();

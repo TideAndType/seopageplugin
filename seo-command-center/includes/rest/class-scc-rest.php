@@ -409,6 +409,123 @@ class SCC_REST {
 				),
 			)
 		);
+
+		// ---- Advanced internal linking, meta, schema ------------------
+		$post_arg = array( 'post_id' => array( 'sanitize_callback' => 'absint', 'required' => true ) );
+
+		register_rest_route( self::NS, '/index/reindex', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'reindex' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/index/status', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'index_status' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/links/analyze', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'links_analyze' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/links/recommendations', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'links_recommendations' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/links/apply', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'links_apply' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+		register_rest_route( self::NS, '/links/apply-high', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'links_apply_high' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/links/scan', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'links_scan' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/meta/variants', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'meta_variants' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/meta/apply', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'meta_apply' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/meta/opportunities', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'meta_opportunities' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/meta/history', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'meta_history' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/schema/recommend', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'schema_recommend' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/schema/generate', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'schema_generate' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/schema/save', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'schema_save' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/schema/disable', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'schema_disable' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
+		register_rest_route( self::NS, '/schema/settings', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'schema_settings_get' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'schema_settings_save' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/history', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'history_list' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/history/revert', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'history_revert' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+		register_rest_route( self::NS, '/seo-report', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'seo_report' ),
+			'permission_callback' => $perm,
+			'args'                => $post_arg,
+		) );
 	}
 
 	/**
@@ -997,6 +1114,291 @@ class SCC_REST {
 				break;
 		}
 		return $this->ok( array( 'queue' => SCC_Publishing::queue() ) );
+	}
+
+	/**
+	 * POST /index/reindex.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function reindex() {
+		$count = SCC_Content_Index::reindex_all( 2000 );
+		return $this->ok( array( 'indexed' => $count ) );
+	}
+
+	/**
+	 * GET /index/status.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function index_status() {
+		return $this->ok( array( 'indexed' => SCC_Content_Index::count() ) );
+	}
+
+	/**
+	 * POST /links/analyze.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function links_analyze( WP_REST_Request $request ) {
+		$engine = new SCC_Link_Engine();
+		$result = $engine->analyze( (int) $request->get_param( 'post_id' ), true );
+		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /links/recommendations.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function links_recommendations( WP_REST_Request $request ) {
+		return $this->ok( array(
+			'recommendations' => SCC_Link_Engine::recommendations( array(
+				'direction'      => sanitize_key( (string) $request->get_param( 'direction' ) ),
+				'min_confidence' => (int) $request->get_param( 'min_confidence' ),
+			) ),
+		) );
+	}
+
+	/**
+	 * POST /links/apply.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function links_apply( WP_REST_Request $request ) {
+		$inserter = new SCC_Link_Inserter();
+		$result   = $inserter->apply( (int) $request->get_param( 'id' ), 'manual' );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /links/apply-high — apply all high-confidence recommendations.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function links_apply_high() {
+		$high = (int) SCC_Settings::get( 'link_high_confidence', 80 );
+		$recs = SCC_Link_Engine::recommendations( array( 'min_confidence' => $high, 'limit' => 200 ) );
+		$inserter = new SCC_Link_Inserter();
+		$applied  = 0;
+		$skipped  = 0;
+		foreach ( $recs as $rec ) {
+			$r = $inserter->apply( (int) $rec['id'], 'batch' );
+			if ( is_wp_error( $r ) ) {
+				$skipped++;
+			} else {
+				$applied++;
+			}
+		}
+		return $this->ok( array( 'applied' => $applied, 'skipped' => $skipped ) );
+	}
+
+	/**
+	 * POST /links/scan — site-wide reoptimization scan.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function links_scan() {
+		// Ensure the index exists before scanning.
+		if ( SCC_Content_Index::count() < 1 ) {
+			SCC_Content_Index::reindex_all( 2000 );
+		}
+		$engine = new SCC_Link_Engine();
+		return $this->ok( $engine->scan_site( 500 ) );
+	}
+
+	/**
+	 * POST /meta/variants.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function meta_variants( WP_REST_Request $request ) {
+		$optimizer = new SCC_Meta_Optimizer( $this->ai );
+		$result    = $optimizer->generate_variants( (int) $request->get_param( 'post_id' ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /meta/apply.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function meta_apply( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$optimizer = new SCC_Meta_Optimizer( $this->ai );
+		$result = $optimizer->apply(
+			(int) $request->get_param( 'post_id' ),
+			array(
+				'title'       => $params['title'] ?? '',
+				'description' => $params['description'] ?? '',
+			),
+			(string) ( $params['reason'] ?? '' ),
+			! empty( $params['force'] )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /meta/opportunities.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function meta_opportunities() {
+		$optimizer = new SCC_Meta_Optimizer( $this->ai );
+		$ops = $optimizer->opportunities();
+		if ( is_wp_error( $ops ) ) {
+			return $ops;
+		}
+		return $this->ok( array( 'connected' => SCC_GSC::is_connected(), 'opportunities' => $ops ) );
+	}
+
+	/**
+	 * GET /meta/history.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function meta_history( WP_REST_Request $request ) {
+		return $this->ok( array( 'history' => SCC_Meta_History::for_post( (int) $request->get_param( 'post_id' ) ) ) );
+	}
+
+	/**
+	 * POST /schema/recommend.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function schema_recommend( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		$rec     = SCC_Schema_Engine::recommend( $post_id );
+		$rec['conflicts'] = SCC_Schema_Engine::detect_conflicts( $post_id, $rec['recommended'] );
+		return $this->ok( $rec );
+	}
+
+	/**
+	 * POST /schema/generate.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function schema_generate( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : array();
+		$types   = isset( $params['types'] ) ? array_map( 'sanitize_text_field', (array) $params['types'] ) : array();
+		$post_id = (int) $request->get_param( 'post_id' );
+		$result  = SCC_Schema_Engine::generate( $post_id, $types );
+		$result['conflicts'] = SCC_Schema_Engine::detect_conflicts( $post_id, wp_list_pluck( $result['nodes'], '@type' ) );
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /schema/save.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function schema_save( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : array();
+		$post_id = (int) $request->get_param( 'post_id' );
+
+		// Accept either generated types (regenerate then save) or explicit nodes.
+		if ( ! empty( $params['nodes'] ) && is_array( $params['nodes'] ) ) {
+			$nodes = $params['nodes'];
+		} else {
+			$types = isset( $params['types'] ) ? array_map( 'sanitize_text_field', (array) $params['types'] ) : array();
+			$gen   = SCC_Schema_Engine::generate( $post_id, $types );
+			$nodes = $gen['nodes'];
+		}
+		$result = SCC_Schema_Engine::save( $post_id, $nodes );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'saved' => true, 'count' => count( $nodes ) ) );
+	}
+
+	/**
+	 * POST /schema/disable.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function schema_disable( WP_REST_Request $request ) {
+		$result = SCC_Schema_Engine::disable( (int) $request->get_param( 'post_id' ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'disabled' => true ) );
+	}
+
+	/**
+	 * GET /schema/settings.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function schema_settings_get() {
+		return $this->ok( array( 'settings' => SCC_Schema_Engine::business() ) );
+	}
+
+	/**
+	 * POST /schema/settings.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function schema_settings_save( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		return $this->ok( array( 'settings' => SCC_Schema_Engine::save_business( is_array( $params ) ? $params : array() ) ) );
+	}
+
+	/**
+	 * GET /history.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function history_list( WP_REST_Request $request ) {
+		return $this->ok( array( 'history' => SCC_Change_History::all( (int) $request->get_param( 'post_id' ), 200 ) ) );
+	}
+
+	/**
+	 * POST /history/revert.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function history_revert( WP_REST_Request $request ) {
+		$result = SCC_Change_History::revert( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'reverted' => true ) );
+	}
+
+	/**
+	 * GET /seo-report — unified per-page optimization readiness.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function seo_report( WP_REST_Request $request ) {
+		return $this->ok( SCC_SEO_Report::build( (int) $request->get_param( 'post_id' ) ) );
 	}
 
 	/**

@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SCC_Schema {
 
 	/** Allowed schema @types this plugin will emit. */
-	const ALLOWED = array( 'Article', 'BlogPosting', 'FAQPage', 'LocalBusiness', 'Organization', 'Service', 'BreadcrumbList', 'WebPage' );
+	const ALLOWED = array( 'Article', 'BlogPosting', 'NewsArticle', 'FAQPage', 'LocalBusiness', 'Organization', 'Person', 'Service', 'BreadcrumbList', 'WebPage' );
 
 	/**
 	 * Choose a schema type for a page type.
@@ -65,16 +65,34 @@ class SCC_Schema {
 		switch ( $type ) {
 			case 'Article':
 			case 'BlogPosting':
+			case 'NewsArticle':
 				$node['headline']    = $name;
 				$node['description'] = $desc;
 				if ( $url ) {
 					$node['mainEntityOfPage'] = $url;
 				}
 				if ( ! empty( $data['author'] ) ) {
-					$node['author'] = array( '@type' => 'Organization', 'name' => SCC_Security::sanitize_text( $data['author'] ) );
+					$author_type = ! empty( $data['author_is_person'] ) ? 'Person' : 'Organization';
+					$node['author'] = array( '@type' => $author_type, 'name' => SCC_Security::sanitize_text( $data['author'] ) );
+				}
+				if ( ! empty( $data['image'] ) ) {
+					$node['image'] = esc_url_raw( $data['image'] );
 				}
 				if ( ! empty( $data['date'] ) ) {
 					$node['datePublished'] = SCC_Security::sanitize_text( $data['date'] );
+				}
+				if ( ! empty( $data['modified'] ) ) {
+					$node['dateModified'] = SCC_Security::sanitize_text( $data['modified'] );
+				}
+				break;
+
+			case 'Person':
+				$node['name'] = $name;
+				if ( $url ) {
+					$node['url'] = $url;
+				}
+				if ( ! empty( $data['sameAs'] ) && is_array( $data['sameAs'] ) ) {
+					$node['sameAs'] = array_values( array_filter( array_map( 'esc_url_raw', $data['sameAs'] ) ) );
 				}
 				break;
 
@@ -191,11 +209,17 @@ class SCC_Schema {
 			return new WP_Error( 'scc_bad_schema', __( 'Schema missing @context/@type.', 'seo-command-center' ) );
 		}
 		$type = $node['@type'];
-		if ( in_array( $type, array( 'Article', 'BlogPosting' ), true ) && empty( $node['headline'] ) ) {
+		if ( in_array( $type, array( 'Article', 'BlogPosting', 'NewsArticle' ), true ) && empty( $node['headline'] ) ) {
 			return new WP_Error( 'scc_bad_schema', __( 'Article schema requires a headline.', 'seo-command-center' ) );
 		}
-		if ( in_array( $type, array( 'Service', 'LocalBusiness', 'Organization', 'WebPage' ), true ) && empty( $node['name'] ) ) {
+		if ( in_array( $type, array( 'Service', 'LocalBusiness', 'Organization', 'Person', 'WebPage' ), true ) && empty( $node['name'] ) ) {
 			return new WP_Error( 'scc_bad_schema', __( 'Schema requires a name.', 'seo-command-center' ) );
+		}
+		// Validate any URLs present.
+		foreach ( array( 'url', 'mainEntityOfPage', 'image' ) as $url_field ) {
+			if ( ! empty( $node[ $url_field ] ) && ! wp_http_validate_url( $node[ $url_field ] ) ) {
+				return new WP_Error( 'scc_bad_schema', __( 'Schema contains an invalid URL.', 'seo-command-center' ) );
+			}
 		}
 		return true;
 	}
