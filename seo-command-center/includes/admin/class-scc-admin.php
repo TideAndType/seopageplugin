@@ -47,13 +47,13 @@ class SCC_Admin {
 		$pages = array(
 			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
-			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_placeholder' ),
-			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_placeholder' ),
-			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
+			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
+			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_placeholder' ),
-			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_placeholder' ),
+			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_placeholder' ),
 			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
@@ -180,6 +180,64 @@ class SCC_Admin {
 			array(
 				'hints'     => SCC_Settings::credential_hints(),
 				'providers' => $this->ai->get_providers(),
+			)
+		);
+	}
+
+	/**
+	 * Keyword Strategy page.
+	 */
+	public function render_keyword_strategy() {
+		$this->view(
+			'keyword-strategy',
+			array(
+				'strategy' => SCC_Keyword_Strategy::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Site Architecture page.
+	 */
+	public function render_architecture() {
+		$strategy = SCC_Keyword_Strategy::latest();
+		$tree     = null;
+		if ( $strategy && ! empty( $strategy['map_data'] ) ) {
+			$builder = new SCC_Architecture();
+			$tree    = $builder->build( $strategy['map_data'] );
+		}
+		$this->view(
+			'architecture',
+			array(
+				'strategy' => $strategy,
+				'tree'     => $tree,
+			)
+		);
+	}
+
+	/**
+	 * Content Plan page.
+	 */
+	public function render_content_plan() {
+		$this->view(
+			'content-plan',
+			array(
+				'entries'  => SCC_Content_Plan::all(),
+				'statuses' => SCC_Content_Plan::STATUSES,
+			)
+		);
+	}
+
+	/**
+	 * SEO Audit page (cannibalization for now; expands in Phase 3).
+	 */
+	public function render_seo_audit() {
+		$detector = new SCC_Cannibalization();
+		$this->view(
+			'seo-audit',
+			array(
+				'cannibalization' => $detector->detect(),
+				'has_analysis'    => (bool) SCC_Analyzer::latest(),
 			)
 		);
 	}

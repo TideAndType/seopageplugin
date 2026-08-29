@@ -69,6 +69,18 @@ if ( ! function_exists( 'home_url' ) ) {
 		return 'https://example.com' . $path;
 	}
 }
+if ( ! function_exists( 'sanitize_title' ) ) {
+	function sanitize_title( $title ) {
+		$title = strtolower( (string) $title );
+		$title = preg_replace( '/[^a-z0-9]+/', '-', $title );
+		return trim( $title, '-' );
+	}
+}
+if ( ! function_exists( 'sanitize_key' ) ) {
+	function sanitize_key( $key ) {
+		return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );
+	}
+}
 
 if ( ! class_exists( 'WP_Error' ) ) {
 	class WP_Error {
@@ -115,3 +127,24 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 	}
 }
 require_once __DIR__ . '/../seo-command-center/includes/logging/class-scc-logger.php';
+
+// --- Phase 2 stubs + classes under test -----------------------------------
+if ( ! class_exists( 'SCC_Analyzer' ) ) {
+	// Minimal stub: architecture/cannibalization call ::latest().
+	class SCC_Analyzer {
+		public static $latest = null;
+		public static function latest() {
+			return self::$latest;
+		}
+	}
+}
+if ( ! class_exists( 'SCC_Settings' ) ) {
+	class SCC_Settings {
+		public static function get( $key, $default = null ) {
+			return $default;
+		}
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-architecture.php';
+require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-cannibalization.php';
+require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-content-plan.php';

@@ -128,6 +128,88 @@ class SCC_REST {
 				'permission_callback' => $perm,
 			)
 		);
+
+		// ---- Phase 2: strategy ----------------------------------------
+		register_rest_route(
+			self::NS,
+			'/keywords',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_keywords' ),
+					'permission_callback' => $perm,
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'generate_keywords' ),
+					'permission_callback' => $perm,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'get_architecture' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/content-plan',
+			array(
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_content_plan' ),
+					'permission_callback' => $perm,
+				),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'create_content_plan' ),
+					'permission_callback' => $perm,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/content-plan/seed',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'seed_content_plan' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/content-plan/(?P<id>\d+)',
+			array(
+				array(
+					'methods'             => WP_REST_Server::EDITABLE,
+					'callback'            => array( $this, 'update_content_plan' ),
+					'permission_callback' => $perm,
+				),
+				array(
+					'methods'             => WP_REST_Server::DELETABLE,
+					'callback'            => array( $this, 'delete_content_plan' ),
+					'permission_callback' => $perm,
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/cannibalization',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'cannibalization' ),
+				'permission_callback' => $perm,
+			)
+		);
 	}
 
 	/**
@@ -287,6 +369,128 @@ class SCC_REST {
 	 */
 	public function logs() {
 		return $this->ok( array( 'logs' => SCC_Logger::recent( 100 ) ) );
+	}
+
+	/**
+	 * GET /keywords — latest strategy.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_keywords() {
+		return $this->ok( array( 'strategy' => SCC_Keyword_Strategy::latest() ) );
+	}
+
+	/**
+	 * POST /keywords — generate a topical map.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function generate_keywords( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$service = new SCC_Keyword_Strategy( $this->ai );
+		$result  = $service->generate( is_array( $params ) ? $params : array() );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /architecture — build tree from the latest strategy.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function get_architecture() {
+		$strategy = SCC_Keyword_Strategy::latest();
+		if ( ! $strategy || empty( $strategy['map_data'] ) ) {
+			return $this->ok( array( 'tree' => null ) );
+		}
+		$builder = new SCC_Architecture();
+		return $this->ok( array( 'tree' => $builder->build( $strategy['map_data'] ) ) );
+	}
+
+	/**
+	 * GET /content-plan.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function get_content_plan( WP_REST_Request $request ) {
+		$status = sanitize_key( (string) $request->get_param( 'status' ) );
+		return $this->ok( array( 'entries' => SCC_Content_Plan::all( $status ) ) );
+	}
+
+	/**
+	 * POST /content-plan — create an entry.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function create_content_plan( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$id     = SCC_Content_Plan::create( is_array( $params ) ? $params : array() );
+		if ( ! $id ) {
+			return $this->fail( 'create_failed', __( 'Could not create the plan entry.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id, 'entries' => SCC_Content_Plan::all() ) );
+	}
+
+	/**
+	 * POST /content-plan/seed — seed the plan from the latest architecture.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function seed_content_plan() {
+		$strategy = SCC_Keyword_Strategy::latest();
+		if ( ! $strategy || empty( $strategy['map_data'] ) ) {
+			return $this->fail( 'no_strategy', __( 'Generate a keyword strategy first.', 'seo-command-center' ), 400 );
+		}
+		$builder = new SCC_Architecture();
+		$tree    = $builder->build( $strategy['map_data'] );
+		$created = SCC_Content_Plan::seed_from_architecture( $tree );
+		return $this->ok( array( 'created' => $created, 'entries' => SCC_Content_Plan::all() ) );
+	}
+
+	/**
+	 * PUT /content-plan/{id} — update status.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function update_content_plan( WP_REST_Request $request ) {
+		$id     = (int) $request->get_param( 'id' );
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$status = isset( $params['status'] ) ? $params['status'] : '';
+		if ( ! SCC_Content_Plan::set_status( $id, $status ) ) {
+			return $this->fail( 'update_failed', __( 'Invalid status or entry.', 'seo-command-center' ), 400 );
+		}
+		return $this->ok( array( 'entries' => SCC_Content_Plan::all() ) );
+	}
+
+	/**
+	 * DELETE /content-plan/{id}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function delete_content_plan( WP_REST_Request $request ) {
+		$id = (int) $request->get_param( 'id' );
+		SCC_Content_Plan::delete( $id );
+		return $this->ok( array( 'entries' => SCC_Content_Plan::all() ) );
+	}
+
+	/**
+	 * GET /cannibalization.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function cannibalization() {
+		$detector = new SCC_Cannibalization();
+		return $this->ok( array( 'groups' => $detector->detect() ) );
 	}
 
 	/**

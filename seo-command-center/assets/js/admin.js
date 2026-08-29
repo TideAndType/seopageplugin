@@ -144,9 +144,113 @@
 		} );
 	}
 
+	// ---- Keyword strategy generation -----------------------------------
+	function bindKeywordStrategy() {
+		var form = document.getElementById( 'scc-keyword-form' );
+		if ( ! form ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-keyword-status' );
+		form.addEventListener( 'submit', function ( e ) {
+			e.preventDefault();
+			var data = {};
+			Array.prototype.forEach.call( form.elements, function ( el ) {
+				if ( el.name ) {
+					data[ el.name ] = el.value;
+				}
+			} );
+			setStatus( status, 'Building topical map… this can take a moment.' );
+			var btn = form.querySelector( 'button[type=submit]' );
+			if ( btn ) {
+				btn.disabled = true;
+			}
+			request( '/keywords', { method: 'POST', data: data } )
+				.then( function () {
+					setStatus( status, 'Done. Reloading…', 'is-ok' );
+					window.location.reload();
+				} )
+				.catch( function ( err ) {
+					if ( btn ) {
+						btn.disabled = false;
+					}
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
+	// ---- Seed content plan from architecture ---------------------------
+	function bindSeedPlan() {
+		var btn = document.getElementById( 'scc-seed-plan' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-seed-status' );
+		btn.addEventListener( 'click', function () {
+			btn.disabled = true;
+			setStatus( status, '…' );
+			request( '/content-plan/seed', { method: 'POST' } )
+				.then( function ( res ) {
+					var created = ( res.data && res.data.created ) || 0;
+					setStatus( status, created + ' new page(s) added to your content plan.', 'is-ok' );
+					btn.disabled = false;
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
+	// ---- Content plan status / delete ----------------------------------
+	function bindContentPlan() {
+		var table = document.getElementById( 'scc-plan-table' );
+		if ( ! table ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-plan-status-msg' );
+
+		table.addEventListener( 'change', function ( e ) {
+			if ( ! e.target.classList.contains( 'scc-plan-status' ) ) {
+				return;
+			}
+			var row = e.target.closest( 'tr' );
+			var id = row.getAttribute( 'data-id' );
+			request( '/content-plan/' + id, { method: 'PUT', data: { status: e.target.value } } )
+				.then( function () {
+					setStatus( status, i18n.saved || 'Saved.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+
+		table.addEventListener( 'click', function ( e ) {
+			if ( ! e.target.classList.contains( 'scc-plan-delete' ) ) {
+				return;
+			}
+			e.preventDefault();
+			var row = e.target.closest( 'tr' );
+			var id = row.getAttribute( 'data-id' );
+			if ( ! window.confirm( 'Remove this entry from the plan?' ) ) {
+				return;
+			}
+			request( '/content-plan/' + id, { method: 'DELETE' } )
+				.then( function () {
+					row.parentNode.removeChild( row );
+					setStatus( status, 'Removed.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
 		bindConnections();
+		bindKeywordStrategy();
+		bindSeedPlan();
+		bindContentPlan();
 	} );
 } )();

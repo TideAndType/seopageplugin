@@ -51,6 +51,11 @@ require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-seo-meta.php';
 require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-crawler.php';
 require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-analyzer.php';
 
+require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-keyword-strategy.php';
+require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-architecture.php';
+require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-content-plan.php';
+require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-cannibalization.php';
+
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';
 require_once SCC_PLUGIN_DIR . 'includes/rest/class-scc-rest.php';

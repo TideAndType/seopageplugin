@@ -110,6 +110,58 @@ assert_eq( 'value', $out['nested']['safe'], 'safe nested value kept' );
 assert_true( strpos( $out['freeform'], '[redacted]' ) !== false, 'bearer token redacted in free text' );
 assert_eq( 5, $out['count'], 'non-secret scalar kept' );
 
+echo "\n== Cannibalization heuristic ==\n";
+$cannibal = new SCC_Cannibalization();
+$tok = new ReflectionMethod( 'SCC_Cannibalization', 'tokens' );
+$tok->setAccessible( true );
+$t1 = $tok->invoke( $cannibal, 'Local SEO Services Company' );
+assert_true( in_array( 'local', $t1, true ) && in_array( 'seo', $t1, true ), 'significant tokens kept' );
+assert_true( ! in_array( 'services', $t1, true ) && ! in_array( 'company', $t1, true ), 'stop words removed' );
+
+$sim = new ReflectionMethod( 'SCC_Cannibalization', 'similar' );
+$sim->setAccessible( true );
+assert_true( $sim->invoke( $cannibal, array( 'local', 'seo', 'daytona' ), array( 'local', 'seo', 'daytona', 'beach' ) ), 'high overlap flagged' );
+assert_eq( false, $sim->invoke( $cannibal, array( 'web', 'design' ), array( 'plumbing', 'repair' ) ), 'no overlap not flagged' );
+
+echo "\n== Architecture tree building ==\n";
+SCC_Analyzer::$latest = null; // No existing pages.
+$arch = new SCC_Architecture();
+$map = array(
+	'clusters' => array(
+		array( 'service' => 'Local SEO', 'location' => '', 'primary_keyword' => 'local seo', 'supporting_terms' => array(), 'intent' => 'commercial', 'recommended_url' => '/local-seo/', 'related' => array(), 'page_type' => 'service', 'rationale' => '' ),
+		array( 'service' => 'Local SEO', 'location' => 'Daytona Beach', 'primary_keyword' => 'local seo daytona beach', 'supporting_terms' => array(), 'intent' => 'local', 'recommended_url' => '/local-seo/daytona-beach/', 'related' => array(), 'page_type' => 'location', 'rationale' => '' ),
+		array( 'service' => 'Local SEO', 'location' => '', 'primary_keyword' => 'how much does local seo cost', 'supporting_terms' => array(), 'intent' => 'informational', 'recommended_url' => '/blog/local-seo-cost/', 'related' => array(), 'page_type' => 'article', 'rationale' => '' ),
+	),
+	'entities' => array(),
+	'notes'    => '',
+);
+$tree = $arch->build( $map );
+assert_eq( 1, count( $tree['pillars'] ), 'one service pillar' );
+assert_eq( 'Local SEO', $tree['pillars'][0]['service'], 'pillar service name' );
+assert_eq( 1, count( $tree['pillars'][0]['children'] ), 'one location child' );
+assert_eq( 1, count( $tree['pillars'][0]['articles'] ), 'one supporting article' );
+assert_eq( false, $tree['pillars'][0]['children'][0]['exists'], 'new page not marked existing' );
+
+echo "\n== Architecture marks existing pages ==\n";
+SCC_Analyzer::$latest = array( 'items' => array( array( 'url' => 'https://example.com/local-seo/' ) ) );
+$tree2 = $arch->build( $map );
+assert_true( $tree2['pillars'][0]['exists'], 'existing pillar detected' );
+SCC_Analyzer::$latest = null;
+
+echo "\n== Content plan sanitization ==\n";
+$clean = SCC_Content_Plan::sanitize( array(
+	'title'      => '  Test Page ',
+	'status'     => 'bogus',
+	'priority'   => 'high',
+	'word_count' => '999999999',
+	'secondary'  => "a, b\nc",
+) );
+assert_eq( 'Test Page', $clean['title'], 'title trimmed' );
+assert_eq( 'recommended', $clean['status'], 'invalid status falls back' );
+assert_eq( 'high', $clean['priority'], 'valid priority kept' );
+assert_eq( 20000, $clean['word_count'], 'word count clamped to max' );
+assert_eq( array( 'a', 'b', 'c' ), json_decode( $clean['secondary'], true ), 'secondary list parsed' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -25,12 +25,12 @@ The functional base everything else builds on.
 - ✅ Admin dashboard, Site Analysis, Settings, API Connections pages
 - ✅ Internal REST API scaffold (analyze, settings, ai-test)
 
-## Phase 2 — Strategy ⬜
-- Keyword / topic strategy builder (structured topical map, not keyword lists)
-- Site architecture engine (Pillar → Service → Location → Supporting)
-- Content plan / calendar
-- Keyword → URL mapping
-- Keyword cannibalization detection
+## Phase 2 — Strategy ✅
+- ✅ Keyword / topic strategy builder (structured topical map via AI JSON, not keyword lists)
+- ✅ Site architecture engine (Pillar → Service → Location → Supporting), marks existing vs new pages
+- ✅ Content plan / calendar (CRUD, statuses, seed-from-architecture)
+- ✅ Keyword → URL mapping (recommended slugs per cluster)
+- ✅ Keyword cannibalization detection (token-overlap heuristic + recommendation options)
 
 ## Phase 3 — Content Generation ⬜
 - Multi-step AI content generator (brief → intent → outline → coverage →

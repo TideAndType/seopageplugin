@@ -73,3 +73,25 @@
 	display: inline-block; background: #2271b1; color: #fff; font-size: 12px;
 	padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
 }
+
+/* Topical map clusters */
+.scc-cluster { border: 1px solid #e0e0e2; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+.scc-cluster__head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.scc-cluster__body > div { margin-bottom: 4px; font-size: 13px; }
+.scc-label { color: #646970; font-weight: 600; }
+.scc-entities { margin-top: 12px; font-size: 13px; }
+.scc-flag--pillar { background: #e7e9fb; color: #3730a3; }
+.scc-flag--service { background: #e6f4ea; color: #137333; }
+.scc-flag--location { background: #fdf0e3; color: #9a5b00; }
+.scc-flag--article { background: #eef2f5; color: #3c4257; }
+
+/* Architecture tree */
+.scc-arch-pillar { border-left: 3px solid #2271b1; padding: 8px 0 8px 14px; margin: 14px 0; }
+.scc-arch-children { margin: 6px 0 6px 22px; }
+.scc-arch-articles { border-left: 2px dashed #dcdcde; padding-left: 12px; }
+.scc-arch-node { display: flex; align-items: center; gap: 10px; padding: 4px 0; flex-wrap: wrap; }
+.scc-arch-node.is-existing { opacity: .7; }
+.scc-arch-title { font-weight: 600; }
+
+.scc-options { margin: 4px 0 0 18px; list-style: disc; }
+.scc-options li { margin-bottom: 4px; font-size: 13px; }
