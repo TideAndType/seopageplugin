@@ -856,6 +856,97 @@
 		} );
 	}
 
+	// ---- Native template engine ----------------------------------------
+	function bindNativeTemplates() {
+		var rendererSel = document.getElementById( 'scc-default-renderer' );
+		if ( rendererSel ) {
+			var rmsg = document.getElementById( 'scc-renderer-msg' );
+			rendererSel.addEventListener( 'change', function () {
+				request( '/templates/native/map', { method: 'POST', data: { default_renderer: rendererSel.value } } )
+					.then( function () { setStatus( rmsg, i18n.saved || 'Saved.', 'is-ok' ); } )
+					.catch( function ( e ) { setStatus( rmsg, ( e && e.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var newBtn = document.getElementById( 'scc-new-template' );
+		if ( newBtn ) {
+			var tmsg = document.getElementById( 'scc-template-msg' );
+			newBtn.addEventListener( 'click', function () {
+				var type = ( document.getElementById( 'scc-new-template-type' ) || {} ).value || 'service';
+				newBtn.disabled = true;
+				setStatus( tmsg, 'Creating…' );
+				request( '/templates/native', { method: 'POST', data: { content_type: type, name: type.replace( /_/g, ' ' ) + ' template' } } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( e ) { newBtn.disabled = false; setStatus( tmsg, ( e && e.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var table = document.getElementById( 'scc-templates-table' );
+		if ( table ) {
+			var tmsg2 = document.getElementById( 'scc-template-msg' );
+			var previewOut = document.getElementById( 'scc-tpl-preview-out' );
+			table.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( 'tr' );
+				if ( ! row ) { return; }
+				var id = row.getAttribute( 'data-id' );
+				var family = row.getAttribute( 'data-family' );
+				var type = row.getAttribute( 'data-type' );
+
+				if ( e.target.classList.contains( 'scc-tpl-delete' ) ) {
+					if ( ! window.confirm( 'Delete this template? Existing pages are unaffected.' ) ) { return; }
+					request( '/templates/native/' + id, { method: 'DELETE' } )
+						.then( function () { row.parentNode.removeChild( row ); setStatus( tmsg2, 'Deleted.', 'is-ok' ); } )
+						.catch( function ( er ) { setStatus( tmsg2, ( er && er.message ) || i18n.error, 'is-error' ); } );
+				} else if ( e.target.classList.contains( 'scc-tpl-clone' ) ) {
+					request( '/templates/native/clone', { method: 'POST', data: { id: id } } )
+						.then( function () { window.location.reload(); } )
+						.catch( function ( er ) { setStatus( tmsg2, ( er && er.message ) || i18n.error, 'is-error' ); } );
+				} else if ( e.target.classList.contains( 'scc-tpl-preview' ) ) {
+					setStatus( tmsg2, 'Rendering preview…' );
+					request( '/templates/native/preview', { method: 'POST', data: { content_type: type, family: family, service: 'Local SEO', city: 'Daytona Beach', primary_keyword: 'Daytona Beach Local SEO' } } )
+						.then( function ( res ) {
+							setStatus( tmsg2, '', 'is-ok' );
+							var d = res.data || {};
+							previewOut.innerHTML = '';
+							previewOut.appendChild( el( 'p', 'Template: ' + d.template + ' · Renderer: ' + d.renderer + ' · Selected via: ' + d.source, 'scc-note' ) );
+							var pre = el( 'pre', d.html || '' );
+							pre.style.cssText = 'white-space:pre-wrap;background:#f6f7f8;border:1px solid #e0e0e2;border-radius:6px;padding:12px;max-height:360px;overflow:auto;';
+							previewOut.appendChild( pre );
+						} )
+						.catch( function ( er ) { setStatus( tmsg2, ( er && er.message ) || i18n.error, 'is-error' ); } );
+				}
+			} );
+		}
+
+		var mapTable = document.getElementById( 'scc-tpl-map-table' );
+		if ( mapTable ) {
+			var mmsg = document.getElementById( 'scc-map-msg' );
+			mapTable.addEventListener( 'change', function ( e ) {
+				var row = e.target.closest( 'tr' );
+				var ct = row.getAttribute( 'data-content-type' );
+				var family = ( row.querySelector( '.scc-map-family' ) || {} ).value || '';
+				var renderer = ( row.querySelector( '.scc-map-renderer' ) || {} ).value || '';
+				request( '/templates/native/map', { method: 'POST', data: { content_type: ct, family: family, renderer: renderer } } )
+					.then( function () { setStatus( mmsg, i18n.saved || 'Saved.', 'is-ok' ); } )
+					.catch( function ( er ) { setStatus( mmsg, ( er && er.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var elImport = document.getElementById( 'scc-el-import' );
+		if ( elImport ) {
+			var elmsg = document.getElementById( 'scc-el-msg' );
+			elImport.addEventListener( 'click', function () {
+				var source = ( document.getElementById( 'scc-el-source' ) || {} ).value;
+				var type = ( document.getElementById( 'scc-el-type' ) || {} ).value;
+				elImport.disabled = true;
+				setStatus( elmsg, 'Importing…' );
+				request( '/templates/native/import-elementor', { method: 'POST', data: { source_id: source, content_type: type } } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( er ) { elImport.disabled = false; setStatus( elmsg, ( er && er.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+	}
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
@@ -872,5 +963,6 @@
 		bindPublishing();
 		bindSeoPanel();
 		bindSchemaSettings();
+		bindNativeTemplates();
 	} );
 } )();

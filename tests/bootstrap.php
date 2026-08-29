@@ -132,6 +132,32 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 		return json_encode( $data );
 	}
 }
+// Minimal $wpdb stub so logging (secret-redacting) doesn't fatal in tests.
+if ( ! isset( $GLOBALS['wpdb'] ) ) {
+	class SCC_Test_WPDB {
+		public $prefix = 'wp_';
+		public $insert_id = 1;
+		public function __call( $name, $args ) {
+			return 0;
+		}
+		public function get_var( $q = '' ) {
+			return 0;
+		}
+		public function get_row( $q = '', $o = null ) {
+			return null;
+		}
+		public function get_results( $q = '', $o = null ) {
+			return array();
+		}
+		public function prepare( $q ) {
+			return $q;
+		}
+		public function insert( $t, $d, $f = null ) {
+			return 1;
+		}
+	}
+	$GLOBALS['wpdb'] = new SCC_Test_WPDB();
+}
 require_once __DIR__ . '/../seo-command-center/includes/logging/class-scc-logger.php';
 
 // --- Phase 2 stubs + classes under test -----------------------------------
@@ -237,3 +263,42 @@ require_once __DIR__ . '/../seo-command-center/includes/index/class-scc-content-
 require_once __DIR__ . '/../seo-command-center/includes/index/class-scc-change-history.php';
 require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-anchor-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-link-engine.php';
+
+// --- CMS-agnostic template/renderer stubs + classes under test ------------
+if ( ! function_exists( 'do_action' ) ) {
+	function do_action( $tag ) {}
+}
+if ( ! function_exists( 'wp_kses' ) ) {
+	function wp_kses( $html, $allowed = array() ) {
+		return (string) $html;
+	}
+}
+if ( ! function_exists( 'wp_kses_allowed_html' ) ) {
+	function wp_kses_allowed_html( $ctx = 'post' ) {
+		return array();
+	}
+}
+if ( ! class_exists( 'SCC_Elementor' ) ) {
+	// Elementor is treated as absent in the unit environment.
+	class SCC_Elementor {
+		public static $active = false;
+		public static function is_active() {
+			return self::$active;
+		}
+		public static function get_data( $id ) {
+			return null;
+		}
+		public static function is_elementor_post( $id ) {
+			return false;
+		}
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-content-object.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-map.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-selector.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/interface-scc-renderer.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-wordpress-renderer.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-gutenberg-renderer.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-elementor-renderer.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-renderer-manager.php';

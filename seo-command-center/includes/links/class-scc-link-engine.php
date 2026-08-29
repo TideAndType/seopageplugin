@@ -279,6 +279,53 @@ class SCC_Link_Engine {
 	}
 
 	/**
+	 * Find internal-link opportunities for a content object BEFORE it is saved
+	 * (operates on the content object, renderer-independent). Returns high-value,
+	 * naturally-placeable links to existing pages.
+	 *
+	 * @param SCC_Content_Object $content Content object.
+	 * @param int                $limit   Max links.
+	 * @return array List of {target_id, target_url, anchor, confidence, reason}.
+	 */
+	public function opportunities_for_content( SCC_Content_Object $content, $limit = 5 ) {
+		$text = wp_strip_all_tags( $content->content . ' ' . $content->intro );
+
+		$subject = array(
+			'title'           => $content->title,
+			'primary_keyword' => $content->primary_keyword,
+			'intent'          => $content->search_intent,
+			'url'             => '',
+			'tokens'          => SCC_Content_Index::tokenize( $content->title . ' ' . $text ),
+		);
+
+		$high  = self::thresholds()['high'];
+		$out   = array();
+		$rows  = SCC_Content_Index::all( 3000 );
+
+		foreach ( $rows as $other ) {
+			$rel = SCC_Content_Index::relevance( $subject, $other );
+			if ( $rel < $high ) {
+				continue;
+			}
+			$anchor = SCC_Anchor_Engine::choose( $other, $text, self::anchors_pointing_at( (int) $other['post_id'], $rows ) );
+			if ( ! $anchor || ! $anchor['present'] ) {
+				continue; // Only insert where a natural anchor already exists.
+			}
+			$out[] = array(
+				'target_id'  => (int) $other['post_id'],
+				'target_url' => $other['url'],
+				'anchor'     => $anchor['anchor'],
+				'confidence' => (int) round( $rel ),
+				'reason'     => $this->reason( 0, $other, $rel ),
+			);
+			if ( count( $out ) >= $limit ) {
+				break;
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * List stored recommendations, optionally filtered.
 	 *
 	 * @param array $args {direction, min_confidence, status, limit}.

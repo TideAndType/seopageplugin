@@ -50,6 +50,7 @@ class SCC_DB {
 		$content_index   = self::table( 'content_index' );
 		$change_history  = self::table( 'change_history' );
 		$meta_history    = self::table( 'meta_history' );
+		$scc_templates   = self::table( 'templates' );
 
 		$sql = array();
 
@@ -225,6 +226,26 @@ class SCC_DB {
 			KEY post_id (post_id)
 		) {$charset_collate};";
 
+		$sql[] = "CREATE TABLE {$scc_templates} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			family VARCHAR(64) NOT NULL DEFAULT '',
+			name VARCHAR(200) NULL,
+			description TEXT NULL,
+			content_type VARCHAR(40) NULL,
+			template_type VARCHAR(40) NULL,
+			structure LONGTEXT NULL,
+			renderer VARCHAR(40) NOT NULL DEFAULT 'gutenberg',
+			elementor_source_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			status VARCHAR(20) NOT NULL DEFAULT 'active',
+			version INT NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			modified_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY family (family),
+			KEY content_type (content_type),
+			KEY status (status)
+		) {$charset_collate};";
+
 		$sql[] = "CREATE TABLE {$logs} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
@@ -259,6 +280,7 @@ class SCC_DB {
 			'content_index',
 			'change_history',
 			'meta_history',
+			'templates',
 		);
 		foreach ( $tables as $t ) {
 			$name = self::table( $t );

@@ -153,6 +153,35 @@ active.
 
 ---
 
+## 4a. CMS-agnostic template & rendering (v1.2)
+
+The page-generation path is split into three decoupled layers so the plugin does
+**not** depend on Elementor (or any specific builder):
+
+```
+SEO Strategy Engine  →  Content + Template Engine  →  Renderer  →  WordPress Page
+   (what to create)       (structure + fields)         (how it's built)
+```
+
+- **SEO Strategy Engine** (existing strategy/generation classes) decides *what*
+  page to create: type, primary keyword, intent, structure, links, metadata,
+  schema. It references no builder.
+- **Content + Template Engine**: `SCC_Content_Object` is the standardized,
+  renderer-independent representation of a page (title, h1, intro, sections,
+  benefits, process, local_content, faq, cta, metadata, schema, internal_links).
+  `SCC_Template` / `SCC_Template_Store` define reusable structures; deterministic
+  `SCC_Template_Selector` chooses one (never the AI). See `docs/TEMPLATES.md`.
+- **Renderer**: `SCC_Renderer_Interface` implementations (`gutenberg` default,
+  `wordpress`, optional `elementor`) turn the content object + template into
+  `post_content` (+ optional builder meta). `SCC_Renderer_Manager` picks one with
+  automatic fallback when an optional builder is unavailable. See
+  `docs/RENDERERS.md`.
+
+Internal linking, metadata, and schema all operate on the **content object**
+before/after render and are renderer-independent. Elementor is now one optional
+renderer, not a dependency; the pre-existing `SCC_Template_Mapping` +
+`SCC_Elementor_Builder` are reused by the Elementor renderer and remain intact.
+
 ## 5. Admin UI
 
 WordPress-native admin (top-level menu + submenus) but styled to feel like a

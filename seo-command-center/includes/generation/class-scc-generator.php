@@ -23,13 +23,39 @@ class SCC_Generator {
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
+	/** @var SCC_Renderer_Manager */
+	protected $renderers;
+
 	/**
 	 * Constructor.
 	 *
-	 * @param SCC_AI_Manager $ai AI manager.
+	 * @param SCC_AI_Manager            $ai        AI manager.
+	 * @param SCC_Renderer_Manager|null $renderers Renderer manager (optional).
 	 */
-	public function __construct( SCC_AI_Manager $ai ) {
-		$this->ai = $ai;
+	public function __construct( SCC_AI_Manager $ai, $renderers = null ) {
+		$this->ai        = $ai;
+		$this->renderers = $renderers instanceof SCC_Renderer_Manager ? $renderers : new SCC_Renderer_Manager();
+	}
+
+	/**
+	 * Weave a few high-confidence, naturally-placeable internal links into the
+	 * content object's body before rendering (renderer-independent).
+	 *
+	 * @param SCC_Content_Object $content Content object.
+	 * @return array The link opportunities used.
+	 */
+	protected function weave_internal_links( SCC_Content_Object $content ) {
+		$max = (int) SCC_Settings::get( 'max_internal_links', 8 );
+		$engine = new SCC_Link_Engine();
+		$links  = $engine->opportunities_for_content( $content, $max );
+		if ( empty( $links ) ) {
+			return array();
+		}
+		$inserter = new SCC_Link_Inserter();
+		foreach ( $links as $link ) {
+			$content->content = $inserter->insert_link_in_html( $content->content, $link['anchor'], $link['target_url'] );
+		}
+		return $links;
 	}
 
 	/**
@@ -53,17 +79,44 @@ class SCC_Generator {
 			return $body;
 		}
 
-		// Build the post.
-		$post_type = self::post_type_for( $entry['page_type'] ?? 'article' );
+		// --- Content + Template + Renderer layers (CMS-agnostic) -----------
+		// Build the standardized, renderer-independent content object.
+		$content = SCC_Content_Object::from_generation( $entry, $body, $brief );
+
+		// Internal links operate on the content object BEFORE rendering.
+		$content->internal_links = $this->weave_internal_links( $content );
+
+		// Deterministic template + renderer selection (the AI never picks).
+		$selection = SCC_Template_Selector::select(
+			$content->content_type,
+			isset( $entry['template_family'] ) ? (string) $entry['template_family'] : ''
+		);
+		$template  = $selection['template'];
+		$preferred = SCC_Template_Selector::renderer_for( $content->content_type, $template );
+		$renderer  = $this->renderers->pick( $preferred, $content->content_type );
+
+		$rendered = $renderer->render( $content, $template );
+		if ( is_wp_error( $rendered ) ) {
+			// Safety net: never fail the whole run because a builder errored.
+			SCC_Logger::error( 'generator', 'Renderer failed, using native WP: ' . $rendered->get_error_message() );
+			$renderer = new SCC_WordPress_Renderer();
+			$rendered = $renderer->render( $content, $template );
+		}
+		if ( is_wp_error( $rendered ) ) {
+			return $rendered;
+		}
+
+		$post_type = self::post_type_for( $content->content_type );
 		$status    = SCC_Settings::get( 'auto_publish', false ) ? 'publish' : 'draft';
+		$slug      = ! empty( $rendered['post_name'] ) ? $rendered['post_name'] : $this->slug_from_url( $entry['url'] ?? '', $content->title );
 
 		$post_id = wp_insert_post(
 			array(
-				'post_title'   => $body['title'],
-				'post_content' => $body['content_html'],
+				'post_title'   => $content->title,
+				'post_content' => $rendered['post_content'],
 				'post_status'  => $status,
 				'post_type'    => $post_type,
-				'post_name'    => $this->slug_from_url( $entry['url'] ?? '', $body['title'] ),
+				'post_name'    => $slug,
 			),
 			true
 		);
@@ -73,9 +126,15 @@ class SCC_Generator {
 			return $post_id;
 		}
 
-		// If an Elementor template is mapped to this content type, populate it
-		// (preserving the design) instead of relying on raw post_content.
-		$used_elementor = $this->maybe_apply_elementor( $post_id, $entry, $body, $brief );
+		// Apply renderer-provided post meta (e.g. duplicated _elementor_data).
+		// The source template is never modified.
+		foreach ( (array) $rendered['post_meta'] as $meta_key => $meta_value ) {
+			update_post_meta( $post_id, $meta_key, $meta_value );
+		}
+		update_post_meta( $post_id, '_scc_renderer', $renderer->get_id() );
+		update_post_meta( $post_id, '_scc_template', $template->family );
+		$used_renderer  = $renderer->get_id();
+		$used_elementor = ( 'elementor' === $used_renderer );
 
 		// Metadata (non-destructive).
 		SCC_Metadata::apply(
@@ -102,10 +161,10 @@ class SCC_Generator {
 		update_post_meta( $post_id, '_scc_brief', wp_json_encode( $brief ) );
 		update_post_meta( $post_id, '_scc_generated', current_time( 'mysql' ) );
 
-		// Quality score.
+		// Quality score (scored on the actual rendered content).
 		$score = SCC_Quality_Score::score(
 			array(
-				'html'             => $body['content_html'],
+				'html'             => $rendered['post_content'],
 				'brief'            => $brief,
 				'meta_title'       => $body['meta_title'],
 				'meta_description' => $body['meta_description'],
@@ -129,7 +188,7 @@ class SCC_Generator {
 			);
 		}
 
-		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'elementor' => $used_elementor ) );
+		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'renderer' => $used_renderer, 'template' => $template->family ) );
 
 		return array(
 			'post_id'   => $post_id,
@@ -137,35 +196,12 @@ class SCC_Generator {
 			'view_url'  => get_permalink( $post_id ),
 			'status'    => $status,
 			'score'     => $score,
-			'title'     => $body['title'],
+			'title'     => $content->title,
+			'renderer'  => $used_renderer,
+			'template'  => $template->name,
 			'elementor' => $used_elementor,
+			'links'     => count( (array) $content->internal_links ),
 		);
-	}
-
-	/**
-	 * Apply a mapped Elementor template to the post if one exists.
-	 *
-	 * @param int   $post_id Post id.
-	 * @param array $entry   Plan entry.
-	 * @param array $body    Generated body.
-	 * @param array $brief   Brief.
-	 * @return bool Whether an Elementor template was applied.
-	 */
-	protected function maybe_apply_elementor( $post_id, array $entry, array $body, array $brief ) {
-		if ( ! SCC_Elementor::is_active() ) {
-			return false;
-		}
-		$mapping = SCC_Template_Mapping::for_content_type( $entry['page_type'] ?? 'article' );
-		if ( ! $mapping || empty( $mapping['template_id'] ) ) {
-			return false;
-		}
-		$replacements = SCC_Elementor_Builder::build_replacements( $entry, $body, $brief );
-		$applied      = SCC_Elementor_Builder::apply_to_post( $post_id, (int) $mapping['template_id'], $replacements );
-		if ( is_wp_error( $applied ) ) {
-			SCC_Logger::error( 'generator', 'Elementor apply failed: ' . $applied->get_error_message(), array( 'post_id' => $post_id ) );
-			return false;
-		}
-		return true;
 	}
 
 	/**

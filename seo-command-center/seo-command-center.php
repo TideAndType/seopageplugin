@@ -23,8 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.1.0' );
-define( 'SCC_DB_VERSION', '1.1.0' );
+define( 'SCC_VERSION', '1.2.0' );
+define( 'SCC_DB_VERSION', '1.2.0' );
 define( 'SCC_PLUGIN_FILE', __FILE__ );
 define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SCC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -82,6 +82,18 @@ require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-history.php';
 require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-optimizer.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/schema/class-scc-schema-engine.php';
+
+// CMS-agnostic template + renderer layers.
+require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-content-object.php';
+require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template.php';
+require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-store.php';
+require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-map.php';
+require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-selector.php';
+require_once SCC_PLUGIN_DIR . 'includes/render/interface-scc-renderer.php';
+require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-wordpress-renderer.php';
+require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-gutenberg-renderer.php';
+require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-elementor-renderer.php';
+require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-renderer-manager.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';

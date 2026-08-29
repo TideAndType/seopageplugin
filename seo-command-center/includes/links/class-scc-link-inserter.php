@@ -118,6 +118,23 @@ class SCC_Link_Inserter {
 	}
 
 	/**
+	 * Insert a link into an HTML string (used pre-render on a content object).
+	 * Returns the original HTML unchanged if the anchor can't be placed naturally.
+	 *
+	 * @param string $html       HTML.
+	 * @param string $anchor     Anchor phrase.
+	 * @param string $target_url Target URL.
+	 * @return string
+	 */
+	public function insert_link_in_html( $html, $anchor, $target_url ) {
+		if ( '' === trim( (string) $html ) || false !== strpos( $html, $target_url ) ) {
+			return $html;
+		}
+		$result = $this->insert_anchor( $html, $anchor, $target_url );
+		return ( null === $result ) ? $html : $result;
+	}
+
+	/**
 	 * Count existing internal links in content.
 	 *
 	 * @param string $content Content.

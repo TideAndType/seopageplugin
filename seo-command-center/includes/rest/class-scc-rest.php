@@ -526,6 +526,52 @@ class SCC_REST {
 			'permission_callback' => $perm,
 			'args'                => $post_arg,
 		) );
+
+		// ---- CMS-agnostic templates + renderers -----------------------
+		register_rest_route( self::NS, '/templates/native', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'templates_list' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'templates_create' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/templates/native/(?P<id>\d+)', array(
+			array(
+				'methods'             => WP_REST_Server::EDITABLE,
+				'callback'            => array( $this, 'templates_version' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( $this, 'templates_delete' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/templates/native/clone', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'templates_clone' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/templates/native/map', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'templates_map' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/templates/native/import-elementor', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'templates_import_elementor' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/templates/native/preview', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'templates_preview' ),
+			'permission_callback' => $perm,
+		) );
 	}
 
 	/**
@@ -1399,6 +1445,194 @@ class SCC_REST {
 	 */
 	public function seo_report( WP_REST_Request $request ) {
 		return $this->ok( SCC_SEO_Report::build( (int) $request->get_param( 'post_id' ) ) );
+	}
+
+	/**
+	 * GET /templates/native — templates, map, renderers, Elementor sources.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function templates_list() {
+		$manager   = new SCC_Renderer_Manager();
+		$renderers = array();
+		foreach ( $manager->all() as $id => $r ) {
+			$renderers[ $id ] = array( 'label' => $r->get_label(), 'available' => $r->is_available() );
+		}
+		$templates = array();
+		foreach ( SCC_Template_Store::all_active() as $row ) {
+			$templates[] = array(
+				'id' => (int) $row['id'], 'family' => $row['family'], 'name' => $row['name'],
+				'content_type' => $row['content_type'], 'renderer' => $row['renderer'],
+				'version' => (int) $row['version'], 'elementor_source_id' => (int) $row['elementor_source_id'],
+				'sections' => count( (array) ( $row['structure']['sections'] ?? array() ) ),
+			);
+		}
+		return $this->ok( array(
+			'templates'        => $templates,
+			'map'              => SCC_Template_Map::all(),
+			'types'            => SCC_Template::TYPES,
+			'renderers'        => $renderers,
+			'default_renderer' => SCC_Settings::get( 'default_renderer', 'gutenberg' ),
+			'elementor_active' => SCC_Elementor::is_active(),
+			'elementor_sources'=> SCC_Elementor::is_active() ? SCC_Elementor::list_templates() : array(),
+		) );
+	}
+
+	/**
+	 * POST /templates/native — create a template (from a type default if no structure).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function templates_create( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$id     = SCC_Template_Store::create( is_array( $params ) ? $params : array() );
+		if ( ! $id ) {
+			return $this->fail( 'create_failed', __( 'Could not create the template.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id ) );
+	}
+
+	/**
+	 * PUT /templates/native/{id} — save as a new version.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function templates_version( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$id     = SCC_Template_Store::update_as_new_version( (int) $request->get_param( 'id' ), is_array( $params ) ? $params : array() );
+		if ( ! $id ) {
+			return $this->fail( 'version_failed', __( 'Could not save a new version.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id ) );
+	}
+
+	/**
+	 * DELETE /templates/native/{id}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function templates_delete( WP_REST_Request $request ) {
+		SCC_Template_Store::delete( (int) $request->get_param( 'id' ) );
+		return $this->ok( array( 'deleted' => true ) );
+	}
+
+	/**
+	 * POST /templates/native/clone.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function templates_clone( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : array();
+		$id     = SCC_Template_Store::clone_template( (int) ( $params['id'] ?? 0 ), (string) ( $params['name'] ?? '' ) );
+		if ( ! $id ) {
+			return $this->fail( 'clone_failed', __( 'Could not clone the template.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id ) );
+	}
+
+	/**
+	 * POST /templates/native/map — content-type -> template + renderer + default.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function templates_map( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : array();
+		if ( isset( $params['content_type'] ) ) {
+			SCC_Template_Map::set(
+				(string) $params['content_type'],
+				(string) ( $params['family'] ?? '' ),
+				(string) ( $params['renderer'] ?? '' )
+			);
+		}
+		if ( isset( $params['default_family'] ) ) {
+			SCC_Template_Map::set_default_family( (string) $params['default_family'] );
+		}
+		if ( isset( $params['default_renderer'] ) ) {
+			SCC_Settings::update( array( 'default_renderer' => (string) $params['default_renderer'] ) );
+		}
+		return $this->ok( array( 'map' => SCC_Template_Map::all() ) );
+	}
+
+	/**
+	 * POST /templates/native/import-elementor — register an Elementor page as a template.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function templates_import_elementor( WP_REST_Request $request ) {
+		if ( ! SCC_Elementor::is_active() ) {
+			return $this->fail( 'no_elementor', __( 'Elementor is not active.', 'seo-command-center' ), 400 );
+		}
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : array();
+		$source = (int) ( $params['source_id'] ?? 0 );
+		if ( $source <= 0 || ! SCC_Elementor::get_data( $source ) ) {
+			return $this->fail( 'bad_source', __( 'That page has no Elementor data.', 'seo-command-center' ), 400 );
+		}
+		$id = SCC_Template_Store::create( array(
+			'name'                => (string) ( $params['name'] ?? get_the_title( $source ) ),
+			'content_type'        => (string) ( $params['content_type'] ?? 'service' ),
+			'renderer'            => 'elementor',
+			'elementor_source_id' => $source,
+		) );
+		if ( ! $id ) {
+			return $this->fail( 'import_failed', __( 'Could not import the template.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id ) );
+	}
+
+	/**
+	 * POST /templates/native/preview — render a sample of a template.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function templates_preview( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : array();
+		$type    = sanitize_key( $params['content_type'] ?? 'service' );
+		$family  = (string) ( $params['family'] ?? '' );
+
+		$selection = SCC_Template_Selector::select( $type, $family );
+		$template  = $selection['template'];
+		$renderer_id = SCC_Template_Selector::renderer_for( $type, $template );
+		$manager   = new SCC_Renderer_Manager();
+		$renderer  = $manager->pick( $renderer_id, $type );
+
+		// Build a sample content object (deterministic placeholder content).
+		$content = new SCC_Content_Object();
+		$content->content_type = $type;
+		$content->title   = SCC_Security::sanitize_text( $params['service'] ?? 'Sample Service' ) . ( ! empty( $params['city'] ) ? ' — ' . SCC_Security::sanitize_text( $params['city'] ) : '' );
+		$content->h1      = $content->title;
+		$content->service = SCC_Security::sanitize_text( $params['service'] ?? 'Sample Service' );
+		$content->city    = SCC_Security::sanitize_text( $params['city'] ?? '' );
+		$content->primary_keyword = SCC_Security::sanitize_text( $params['primary_keyword'] ?? '' );
+		$content->intro   = __( 'This is a preview of how your template will be populated. Real content replaces this when you generate a page.', 'seo-command-center' );
+		$content->content = '<p>' . esc_html( $content->intro ) . '</p>';
+		$content->benefits = array( __( 'Benefit one', 'seo-command-center' ), __( 'Benefit two', 'seo-command-center' ) );
+		$content->faq     = array( array( 'question' => __( 'A sample question?', 'seo-command-center' ), 'answer' => __( 'A sample answer.', 'seo-command-center' ) ) );
+		$content->cta     = __( 'Contact us to get started.', 'seo-command-center' );
+
+		$rendered = $renderer->render( $content, $template );
+		if ( is_wp_error( $rendered ) ) {
+			$rendered = ( new SCC_WordPress_Renderer() )->render( $content, $template );
+		}
+
+		return $this->ok( array(
+			'template' => $template->name,
+			'renderer' => $renderer->get_id(),
+			'source'   => $selection['source'],
+			'html'     => is_wp_error( $rendered ) ? '' : $rendered['post_content'],
+		) );
 	}
 
 	/**

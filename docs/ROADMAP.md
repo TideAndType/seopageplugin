@@ -107,6 +107,29 @@ Built on the existing architecture (AI layer, DB, REST, jobs, Elementor, setting
 - **Unified SEO Command Center editor panel** (meta box) with a readiness score
   (labelled internal, not a ranking guarantee) tying all three systems together.
 
+## v1.2 — CMS-agnostic template engine & renderer abstraction ✅
+Decouples page generation from Elementor. See `docs/TEMPLATES.md` and
+`docs/RENDERERS.md`.
+
+- **Three layers:** SEO Strategy Engine → Content + Template Engine → Renderer.
+  The SEO engine references no page builder.
+- **`SCC_Content_Object`** — standardized, renderer-independent page representation.
+- **Native template engine** (`scc_templates`): `SCC_Template` (+ default
+  structures per type), `SCC_Template_Store` (CRUD, **versioning**, **cloning**),
+  deterministic `SCC_Template_Selector` (manual → rule → content-type → default →
+  fallback; the AI never picks), `SCC_Template_Map` for content-type → template +
+  renderer rules.
+- **Renderer abstraction** (`SCC_Renderer_Interface` + `SCC_Renderer_Manager`):
+  **Gutenberg** (default, block markup), **native WordPress** (classic HTML),
+  and **optional Elementor Free** (duplicates `_elementor_data`, no Pro / Theme
+  Builder). Automatic fallback when a builder is unavailable — generation never
+  fails. Adding Bricks/Divi = a new renderer only.
+- Generator refactored to: build content object → weave internal links → select
+  template → select renderer (with fallback) → render → create draft. Metadata,
+  schema, and internal linking remain renderer-independent. Generated pages are
+  **plain WordPress content** that survives plugin removal. Existing Elementor
+  mapping retained for backward compatibility.
+
 ## Cross-cutting (every phase)
 - Follow WPCS; sanitize input, escape output, prepared queries.
 - No destructive actions without explicit approval.

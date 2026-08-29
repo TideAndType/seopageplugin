@@ -75,6 +75,8 @@ class SCC_Activator {
 			'link_vary_anchor'       => true,
 			// Metadata.
 			'meta_storage'           => 'auto',
+			// Rendering.
+			'default_renderer'       => 'gutenberg',
 			// Publishing.
 			'draft_by_default'      => true,
 			'auto_publish'          => false,

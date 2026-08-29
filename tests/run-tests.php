@@ -375,6 +375,65 @@ echo "\n== Change history: type guard ==\n";
 assert_eq( false, SCC_Change_History::record( array( 'change_type' => 'bogus', 'post_id' => 1 ) ), 'invalid change type rejected' );
 assert_true( false !== SCC_Change_History::record( array( 'change_type' => 'internal_link', 'post_id' => 1, 'previous_value' => 'x', 'new_value' => 'y' ) ), 'valid change type recorded' );
 
+echo "\n== Template engine: default structures + fallback ==\n";
+$struct = SCC_Template::default_structure( 'location_service' );
+assert_true( ! empty( $struct['sections'] ), 'location_service has sections' );
+$labels = array_map( function ( $s ) { return $s['label']; }, $struct['sections'] );
+assert_true( in_array( 'FAQ', $labels, true ) && in_array( 'Hero', $labels, true ), 'expected sections present' );
+$fallback = SCC_Template::fallback( 'service' );
+assert_true( $fallback instanceof SCC_Template && count( $fallback->sections() ) > 0, 'fallback template built' );
+
+echo "\n== Content object: from_generation + variables ==\n";
+$entry = array( 'page_type' => 'location_service', 'title' => 'Local SEO — Daytona Beach', 'primary_keyword' => 'daytona beach local seo', 'parent' => 'Local SEO', 'url' => '/local-seo/daytona-beach/' );
+$body  = array( 'title' => 'Local SEO — Daytona Beach', 'content_html' => '<p>We help Daytona Beach businesses.</p>', 'faqs' => array( array( 'question' => 'How much?', 'answer' => 'It depends.' ) ), 'meta_title' => 'MT', 'meta_description' => 'MD', 'image' => array( 'alt' => 'alt text' ) );
+$co = SCC_Content_Object::from_generation( $entry, $body, array( 'cta' => 'Call us' ) );
+assert_eq( 'location_service', $co->content_type, 'content type carried' );
+assert_eq( 'Daytona Beach', $co->city, 'city derived from title' );
+assert_eq( 'Local SEO', $co->service, 'service from parent' );
+$vars = $co->variables();
+assert_eq( 'Daytona Beach', $vars['CITY'], 'CITY variable' );
+assert_eq( 'Call us', $vars['CTA'], 'CTA variable' );
+assert_true( strpos( $vars['FAQ'], 'How much?' ) !== false, 'FAQ variable built' );
+
+echo "\n== WordPress renderer ==\n";
+$wp = new SCC_WordPress_Renderer();
+$out = $wp->render( $co, SCC_Template::fallback( 'location_service' ) );
+assert_true( is_array( $out ) && ! empty( $out['post_content'] ), 'renders post_content' );
+assert_true( strpos( $out['post_content'], '{{' ) === false, 'no unreplaced placeholders' );
+assert_true( strpos( $out['post_content'], 'Daytona Beach' ) !== false, 'content includes populated data' );
+assert_true( strpos( $out['post_content'], '<h1' ) === false, 'no in-body H1 (theme renders title)' );
+assert_eq( 'daytona-beach', $out['post_name'], 'slug from url last segment' );
+
+echo "\n== Gutenberg renderer ==\n";
+$gb = new SCC_Gutenberg_Renderer();
+$gout = $gb->render( $co, SCC_Template::fallback( 'location_service' ) );
+assert_true( strpos( $gout['post_content'], '<!-- wp:' ) !== false, 'produces block markup' );
+$blocks = SCC_Gutenberg_Renderer::html_to_blocks( '<h2>Title</h2><p>Body text</p><ul><li>a</li></ul>' );
+assert_true( strpos( $blocks, '<!-- wp:heading' ) !== false, 'heading block' );
+assert_true( strpos( $blocks, '<!-- wp:paragraph' ) !== false, 'paragraph block' );
+assert_true( strpos( $blocks, '<!-- wp:list' ) !== false, 'list block' );
+
+echo "\n== Renderer manager: fallback when Elementor unavailable ==\n";
+SCC_Elementor::$active = false;
+$manager = new SCC_Renderer_Manager();
+$picked = $manager->pick( 'elementor', 'service' );
+assert_true( in_array( $picked->get_id(), array( 'gutenberg', 'wordpress' ), true ), 'falls back from unavailable elementor (' . $picked->get_id() . ')' );
+assert_eq( 'gutenberg', $manager->pick( 'gutenberg', 'service' )->get_id(), 'honors available preference' );
+$el = $manager->get( 'elementor' );
+assert_eq( false, $el->is_available( 'service' ), 'elementor renderer not available without Elementor' );
+
+echo "\n== Template selector: pinned renderer + fallback ==\n";
+$pinned = new SCC_Template( array( 'renderer' => 'wordpress', 'structure' => array( 'sections' => array() ) ) );
+assert_eq( 'wordpress', SCC_Template_Selector::renderer_for( 'service', $pinned ), 'template pins renderer' );
+assert_eq( 'gutenberg', SCC_Template_Selector::renderer_for( 'service', SCC_Template::fallback( 'service' ) ), 'default renderer when unpinned' );
+
+echo "\n== Original template never modified during render ==\n";
+$tpl = SCC_Template::fallback( 'service' );
+$before = wp_json_encode( $tpl->sections() );
+$wp->render( $co, $tpl );
+$gb->render( $co, $tpl );
+assert_eq( $before, wp_json_encode( $tpl->sections() ), 'template structure unchanged after rendering' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

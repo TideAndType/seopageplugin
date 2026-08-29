@@ -50,6 +50,7 @@ class SCC_Admin {
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
+			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
 			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
@@ -380,6 +381,29 @@ class SCC_Admin {
 				'has_analysis'         => (bool) SCC_Analyzer::latest(),
 				'gsc_connected'        => SCC_GSC::is_connected(),
 				'dataforseo_connected' => SCC_DataForSEO::is_connected(),
+			)
+		);
+	}
+
+	/**
+	 * Templates page (native template engine + mapping + renderers).
+	 */
+	public function render_templates() {
+		$manager   = new SCC_Renderer_Manager();
+		$renderers = array();
+		foreach ( $manager->all() as $id => $r ) {
+			$renderers[ $id ] = array( 'label' => $r->get_label(), 'available' => $r->is_available() );
+		}
+		$this->view(
+			'templates',
+			array(
+				'templates'        => SCC_Template_Store::all_active(),
+				'map'              => SCC_Template_Map::all(),
+				'types'            => SCC_Template::TYPES,
+				'renderers'        => $renderers,
+				'default_renderer' => SCC_Settings::get( 'default_renderer', 'gutenberg' ),
+				'elementor_active' => SCC_Elementor::is_active(),
+				'elementor_sources'=> SCC_Elementor::is_active() ? SCC_Elementor::list_templates() : array(),
 			)
 		);
 	}
