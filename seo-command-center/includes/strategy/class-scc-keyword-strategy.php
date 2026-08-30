@@ -138,7 +138,10 @@ class SCC_Keyword_Strategy {
 				),
 			),
 			'json'       => true,
-			'max_tokens' => 4000,
+			// Kept modest so local models (often reached over a tunnel with a
+			// request time limit) can finish within the budget. Still ample for a
+			// full topical map.
+			'max_tokens' => 2500,
 			'temperature'=> 0.4,
 		);
 	}

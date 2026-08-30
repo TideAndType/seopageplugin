@@ -158,6 +158,13 @@ class SCC_AI_Manager {
 	 * @return SCC_AI_Response
 	 */
 	public function complete( array $request, $operation = 'generic' ) {
+		// AI calls (especially local models) can take a while; lift PHP's
+		// execution cap where the host allows it so we return a clean result
+		// instead of a killed request. Best-effort — some hosts disable this.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
 		if ( $this->budget_exceeded() ) {
 			$r = new SCC_AI_Response();
 			$r->error = new WP_Error(

@@ -396,7 +396,14 @@
 					} )
 					.catch( function ( err ) {
 						autoBtn.disabled = false;
-						setStatus( autoStatus, ( err && err.message ) || i18n.error, 'is-error' );
+						var msg = err && err.message;
+						// A blank/opaque error usually means the request was cut off
+						// (host PHP limit or a tunnel's request time limit) before the
+						// model finished — common with slower local models.
+						if ( ! msg || /something went wrong|gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( msg ) ) {
+							msg = 'The request didn’t complete — usually the AI model took too long. If you’re using LM Studio over a tunnel, free tunnels cut off long requests: try a faster/smaller model, load it with more context, or use a cloud provider (Gemini) for the topical map under Settings → AI.';
+						}
+						setStatus( autoStatus, msg, 'is-error' );
 					} );
 			} );
 		}
