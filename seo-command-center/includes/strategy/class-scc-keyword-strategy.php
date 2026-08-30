@@ -220,6 +220,11 @@ class SCC_Keyword_Strategy {
 		$map = $this->normalize_map( $map );
 		$map = $this->reconcile_with_site( $map );
 
+		// Record which provider/model actually produced this map, so it's clear
+		// in the UI what generated it (and easy to confirm LM Studio was used).
+		$map['generated_by']    = isset( $response->provider ) ? (string) $response->provider : '';
+		$map['generated_model'] = isset( $response->model ) ? (string) $response->model : '';
+
 		$strategy_id = SCC_DB::insert(
 			'keyword_strategies',
 			array(

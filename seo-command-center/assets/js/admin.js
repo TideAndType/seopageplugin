@@ -382,12 +382,33 @@
 
 	// ---- Keyword strategy generation -----------------------------------
 	function bindKeywordStrategy() {
+		// Replace the previous map on the right with a "building" placeholder, so
+		// stale suggestions don't linger while a new run is in progress.
+		function clearMapPanel( message ) {
+			var result = document.getElementById( 'scc-keyword-result' );
+			if ( ! result ) {
+				return;
+			}
+			var heading = result.querySelector( 'h2' );
+			result.innerHTML = '';
+			if ( ! heading ) {
+				heading = document.createElement( 'h2' );
+				heading.textContent = 'Topical map';
+			}
+			result.appendChild( heading );
+			var p = document.createElement( 'p' );
+			p.className = 'scc-note';
+			p.textContent = message || 'Building…';
+			result.appendChild( p );
+		}
+
 		// "Build from my site" — infers inputs and generates in one click.
 		var autoBtn = document.getElementById( 'scc-keyword-auto' );
 		if ( autoBtn ) {
 			var autoStatus = document.getElementById( 'scc-keyword-auto-status' );
 			autoBtn.addEventListener( 'click', function () {
 				autoBtn.disabled = true;
+				clearMapPanel( 'Building your topical map… the previous suggestions will be replaced when this finishes.' );
 				setStatus( autoStatus, 'Analyzing your site and building the topical map… this runs in the background and can take a few minutes for local models. You can leave this page open.' );
 				request( '/keywords/auto', { method: 'POST' } )
 					.then( function ( res ) {
@@ -467,6 +488,7 @@
 					data[ el.name ] = el.value;
 				}
 			} );
+			clearMapPanel( 'Building your topical map… the previous suggestions will be replaced when this finishes.' );
 			setStatus( status, 'Building topical map… this can take a moment.' );
 			var btn = form.querySelector( 'button[type=submit]' );
 			if ( btn ) {

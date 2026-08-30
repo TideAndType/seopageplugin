@@ -14,6 +14,16 @@ $clusters = isset( $map['clusters'] ) ? (array) $map['clusters'] : array();
 $existing_count = isset( $map['existing_count'] ) ? (int) $map['existing_count'] : count( array_filter( $clusters, function ( $c ) { return isset( $c['status'] ) && 'existing' === $c['status']; } ) );
 $new_count      = isset( $map['new_count'] ) ? (int) $map['new_count'] : ( count( $clusters ) - $existing_count );
 ?>
+<?php
+$provider_labels = array( 'lmstudio' => 'LM Studio', 'gemini' => 'Google Gemini', 'claude' => 'Anthropic Claude', 'openai' => 'OpenAI' );
+$gen_by    = isset( $map['generated_by'] ) ? (string) $map['generated_by'] : '';
+$gen_model = isset( $map['generated_model'] ) ? (string) $map['generated_model'] : '';
+if ( '' !== $gen_by ) :
+	$gen_label = isset( $provider_labels[ $gen_by ] ) ? $provider_labels[ $gen_by ] : $gen_by;
+	?>
+	<p class="scc-note"><strong><?php esc_html_e( 'Generated with:', 'seo-command-center' ); ?></strong>
+		<?php echo esc_html( $gen_label ); ?><?php echo '' !== $gen_model ? ' · ' . esc_html( $gen_model ) : ''; ?></p>
+<?php endif; ?>
 <?php if ( $existing_count || $new_count ) : ?>
 	<p class="scc-note">
 		<?php

@@ -624,6 +624,27 @@ assert_eq( $secret1, $secret2, 'worker secret is stable across calls' );
 $jobs = new SCC_Jobs( new SCC_Test_Manager( array() ) );
 assert_eq( false, $jobs->run_authenticated( 'wrong-secret' ), 'worker rejects a bad secret' );
 
+echo "\n== Tolerant JSON parsing (small local models) ==\n";
+$mk = function ( $content ) {
+	$r = new SCC_AI_Response();
+	$r->content = $content;
+	return $r;
+};
+$clean = $mk( '{"clusters":[{"service":"x"}],"notes":"hi"}' )->json();
+assert_true( is_array( $clean ) && 'hi' === $clean['notes'], 'clean JSON decodes' );
+$fenced = $mk( "```json\n{\"a\":1}\n```" )->json();
+assert_true( is_array( $fenced ) && 1 === $fenced['a'], 'fenced JSON decodes' );
+$prose = $mk( "Sure! Here is your map:\n{\"a\":1}\nHope this helps." )->json();
+assert_true( is_array( $prose ) && 1 === $prose['a'], 'prose-wrapped JSON is extracted' );
+$trailing = $mk( '{"a":1,"b":[1,2,],}' )->json();
+assert_true( is_array( $trailing ) && 1 === $trailing['a'], 'trailing commas are repaired' );
+$truncated = $mk( '{"clusters":[{"service":"Web Design","primary_keyword":"web design"' )->json();
+assert_true( is_array( $truncated ) && isset( $truncated['clusters'][0]['service'] ), 'truncated JSON is closed and salvaged' );
+$smart = $mk( '{“a”:“b”}' )->json();
+assert_true( is_array( $smart ) && 'b' === $smart['a'], 'smart quotes are normalized' );
+$garbage = $mk( 'I could not build a map.' )->json();
+assert_eq( null, $garbage, 'non-JSON returns null' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
