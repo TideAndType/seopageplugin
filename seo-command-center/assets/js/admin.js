@@ -463,8 +463,7 @@
 						// Fire the generation as a separate request we do NOT await.
 						// It runs server-side with ignore_user_abort, so it finishes
 						// even if this connection is dropped by a gateway timeout.
-						request( '/keywords/auto/process', { method: 'POST', data: { job: d.job_id } } )
-							.catch( function () { /* ignore — progress is tracked by polling */ } );
+						fireProcess( d.job_id );
 						pollAuto( d.job_id );
 					} )
 					.catch( function ( err ) {
@@ -479,10 +478,28 @@
 
 			// Poll a background topical-map job until it finishes. The work runs
 			// server-side, so the page request can never time out.
+			function fireProcess( jobId ) {
+				request( '/keywords/auto/process', { method: 'POST', data: { job: jobId } } )
+					.then( function ( res ) {
+						// If the host let this long request finish, act on it now
+						// instead of waiting for the next poll.
+						var d = res.data || {};
+						if ( d.state === 'done' ) {
+							setStatus( autoStatus, 'Done. Reloading…', 'is-ok' );
+							window.location.reload();
+						} else if ( d.state === 'error' && d.error ) {
+							autoBtn.disabled = false;
+							setStatus( autoStatus, d.error, 'is-error' );
+						}
+					} )
+					.catch( function () { /* dropped by a gateway timeout — polling tracks it */ } );
+			}
+
 			function pollAuto( jobId ) {
-				var started = Date.now();
-				var maxMs   = 15 * 60 * 1000; // 15 minutes — generous for slow local models.
-				var dots    = 0;
+				var started    = Date.now();
+				var maxMs      = 15 * 60 * 1000; // 15 minutes — generous for slow local models.
+				var dots       = 0;
+				var lastKick   = Date.now();
 				( function tick() {
 					if ( Date.now() - started > maxMs ) {
 						autoBtn.disabled = false;
@@ -505,6 +522,12 @@
 								}
 								setStatus( autoStatus, msg, 'is-error' );
 								return;
+							}
+							// If it hasn't been picked up yet (still queued), re-fire the
+							// process request — the first one may have been dropped.
+							if ( d.status === 'queued' && ( Date.now() - lastKick ) > 8000 ) {
+								lastKick = Date.now();
+								fireProcess( jobId );
 							}
 							// Still running — keep the user informed and poll again.
 							dots = ( dots + 1 ) % 4;

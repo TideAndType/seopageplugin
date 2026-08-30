@@ -97,8 +97,11 @@ class SCC_Jobs {
 			),
 			array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
-		self::ensure_scheduled();
-		self::spawn_worker();
+		// NOTE: we intentionally do NOT spawn the loopback worker or schedule cron
+		// here. On hosts that block loopback, a half-executed worker can claim the
+		// job (mark it "processing") and then die when the non-blocking request is
+		// dropped, leaving it stuck and preventing the real trigger from running
+		// it. The browser's /keywords/auto/process request is the sole trigger.
 		SCC_Logger::info( 'jobs', 'Keyword-auto job enqueued', array( 'job_id' => $id ) );
 		return array( 'job_id' => (int) $id );
 	}

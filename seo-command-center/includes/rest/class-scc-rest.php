@@ -926,18 +926,56 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function process_keyword_auto( WP_REST_Request $request ) {
-		if ( ! $this->jobs ) {
-			return $this->ok( array( 'ran' => false ) );
-		}
 		if ( function_exists( 'ignore_user_abort' ) ) {
 			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
+
 		$job_id = (int) $request->get_param( 'job' );
-		$this->jobs->process_job_now( $job_id );
-		return $this->ok( array( 'ran' => true, 'job_id' => $job_id ) );
+		$job    = SCC_DB::get( 'jobs', $job_id );
+		if ( ! $job ) {
+			return $this->fail( 'no_job', __( 'That build job was not found.', 'seo-command-center' ), 404 );
+		}
+		if ( 'completed' === $job['status'] ) {
+			return $this->ok( array( 'ran' => false, 'state' => 'done' ) );
+		}
+		// Only one processor should run: if another already marked it processing
+		// very recently, don't start a second generation.
+		if ( 'processing' === $job['status'] && ! empty( $job['started_at'] ) ) {
+			$age = time() - (int) strtotime( $job['started_at'] . ' UTC' );
+			if ( $age >= 0 && $age < 300 ) {
+				return $this->ok( array( 'ran' => false, 'state' => 'running' ) );
+			}
+		}
+
+		// Claim + run the generation directly (no cron/loopback dependency).
+		SCC_DB::update( 'jobs', array( 'status' => 'processing', 'started_at' => current_time( 'mysql' ) ), array( 'id' => $job_id ) );
+
+		$payload = json_decode( (string) $job['payload'], true );
+		$payload = is_array( $payload ) ? $payload : array();
+		$inputs  = SCC_Keyword_Strategy::infer_inputs_from_site();
+		foreach ( array( 'map_type', 'depth', 'language' ) as $k ) {
+			if ( isset( $payload[ $k ] ) ) {
+				$inputs[ $k ] = $payload[ $k ];
+			}
+		}
+
+		$service = new SCC_Keyword_Strategy( $this->ai );
+		$result  = $service->generate( $inputs );
+
+		if ( is_wp_error( $result ) ) {
+			SCC_DB::update(
+				'jobs',
+				array( 'status' => 'failed', 'finished_at' => current_time( 'mysql' ), 'last_error' => substr( $result->get_error_message(), 0, 250 ) ),
+				array( 'id' => $job_id )
+			);
+			return $this->ok( array( 'ran' => true, 'state' => 'error', 'error' => $result->get_error_message() ) );
+		}
+
+		SCC_DB::update( 'jobs', array( 'status' => 'completed', 'finished_at' => current_time( 'mysql' ), 'last_error' => null ), array( 'id' => $job_id ) );
+		return $this->ok( array( 'ran' => true, 'state' => 'done' ) );
 	}
 
 	/**
@@ -1012,11 +1050,8 @@ class SCC_REST {
 			$state = 'done';
 		} elseif ( 'failed' === $status ) {
 			$state = 'error';
-		} elseif ( 'queued' === $status && $this->jobs ) {
-			// Not picked up yet — re-kick the worker (backstop for hosts that
-			// dropped the first non-blocking loopback). Cheap and non-blocking.
-			SCC_Jobs::spawn_worker();
 		}
+		// (If still 'queued', the browser re-fires /keywords/auto/process.)
 
 		$out = array( 'state' => $state, 'status' => $status );
 		if ( 'error' === $state ) {
