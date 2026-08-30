@@ -77,13 +77,19 @@ class SCC_Jobs {
 	 *
 	 * @return array {job_id:int}
 	 */
-	public function enqueue_keyword_auto() {
+	public function enqueue_keyword_auto( array $opts = array() ) {
+		$clean = array();
+		foreach ( array( 'map_type', 'depth', 'language' ) as $k ) {
+			if ( isset( $opts[ $k ] ) ) {
+				$clean[ $k ] = (string) $opts[ $k ];
+			}
+		}
 		$id = SCC_DB::insert(
 			'jobs',
 			array(
 				'type'         => 'keyword_auto',
 				'status'       => 'queued',
-				'payload'      => wp_json_encode( array() ),
+				'payload'      => wp_json_encode( $clean ),
 				'attempts'     => 0,
 				'max_attempts' => 1,
 				'scheduled_at' => current_time( 'mysql' ),
@@ -274,8 +280,14 @@ class SCC_Jobs {
 				return is_wp_error( $result ) ? $result : true;
 
 			case 'keyword_auto':
+				$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
+				foreach ( array( 'map_type', 'depth', 'language' ) as $k ) {
+					if ( isset( $payload[ $k ] ) ) {
+						$inputs[ $k ] = $payload[ $k ];
+					}
+				}
 				$service = new SCC_Keyword_Strategy( $this->ai );
-				$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
+				$result  = $service->generate( $inputs );
 				return is_wp_error( $result ) ? $result : true;
 
 			case 'link_autopilot':

@@ -868,23 +868,55 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function auto_keywords( WP_REST_Request $request ) {
-		// Run synchronously and return the real result (or the real error). The
-		// AI manager lifts PHP's execution limit; a reachable, reasonably fast
-		// provider (like a local LM Studio) completes well within limits. This is
-		// simpler and more transparent than backgrounding — the exact error, if
-		// any, comes straight back to the UI instead of being swallowed by a
-		// worker that some hosts never run.
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
 
-		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
-		// Carry the generation controls (map type / depth / language) through.
+		$opts = array();
 		foreach ( array( 'map_type', 'depth', 'language' ) as $opt ) {
 			if ( isset( $params[ $opt ] ) ) {
-				$inputs[ $opt ] = $params[ $opt ];
+				$opts[ $opt ] = $params[ $opt ];
 			}
 		}
 
+		// Preferred: return the response immediately, THEN keep running this same
+		// request to do the (possibly long) generation. LM Studio is reached from
+		// this request context — which works — but the browser no longer waits, so
+		// a big map can't time out the front-end request. Needs PHP-FPM's
+		// fastcgi_finish_request (IONOS has it); no loopback/WP-Cron required.
+		if ( $this->jobs && function_exists( 'fastcgi_finish_request' ) ) {
+			$res    = $this->jobs->enqueue_keyword_auto( $opts );
+			$job_id = (int) $res['job_id'];
+			$jobs   = $this->jobs;
+
+			add_action( 'shutdown', function () use ( $jobs, $job_id ) {
+				// Push WordPress's already-written REST body out to the client,
+				// then detach so the browser's request completes right away.
+				while ( ob_get_level() > 0 ) {
+					@ob_end_flush(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				if ( function_exists( 'session_write_close' ) ) {
+					@session_write_close(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				@fastcgi_finish_request(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				if ( function_exists( 'set_time_limit' ) ) {
+					@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				if ( function_exists( 'ignore_user_abort' ) ) {
+					@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				$jobs->process_job_now( $job_id );
+			}, PHP_INT_MAX );
+
+			return $this->ok( array( 'async' => true, 'job_id' => $job_id ) );
+		}
+
+		// Fallback (no fastcgi_finish_request): run inline and return the real
+		// result or error. Fine for fast providers; long generations may hit the
+		// front-end request limit on some hosts.
+		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
+		foreach ( $opts as $k => $v ) {
+			$inputs[ $k ] = $v;
+		}
 		$service = new SCC_Keyword_Strategy( $this->ai );
 		$result  = $service->generate( $inputs );
 		if ( is_wp_error( $result ) ) {
