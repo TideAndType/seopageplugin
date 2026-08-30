@@ -477,6 +477,15 @@ $fs2 = SCC_GSC::field_status();
 assert_true( $fs2['client_id'] && $fs2['client_secret'] && $fs2['refresh_token'], 'all fields present' );
 assert_true( SCC_GSC::is_connected(), 'connected with all three fields' );
 
+echo "\n== LM Studio error extraction ==\n";
+$lm2  = new SCC_LMStudio_Provider();
+$eerr = new ReflectionMethod( 'SCC_LMStudio_Provider', 'extract_error' );
+$eerr->setAccessible( true );
+assert_eq( 'HTTP 400 — bad model', $eerr->invoke( $lm2, array( 'error' => array( 'message' => 'bad model' ) ), '', 400 ), 'object error.message' );
+assert_eq( 'HTTP 400 — plain string err', $eerr->invoke( $lm2, array( 'error' => 'plain string err' ), '', 400 ), 'string error' );
+assert_eq( 'HTTP 400 — raw body here', $eerr->invoke( $lm2, null, 'raw body here', 400 ), 'raw-body fallback' );
+assert_eq( 'HTTP 400', $eerr->invoke( $lm2, null, '', 400 ), 'no detail fallback' );
+
 echo "\n== AI Manager: safety-net fallback to a configured provider ==\n";
 if ( ! class_exists( 'SCC_AI_Usage' ) ) {
 	class SCC_AI_Usage {

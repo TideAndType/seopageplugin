@@ -186,16 +186,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 
 		$url = $this->base_url() . '/chat/completions';
 
-		$http = wp_remote_post(
-			$url,
-			array(
-				'timeout'   => self::DEFAULT_TIMEOUT,
-				'headers'   => $headers,
-				'body'      => wp_json_encode( $body ),
-				// Local endpoints are typically plain HTTP; only verify for HTTPS.
-				'sslverify' => ( 0 === strpos( $url, 'https://' ) ),
-			)
-		);
+		$http = $this->post_chat( $url, $headers, $body );
 
 		if ( is_wp_error( $http ) ) {
 			SCC_Logger::error( 'lmstudio', 'Transport error: ' . $http->get_error_message() );
@@ -213,8 +204,22 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		$code = wp_remote_retrieve_response_code( $http );
 		$data = json_decode( wp_remote_retrieve_body( $http ), true );
 
+		// Many local models/engines reject JSON mode (response_format) or other
+		// optional params with a 400. Retry once without the optional params —
+		// the system prompt already instructs "Respond ONLY with valid JSON".
+		if ( 400 === (int) $code && ( isset( $body['response_format'] ) || isset( $body['temperature'] ) ) ) {
+			SCC_Logger::info( 'lmstudio', 'Retrying without response_format/temperature after HTTP 400' );
+			unset( $body['response_format'], $body['temperature'] );
+			$retry = $this->post_chat( $url, $headers, $body );
+			if ( ! is_wp_error( $retry ) ) {
+				$http = $retry;
+				$code = wp_remote_retrieve_response_code( $http );
+				$data = json_decode( wp_remote_retrieve_body( $http ), true );
+			}
+		}
+
 		if ( 200 !== (int) $code ) {
-			$msg = isset( $data['error']['message'] ) ? $data['error']['message'] : sprintf( 'HTTP %d', $code );
+			$msg = $this->extract_error( $data, wp_remote_retrieve_body( $http ), (int) $code );
 			SCC_Logger::error( 'lmstudio', 'API error: ' . $msg, array( 'status' => $code ) );
 			$response->error = new WP_Error( 'scc_api_error', $msg, array( 'status' => $code ) );
 			return $response;
@@ -226,5 +231,55 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		$response->cost          = 0.0;
 
 		return $response;
+	}
+
+	/**
+	 * POST a chat-completions body to the server.
+	 *
+	 * @param string $url     Endpoint URL.
+	 * @param array  $headers Request headers.
+	 * @param array  $body    Request body (will be JSON-encoded).
+	 * @return array|WP_Error wp_remote_post result.
+	 */
+	protected function post_chat( $url, array $headers, array $body ) {
+		return wp_remote_post(
+			$url,
+			array(
+				'timeout'   => self::DEFAULT_TIMEOUT,
+				'headers'   => $headers,
+				'body'      => wp_json_encode( $body ),
+				// Local endpoints are typically plain HTTP; only verify for HTTPS.
+				'sslverify' => ( 0 === strpos( $url, 'https://' ) ),
+			)
+		);
+	}
+
+	/**
+	 * Pull a human-readable error out of an LM Studio / OpenAI-style error body.
+	 * LM Studio returns the error as either {error:{message}} or {error:"..."}
+	 * (a plain string), so handle both plus a raw-body fallback.
+	 *
+	 * @param mixed  $data Decoded JSON body (array) or null.
+	 * @param string $raw  Raw response body.
+	 * @param int    $code HTTP status code.
+	 * @return string
+	 */
+	protected function extract_error( $data, $raw, $code ) {
+		if ( is_array( $data ) ) {
+			if ( isset( $data['error']['message'] ) && '' !== (string) $data['error']['message'] ) {
+				return sprintf( 'HTTP %d — %s', $code, (string) $data['error']['message'] );
+			}
+			if ( isset( $data['error'] ) && is_string( $data['error'] ) && '' !== $data['error'] ) {
+				return sprintf( 'HTTP %d — %s', $code, $data['error'] );
+			}
+			if ( isset( $data['message'] ) && is_string( $data['message'] ) && '' !== $data['message'] ) {
+				return sprintf( 'HTTP %d — %s', $code, $data['message'] );
+			}
+		}
+		$raw = trim( (string) $raw );
+		if ( '' !== $raw ) {
+			return sprintf( 'HTTP %d — %s', $code, mb_substr( wp_strip_all_tags( $raw ), 0, 300 ) );
+		}
+		return sprintf( 'HTTP %d', $code );
 	}
 }
