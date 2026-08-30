@@ -213,12 +213,22 @@
 					credentials[ field + '_clear' ] = true;
 				}
 			} );
-			// The GSC property is a setting, not a credential — save it alongside.
+			// Some fields on this page are settings, not credentials — save them alongside.
 			var payload = { credentials: credentials };
+			var settings = {};
 			var gscSite = document.getElementById( 'scc-gsc-site' );
 			if ( gscSite ) {
-				payload.settings = { gsc_site_url: gscSite.value };
+				settings.gsc_site_url = gscSite.value;
 			}
+			var lmBase = document.getElementById( 'scc-lmstudio-base' );
+			if ( lmBase ) {
+				settings.lmstudio_base_url = lmBase.value;
+			}
+			var lmModel = document.getElementById( 'scc-lmstudio-model' );
+			if ( lmModel ) {
+				settings.lmstudio_model = lmModel.value;
+			}
+			payload.settings = settings;
 			setStatus( status, '…' );
 			request( '/settings', { method: 'POST', data: payload } )
 				.then( function () {

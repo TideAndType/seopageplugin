@@ -327,6 +327,8 @@ class SCC_Admin {
 			array(
 				'hints'         => SCC_Settings::credential_hints(),
 				'providers'     => $this->ai->get_providers(),
+				'lmstudio_base_url' => SCC_Settings::get( 'lmstudio_base_url', 'http://localhost:1234/v1' ),
+				'lmstudio_model'    => SCC_Settings::get( 'lmstudio_model', 'local-model' ),
 				'gsc_site_url'  => SCC_Settings::get( 'gsc_site_url', '' ),
 				'gsc_connected' => SCC_GSC::is_connected(),
 				'gsc_has_client'=> SCC_GSC::has_client(),

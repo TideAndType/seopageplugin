@@ -64,12 +64,33 @@ $field = function ( $field, $label, $hints ) {
 		</p>
 
 		<h2><?php esc_html_e( 'LM Studio (local, optional)', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'Run models on your own computer with LM Studio — free and private. Set the server URL and model under Settings → AI (default http://localhost:1234/v1). An API key is optional; only add one if you configured LM Studio to require it. Note: WordPress must be able to reach the LM Studio server, so “localhost” only works when WordPress runs on the same machine.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( 'Run models on your own computer with LM Studio — free and private. Enter the address WordPress should contact below.', 'seo-command-center' ); ?></p>
+		<div class="notice notice-warning inline" style="margin:8px 0;">
+			<p><?php echo wp_kses_post( __( '<strong>Different machines?</strong> If LM Studio runs on your laptop and this site is hosted elsewhere (e.g. IONOS), the hosted server <em>cannot</em> reach “localhost” or your home network. You must expose LM Studio with a tunnel and paste that public URL here — for example a <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener">Cloudflare Tunnel</a> or <a href="https://ngrok.com/" target="_blank" rel="noopener">ngrok</a> address like <code>https://your-tunnel.trycloudflare.com/v1</code>. “localhost” only works when WordPress runs on the same machine as LM Studio.', 'seo-command-center' ) ); ?></p>
+		</div>
 		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="scc-lmstudio-base"><?php esc_html_e( 'Server URL', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="text" class="regular-text code" id="scc-lmstudio-base" value="<?php echo esc_attr( isset( $data['lmstudio_base_url'] ) ? $data['lmstudio_base_url'] : '' ); ?>" placeholder="http://localhost:1234/v1  or  https://your-tunnel.trycloudflare.com/v1">
+					<p class="description"><?php esc_html_e( 'The base URL of your LM Studio server, ending in /v1. This is the address the plugin contacts — not the API key.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-lmstudio-model"><?php esc_html_e( 'Model', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="text" class="regular-text" id="scc-lmstudio-model" list="scc-lmstudio-model-list" value="<?php echo esc_attr( isset( $data['lmstudio_model'] ) ? $data['lmstudio_model'] : '' ); ?>" placeholder="local-model">
+					<datalist id="scc-lmstudio-model-list"></datalist>
+					<button type="button" class="button" id="scc-lmstudio-detect"><?php esc_html_e( 'Detect models', 'seo-command-center' ); ?></button>
+					<span class="scc-inline-status" id="scc-lmstudio-detect-status"></span>
+					<p class="description"><?php esc_html_e( 'Click Detect models after entering the server URL to load the model currently running in LM Studio.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
 			<?php
 			$field( 'lmstudio_key', __( 'LM Studio API key (optional)', 'seo-command-center' ), $hints );
 			?>
 		</table>
+		<p class="scc-note"><?php esc_html_e( 'An API key is optional; only add one if you configured LM Studio to require it. These settings also appear under Settings → AI.', 'seo-command-center' ); ?></p>
 
 		<h2><?php esc_html_e( 'DataForSEO (optional)', 'seo-command-center' ); ?></h2>
 		<p class="scc-note"><?php esc_html_e( 'Adds real keyword volume, competition, and related keywords. The plugin works without it.', 'seo-command-center' ); ?></p>
