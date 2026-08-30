@@ -275,6 +275,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/brief/topic',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'brief_topic' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/generate',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1094,6 +1104,46 @@ class SCC_REST {
 		if ( ! $entry ) {
 			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
 		}
+		$service = new SCC_Content_Brief( $this->ai );
+		$brief   = $service->generate( $entry );
+		if ( is_wp_error( $brief ) ) {
+			return $brief;
+		}
+		return $this->ok( array( 'brief' => $brief, 'entry' => $entry ) );
+	}
+
+	/**
+	 * POST /brief/topic — generate a content brief for an ad-hoc topic from the
+	 * topical map (no content-plan entry required).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function brief_topic( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$title = SCC_Security::sanitize_text( $params['title'] ?? '' );
+		if ( '' === $title ) {
+			return $this->fail( 'no_topic', __( 'A topic title is required.', 'seo-command-center' ), 400 );
+		}
+
+		$secondary = $params['secondary'] ?? array();
+		if ( ! is_array( $secondary ) ) {
+			$secondary = array();
+		}
+
+		$entry = array(
+			'title'           => $title,
+			'url'             => SCC_Security::sanitize_text( $params['url'] ?? '' ),
+			'primary_keyword' => SCC_Security::sanitize_text( $params['primary_keyword'] ?? $title ),
+			'secondary'       => array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), $secondary ) ) ),
+			'intent'          => SCC_Security::sanitize_text( $params['intent'] ?? '' ),
+			'page_type'       => SCC_Security::sanitize_text( $params['page_type'] ?? 'article' ),
+			'parent'          => '',
+			'word_count'      => (int) SCC_Settings::get( 'default_word_count', 1200 ),
+		);
+
 		$service = new SCC_Content_Brief( $this->ai );
 		$brief   = $service->generate( $entry );
 		if ( is_wp_error( $brief ) ) {

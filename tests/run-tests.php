@@ -610,6 +610,35 @@ assert_eq( 'pillar', $ks->guess_public( '/' ), 'home is a pillar' );
 assert_eq( 'service', $ks->guess_public( '/services/' ), 'top-level is a service' );
 assert_eq( 'article', $ks->guess_public( '/blog/my-post/' ), 'deep path is an article' );
 
+// Subtopics: existing/new flagging and topic counts span pillars + subtopics.
+SCC_KS_Test::$pages = array(
+	array( 'title' => 'Web Design', 'path' => '/web-design/' ),
+	array( 'title' => 'Pricing', 'path' => '/web-design/pricing/' ),
+);
+$withSubs = array(
+	'clusters' => array(
+		array(
+			'service' => 'Web Design', 'location' => '', 'primary_keyword' => 'web design',
+			'supporting_terms' => array(), 'intent' => 'commercial', 'recommended_url' => '/web-design/',
+			'related' => array(), 'page_type' => 'service', 'status' => 'new', 'rationale' => '',
+			'subtopics' => array(
+				array( 'title' => 'Pricing', 'primary_keyword' => 'web design pricing', 'intent' => 'commercial', 'recommended_url' => '/web-design/pricing/', 'status' => 'new' ),
+				array( 'title' => 'Portfolio', 'primary_keyword' => 'web design portfolio', 'intent' => 'informational', 'recommended_url' => '/web-design/portfolio/', 'status' => 'new' ),
+			),
+		),
+	),
+	'entities' => array(), 'notes' => '',
+);
+$recSubs = $ks->reconcile_public( $withSubs );
+$pillar  = $recSubs['clusters'][0];
+assert_eq( 'existing', $pillar['status'], 'pillar matched to real page is existing' );
+$subByUrl = array();
+foreach ( $pillar['subtopics'] as $s ) { $subByUrl[ $s['recommended_url'] ] = $s['status']; }
+assert_eq( 'existing', $subByUrl['/web-design/pricing/'], 'subtopic matching a real page is existing' );
+assert_eq( 'new', $subByUrl['/web-design/portfolio/'], 'subtopic with no real page is new' );
+assert_eq( 2, $recSubs['existing_count'], 'existing count includes pillar + subtopic' );
+assert_eq( 1, $recSubs['new_count'], 'new count includes the gap subtopic' );
+
 echo "\n== Background worker auth ==\n";
 if ( ! function_exists( 'wp_generate_password' ) ) {
 	function wp_generate_password( $len = 12, $special = true, $extra = true ) {

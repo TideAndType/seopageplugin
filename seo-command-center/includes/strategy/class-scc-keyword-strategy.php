@@ -153,24 +153,32 @@ class SCC_Keyword_Strategy {
 	 * @return array {system, messages, json}
 	 */
 	protected function build_prompt( array $inputs ) {
-		$system = 'You are a senior SEO strategist. Build a STRUCTURED TOPICAL MAP for a business, '
-			. 'not a random keyword list. Group by service (and location where the business is local). '
-			. 'For each cluster, identify one primary keyword, several genuinely distinct supporting terms, '
-			. 'the dominant search intent (informational, commercial, transactional, navigational, or local), '
-			. 'a clean recommended URL slug path, and 2-4 related internal topics. '
+		$system = 'You are a senior SEO strategist. Build a STRUCTURED TOPICAL MAP for a business as a set of '
+			. 'PILLAR topics, each with its own supporting SUBTOPICS (the classic pillar/cluster model). '
+			. 'A pillar is a broad hub page for a service or theme; its subtopics are specific supporting '
+			. 'articles/pages that link up to it. '
+			. 'For each PILLAR provide: the topic name (service), one primary keyword, 3-6 genuinely distinct '
+			. 'supporting terms, the dominant search intent (informational, commercial, transactional, '
+			. 'navigational, or local), a clean recommended URL slug path, an example SEO meta title under ~60 '
+			. 'characters, a strategic priority ("high", "medium", or "low") reflecting business value and how '
+			. 'foundational the topic is, 2-4 related internal topics, and 3-8 SUBTOPICS. '
+			. 'For each SUBTOPIC provide: title, primary_keyword, intent, a recommended URL slug path (usually '
+			. 'nested under the pillar), and an example meta title. '
 			. 'Only propose location+service pages where they would carry genuinely unique local value — '
 			. 'never propose near-duplicate doorway pages. Do not invent search volume or difficulty numbers; '
-			. 'you are giving strategic recommendations, not measured data. '
+			. 'priority is your strategic judgement, not measured data. '
 			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, url} is provided. '
-			. 'For EVERY existing page, output one cluster that REUSES its exact url path verbatim and sets '
-			. '"status":"existing" — do not invent a new slug for a page that already exists. Then ADD clusters '
-			. 'with "status":"new" for genuine gaps and opportunities the site is missing. Infer the business\'s '
-			. 'real services, products and locations from the existing page titles. Never propose a near-duplicate '
-			. 'of a page that already exists. '
+			. 'For EVERY existing page, output one pillar (or subtopic) that REUSES its exact url path verbatim '
+			. 'and sets "status":"existing" — do not invent a new slug for a page that already exists. Then ADD '
+			. 'pillars/subtopics with "status":"new" for genuine gaps. Infer the business\'s real services, '
+			. 'products and locations from the existing page titles. Never propose a near-duplicate of a page '
+			. 'that already exists. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
-			. '"intent":str,"recommended_url":str,"related":[str],"page_type":"pillar|service|location|article",'
-			. '"status":"existing|new","rationale":str}],"entities":[str],"notes":str}';
+			. '"intent":str,"recommended_url":str,"meta_title":str,"priority":"high|medium|low","related":[str],'
+			. '"page_type":"pillar|service|location|article","status":"existing|new","rationale":str,'
+			. '"subtopics":[{"title":str,"primary_keyword":str,"intent":str,"recommended_url":str,"meta_title":str}]}],'
+			. '"entities":[str],"notes":str}';
 
 		$existing = self::existing_site_pages();
 		$inputs['existing_site_pages'] = $existing;
@@ -185,10 +193,9 @@ class SCC_Keyword_Strategy {
 				),
 			),
 			'json'       => true,
-			// Kept modest so local models (often reached over a tunnel with a
-			// request time limit) can finish within the budget. Still ample for a
-			// full topical map.
-			'max_tokens' => 2500,
+			// Enough headroom for pillars + subtopics. If a model truncates the
+			// tail, the tolerant JSON parser closes and salvages what came through.
+			'max_tokens' => 3500,
 			'temperature'=> 0.4,
 		);
 	}
@@ -267,22 +274,50 @@ class SCC_Keyword_Strategy {
 		$valid_intent = array( 'informational', 'commercial', 'transactional', 'navigational', 'local' );
 		$valid_type   = array( 'pillar', 'service', 'location', 'article' );
 
+		$valid_priority = array( 'high', 'medium', 'low' );
+
 		$clusters = array();
 		foreach ( (array) ( $map['clusters'] ?? array() ) as $c ) {
-			$intent = strtolower( (string) ( $c['intent'] ?? 'informational' ) );
-			$type   = strtolower( (string) ( $c['page_type'] ?? 'service' ) );
-			$clusters[] = array(
+			$intent   = strtolower( (string) ( $c['intent'] ?? 'informational' ) );
+			$type     = strtolower( (string) ( $c['page_type'] ?? 'service' ) );
+			$priority = strtolower( (string) ( $c['priority'] ?? '' ) );
+			$priority = in_array( $priority, $valid_priority, true ) ? $priority : 'medium';
+
+			// Subtopics (supporting articles under the pillar).
+			$subtopics = array();
+			foreach ( (array) ( $c['subtopics'] ?? array() ) as $s ) {
+				$sintent = strtolower( (string) ( $s['intent'] ?? 'informational' ) );
+				$title   = SCC_Security::sanitize_text( $s['title'] ?? ( $s['primary_keyword'] ?? '' ) );
+				if ( '' === $title ) {
+					continue;
+				}
+				$subtopics[] = array(
+					'title'           => $title,
+					'primary_keyword' => SCC_Security::sanitize_text( $s['primary_keyword'] ?? $title ),
+					'intent'          => in_array( $sintent, $valid_intent, true ) ? $sintent : 'informational',
+					'recommended_url' => $this->clean_slug_path( $s['recommended_url'] ?? '' ),
+					'meta_title'      => SCC_Security::sanitize_text( $s['meta_title'] ?? '' ),
+					'status'          => 'new',
+				);
+			}
+
+			$cluster = array(
 				'service'          => SCC_Security::sanitize_text( $c['service'] ?? '' ),
 				'location'         => empty( $c['location'] ) ? '' : SCC_Security::sanitize_text( $c['location'] ),
 				'primary_keyword'  => SCC_Security::sanitize_text( $c['primary_keyword'] ?? '' ),
 				'supporting_terms' => array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $c['supporting_terms'] ?? array() ) ) ) ),
 				'intent'           => in_array( $intent, $valid_intent, true ) ? $intent : 'informational',
 				'recommended_url'  => $this->clean_slug_path( $c['recommended_url'] ?? '' ),
+				'meta_title'       => SCC_Security::sanitize_text( $c['meta_title'] ?? '' ),
+				'priority'         => $priority,
 				'related'          => array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $c['related'] ?? array() ) ) ) ),
 				'page_type'        => in_array( $type, $valid_type, true ) ? $type : 'service',
 				'status'           => ( isset( $c['status'] ) && 'existing' === strtolower( (string) $c['status'] ) ) ? 'existing' : 'new',
 				'rationale'        => SCC_Security::sanitize_textarea( $c['rationale'] ?? '' ),
+				'subtopics'        => $subtopics,
 			);
+			$cluster['authority_score'] = $this->authority_score( $cluster );
+			$clusters[] = $cluster;
 		}
 
 		return array(
@@ -317,7 +352,7 @@ class SCC_Keyword_Strategy {
 		$clusters = isset( $map['clusters'] ) ? $map['clusters'] : array();
 		$seen     = array();
 
-		// Flag clusters whose URL matches a real page as existing; note matches.
+		// Flag clusters (and their subtopics) whose URL matches a real page.
 		foreach ( $clusters as &$c ) {
 			$path = self::normalize_site_path( $c['recommended_url'] );
 			if ( isset( $by_path[ $path ] ) ) {
@@ -329,6 +364,19 @@ class SCC_Keyword_Strategy {
 				// it's really a recommendation.
 				$c['status'] = 'new';
 			}
+			if ( ! empty( $c['subtopics'] ) && is_array( $c['subtopics'] ) ) {
+				foreach ( $c['subtopics'] as &$s ) {
+					$spath = self::normalize_site_path( $s['recommended_url'] ?? '' );
+					if ( '' !== $spath && isset( $by_path[ $spath ] ) ) {
+						$s['status']          = 'existing';
+						$s['recommended_url'] = $spath;
+						$seen[ $spath ]       = true;
+					} else {
+						$s['status'] = 'new';
+					}
+				}
+				unset( $s );
+			}
 		}
 		unset( $c );
 
@@ -337,18 +385,23 @@ class SCC_Keyword_Strategy {
 			if ( isset( $seen[ $path ] ) ) {
 				continue;
 			}
-			$clusters[] = array(
+			$injected = array(
 				'service'          => $title,
 				'location'         => '',
 				'primary_keyword'  => $title,
 				'supporting_terms' => array(),
 				'intent'           => 'commercial',
 				'recommended_url'  => $path,
+				'meta_title'       => '',
+				'priority'         => 'medium',
 				'related'          => array(),
 				'page_type'        => $this->guess_page_type( $path ),
 				'status'           => 'existing',
 				'rationale'        => __( 'Existing page on your site.', 'seo-command-center' ),
+				'subtopics'        => array(),
 			);
+			$injected['authority_score'] = $this->authority_score( $injected );
+			$clusters[] = $injected;
 		}
 
 		// Existing pages first, then recommended gaps.
@@ -359,10 +412,42 @@ class SCC_Keyword_Strategy {
 		} );
 
 		$map['clusters'] = $clusters;
-		$existing_count  = count( array_filter( $clusters, function ( $c ) { return 'existing' === $c['status']; } ) );
-		$map['existing_count'] = $existing_count;
-		$map['new_count']      = count( $clusters ) - $existing_count;
+
+		// Counts span pillars AND subtopics (topicalmap-style topic totals).
+		$existing = 0;
+		$total    = 0;
+		foreach ( $clusters as $c ) {
+			$total++;
+			if ( 'existing' === $c['status'] ) {
+				$existing++;
+			}
+			foreach ( (array) ( $c['subtopics'] ?? array() ) as $s ) {
+				$total++;
+				if ( isset( $s['status'] ) && 'existing' === $s['status'] ) {
+					$existing++;
+				}
+			}
+		}
+		$map['existing_count'] = $existing;
+		$map['new_count']      = $total - $existing;
+		$map['pillar_count']   = count( $clusters );
 		return $map;
+	}
+
+	/**
+	 * A strategic (NOT measured) topical-authority score 0-100 for a pillar,
+	 * derived from priority, breadth of supporting terms, and subtopic depth.
+	 * Presented as strategic opinion, never as search-volume data.
+	 *
+	 * @param array $cluster Cluster.
+	 * @return int
+	 */
+	protected function authority_score( array $cluster ) {
+		$base = array( 'high' => 80, 'medium' => 60, 'low' => 40 );
+		$score = isset( $base[ $cluster['priority'] ?? 'medium' ] ) ? $base[ $cluster['priority'] ] : 60;
+		$score += min( 10, count( (array) ( $cluster['supporting_terms'] ?? array() ) ) * 2 );
+		$score += min( 10, count( (array) ( $cluster['subtopics'] ?? array() ) ) * 2 );
+		return (int) max( 1, min( 100, $score ) );
 	}
 
 	/**

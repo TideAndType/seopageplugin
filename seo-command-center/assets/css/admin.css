@@ -84,6 +84,21 @@
 .scc-flag--service { background: #e6f4ea; color: #137333; }
 .scc-flag--location { background: #fdf0e3; color: #9a5b00; }
 .scc-flag--article { background: #eef2f5; color: #3c4257; }
+.scc-flag--prio-high { background: #fdeceb; color: #b32d2e; }
+.scc-flag--prio-medium { background: #fdf6e3; color: #8a6d00; }
+.scc-flag--prio-low { background: #eef2f5; color: #5f6b7a; }
+
+/* Topical map: pillars, subtopics, briefs */
+.scc-pillar { border-left: 3px solid #2271b1; }
+.scc-subtopics { margin-top: 10px; border-top: 1px dashed #e0e0e2; padding-top: 8px; }
+.scc-subtopic { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 5px 0; font-size: 13px; border-bottom: 1px solid #f2f2f4; }
+.scc-subtopic.is-existing { opacity: .75; }
+.scc-subtopic__title { font-weight: 600; }
+.scc-subtopic__kw { color: #5f6b7a; }
+.scc-brief-wrap { margin-top: 8px; }
+.scc-brief-out { margin-top: 8px; padding: 10px 12px; background: #f6f7f7; border: 1px solid #e0e0e2; border-radius: 6px; font-size: 13px; }
+.scc-brief-out ul { margin: 4px 0 10px 18px; }
+.scc-brief-out p { margin: 6px 0; }
 
 /* Architecture tree */
 .scc-arch-pillar { border-left: 3px solid #2271b1; padding: 8px 0 8px 14px; margin: 14px 0; }

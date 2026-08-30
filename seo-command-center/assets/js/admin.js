@@ -547,6 +547,80 @@
 		} );
 	}
 
+	// ---- One-click content briefs (topical map) ------------------------
+	function renderBrief( brief ) {
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+		function list( items, render ) {
+			if ( ! items || ! items.length ) { return ''; }
+			return '<ul>' + items.map( render ).join( '' ) + '</ul>';
+		}
+		var html = '';
+		if ( brief.h1 ) { html += '<p><strong>H1:</strong> ' + esc( brief.h1 ) + '</p>'; }
+		var meta = [];
+		if ( brief.search_intent ) { meta.push( 'Intent: ' + esc( brief.search_intent ) ); }
+		if ( brief.recommended_words ) { meta.push( '~' + esc( brief.recommended_words ) + ' words' ); }
+		if ( meta.length ) { html += '<p class="scc-note">' + meta.join( ' · ' ) + '</p>'; }
+		if ( brief.summary ) { html += '<p>' + esc( brief.summary ) + '</p>'; }
+		if ( brief.outline && brief.outline.length ) {
+			html += '<p><strong>Outline</strong></p>' + list( brief.outline, function ( o ) {
+				var h = o.heading ? esc( o.heading ) : '';
+				var p = o.purpose ? ' — <span class="scc-note">' + esc( o.purpose ) + '</span>' : '';
+				return '<li>' + h + p + '</li>';
+			} );
+		}
+		if ( brief.questions && brief.questions.length ) {
+			html += '<p><strong>Questions to answer</strong></p>' + list( brief.questions, function ( q ) { return '<li>' + esc( q ) + '</li>'; } );
+		}
+		if ( brief.entities && brief.entities.length ) {
+			html += '<p><strong>Entities:</strong> ' + esc( brief.entities.join( ', ' ) ) + '</p>';
+		}
+		if ( brief.internal_link_targets && brief.internal_link_targets.length ) {
+			html += '<p><strong>Internal links</strong></p>' + list( brief.internal_link_targets, function ( t ) { return '<li>' + esc( t ) + '</li>'; } );
+		}
+		if ( brief.cta ) { html += '<p><strong>CTA:</strong> ' + esc( brief.cta ) + '</p>'; }
+		return html || '<p class="scc-note">No brief content returned.</p>';
+	}
+
+	function bindTopicBriefs() {
+		var buttons = document.querySelectorAll( '.scc-brief-btn' );
+		if ( ! buttons.length ) {
+			return;
+		}
+		Array.prototype.forEach.call( buttons, function ( btn ) {
+			btn.addEventListener( 'click', function () {
+				var wrap = btn.closest( '.scc-brief-wrap' );
+				var status = wrap ? wrap.querySelector( '.scc-brief-status' ) : null;
+				var out = wrap ? wrap.querySelector( '.scc-brief-out' ) : null;
+				var topic;
+				try {
+					topic = JSON.parse( btn.getAttribute( 'data-topic' ) || '{}' );
+				} catch ( e ) {
+					topic = {};
+				}
+				btn.disabled = true;
+				setStatus( status, 'Writing brief with your AI model… this can take a moment.' );
+				request( '/brief/topic', { method: 'POST', data: topic } )
+					.then( function ( res ) {
+						btn.disabled = false;
+						var brief = res.data && res.data.brief;
+						if ( out && brief ) {
+							out.innerHTML = renderBrief( brief );
+							out.hidden = false;
+						}
+						setStatus( status, 'Brief ready.', 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						btn.disabled = false;
+						setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		} );
+	}
+
 	// ---- Seed content plan from architecture ---------------------------
 	function bindSeedPlan() {
 		var btn = document.getElementById( 'scc-seed-plan' );
@@ -1359,6 +1433,7 @@
 		bindLmStudioDetect();
 		bindConnections();
 		bindKeywordStrategy();
+		bindTopicBriefs();
 		bindSeedPlan();
 		bindContentPlan();
 		bindGenerate();
