@@ -477,6 +477,80 @@ $fs2 = SCC_GSC::field_status();
 assert_true( $fs2['client_id'] && $fs2['client_secret'] && $fs2['refresh_token'], 'all fields present' );
 assert_true( SCC_GSC::is_connected(), 'connected with all three fields' );
 
+echo "\n== AI Manager: safety-net fallback to a configured provider ==\n";
+if ( ! class_exists( 'SCC_AI_Usage' ) ) {
+	class SCC_AI_Usage {
+		public static function record( $response, $operation = '' ) {}
+		public static function month_to_date_cost() { return 0.0; }
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php';
+
+/**
+ * Fake provider for manager routing tests. `$ok` decides success vs error.
+ */
+class SCC_Fake_Provider implements SCC_AI_Provider_Interface {
+	public $id;
+	public $ok;
+	public $configured;
+	public function __construct( $id, $ok = true, $configured = true ) {
+		$this->id = $id; $this->ok = $ok; $this->configured = $configured;
+	}
+	public function get_id() { return $this->id; }
+	public function get_label() { return $this->id; }
+	public function is_configured() { return $this->configured; }
+	public function list_models() { return array( 'm' => 'm' ); }
+	public function complete( array $request ) {
+		$r = new SCC_AI_Response();
+		if ( $this->ok ) {
+			$r->content = 'from:' . $this->id;
+		} else {
+			$r->error = new WP_Error( 'auth', 'invalid x-api-key' );
+		}
+		return $r;
+	}
+	public function estimate_cost( $input_tokens, $output_tokens, $model ) { return 0.0; }
+}
+
+/** Manager subclass that registers only fakes (no real HTTP providers). */
+class SCC_Test_Manager extends SCC_AI_Manager {
+	public function __construct( array $providers ) {
+		foreach ( $providers as $p ) { $this->register( $p ); }
+	}
+}
+
+// Primary (claude) has a bad key; LM Studio is configured → manager should
+// fall through to LM Studio automatically instead of returning the auth error.
+$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => '' );
+$mgr = new SCC_Test_Manager( array(
+	new SCC_Fake_Provider( 'claude', false, true ),
+	new SCC_Fake_Provider( 'lmstudio', true, true ),
+) );
+$resp = $mgr->complete( array( 'messages' => array() ), 'keyword-strategy' );
+assert_true( ! $resp->is_error(), 'falls back to a configured provider when primary key is bad' );
+assert_eq( 'from:lmstudio', $resp->content, 'used LM Studio as the safety-net provider' );
+
+// When nothing succeeds, the reported error is the primary provider's, with guidance.
+$mgr2 = new SCC_Test_Manager( array(
+	new SCC_Fake_Provider( 'claude', false, true ),
+	new SCC_Fake_Provider( 'lmstudio', false, true ),
+) );
+$resp2 = $mgr2->complete( array( 'messages' => array() ), 'keyword-strategy' );
+assert_true( $resp2->is_error(), 'error when every provider fails' );
+assert_true( false !== strpos( $resp2->error->get_error_message(), 'Primary provider' ) || false !== strpos( $resp2->error->get_error_message(), 'Primary' ), 'error message points user to Settings → AI primary provider' );
+
+// A per-task route override is honored as the primary.
+$GLOBALS['scc_test_options']['scc_settings'] = array(
+	'default_provider' => 'claude', 'fallback_provider' => '',
+	'route_keyword_strategy_provider' => 'lmstudio',
+);
+$mgr3 = new SCC_Test_Manager( array(
+	new SCC_Fake_Provider( 'claude', true, true ),
+	new SCC_Fake_Provider( 'lmstudio', true, true ),
+) );
+$resp3 = $mgr3->complete( array( 'messages' => array() ), 'keyword-strategy' );
+assert_eq( 'from:lmstudio', $resp3->content, 'route override sends keyword-strategy to LM Studio' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

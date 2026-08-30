@@ -30,6 +30,7 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 						<option value="gemini" <?php selected( $s['default_provider'], 'gemini' ); ?>>Google Gemini</option>
 						<option value="lmstudio" <?php selected( $s['default_provider'], 'lmstudio' ); ?>>LM Studio (local)</option>
 					</select>
+					<p class="description"><?php esc_html_e( 'This provider runs every AI task (site plan, topical map, content) unless overridden per task below. Connecting a provider under API Connections is not enough — choose it here to actually use it. Pick “LM Studio (local)” to run everything on your own server.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 			<tr>

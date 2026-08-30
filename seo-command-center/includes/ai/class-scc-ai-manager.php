@@ -187,12 +187,26 @@ class SCC_AI_Manager {
 			$order[] = $fallback;
 		}
 
-		$last = new SCC_AI_Response();
+		// Safety net: if the chosen provider(s) fail, try any other provider the
+		// user has actually configured. This way a connected provider (e.g. a
+		// local LM Studio server) is still used even if the primary provider is
+		// left on a default with a missing or invalid key.
+		foreach ( array_keys( $this->providers ) as $pid ) {
+			if ( ! in_array( $pid, $order, true ) ) {
+				$order[] = $pid;
+			}
+		}
+
+		$last          = new SCC_AI_Response();
+		$tried         = array();
+		$configured    = array();
+		$first_error   = null;
 		foreach ( $order as $pid ) {
 			$provider = $this->get_provider( $pid );
 			if ( ! $provider || ! $provider->is_configured() ) {
 				continue;
 			}
+			$configured[] = $pid;
 			$req = $request;
 			if ( empty( $req['model'] ) ) {
 				// Use the forced model only for the routed primary provider.
@@ -201,14 +215,44 @@ class SCC_AI_Manager {
 			$response = $provider->complete( $req );
 			SCC_AI_Usage::record( $response, $operation );
 			if ( ! $response->is_error() ) {
+				if ( $pid !== $primary ) {
+					SCC_Logger::info( 'ai-manager', 'Primary provider unavailable; used a configured fallback', array( 'primary' => $primary, 'used' => $pid ) );
+				}
 				return $response;
 			}
+			$tried[] = $pid;
+			// Report the first (primary) provider's error, not a later safety-net one.
+			if ( null === $first_error ) {
+				$first_error = $response;
+			}
 			$last = $response;
-			SCC_Logger::error( 'ai-manager', 'Provider failed, trying fallback if available', array( 'provider' => $pid ) );
+			SCC_Logger::error( 'ai-manager', 'Provider failed, trying next configured provider if available', array( 'provider' => $pid ) );
+		}
+		if ( null !== $first_error ) {
+			$last = $first_error;
 		}
 
 		if ( ! $last->is_error() ) {
-			$last->error = new WP_Error( 'scc_no_provider', __( 'No AI provider is configured. Add an API key under API Connections.', 'seo-command-center' ), array( 'status' => 400 ) );
+			$last->error = new WP_Error( 'scc_no_provider', __( 'No AI provider is configured. Add an API key under API Connections, or connect LM Studio, then choose it as your Primary provider under Settings → AI.', 'seo-command-center' ), array( 'status' => 400 ) );
+		} elseif ( $last->is_error() ) {
+			// Sharpen the message so the user knows which provider rejected the
+			// request and what to do next (the raw "invalid x-api-key" is opaque).
+			$failed = ! empty( $tried ) ? $tried[0] : $primary;
+			$labels = array(
+				'claude'   => 'Anthropic Claude',
+				'openai'   => 'OpenAI',
+				'gemini'   => 'Google Gemini',
+				'lmstudio' => 'LM Studio',
+			);
+			$name = isset( $labels[ $failed ] ) ? $labels[ $failed ] : $failed;
+			$msg  = $last->error->get_error_message();
+			$hint = sprintf(
+				/* translators: 1: provider name, 2: original error message */
+				__( 'Your primary AI provider (%1$s) failed: %2$s — Under Settings → AI, set “Primary provider” to a provider you have connected (for example LM Studio), or fix that provider’s key under API Connections.', 'seo-command-center' ),
+				$name,
+				$msg
+			);
+			$last->error = new WP_Error( $last->error->get_error_code(), $hint, $last->error->get_error_data() );
 		}
 		return $last;
 	}

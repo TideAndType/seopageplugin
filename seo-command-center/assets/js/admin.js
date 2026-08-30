@@ -178,6 +178,32 @@
 					if ( modelInput && ( ! modelInput.value || modelInput.value === 'local-model' ) ) {
 						modelInput.value = d.models[0];
 					}
+					// Feed detected models into the per-task routing dropdowns too.
+					if ( window.SCC && window.SCC.providers && window.SCC.providers.lmstudio ) {
+						var map = {};
+						d.models.forEach( function ( m ) { map[ m ] = m; } );
+						window.SCC.providers.lmstudio.models = map;
+						Array.prototype.forEach.call( document.querySelectorAll( '.scc-route-provider' ), function ( sel ) {
+							if ( sel.value !== 'lmstudio' ) { return; }
+							var row = sel.closest( 'tr' );
+							var modelSel = row ? row.querySelector( '.scc-route-model' ) : null;
+							if ( ! modelSel ) { return; }
+							var keep = modelSel.value;
+							modelSel.innerHTML = '';
+							var def = document.createElement( 'option' );
+							def.value = '';
+							def.textContent = 'Default model for this provider';
+							modelSel.appendChild( def );
+							d.models.forEach( function ( m ) {
+								var opt = document.createElement( 'option' );
+								opt.value = m;
+								opt.textContent = m;
+								if ( m === keep ) { opt.selected = true; }
+								modelSel.appendChild( opt );
+							} );
+							modelSel.disabled = false;
+						} );
+					}
 					setStatus( status, 'Connected — ' + d.models.length + ' model(s): ' + d.models.join( ', ' ) + '. Pick one and Save.', 'is-ok' );
 				} )
 				.catch( function ( err ) {
