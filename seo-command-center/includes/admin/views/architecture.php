@@ -27,7 +27,7 @@ $node_line = function ( $node ) {
 		<?php if ( $exists ) : ?>
 			<span class="scc-badge scc-badge--ok"><?php esc_html_e( 'Exists', 'seo-command-center' ); ?></span>
 		<?php else : ?>
-			<span class="scc-badge"><?php esc_html_e( 'New', 'seo-command-center' ); ?></span>
+			<span class="scc-badge"><?php esc_html_e( 'Gap · new', 'seo-command-center' ); ?></span>
 		<?php endif; ?>
 	</div>
 	<?php

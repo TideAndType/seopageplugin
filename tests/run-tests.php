@@ -560,6 +560,56 @@ $mgr3 = new SCC_Test_Manager( array(
 $resp3 = $mgr3->complete( array( 'messages' => array() ), 'keyword-strategy' );
 assert_eq( 'from:lmstudio', $resp3->content, 'route override sends keyword-strategy to LM Studio' );
 
+echo "\n== Keyword strategy: mirror the real site ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-keyword-strategy.php';
+
+class SCC_KS_Test extends SCC_Keyword_Strategy {
+	public static $pages = array();
+	public static function existing_site_pages( $limit = 200 ) { return self::$pages; }
+	public function reconcile_public( array $map ) { return $this->reconcile_with_site( $map ); }
+	public function guess_public( $path ) { return $this->guess_page_type( $path ); }
+}
+
+$ks = new SCC_KS_Test( new SCC_Test_Manager( array() ) );
+
+// Real site has two pages; the AI map only mentioned one (with a wrong slug)
+// plus one genuine new idea. After reconcile: both real pages present as
+// existing (anchored to real URLs), and the new idea kept as a gap.
+SCC_KS_Test::$pages = array(
+	array( 'title' => 'SEO Audit', 'path' => '/seo-audit/' ),
+	array( 'title' => 'About Us', 'path' => '/about/' ),
+);
+$raw = array(
+	'clusters' => array(
+		array( 'service' => 'SEO Audit', 'location' => '', 'primary_keyword' => 'seo audit',
+			'supporting_terms' => array(), 'intent' => 'commercial', 'recommended_url' => '/seo-audit/',
+			'related' => array(), 'page_type' => 'service', 'status' => 'new', 'rationale' => '' ),
+		array( 'service' => 'Pricing Guide', 'location' => '', 'primary_keyword' => 'pricing',
+			'supporting_terms' => array(), 'intent' => 'commercial', 'recommended_url' => '/pricing/',
+			'related' => array(), 'page_type' => 'service', 'status' => 'new', 'rationale' => '' ),
+	),
+	'entities' => array(),
+	'notes'    => '',
+);
+$rec = $ks->reconcile_public( $raw );
+$by_url = array();
+foreach ( $rec['clusters'] as $c ) { $by_url[ $c['recommended_url'] ] = $c['status']; }
+assert_eq( 'existing', $by_url['/seo-audit/'], 'matched page flagged existing' );
+assert_eq( 'existing', $by_url['/about/'], 'missing real page injected as existing' );
+assert_eq( 'new', $by_url['/pricing/'], 'genuine gap kept as new' );
+assert_eq( 2, $rec['existing_count'], 'existing_count reflects real pages' );
+assert_eq( 1, $rec['new_count'], 'new_count reflects gaps' );
+assert_eq( 'existing', $rec['clusters'][0]['status'], 'existing pages sorted first' );
+
+// No real pages (brand-new site) → map returned unchanged.
+SCC_KS_Test::$pages = array();
+$rec2 = $ks->reconcile_public( $raw );
+assert_eq( 2, count( $rec2['clusters'] ), 'no injection when site has no pages' );
+
+assert_eq( 'pillar', $ks->guess_public( '/' ), 'home is a pillar' );
+assert_eq( 'service', $ks->guess_public( '/services/' ), 'top-level is a service' );
+assert_eq( 'article', $ks->guess_public( '/blog/my-post/' ), 'deep path is an article' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

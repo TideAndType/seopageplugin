@@ -105,6 +105,48 @@ class SCC_Keyword_Strategy {
 	}
 
 	/**
+	 * The site's real published pages/posts as {title, path} pairs, so the
+	 * topical map can be anchored to the actual URLs the site already has.
+	 *
+	 * @param int $limit Max pages.
+	 * @return array<int,array{title:string,path:string}>
+	 */
+	public static function existing_site_pages( $limit = 200 ) {
+		$pages = array();
+		$q     = new WP_Query( array(
+			'post_type'      => array( 'page', 'post' ),
+			'post_status'    => 'publish',
+			'posts_per_page' => (int) $limit,
+			'no_found_rows'  => true,
+			'orderby'        => 'menu_order title',
+			'order'          => 'ASC',
+			'fields'         => 'ids',
+		) );
+		foreach ( $q->posts as $pid ) {
+			$title = trim( (string) get_the_title( $pid ) );
+			$path  = wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH );
+			$path  = self::normalize_site_path( (string) $path );
+			if ( '' === $title || '' === $path ) {
+				continue;
+			}
+			$pages[] = array( 'title' => $title, 'path' => $path );
+		}
+		return $pages;
+	}
+
+	/**
+	 * Normalize a URL path to a clean, comparable "/slug/…/" form.
+	 *
+	 * @param string $path Raw path.
+	 * @return string
+	 */
+	protected static function normalize_site_path( $path ) {
+		$segments = array_filter( explode( '/', (string) $path ) );
+		$clean    = array_filter( array_map( 'sanitize_title', $segments ) );
+		return '/' . implode( '/', $clean ) . ( $clean ? '/' : '' );
+	}
+
+	/**
 	 * Build the AI prompt for the topical map.
 	 *
 	 * @param array $inputs Sanitized inputs.
@@ -119,22 +161,27 @@ class SCC_Keyword_Strategy {
 			. 'Only propose location+service pages where they would carry genuinely unique local value — '
 			. 'never propose near-duplicate doorway pages. Do not invent search volume or difficulty numbers; '
 			. 'you are giving strategic recommendations, not measured data. '
-			. 'If an "existing_pages" list is provided, infer the business\'s real services, products and locations '
-			. 'from those page titles, map the CURRENT site architecture, and prioritize clusters that strengthen or '
-			. 'fill gaps in what already exists rather than duplicating existing pages. '
+			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, url} is provided. '
+			. 'For EVERY existing page, output one cluster that REUSES its exact url path verbatim and sets '
+			. '"status":"existing" — do not invent a new slug for a page that already exists. Then ADD clusters '
+			. 'with "status":"new" for genuine gaps and opportunities the site is missing. Infer the business\'s '
+			. 'real services, products and locations from the existing page titles. Never propose a near-duplicate '
+			. 'of a page that already exists. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
 			. '"intent":str,"recommended_url":str,"related":[str],"page_type":"pillar|service|location|article",'
-			. '"rationale":str}],"entities":[str],"notes":str}';
+			. '"status":"existing|new","rationale":str}],"entities":[str],"notes":str}';
 
-		$payload = wp_json_encode( $inputs );
+		$existing = self::existing_site_pages();
+		$inputs['existing_site_pages'] = $existing;
+		$payload  = wp_json_encode( $inputs );
 
 		return array(
 			'system'     => $system,
 			'messages'   => array(
 				array(
 					'role'    => 'user',
-					'content' => "Business inputs (JSON):\n" . $payload . "\n\nProduce the topical map JSON now.",
+					'content' => "Business inputs (JSON):\n" . $payload . "\n\nProduce the topical map JSON now. Include every existing page (reusing its exact url) plus recommended new pages.",
 				),
 			),
 			'json'       => true,
@@ -171,6 +218,7 @@ class SCC_Keyword_Strategy {
 		}
 
 		$map = $this->normalize_map( $map );
+		$map = $this->reconcile_with_site( $map );
 
 		$strategy_id = SCC_DB::insert(
 			'keyword_strategies',
@@ -216,6 +264,7 @@ class SCC_Keyword_Strategy {
 				'recommended_url'  => $this->clean_slug_path( $c['recommended_url'] ?? '' ),
 				'related'          => array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $c['related'] ?? array() ) ) ) ),
 				'page_type'        => in_array( $type, $valid_type, true ) ? $type : 'service',
+				'status'           => ( isset( $c['status'] ) && 'existing' === strtolower( (string) $c['status'] ) ) ? 'existing' : 'new',
 				'rationale'        => SCC_Security::sanitize_textarea( $c['rationale'] ?? '' ),
 			);
 		}
@@ -225,6 +274,96 @@ class SCC_Keyword_Strategy {
 			'entities' => array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $map['entities'] ?? array() ) ) ) ),
 			'notes'    => SCC_Security::sanitize_textarea( $map['notes'] ?? '' ),
 		);
+	}
+
+	/**
+	 * Reconcile the AI map against the site's real pages so the topical map
+	 * always mirrors the actual architecture: every existing page is present
+	 * (anchored to its real URL and flagged "existing"), everything else is a
+	 * "new" gap recommendation. Deterministic — does not trust the model to get
+	 * the existing set right.
+	 *
+	 * @param array $map Normalized map.
+	 * @return array
+	 */
+	protected function reconcile_with_site( array $map ) {
+		$pages = static::existing_site_pages();
+		if ( empty( $pages ) ) {
+			return $map; // Nothing to anchor to (e.g. brand-new site).
+		}
+
+		// Index existing pages by normalized path.
+		$by_path = array();
+		foreach ( $pages as $p ) {
+			$by_path[ $p['path'] ] = $p['title'];
+		}
+
+		$clusters = isset( $map['clusters'] ) ? $map['clusters'] : array();
+		$seen     = array();
+
+		// Flag clusters whose URL matches a real page as existing; note matches.
+		foreach ( $clusters as &$c ) {
+			$path = self::normalize_site_path( $c['recommended_url'] );
+			if ( isset( $by_path[ $path ] ) ) {
+				$c['status']          = 'existing';
+				$c['recommended_url'] = $path; // Use the real, exact path.
+				$seen[ $path ]        = true;
+			} elseif ( 'existing' === $c['status'] ) {
+				// Model claimed "existing" but the URL doesn't match a real page —
+				// it's really a recommendation.
+				$c['status'] = 'new';
+			}
+		}
+		unset( $c );
+
+		// Inject any real page the model left out, anchored to its true URL.
+		foreach ( $by_path as $path => $title ) {
+			if ( isset( $seen[ $path ] ) ) {
+				continue;
+			}
+			$clusters[] = array(
+				'service'          => $title,
+				'location'         => '',
+				'primary_keyword'  => $title,
+				'supporting_terms' => array(),
+				'intent'           => 'commercial',
+				'recommended_url'  => $path,
+				'related'          => array(),
+				'page_type'        => $this->guess_page_type( $path ),
+				'status'           => 'existing',
+				'rationale'        => __( 'Existing page on your site.', 'seo-command-center' ),
+			);
+		}
+
+		// Existing pages first, then recommended gaps.
+		usort( $clusters, function ( $a, $b ) {
+			$ax = ( 'existing' === $a['status'] ) ? 0 : 1;
+			$bx = ( 'existing' === $b['status'] ) ? 0 : 1;
+			return $ax <=> $bx;
+		} );
+
+		$map['clusters'] = $clusters;
+		$existing_count  = count( array_filter( $clusters, function ( $c ) { return 'existing' === $c['status']; } ) );
+		$map['existing_count'] = $existing_count;
+		$map['new_count']      = count( $clusters ) - $existing_count;
+		return $map;
+	}
+
+	/**
+	 * Guess a page type from a URL path depth (home = pillar, deep = article).
+	 *
+	 * @param string $path Normalized path.
+	 * @return string
+	 */
+	protected function guess_page_type( $path ) {
+		$depth = count( array_filter( explode( '/', trim( $path, '/' ) ) ) );
+		if ( 0 === $depth ) {
+			return 'pillar'; // Home page.
+		}
+		if ( $depth >= 2 ) {
+			return 'article';
+		}
+		return 'service';
 	}
 
 	/**

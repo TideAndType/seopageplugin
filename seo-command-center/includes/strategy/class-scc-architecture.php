@@ -40,6 +40,9 @@ class SCC_Architecture {
 					'seed'     => null,
 				);
 			}
+			// Prefer the reconciled status; fall back to path matching for older maps.
+			$exists = ( isset( $c['status'] ) && 'existing' === $c['status'] )
+				|| $this->path_exists( $c['recommended_url'], $existing );
 			$node = array(
 				'title'           => $this->node_title( $c ),
 				'primary_keyword' => $c['primary_keyword'],
@@ -48,7 +51,7 @@ class SCC_Architecture {
 				'page_type'       => $c['page_type'],
 				'related'         => $c['related'],
 				'rationale'       => $c['rationale'],
-				'exists'          => $this->path_exists( $c['recommended_url'], $existing ),
+				'exists'          => $exists,
 			);
 			if ( 'article' === $c['page_type'] ) {
 				$services[ $service ]['articles'][] = $node;
