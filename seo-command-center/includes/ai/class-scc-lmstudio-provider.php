@@ -174,9 +174,13 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		if ( isset( $request['temperature'] ) ) {
 			$body['temperature'] = (float) $request['temperature'];
 		}
-		if ( ! empty( $request['json'] ) ) {
-			$body['response_format'] = array( 'type' => 'json_object' );
-		}
+		// NOTE: We deliberately do NOT send response_format. LM Studio builds vary
+		// wildly here — some accept {"type":"json_object"}, newer ones reject it
+		// with HTTP 400 ("must be 'json_schema' or 'text'"), and json_schema needs
+		// a full schema per request. JSON is requested via the system prompt
+		// ("Respond ONLY with valid JSON") and recovered by the tolerant parser,
+		// which is reliable across every LM Studio version without a failed
+		// round-trip. See $request['json'] handling above (adds the instruction).
 
 		$headers = array( 'content-type' => 'application/json' );
 		$key     = $this->get_key();
