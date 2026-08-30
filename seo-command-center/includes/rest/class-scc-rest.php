@@ -174,6 +174,29 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/keywords/auto/status',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'auto_keywords_status' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		// Loopback worker: authenticated by a shared secret (no cookie in a
+		// non-blocking loopback), so it uses an open permission and verifies the
+		// secret inside. It only processes already-queued jobs — no user input.
+		register_rest_route(
+			self::NS,
+			'/jobs/run',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'run_jobs_worker' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/architecture',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -834,15 +857,79 @@ class SCC_REST {
 	 *
 	 * @return WP_REST_Response|WP_Error
 	 */
-	public function auto_keywords() {
-		$inputs  = SCC_Keyword_Strategy::infer_inputs_from_site();
+	public function auto_keywords( WP_REST_Request $request ) {
+		// Run the generation as a background job so a slow model (or a tunnel
+		// with a request time limit) can never time out the page request. The
+		// browser polls /keywords/auto/status until it finishes.
+		if ( $this->jobs ) {
+			$before = SCC_Keyword_Strategy::latest();
+			$res    = $this->jobs->enqueue_keyword_auto();
+			return $this->ok( array(
+				'async'         => true,
+				'job_id'        => $res['job_id'],
+				'prev_strategy' => $before ? (int) $before['id'] : 0,
+			) );
+		}
+
+		// Fallback: no job queue available — run inline (older behavior).
 		$service = new SCC_Keyword_Strategy( $this->ai );
-		$result  = $service->generate( $inputs );
+		$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 		$result['inferred'] = true;
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /keywords/auto/status — poll a background topical-map job.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function auto_keywords_status( WP_REST_Request $request ) {
+		$job_id = (int) $request->get_param( 'job' );
+		$job    = SCC_Jobs::find_job( $job_id );
+		if ( ! $job ) {
+			return $this->ok( array( 'state' => 'unknown' ) );
+		}
+
+		$status = (string) $job['status'];
+		$state  = 'running';
+		if ( 'completed' === $status ) {
+			$state = 'done';
+		} elseif ( 'failed' === $status ) {
+			$state = 'error';
+		} elseif ( 'queued' === $status && $this->jobs ) {
+			// Not picked up yet — re-kick the worker (backstop for hosts that
+			// dropped the first non-blocking loopback). Cheap and non-blocking.
+			SCC_Jobs::spawn_worker();
+		}
+
+		$out = array( 'state' => $state, 'status' => $status );
+		if ( 'error' === $state ) {
+			$out['error'] = (string) $job['last_error'];
+		}
+		if ( 'done' === $state ) {
+			$latest = SCC_Keyword_Strategy::latest();
+			$out['strategy_id'] = $latest ? (int) $latest['id'] : 0;
+		}
+		return $this->ok( $out );
+	}
+
+	/**
+	 * POST /jobs/run — loopback worker. Authenticated by the shared secret.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function run_jobs_worker( WP_REST_Request $request ) {
+		if ( ! $this->jobs ) {
+			return $this->ok( array( 'ran' => false ) );
+		}
+		$secret = (string) $request->get_param( 'secret' );
+		$ran    = $this->jobs->run_authenticated( $secret );
+		return $this->ok( array( 'ran' => (bool) $ran ) );
 	}
 
 	/**

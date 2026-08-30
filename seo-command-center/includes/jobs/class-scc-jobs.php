@@ -21,6 +21,7 @@ class SCC_Jobs {
 	const CRON_HOOK      = 'scc_run_jobs';
 	const PER_TICK       = 3;   // Max jobs processed per cron tick.
 	const PAUSED_OPTION  = 'scc_jobs_paused';
+	const SECRET_OPTION  = 'scc_worker_secret';
 
 	/** @var SCC_AI_Manager */
 	protected $ai;
@@ -67,6 +68,67 @@ class SCC_Jobs {
 		}
 		SCC_Logger::info( 'jobs', 'Batch enqueued', array( 'queued' => $queued ) );
 		return array( 'queued' => $queued );
+	}
+
+	/**
+	 * Enqueue a single "build the topical map from the site" job and kick off a
+	 * worker immediately. Runs the AI generation off the web request so the page
+	 * never times out, no matter how slow the model is.
+	 *
+	 * @return array {job_id:int}
+	 */
+	public function enqueue_keyword_auto() {
+		$id = SCC_DB::insert(
+			'jobs',
+			array(
+				'type'         => 'keyword_auto',
+				'status'       => 'queued',
+				'payload'      => wp_json_encode( array() ),
+				'attempts'     => 0,
+				'max_attempts' => 1,
+				'scheduled_at' => current_time( 'mysql' ),
+				'created_at'   => current_time( 'mysql' ),
+			),
+			array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
+		);
+		self::ensure_scheduled();
+		self::spawn_worker();
+		SCC_Logger::info( 'jobs', 'Keyword-auto job enqueued', array( 'job_id' => $id ) );
+		return array( 'job_id' => (int) $id );
+	}
+
+	/**
+	 * Shared worker secret (created once), used to authenticate the loopback
+	 * request that triggers immediate job processing.
+	 *
+	 * @return string
+	 */
+	public static function worker_secret() {
+		$secret = get_option( self::SECRET_OPTION, '' );
+		if ( ! is_string( $secret ) || '' === $secret ) {
+			$secret = wp_generate_password( 40, false, false );
+			update_option( self::SECRET_OPTION, $secret, false );
+		}
+		return $secret;
+	}
+
+	/**
+	 * Fire a non-blocking loopback request that processes queued jobs right now,
+	 * so interactive work does not wait for the next WP-Cron tick. Best-effort:
+	 * if the loopback is blocked, the scheduled cron event still runs it.
+	 */
+	public static function spawn_worker() {
+		$url = rest_url( SCC_REST::NS . '/jobs/run' );
+		wp_remote_post(
+			$url,
+			array(
+				'timeout'   => 0.01,
+				'blocking'  => false,
+				'sslverify' => ( 0 === strpos( $url, 'https://' ) && apply_filters( 'https_local_ssl_verify', false ) ),
+				'body'      => array( 'secret' => self::worker_secret() ),
+				'cookies'   => array(),
+			)
+		);
 	}
 
 	/**
@@ -145,7 +207,18 @@ class SCC_Jobs {
 	 */
 	protected function process( array $job ) {
 		$id = (int) $job['id'];
-		SCC_DB::update( 'jobs', array( 'status' => 'processing', 'started_at' => current_time( 'mysql' ) ), array( 'id' => $id ) );
+
+		// Atomically claim the job: only proceed if it was still 'queued'. This
+		// prevents the immediate loopback worker and the WP-Cron tick from
+		// running the same job twice (which would create duplicate output).
+		$claimed = SCC_DB::update(
+			'jobs',
+			array( 'status' => 'processing', 'started_at' => current_time( 'mysql' ) ),
+			array( 'id' => $id, 'status' => 'queued' )
+		);
+		if ( ! $claimed ) {
+			return; // Someone else already claimed it.
+		}
 
 		$result = $this->dispatch( $job );
 
@@ -200,6 +273,11 @@ class SCC_Jobs {
 				$result    = $generator->generate( $entry );
 				return is_wp_error( $result ) ? $result : true;
 
+			case 'keyword_auto':
+				$service = new SCC_Keyword_Strategy( $this->ai );
+				$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
+				return is_wp_error( $result ) ? $result : true;
+
 			case 'link_autopilot':
 				$post_id = (int) ( $payload['post_id'] ?? 0 );
 				if ( ! $post_id || ! get_post( $post_id ) ) {
@@ -212,6 +290,41 @@ class SCC_Jobs {
 			default:
 				return new WP_Error( 'scc_unknown_job', 'Unknown job type.' );
 		}
+	}
+
+	/**
+	 * Fetch one job row (decoded status fields) for polling.
+	 *
+	 * @param int $id Job id.
+	 * @return array|null {status, last_error, attempts}
+	 */
+	public static function find_job( $id ) {
+		global $wpdb;
+		$table = SCC_DB::table( 'jobs' );
+		$row   = $wpdb->get_row( $wpdb->prepare( "SELECT id, type, status, last_error, attempts, max_attempts FROM {$table} WHERE id = %d", (int) $id ), ARRAY_A ); // phpcs:ignore WordPress.DB
+		return $row ? $row : null;
+	}
+
+	/**
+	 * Run the queue now if the caller presents the worker secret. Used by the
+	 * non-blocking loopback in spawn_worker(). Lifts execution limits so a slow
+	 * AI call is not killed.
+	 *
+	 * @param string $secret Provided secret.
+	 * @return bool Whether processing ran.
+	 */
+	public function run_authenticated( $secret ) {
+		if ( ! hash_equals( self::worker_secret(), (string) $secret ) ) {
+			return false;
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$this->run();
+		return true;
 	}
 
 	/**

@@ -610,6 +610,20 @@ assert_eq( 'pillar', $ks->guess_public( '/' ), 'home is a pillar' );
 assert_eq( 'service', $ks->guess_public( '/services/' ), 'top-level is a service' );
 assert_eq( 'article', $ks->guess_public( '/blog/my-post/' ), 'deep path is an article' );
 
+echo "\n== Background worker auth ==\n";
+if ( ! function_exists( 'wp_generate_password' ) ) {
+	function wp_generate_password( $len = 12, $special = true, $extra = true ) {
+		return substr( str_repeat( 'abcdef0123456789', 8 ), 0, (int) $len );
+	}
+}
+$GLOBALS['scc_test_options']['scc_worker_secret'] = '';
+$secret1 = SCC_Jobs::worker_secret();
+$secret2 = SCC_Jobs::worker_secret();
+assert_true( '' !== $secret1, 'a worker secret is generated' );
+assert_eq( $secret1, $secret2, 'worker secret is stable across calls' );
+$jobs = new SCC_Jobs( new SCC_Test_Manager( array() ) );
+assert_eq( false, $jobs->run_authenticated( 'wrong-secret' ), 'worker rejects a bad secret' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

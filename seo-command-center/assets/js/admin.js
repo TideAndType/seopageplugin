@@ -388,24 +388,66 @@
 			var autoStatus = document.getElementById( 'scc-keyword-auto-status' );
 			autoBtn.addEventListener( 'click', function () {
 				autoBtn.disabled = true;
-				setStatus( autoStatus, 'Analyzing your site and building the topical map… this can take up to a minute.' );
+				setStatus( autoStatus, 'Analyzing your site and building the topical map… this runs in the background and can take a few minutes for local models. You can leave this page open.' );
 				request( '/keywords/auto', { method: 'POST' } )
-					.then( function () {
-						setStatus( autoStatus, 'Done. Reloading…', 'is-ok' );
-						window.location.reload();
+					.then( function ( res ) {
+						var d = res.data || {};
+						if ( ! d.async ) {
+							// Inline fallback — already done.
+							setStatus( autoStatus, 'Done. Reloading…', 'is-ok' );
+							window.location.reload();
+							return;
+						}
+						pollAuto( d.job_id );
 					} )
 					.catch( function ( err ) {
 						autoBtn.disabled = false;
-						var msg = err && err.message;
-						// A blank/opaque error usually means the request was cut off
-						// (host PHP limit or a tunnel's request time limit) before the
-						// model finished — common with slower local models.
-						if ( ! msg || /something went wrong|gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( msg ) ) {
-							msg = 'The request didn’t complete — usually the AI model took too long. If you’re using LM Studio over a tunnel, free tunnels cut off long requests: try a faster/smaller model, load it with more context, or use a cloud provider (Gemini) for the topical map under Settings → AI.';
-						}
-						setStatus( autoStatus, msg, 'is-error' );
+						setStatus( autoStatus, ( err && err.message ) || i18n.error, 'is-error' );
 					} );
 			} );
+
+			// Poll a background topical-map job until it finishes. The work runs
+			// server-side, so the page request can never time out.
+			function pollAuto( jobId ) {
+				var started = Date.now();
+				var maxMs   = 15 * 60 * 1000; // 15 minutes — generous for slow local models.
+				var dots    = 0;
+				( function tick() {
+					if ( Date.now() - started > maxMs ) {
+						autoBtn.disabled = false;
+						setStatus( autoStatus, 'Still working after 15 minutes — the model may be stuck. Check that your AI provider is reachable, try a faster model, or route the topical map to Gemini under Settings → AI.', 'is-error' );
+						return;
+					}
+					request( '/keywords/auto/status?job=' + encodeURIComponent( jobId ), { method: 'GET' } )
+						.then( function ( res ) {
+							var d = res.data || {};
+							if ( d.state === 'done' ) {
+								setStatus( autoStatus, 'Done. Reloading…', 'is-ok' );
+								window.location.reload();
+								return;
+							}
+							if ( d.state === 'error' ) {
+								autoBtn.disabled = false;
+								var msg = d.error || '';
+								if ( ! msg || /gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( msg ) ) {
+									msg = 'The AI model didn’t complete. If you’re using LM Studio over a tunnel, free tunnels cut off long requests — try a faster/smaller model, load it with more context, or route the topical map to Gemini under Settings → AI.';
+								}
+								setStatus( autoStatus, msg, 'is-error' );
+								return;
+							}
+							// Still running — keep the user informed and poll again.
+							dots = ( dots + 1 ) % 4;
+							var secs = Math.round( ( Date.now() - started ) / 1000 );
+							setStatus( autoStatus, 'Building your topical map in the background' + new Array( dots + 1 ).join( '.' ) + ' (' + secs + 's) — you can leave this page open.' );
+							window.setTimeout( tick, 3000 );
+						} )
+						.catch( function () {
+							// A transient poll error (e.g. brief network blip) shouldn't
+							// abort the job — keep polling.
+							window.setTimeout( tick, 4000 );
+						} );
+				} )();
+			}
 		}
 
 		var form = document.getElementById( 'scc-keyword-form' );
