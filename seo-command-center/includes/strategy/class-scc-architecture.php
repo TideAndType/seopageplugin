@@ -65,6 +65,26 @@ class SCC_Architecture {
 					$services[ $service ]['children'][] = $node;
 				}
 			}
+
+			// Subtopics become supporting articles under the same pillar, so they
+			// flow into Site Architecture and the Content Plan.
+			foreach ( (array) ( $c['subtopics'] ?? array() ) as $sub ) {
+				if ( empty( $sub['title'] ) ) {
+					continue;
+				}
+				$sub_exists = ( isset( $sub['status'] ) && 'existing' === $sub['status'] )
+					|| $this->path_exists( $sub['recommended_url'] ?? '', $existing );
+				$services[ $service ]['articles'][] = array(
+					'title'           => $sub['title'],
+					'primary_keyword' => isset( $sub['primary_keyword'] ) ? $sub['primary_keyword'] : $sub['title'],
+					'intent'          => isset( $sub['intent'] ) ? $sub['intent'] : 'informational',
+					'url'             => isset( $sub['recommended_url'] ) ? $sub['recommended_url'] : '',
+					'page_type'       => 'article',
+					'related'         => isset( $sub['content_nodes'] ) ? (array) $sub['content_nodes'] : array(),
+					'rationale'       => '',
+					'exists'          => $sub_exists,
+				);
+			}
 		}
 
 		// Assemble tree.

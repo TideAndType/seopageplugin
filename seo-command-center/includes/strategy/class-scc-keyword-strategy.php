@@ -51,6 +51,11 @@ class SCC_Keyword_Strategy {
 			return array_values( array_slice( $items, 0, 100 ) );
 		};
 
+		$map_type = strtolower( (string) ( $raw['map_type'] ?? 'seo' ) );
+		$map_type = in_array( $map_type, array( 'seo', 'question', 'keyword' ), true ) ? $map_type : 'seo';
+		$depth    = strtolower( (string) ( $raw['depth'] ?? 'standard' ) );
+		$depth    = in_array( $depth, array( 'compact', 'standard', 'deep' ), true ) ? $depth : 'standard';
+
 		return array(
 			'business_name' => SCC_Security::sanitize_text( $raw['business_name'] ?? '' ),
 			'description'   => SCC_Security::sanitize_textarea( $raw['description'] ?? '' ),
@@ -62,6 +67,10 @@ class SCC_Keyword_Strategy {
 			'seed_keywords' => $list( $raw['seed_keywords'] ?? '' ),
 			'existing_pages'=> array_slice( $list( $raw['existing_pages'] ?? '' ), 0, 200 ),
 			'website'       => esc_url_raw( $raw['website'] ?? home_url() ),
+			// Generation controls (map type / language / depth).
+			'map_type'      => $map_type,
+			'language'      => SCC_Security::sanitize_text( $raw['language'] ?? '' ),
+			'depth'         => $depth,
 		);
 	}
 
@@ -153,20 +162,44 @@ class SCC_Keyword_Strategy {
 	 * @return array {system, messages, json}
 	 */
 	protected function build_prompt( array $inputs ) {
-		$system = 'You are a senior SEO strategist. Build a STRUCTURED TOPICAL MAP for a business as a set of '
-			. 'PILLAR topics, each with its own supporting SUBTOPICS (the classic pillar/cluster model). '
-			. 'A pillar is a broad hub page for a service or theme; its subtopics are specific supporting '
-			. 'articles/pages that link up to it. '
+		$map_type = $inputs['map_type'] ?? 'seo';
+		$depth    = $inputs['depth'] ?? 'standard';
+		$language = trim( (string) ( $inputs['language'] ?? '' ) );
+
+		// Depth presets: how many pillars / subtopics / content nodes to aim for,
+		// and a token budget sized to match.
+		$presets = array(
+			'compact'  => array( 'pillars' => '4-6',  'subs' => '3-4', 'nodes' => '2-3', 'tokens' => 3000 ),
+			'standard' => array( 'pillars' => '6-9',  'subs' => '4-6', 'nodes' => '3-4', 'tokens' => 4000 ),
+			'deep'     => array( 'pillars' => '9-14', 'subs' => '5-8', 'nodes' => '4-6', 'tokens' => 5500 ),
+		);
+		$p = isset( $presets[ $depth ] ) ? $presets[ $depth ] : $presets['standard'];
+
+		// Map-type flavor.
+		$type_intro = 'Build a STRUCTURED TOPICAL MAP for a business as a set of PILLAR topics.';
+		if ( 'question' === $map_type ) {
+			$type_intro = 'Build a QUESTION / FAQ TOPICAL MAP: pillars are themes, and subtopics + content nodes are the real questions searchers ask (who/what/why/how/best/vs/cost), grouped by theme.';
+		} elseif ( 'keyword' === $map_type ) {
+			$type_intro = 'Build a KEYWORD-CLUSTER MAP: pillars are head terms, subtopics are tightly-related keyword clusters, and content nodes are long-tail variations grouped by search intent.';
+		}
+
+		$system = 'You are a senior SEO strategist. ' . $type_intro . ' '
+			. 'Use the classic pillar/cluster model with THREE levels: PILLAR -> SUBTOPIC -> CONTENT NODES. '
+			. 'A pillar is a broad hub page; its subtopics are specific supporting articles/pages that link up '
+			. 'to it; each subtopic has a few CONTENT NODES (specific questions/points that page must cover). '
+			. 'Aim for roughly ' . $p['pillars'] . ' pillars, ' . $p['subs'] . ' subtopics per pillar, and '
+			. $p['nodes'] . ' content nodes per subtopic. '
 			. 'For each PILLAR provide: the topic name (service), one primary keyword, 3-6 genuinely distinct '
 			. 'supporting terms, the dominant search intent (informational, commercial, transactional, '
 			. 'navigational, or local), a clean recommended URL slug path, an example SEO meta title under ~60 '
-			. 'characters, a strategic priority ("high", "medium", or "low") reflecting business value and how '
-			. 'foundational the topic is, 2-4 related internal topics, and 3-8 SUBTOPICS. '
-			. 'For each SUBTOPIC provide: title, primary_keyword, intent, a recommended URL slug path (usually '
-			. 'nested under the pillar), and an example meta title. '
+			. 'characters, a strategic priority ("high", "medium", or "low"), 2-4 related internal topics, and '
+			. 'the SUBTOPICS. For each SUBTOPIC provide: title, primary_keyword, intent, a recommended URL slug '
+			. 'path (usually nested under the pillar), an example meta title, and content_nodes (an array of '
+			. 'short specific questions/points to cover). '
 			. 'Only propose location+service pages where they would carry genuinely unique local value — '
 			. 'never propose near-duplicate doorway pages. Do not invent search volume or difficulty numbers; '
 			. 'priority is your strategic judgement, not measured data. '
+			. ( '' !== $language ? ( 'Write ALL topics, keywords, titles and questions in ' . $language . '. ' ) : '' )
 			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, url} is provided. '
 			. 'For EVERY existing page, output one pillar (or subtopic) that REUSES its exact url path verbatim '
 			. 'and sets "status":"existing" — do not invent a new slug for a page that already exists. Then ADD '
@@ -177,8 +210,8 @@ class SCC_Keyword_Strategy {
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
 			. '"intent":str,"recommended_url":str,"meta_title":str,"priority":"high|medium|low","related":[str],'
 			. '"page_type":"pillar|service|location|article","status":"existing|new","rationale":str,'
-			. '"subtopics":[{"title":str,"primary_keyword":str,"intent":str,"recommended_url":str,"meta_title":str}]}],'
-			. '"entities":[str],"notes":str}';
+			. '"subtopics":[{"title":str,"primary_keyword":str,"intent":str,"recommended_url":str,"meta_title":str,'
+			. '"content_nodes":[str]}]}],"entities":[str],"notes":str}';
 
 		$existing = self::existing_site_pages();
 		$inputs['existing_site_pages'] = $existing;
@@ -193,9 +226,9 @@ class SCC_Keyword_Strategy {
 				),
 			),
 			'json'       => true,
-			// Enough headroom for pillars + subtopics. If a model truncates the
-			// tail, the tolerant JSON parser closes and salvages what came through.
-			'max_tokens' => 3500,
+			// Sized to the chosen depth. If a model truncates the tail, the
+			// tolerant JSON parser closes and salvages what came through.
+			'max_tokens' => (int) $p['tokens'],
 			'temperature'=> 0.4,
 		);
 	}
@@ -291,12 +324,14 @@ class SCC_Keyword_Strategy {
 				if ( '' === $title ) {
 					continue;
 				}
+				$nodes = array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $s['content_nodes'] ?? array() ) ) ) );
 				$subtopics[] = array(
 					'title'           => $title,
 					'primary_keyword' => SCC_Security::sanitize_text( $s['primary_keyword'] ?? $title ),
 					'intent'          => in_array( $sintent, $valid_intent, true ) ? $sintent : 'informational',
 					'recommended_url' => $this->clean_slug_path( $s['recommended_url'] ?? '' ),
 					'meta_title'      => SCC_Security::sanitize_text( $s['meta_title'] ?? '' ),
+					'content_nodes'   => array_slice( $nodes, 0, 12 ),
 					'status'          => 'new',
 				);
 			}

@@ -874,8 +874,19 @@ class SCC_REST {
 		// simpler and more transparent than backgrounding — the exact error, if
 		// any, comes straight back to the UI instead of being swallowed by a
 		// worker that some hosts never run.
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
+		// Carry the generation controls (map type / depth / language) through.
+		foreach ( array( 'map_type', 'depth', 'language' ) as $opt ) {
+			if ( isset( $params[ $opt ] ) ) {
+				$inputs[ $opt ] = $params[ $opt ];
+			}
+		}
+
 		$service = new SCC_Keyword_Strategy( $this->ai );
-		$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
+		$result  = $service->generate( $inputs );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

@@ -136,9 +136,16 @@ $brief_button = function ( $node ) {
 								'primary_keyword' => isset( $s['primary_keyword'] ) ? $s['primary_keyword'] : $s['title'],
 								'intent'          => isset( $s['intent'] ) ? $s['intent'] : 'informational',
 								'page_type'       => 'article',
-								'secondary'       => array(),
+								'secondary'       => isset( $s['content_nodes'] ) ? $s['content_nodes'] : array(),
 							) );
 							?>
+							<?php if ( ! empty( $s['content_nodes'] ) ) : ?>
+								<ul class="scc-nodes">
+									<?php foreach ( (array) $s['content_nodes'] as $node ) : ?>
+										<li><?php echo esc_html( $node ); ?></li>
+									<?php endforeach; ?>
+								</ul>
+							<?php endif; ?>
 						</div>
 					<?php endforeach; ?>
 				</div>

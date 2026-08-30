@@ -639,6 +639,18 @@ assert_eq( 'new', $subByUrl['/web-design/portfolio/'], 'subtopic with no real pa
 assert_eq( 2, $recSubs['existing_count'], 'existing count includes pillar + subtopic' );
 assert_eq( 1, $recSubs['new_count'], 'new count includes the gap subtopic' );
 
+// Generation settings sanitize with safe defaults + whitelisting.
+$def = SCC_Keyword_Strategy::sanitize_inputs( array( 'business_name' => 'X' ) );
+assert_eq( 'seo', $def['map_type'], 'map_type defaults to seo' );
+assert_eq( 'standard', $def['depth'], 'depth defaults to standard' );
+$chosen = SCC_Keyword_Strategy::sanitize_inputs( array( 'business_name' => 'X', 'map_type' => 'question', 'depth' => 'deep', 'language' => 'Spanish' ) );
+assert_eq( 'question', $chosen['map_type'], 'valid map_type kept' );
+assert_eq( 'deep', $chosen['depth'], 'valid depth kept' );
+assert_eq( 'Spanish', $chosen['language'], 'language kept' );
+$bad = SCC_Keyword_Strategy::sanitize_inputs( array( 'business_name' => 'X', 'map_type' => 'hacker', 'depth' => 'ludicrous' ) );
+assert_eq( 'seo', $bad['map_type'], 'invalid map_type falls back to seo' );
+assert_eq( 'standard', $bad['depth'], 'invalid depth falls back to standard' );
+
 echo "\n== Background worker auth ==\n";
 if ( ! function_exists( 'wp_generate_password' ) ) {
 	function wp_generate_password( $len = 12, $special = true, $extra = true ) {

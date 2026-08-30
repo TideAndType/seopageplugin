@@ -449,7 +449,9 @@
 				autoBtn.disabled = true;
 				clearMapPanel( 'Building your topical map… the previous suggestions will be replaced when this finishes.' );
 				setStatus( autoStatus, 'Analyzing your site and building the topical map… this can take up to a minute or two with a local model — please wait.' );
-				request( '/keywords/auto', { method: 'POST' } )
+				function optVal( id ) { var el = document.getElementById( id ); return el ? el.value : ''; }
+				var genOpts = { map_type: optVal( 'scc-map-type' ), depth: optVal( 'scc-map-depth' ), language: optVal( 'scc-map-language' ) };
+				request( '/keywords/auto', { method: 'POST', data: genOpts } )
 					.then( function ( res ) {
 						var d = res.data || {};
 						if ( ! d.async ) {
