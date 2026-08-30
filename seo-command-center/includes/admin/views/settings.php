@@ -85,8 +85,11 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 			<tr>
 				<th scope="row"><label for="scc-lmstudio-model"><?php esc_html_e( 'LM Studio model', 'seo-command-center' ); ?></label></th>
 				<td>
-					<input type="text" class="regular-text" id="scc-lmstudio-model" name="lmstudio_model" value="<?php echo esc_attr( $s['lmstudio_model'] ); ?>" placeholder="local-model">
-					<p class="description"><?php esc_html_e( 'The model identifier loaded in LM Studio (copy it from the LM Studio server panel). “local-model” tells LM Studio to use whatever model is currently loaded.', 'seo-command-center' ); ?></p>
+					<input type="text" class="regular-text" id="scc-lmstudio-model" name="lmstudio_model" value="<?php echo esc_attr( $s['lmstudio_model'] ); ?>" placeholder="local-model" list="scc-lmstudio-model-list">
+					<datalist id="scc-lmstudio-model-list"></datalist>
+					<button type="button" class="button" id="scc-lmstudio-detect"><?php esc_html_e( 'Detect models', 'seo-command-center' ); ?></button>
+					<span class="scc-inline-status" id="scc-lmstudio-detect-status"></span>
+					<p class="description"><?php esc_html_e( 'Click “Detect models” to pull the loaded model IDs from your LM Studio server (this also confirms the URL is reachable). “local-model” uses whatever model is currently loaded.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 		</table>

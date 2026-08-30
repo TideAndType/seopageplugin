@@ -88,6 +88,53 @@
 		} );
 	}
 
+	// ---- LM Studio: detect models --------------------------------------
+	function bindLmStudioDetect() {
+		var btn = document.getElementById( 'scc-lmstudio-detect' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-lmstudio-detect-status' );
+		btn.addEventListener( 'click', function () {
+			var baseEl = document.getElementById( 'scc-lmstudio-base' );
+			var base = baseEl ? baseEl.value : '';
+			btn.disabled = true;
+			setStatus( status, 'Contacting LM Studio…' );
+			request( '/lmstudio/models', { method: 'POST', data: { base_url: base } } )
+				.then( function ( res ) {
+					btn.disabled = false;
+					var d = res.data || {};
+					if ( ! d.ok ) {
+						setStatus( status, d.error || 'Could not reach LM Studio.', 'is-error' );
+						return;
+					}
+					var list = document.getElementById( 'scc-lmstudio-model-list' );
+					var modelInput = document.getElementById( 'scc-lmstudio-model' );
+					if ( list ) {
+						list.innerHTML = '';
+						( d.models || [] ).forEach( function ( m ) {
+							var opt = document.createElement( 'option' );
+							opt.value = m;
+							list.appendChild( opt );
+						} );
+					}
+					if ( ! d.models || ! d.models.length ) {
+						setStatus( status, 'Connected, but no model is loaded in LM Studio. Load one and retry.', 'is-error' );
+						return;
+					}
+					// Auto-fill the first model if the field is empty or the default.
+					if ( modelInput && ( ! modelInput.value || modelInput.value === 'local-model' ) ) {
+						modelInput.value = d.models[0];
+					}
+					setStatus( status, 'Connected — ' + d.models.length + ' model(s): ' + d.models.join( ', ' ) + '. Pick one and Save.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	// ---- Connections (API keys) ----------------------------------------
 	function bindConnections() {
 		var form = document.getElementById( 'scc-connections-form' );
@@ -1070,6 +1117,7 @@
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
+		bindLmStudioDetect();
 		bindConnections();
 		bindKeywordStrategy();
 		bindSeedPlan();

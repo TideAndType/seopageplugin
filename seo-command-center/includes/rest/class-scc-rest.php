@@ -90,6 +90,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/lmstudio/models',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'lmstudio_models' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/analyze',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -723,6 +733,24 @@ class SCC_REST {
 				'latency_ms' => $latency,
 			)
 		);
+	}
+
+	/**
+	 * POST /lmstudio/models — detect the models a local LM Studio server exposes.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function lmstudio_models( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : array();
+		$base   = isset( $params['base_url'] ) ? esc_url_raw( trim( (string) $params['base_url'] ) ) : '';
+
+		$provider = $this->ai->get_provider( 'lmstudio' );
+		if ( ! $provider ) {
+			return $this->fail( 'no_provider', __( 'LM Studio provider unavailable.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( $provider->discover_models( $base ) );
 	}
 
 	/**

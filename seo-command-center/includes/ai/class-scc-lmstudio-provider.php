@@ -77,6 +77,60 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	}
 
 	/**
+	 * Query LM Studio's /v1/models endpoint to list the loaded model ids.
+	 * Doubles as a reachability check for the configured (or given) server URL.
+	 *
+	 * @param string $base_override Optional base URL to test without saving.
+	 * @return array {ok:bool, models:string[], base:string, error:string}
+	 */
+	public function discover_models( $base_override = '' ) {
+		$base = '' !== trim( (string) $base_override ) ? untrailingslashit( trim( (string) $base_override ) ) : $this->base_url();
+
+		$headers = array();
+		$key     = $this->get_key();
+		if ( '' !== $key ) {
+			$headers['authorization'] = 'Bearer ' . $key;
+		}
+
+		$response = wp_remote_get(
+			$base . '/models',
+			array(
+				'timeout'   => 20,
+				'headers'   => $headers,
+				'sslverify' => ( 0 === strpos( $base, 'https://' ) ),
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			return array(
+				'ok'     => false,
+				'models' => array(),
+				'base'   => $base,
+				'error'  => sprintf(
+					/* translators: %s: error */
+					__( 'Could not reach LM Studio at %1$s (%2$s). Make sure the server is running and the URL is reachable from your WordPress host (a hosted site cannot reach localhost — use a tunnel).', 'seo-command-center' ),
+					$base,
+					$response->get_error_message()
+				),
+			);
+		}
+
+		$code = (int) wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $code ) {
+			return array( 'ok' => false, 'models' => array(), 'base' => $base, 'error' => sprintf( 'HTTP %d from %s', $code, $base . '/models' ) );
+		}
+
+		$data   = json_decode( wp_remote_retrieve_body( $response ), true );
+		$models = array();
+		foreach ( (array) ( $data['data'] ?? array() ) as $m ) {
+			if ( ! empty( $m['id'] ) ) {
+				$models[] = SCC_Security::sanitize_text( $m['id'] );
+			}
+		}
+		return array( 'ok' => true, 'models' => $models, 'base' => $base, 'error' => '' );
+	}
+
+	/**
 	 * @inheritDoc
 	 */
 	public function estimate_cost( $input_tokens, $output_tokens, $model ) {
