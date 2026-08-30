@@ -861,17 +861,42 @@ class SCC_REST {
 		// Run the generation as a background job so a slow model (or a tunnel
 		// with a request time limit) can never time out the page request. The
 		// browser polls /keywords/auto/status until it finishes.
-		if ( $this->jobs ) {
+		// Best path (PHP-FPM, e.g. IONOS): flush this response to the browser,
+		// then keep running THIS request to do the work. It executes in the same
+		// context as the admin request — which can reach a local/tunnelled LM
+		// Studio (that's why "Detect models" works) — and needs no working
+		// loopback or WP-Cron, which many hosts block. That was why the previous
+		// background approach never actually queried LM Studio.
+		if ( $this->jobs && function_exists( 'fastcgi_finish_request' ) ) {
 			$before = SCC_Keyword_Strategy::latest();
 			$res    = $this->jobs->enqueue_keyword_auto();
+			$job_id = (int) $res['job_id'];
+
+			$jobs = $this->jobs;
+			add_action( 'shutdown', function () use ( $jobs, $job_id ) {
+				if ( function_exists( 'session_write_close' ) ) {
+					@session_write_close(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				@fastcgi_finish_request(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				if ( function_exists( 'set_time_limit' ) ) {
+					@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				if ( function_exists( 'ignore_user_abort' ) ) {
+					@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+				$jobs->process_job_now( $job_id );
+			}, 1 );
+
 			return $this->ok( array(
 				'async'         => true,
-				'job_id'        => $res['job_id'],
+				'job_id'        => $job_id,
 				'prev_strategy' => $before ? (int) $before['id'] : 0,
 			) );
 		}
 
-		// Fallback: no job queue available — run inline (older behavior).
+		// Fallback (no fastcgi_finish_request): run inline in this request. Still
+		// reaches LM Studio directly; the execution limit is lifted in the AI
+		// manager. Slower to return, but reliable where loopback/cron are blocked.
 		$service = new SCC_Keyword_Strategy( $this->ai );
 		$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
 		if ( is_wp_error( $result ) ) {

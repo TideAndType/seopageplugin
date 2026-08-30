@@ -293,6 +293,21 @@ class SCC_Jobs {
 	}
 
 	/**
+	 * Process one specific job immediately (used after the HTTP response has
+	 * been flushed to the browser). The atomic claim inside process() makes this
+	 * safe to race with the loopback worker and WP-Cron.
+	 *
+	 * @param int $job_id Job id.
+	 * @return void
+	 */
+	public function process_job_now( $job_id ) {
+		$row = SCC_DB::get( 'jobs', (int) $job_id );
+		if ( $row && 'queued' === $row['status'] ) {
+			$this->process( $row );
+		}
+	}
+
+	/**
 	 * Fetch one job row (decoded status fields) for polling.
 	 *
 	 * @param int $id Job id.
