@@ -77,13 +77,27 @@ $field = function ( $field, $label, $hints ) {
 				</td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="scc-lmstudio-model"><?php esc_html_e( 'Model', 'seo-command-center' ); ?></label></th>
+				<th scope="row"><label for="scc-lmstudio-model-select"><?php esc_html_e( 'Model', 'seo-command-center' ); ?></label></th>
 				<td>
-					<input type="text" class="regular-text" id="scc-lmstudio-model" list="scc-lmstudio-model-list" value="<?php echo esc_attr( isset( $data['lmstudio_model'] ) ? $data['lmstudio_model'] : '' ); ?>" placeholder="local-model">
-					<datalist id="scc-lmstudio-model-list"></datalist>
+					<?php $saved_model = isset( $data['lmstudio_model'] ) ? (string) $data['lmstudio_model'] : ''; ?>
 					<button type="button" class="button" id="scc-lmstudio-detect"><?php esc_html_e( 'Detect models', 'seo-command-center' ); ?></button>
+					<select id="scc-lmstudio-model-select" class="regular-text" style="min-width:240px;">
+						<?php if ( '' !== $saved_model ) : ?>
+							<option value="<?php echo esc_attr( $saved_model ); ?>" selected><?php echo esc_html( $saved_model ); ?></option>
+						<?php else : ?>
+							<option value=""><?php esc_html_e( '— click “Detect models” —', 'seo-command-center' ); ?></option>
+						<?php endif; ?>
+					</select>
 					<span class="scc-inline-status" id="scc-lmstudio-detect-status"></span>
-					<p class="description"><?php esc_html_e( 'Click Detect models after entering the server URL to load the model currently running in LM Studio.', 'seo-command-center' ); ?></p>
+					<!-- Actual value saved with the form; kept in sync from the dropdown or the custom field. -->
+					<input type="hidden" id="scc-lmstudio-model" value="<?php echo esc_attr( $saved_model ); ?>">
+					<datalist id="scc-lmstudio-model-list"></datalist>
+					<p class="description">
+						<?php esc_html_e( 'Enter the Server URL above, then click “Detect models” to list the models loaded in LM Studio and pick one.', 'seo-command-center' ); ?><br>
+						<label><?php esc_html_e( 'Or type a model id:', 'seo-command-center' ); ?>
+							<input type="text" id="scc-lmstudio-model-custom" class="regular-text" value="" placeholder="<?php echo esc_attr( '' !== $saved_model ? $saved_model : 'e.g. google/gemma-4-e4b' ); ?>">
+						</label>
+					</p>
 				</td>
 			</tr>
 			<?php

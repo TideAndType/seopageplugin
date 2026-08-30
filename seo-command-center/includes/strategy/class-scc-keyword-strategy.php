@@ -211,14 +211,25 @@ class SCC_Keyword_Strategy {
 			return $response->error;
 		}
 
-		$map = $response->json();
-		if ( ! is_array( $map ) || empty( $map['clusters'] ) ) {
-			SCC_Logger::error( 'keyword-strategy', 'AI returned unparseable topical map' );
-			return new WP_Error( 'scc_bad_ai_output', __( 'The AI response could not be parsed into a topical map. Try again.', 'seo-command-center' ), array( 'status' => 502 ) );
+		$parsed     = $response->json();
+		$ai_usable  = is_array( $parsed ) && ! empty( $parsed['clusters'] );
+		$map        = $ai_usable ? $this->normalize_map( $parsed ) : array( 'clusters' => array(), 'entities' => array(), 'notes' => '' );
+
+		if ( ! $ai_usable ) {
+			// The model didn't return a usable cluster list (common with very
+			// small local models). Rather than failing, still build the map from
+			// the site's real pages so the user always gets their architecture.
+			SCC_Logger::error( 'keyword-strategy', 'AI returned no usable clusters; falling back to site-mirror map' );
+			$map['notes'] = __( 'The AI model did not return topic suggestions this time, so this map shows your existing pages only. Try again, or use a larger model for richer recommendations.', 'seo-command-center' );
 		}
 
-		$map = $this->normalize_map( $map );
 		$map = $this->reconcile_with_site( $map );
+
+		// If there were neither AI suggestions nor existing pages, there is
+		// genuinely nothing to show.
+		if ( empty( $map['clusters'] ) ) {
+			return new WP_Error( 'scc_bad_ai_output', __( 'The AI response could not be parsed and no existing pages were found to map. Try again, or add a business name/service above.', 'seo-command-center' ), array( 'status' => 502 ) );
+		}
 
 		// Record which provider/model actually produced this map, so it's clear
 		// in the UI what generated it (and easy to confirm LM Studio was used).

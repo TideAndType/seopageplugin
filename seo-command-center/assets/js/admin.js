@@ -147,6 +147,28 @@
 			return;
 		}
 		var status = document.getElementById( 'scc-lmstudio-detect-status' );
+
+		// Keep the hidden saved value in sync with the dropdown / custom field
+		// (Connections page). bindConnections saves #scc-lmstudio-model.
+		var modelHidden = document.getElementById( 'scc-lmstudio-model' );
+		var modelSelectEl = document.getElementById( 'scc-lmstudio-model-select' );
+		var modelCustomEl = document.getElementById( 'scc-lmstudio-model-custom' );
+		if ( modelSelectEl && modelHidden ) {
+			modelSelectEl.addEventListener( 'change', function () {
+				modelHidden.value = modelSelectEl.value;
+				if ( modelCustomEl ) { modelCustomEl.value = ''; }
+			} );
+		}
+		if ( modelCustomEl && modelHidden ) {
+			modelCustomEl.addEventListener( 'input', function () {
+				if ( modelCustomEl.value.trim() ) {
+					modelHidden.value = modelCustomEl.value.trim();
+				} else if ( modelSelectEl ) {
+					modelHidden.value = modelSelectEl.value;
+				}
+			} );
+		}
+
 		btn.addEventListener( 'click', function () {
 			var baseEl = document.getElementById( 'scc-lmstudio-base' );
 			var base = baseEl ? baseEl.value : '';
@@ -161,7 +183,8 @@
 						return;
 					}
 					var list = document.getElementById( 'scc-lmstudio-model-list' );
-					var modelInput = document.getElementById( 'scc-lmstudio-model' );
+					var modelInput = document.getElementById( 'scc-lmstudio-model' ); // hidden (Connections) or text (Settings)
+					var modelSelect = document.getElementById( 'scc-lmstudio-model-select' ); // real dropdown (Connections)
 					if ( list ) {
 						list.innerHTML = '';
 						( d.models || [] ).forEach( function ( m ) {
@@ -171,11 +194,27 @@
 						} );
 					}
 					if ( ! d.models || ! d.models.length ) {
-						setStatus( status, 'Connected, but no model is loaded in LM Studio. Load one and retry.', 'is-error' );
+						setStatus( status, 'Connected, but no model is loaded in LM Studio. Load one in LM Studio and click Detect again.', 'is-error' );
 						return;
 					}
-					// Auto-fill the first model if the field is empty or the default.
-					if ( modelInput && ( ! modelInput.value || modelInput.value === 'local-model' ) ) {
+					var prev = modelInput ? modelInput.value : '';
+					// Populate the real dropdown (Connections page).
+					if ( modelSelect ) {
+						modelSelect.innerHTML = '';
+						d.models.forEach( function ( m ) {
+							var opt = document.createElement( 'option' );
+							opt.value = m;
+							opt.textContent = m;
+							if ( m === prev ) { opt.selected = true; }
+							modelSelect.appendChild( opt );
+						} );
+						// If the saved value isn't among the detected models, select the first.
+						if ( d.models.indexOf( prev ) === -1 ) {
+							modelSelect.value = d.models[0];
+						}
+						if ( modelInput ) { modelInput.value = modelSelect.value; }
+					} else if ( modelInput && ( ! modelInput.value || modelInput.value === 'local-model' ) ) {
+						// Settings → AI text field: auto-fill the first model.
 						modelInput.value = d.models[0];
 					}
 					// Feed detected models into the per-task routing dropdowns too.
@@ -409,7 +448,7 @@
 			autoBtn.addEventListener( 'click', function () {
 				autoBtn.disabled = true;
 				clearMapPanel( 'Building your topical map… the previous suggestions will be replaced when this finishes.' );
-				setStatus( autoStatus, 'Analyzing your site and building the topical map… this runs in the background and can take a few minutes for local models. You can leave this page open.' );
+				setStatus( autoStatus, 'Analyzing your site and building the topical map… this can take up to a minute or two with a local model — please wait.' );
 				request( '/keywords/auto', { method: 'POST' } )
 					.then( function ( res ) {
 						var d = res.data || {};

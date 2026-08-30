@@ -858,46 +858,19 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function auto_keywords( WP_REST_Request $request ) {
-		// Run the generation as a background job so a slow model (or a tunnel
-		// with a request time limit) can never time out the page request. The
-		// browser polls /keywords/auto/status until it finishes.
-		// Reliable path: enqueue the job, send the JSON response and CLOSE the
-		// browser connection ourselves, then keep running THIS request to do the
-		// generation. It runs in the same context as the admin request — which
-		// can reach a local/tunnelled LM Studio (that's why "Detect models"
-		// works) — and needs no working loopback or WP-Cron (which many hosts,
-		// including IONOS, block). Works on both PHP-FPM and mod_php.
-		if ( $this->jobs ) {
-			$before = SCC_Keyword_Strategy::latest();
-			$res    = $this->jobs->enqueue_keyword_auto();
-			$job_id = (int) $res['job_id'];
-
-			if ( ! headers_sent() ) {
-				$this->respond_and_continue(
-					array(
-						'async'         => true,
-						'job_id'        => $job_id,
-						'prev_strategy' => $before ? (int) $before['id'] : 0,
-					),
-					function () use ( $job_id ) {
-						$this->jobs->process_job_now( $job_id );
-					}
-				);
-				// respond_and_continue() exits; execution never returns here.
-			}
-
-			// Headers already sent (unusual) — fall back to the loopback/cron
-			// worker and let the browser poll.
-			return $this->ok( array( 'async' => true, 'job_id' => $job_id ) );
-		}
-
-		// No job queue at all — run inline (older behavior).
+		// Run synchronously and return the real result (or the real error). The
+		// AI manager lifts PHP's execution limit; a reachable, reasonably fast
+		// provider (like a local LM Studio) completes well within limits. This is
+		// simpler and more transparent than backgrounding — the exact error, if
+		// any, comes straight back to the UI instead of being swallowed by a
+		// worker that some hosts never run.
 		$service = new SCC_Keyword_Strategy( $this->ai );
 		$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 		$result['inferred'] = true;
+		$result['async']    = false;
 		return $this->ok( $result );
 	}
 
