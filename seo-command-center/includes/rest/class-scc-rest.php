@@ -881,30 +881,25 @@ class SCC_REST {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
 
-		$opts = array();
+		// Run synchronously: this reaches LM Studio directly (proven to work on
+		// this host) and returns the real result — or the real error — straight to
+		// the UI. The AI manager lifts PHP's execution limit. Backgrounding was
+		// tried and this host blocks loopback, WP-Cron, and fastcgi_finish_request,
+		// so the direct synchronous call is the reliable path.
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
 		foreach ( array( 'map_type', 'depth', 'language' ) as $opt ) {
 			if ( isset( $params[ $opt ] ) ) {
-				$opts[ $opt ] = $params[ $opt ];
+				$inputs[ $opt ] = $params[ $opt ];
 			}
 		}
 
-		// Enqueue the job and return IMMEDIATELY with its id. The browser then
-		// fires /keywords/auto/process (which it does not wait on) to run the
-		// generation, and polls /keywords/auto/status for progress. This works on
-		// hosts that block loopback + WP-Cron and lack fastcgi_finish_request
-		// (e.g. some IONOS plans) — the generation runs inside the process
-		// request with ignore_user_abort, so it finishes even if that request's
-		// connection is dropped by a gateway timeout.
-		if ( $this->jobs ) {
-			$res    = $this->jobs->enqueue_keyword_auto( $opts );
-			return $this->ok( array( 'async' => true, 'job_id' => (int) $res['job_id'] ) );
-		}
-
-		// No job queue at all — run inline.
-		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
-		foreach ( $opts as $k => $v ) {
-			$inputs[ $k ] = $v;
-		}
 		$service = new SCC_Keyword_Strategy( $this->ai );
 		$result  = $service->generate( $inputs );
 		if ( is_wp_error( $result ) ) {

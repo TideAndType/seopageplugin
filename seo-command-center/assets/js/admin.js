@@ -470,7 +470,7 @@
 						autoBtn.disabled = false;
 						var msg = err && err.message;
 						if ( ! msg || /something went wrong|gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( msg ) ) {
-							msg = 'Couldn’t start the build. First confirm your AI provider works: go to API Connections and click “Test LM Studio” (or Test Gemini). If that fails, fix the server URL/tunnel there. If it passes, try again, or route the topical map to Gemini under Settings → AI.';
+							msg = 'The request was cut off before the map finished — the model usually took longer than your host allows for one request. The map may have finished and saved anyway: reload this page in a minute to check. Otherwise pick a lower “Depth” (Compact) and try again.';
 						}
 						setStatus( autoStatus, msg, 'is-error' );
 					} );

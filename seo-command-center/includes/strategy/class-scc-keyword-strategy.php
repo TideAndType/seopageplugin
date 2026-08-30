@@ -168,10 +168,14 @@ class SCC_Keyword_Strategy {
 
 		// Depth presets: how many pillars / subtopics / content nodes to aim for,
 		// and a token budget sized to match.
+		// Token budgets are kept modest so a synchronous generation finishes within
+		// a typical hosting request window (some hosts cap requests at ~60-120s).
+		// The tolerant parser salvages any truncated tail, so a smaller budget
+		// degrades gracefully rather than failing.
 		$presets = array(
-			'compact'  => array( 'pillars' => '4-6',  'subs' => '3-4', 'nodes' => '2-3', 'tokens' => 3000 ),
-			'standard' => array( 'pillars' => '6-9',  'subs' => '4-6', 'nodes' => '3-4', 'tokens' => 4000 ),
-			'deep'     => array( 'pillars' => '9-14', 'subs' => '5-8', 'nodes' => '4-6', 'tokens' => 5500 ),
+			'compact'  => array( 'pillars' => '4-5', 'subs' => '2-3', 'nodes' => '2-3', 'tokens' => 1800 ),
+			'standard' => array( 'pillars' => '5-7', 'subs' => '3-4', 'nodes' => '2-3', 'tokens' => 2600 ),
+			'deep'     => array( 'pillars' => '7-10', 'subs' => '4-6', 'nodes' => '3-4', 'tokens' => 3600 ),
 		);
 		$p = isset( $presets[ $depth ] ) ? $presets[ $depth ] : $presets['standard'];
 
