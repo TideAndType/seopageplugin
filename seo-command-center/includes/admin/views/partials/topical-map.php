@@ -40,6 +40,34 @@ if ( '' !== $gen_by ) :
 	<p class="scc-note"><?php echo esc_html( $map['notes'] ); ?></p>
 <?php endif; ?>
 
+<?php if ( ! empty( $map['gsc_connected'] ) ) : ?>
+	<p class="scc-note"><strong><?php esc_html_e( 'Grounded in Google Search Console:', 'seo-command-center' ); ?></strong>
+		<?php esc_html_e( 'suggestions below use your real search queries and impressions.', 'seo-command-center' ); ?></p>
+	<?php if ( ! empty( $map['gsc_quick_wins'] ) ) : ?>
+		<details class="scc-gsc-wins" open>
+			<summary><strong><?php esc_html_e( 'Search Console quick wins', 'seo-command-center' ); ?></strong> — <?php esc_html_e( 'queries you already rank on page 1-2 for (real data). Great candidates for a dedicated page.', 'seo-command-center' ); ?></summary>
+			<table class="widefat striped scc-gsc-table">
+				<thead><tr>
+					<th><?php esc_html_e( 'Query', 'seo-command-center' ); ?></th>
+					<th><?php esc_html_e( 'Impressions', 'seo-command-center' ); ?></th>
+					<th><?php esc_html_e( 'Clicks', 'seo-command-center' ); ?></th>
+					<th><?php esc_html_e( 'Avg. position', 'seo-command-center' ); ?></th>
+				</tr></thead>
+				<tbody>
+				<?php foreach ( (array) $map['gsc_quick_wins'] as $w ) : ?>
+					<tr>
+						<td><?php echo esc_html( $w['query'] ?? '' ); ?></td>
+						<td><?php echo esc_html( number_format_i18n( (int) ( $w['impressions'] ?? 0 ) ) ); ?></td>
+						<td><?php echo esc_html( number_format_i18n( (int) ( $w['clicks'] ?? 0 ) ) ); ?></td>
+						<td><?php echo esc_html( $w['position'] ?? '' ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+		</details>
+	<?php endif; ?>
+<?php endif; ?>
+
 <?php
 /**
  * Render a "Generate brief" button + output container for a topic node.

@@ -114,6 +114,52 @@ class SCC_Keyword_Strategy {
 	}
 
 	/**
+	 * Real search-demand signals from Google Search Console (when connected):
+	 * the site's top queries by impressions, plus "quick win" queries where the
+	 * site already ranks on page 1-2 (positions 4-20) — strong candidates for
+	 * dedicated pages. These are MEASURED numbers, so they may be shown as-is.
+	 *
+	 * @return array {connected:bool, top_queries:array, quick_wins:array}
+	 */
+	public static function gsc_signals() {
+		$out = array( 'connected' => false, 'top_queries' => array(), 'quick_wins' => array() );
+		if ( ! class_exists( 'SCC_GSC' ) || ! SCC_GSC::is_connected() ) {
+			return $out;
+		}
+		$rows = SCC_GSC::query( '', array( 'query' ), 90, 500 );
+		if ( is_wp_error( $rows ) || empty( $rows ) ) {
+			return $out;
+		}
+		$out['connected'] = true;
+
+		$queries = array();
+		foreach ( $rows as $row ) {
+			$q = SCC_Security::sanitize_text( $row['keys'][0] ?? '' );
+			if ( '' === $q ) {
+				continue;
+			}
+			$queries[] = array(
+				'query'       => $q,
+				'impressions' => (int) ( $row['impressions'] ?? 0 ),
+				'clicks'      => (int) ( $row['clicks'] ?? 0 ),
+				'position'    => round( (float) ( $row['position'] ?? 0 ), 1 ),
+			);
+		}
+
+		// Top queries by impressions (the demand the site already sees).
+		usort( $queries, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
+		$out['top_queries'] = array_slice( $queries, 0, 40 );
+
+		// Quick wins: real impressions and ranking just off the top.
+		$wins = array_filter( $queries, function ( $q ) {
+			return $q['impressions'] >= 20 && $q['position'] >= 4 && $q['position'] <= 20;
+		} );
+		$out['quick_wins'] = array_slice( array_values( $wins ), 0, 30 );
+
+		return $out;
+	}
+
+	/**
 	 * The site's real published pages/posts as {title, path} pairs, so the
 	 * topical map can be anchored to the actual URLs the site already has.
 	 *
@@ -210,6 +256,11 @@ class SCC_Keyword_Strategy {
 			. 'pillars/subtopics with "status":"new" for genuine gaps. Infer the business\'s real services, '
 			. 'products and locations from the existing page titles. Never propose a near-duplicate of a page '
 			. 'that already exists. '
+			. 'USE REAL SEARCH DEMAND. If "gsc_top_queries" (real Google Search Console queries with impressions, '
+			. 'clicks and average position) and "gsc_quick_wins" (queries already ranking on page 1-2 without a '
+			. 'dedicated page) are provided, ground your keywords and NEW suggestions in them: add new '
+			. 'pillars/subtopics targeting the highest-impression queries the site has no page for, and mark '
+			. 'quick-win topics "high" priority. Prefer the real query phrasing for primary keywords where natural. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
 			. '"intent":str,"recommended_url":str,"meta_title":str,"priority":"high|medium|low","related":[str],'
@@ -219,6 +270,15 @@ class SCC_Keyword_Strategy {
 
 		$existing = self::existing_site_pages();
 		$inputs['existing_site_pages'] = $existing;
+
+		// Real Search Console demand, if the caller supplied it (see generate()).
+		if ( ! empty( $inputs['gsc_top_queries'] ) ) {
+			$inputs['gsc_top_queries'] = array_slice( (array) $inputs['gsc_top_queries'], 0, 40 );
+		}
+		if ( ! empty( $inputs['gsc_quick_wins'] ) ) {
+			$inputs['gsc_quick_wins'] = array_slice( (array) $inputs['gsc_quick_wins'], 0, 30 );
+		}
+
 		$payload  = wp_json_encode( $inputs );
 
 		return array(
@@ -250,6 +310,15 @@ class SCC_Keyword_Strategy {
 			return new WP_Error( 'scc_missing_inputs', __( 'Enter at least a business name, a service, or a seed keyword — or use “Build from my site”.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 
+		// Pull real Search Console demand (when connected) to ground suggestions.
+		$gsc = self::gsc_signals();
+		if ( ! empty( $gsc['top_queries'] ) ) {
+			$inputs['gsc_top_queries'] = $gsc['top_queries'];
+		}
+		if ( ! empty( $gsc['quick_wins'] ) ) {
+			$inputs['gsc_quick_wins'] = $gsc['quick_wins'];
+		}
+
 		$response = $this->ai->complete( $this->build_prompt( $inputs ), 'keyword-strategy' );
 		if ( $response->is_error() ) {
 			return $response->error;
@@ -279,6 +348,11 @@ class SCC_Keyword_Strategy {
 		// in the UI what generated it (and easy to confirm LM Studio was used).
 		$map['generated_by']    = isset( $response->provider ) ? (string) $response->provider : '';
 		$map['generated_model'] = isset( $response->model ) ? (string) $response->model : '';
+
+		// Attach the real Search Console quick-win opportunities (measured data)
+		// so the map can surface them alongside the AI suggestions.
+		$map['gsc_connected']  = ! empty( $gsc['connected'] );
+		$map['gsc_quick_wins'] = isset( $gsc['quick_wins'] ) ? $gsc['quick_wins'] : array();
 
 		$strategy_id = SCC_DB::insert(
 			'keyword_strategies',
