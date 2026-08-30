@@ -861,42 +861,37 @@ class SCC_REST {
 		// Run the generation as a background job so a slow model (or a tunnel
 		// with a request time limit) can never time out the page request. The
 		// browser polls /keywords/auto/status until it finishes.
-		// Best path (PHP-FPM, e.g. IONOS): flush this response to the browser,
-		// then keep running THIS request to do the work. It executes in the same
-		// context as the admin request — which can reach a local/tunnelled LM
-		// Studio (that's why "Detect models" works) — and needs no working
-		// loopback or WP-Cron, which many hosts block. That was why the previous
-		// background approach never actually queried LM Studio.
-		if ( $this->jobs && function_exists( 'fastcgi_finish_request' ) ) {
+		// Reliable path: enqueue the job, send the JSON response and CLOSE the
+		// browser connection ourselves, then keep running THIS request to do the
+		// generation. It runs in the same context as the admin request — which
+		// can reach a local/tunnelled LM Studio (that's why "Detect models"
+		// works) — and needs no working loopback or WP-Cron (which many hosts,
+		// including IONOS, block). Works on both PHP-FPM and mod_php.
+		if ( $this->jobs ) {
 			$before = SCC_Keyword_Strategy::latest();
 			$res    = $this->jobs->enqueue_keyword_auto();
 			$job_id = (int) $res['job_id'];
 
-			$jobs = $this->jobs;
-			add_action( 'shutdown', function () use ( $jobs, $job_id ) {
-				if ( function_exists( 'session_write_close' ) ) {
-					@session_write_close(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				@fastcgi_finish_request(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				if ( function_exists( 'set_time_limit' ) ) {
-					@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				if ( function_exists( 'ignore_user_abort' ) ) {
-					@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				$jobs->process_job_now( $job_id );
-			}, 1 );
+			if ( ! headers_sent() ) {
+				$this->respond_and_continue(
+					array(
+						'async'         => true,
+						'job_id'        => $job_id,
+						'prev_strategy' => $before ? (int) $before['id'] : 0,
+					),
+					function () use ( $job_id ) {
+						$this->jobs->process_job_now( $job_id );
+					}
+				);
+				// respond_and_continue() exits; execution never returns here.
+			}
 
-			return $this->ok( array(
-				'async'         => true,
-				'job_id'        => $job_id,
-				'prev_strategy' => $before ? (int) $before['id'] : 0,
-			) );
+			// Headers already sent (unusual) — fall back to the loopback/cron
+			// worker and let the browser poll.
+			return $this->ok( array( 'async' => true, 'job_id' => $job_id ) );
 		}
 
-		// Fallback (no fastcgi_finish_request): run inline in this request. Still
-		// reaches LM Studio directly; the execution limit is lifted in the AI
-		// manager. Slower to return, but reliable where loopback/cron are blocked.
+		// No job queue at all — run inline (older behavior).
 		$service = new SCC_Keyword_Strategy( $this->ai );
 		$result  = $service->generate( SCC_Keyword_Strategy::infer_inputs_from_site() );
 		if ( is_wp_error( $result ) ) {
@@ -904,6 +899,59 @@ class SCC_REST {
 		}
 		$result['inferred'] = true;
 		return $this->ok( $result );
+	}
+
+	/**
+	 * Send a JSON success body, close the client connection, then run $work in
+	 * the background of the same PHP process. Ends the request with exit().
+	 *
+	 * @param array    $data Response data (wrapped as {ok:true,data:...}).
+	 * @param callable $work Work to run after the connection is closed.
+	 * @return void
+	 */
+	protected function respond_and_continue( array $data, $work ) {
+		$body = wp_json_encode( array( 'ok' => true, 'data' => $data ) );
+
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		// Discard any buffering that would otherwise hold our body (and make the
+		// Content-Length wrong), so the browser receives it immediately.
+		while ( ob_get_level() > 0 ) {
+			@ob_end_clean(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		if ( ! headers_sent() ) {
+			status_header( 200 );
+			header( 'Content-Type: application/json; charset=' . get_option( 'blog_charset' ) );
+			header( 'Content-Length: ' . strlen( $body ) );
+			header( 'Connection: close' );
+		}
+
+		echo $body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON body.
+
+		// Flush to the client and, where supported, detach so we can keep working.
+		if ( function_exists( 'session_write_close' ) ) {
+			@session_write_close(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'fastcgi_finish_request' ) ) {
+			@fastcgi_finish_request(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		} else {
+			@flush(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		try {
+			call_user_func( $work );
+		} catch ( \Throwable $e ) {
+			SCC_Logger::error( 'rest', 'Background work failed: ' . $e->getMessage() );
+		}
+
+		exit;
 	}
 
 	/**
