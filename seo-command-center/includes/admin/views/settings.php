@@ -94,6 +94,31 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 			</tr>
 		</table>
 
+		<h2><?php esc_html_e( 'AI model per task', 'seo-command-center' ); ?></h2>
+		<p class="description"><?php esc_html_e( 'Optionally use a different provider/model for each AI task. Leave as “Use primary provider” to follow the setting above. (Site Analysis and the SEO Audit are rule-based and don’t use AI, so they aren’t listed here.)', 'seo-command-center' ); ?></p>
+		<table class="form-table" role="presentation" id="scc-route-table">
+			<?php foreach ( SCC_AI_Manager::routable_operations() as $key => $label ) :
+				$sel_provider = isset( $s[ "route_{$key}_provider" ] ) ? $s[ "route_{$key}_provider" ] : '';
+				$sel_model    = isset( $s[ "route_{$key}_model" ] ) ? $s[ "route_{$key}_model" ] : '';
+				?>
+				<tr>
+					<th scope="row"><?php echo esc_html( $label ); ?></th>
+					<td>
+						<select class="scc-route-provider" name="route_<?php echo esc_attr( $key ); ?>_provider" data-key="<?php echo esc_attr( $key ); ?>">
+							<option value="" <?php selected( $sel_provider, '' ); ?>><?php esc_html_e( 'Use primary provider', 'seo-command-center' ); ?></option>
+							<option value="claude" <?php selected( $sel_provider, 'claude' ); ?>>Anthropic Claude</option>
+							<option value="openai" <?php selected( $sel_provider, 'openai' ); ?>>OpenAI</option>
+							<option value="gemini" <?php selected( $sel_provider, 'gemini' ); ?>>Google Gemini</option>
+							<option value="lmstudio" <?php selected( $sel_provider, 'lmstudio' ); ?>>LM Studio (local)</option>
+						</select>
+						<select class="scc-route-model" name="route_<?php echo esc_attr( $key ); ?>_model" data-key="<?php echo esc_attr( $key ); ?>" data-selected="<?php echo esc_attr( $sel_model ); ?>">
+							<option value=""><?php esc_html_e( 'Default model', 'seo-command-center' ); ?></option>
+						</select>
+					</td>
+				</tr>
+			<?php endforeach; ?>
+		</table>
+
 		<h2><?php esc_html_e( 'SEO defaults', 'seo-command-center' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>

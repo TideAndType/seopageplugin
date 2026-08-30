@@ -65,6 +65,15 @@ class SCC_Activator {
 			'gemini_model'          => 'gemini-flash-latest',
 			'lmstudio_model'        => 'local-model',
 			'lmstudio_base_url'     => 'http://localhost:1234/v1',
+			// Per-operation AI routing (empty = use the primary provider/model).
+			'route_keyword_strategy_provider'   => '',
+			'route_keyword_strategy_model'      => '',
+			'route_content_generation_provider' => '',
+			'route_content_generation_model'    => '',
+			'route_content_brief_provider'      => '',
+			'route_content_brief_model'         => '',
+			'route_meta_optimization_provider'  => '',
+			'route_meta_optimization_model'     => '',
 			// SEO.
 			'default_word_count'    => 1200,
 			'max_internal_links'    => 8,

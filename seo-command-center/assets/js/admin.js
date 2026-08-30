@@ -88,6 +88,58 @@
 		} );
 	}
 
+	// ---- Per-task AI routing (model dropdowns) -------------------------
+	function bindRouteModels() {
+		var table = document.getElementById( 'scc-route-table' );
+		if ( ! table ) {
+			return;
+		}
+		var providers = window.SCC.providers || {};
+
+		function fillModels( providerSel ) {
+			var row = providerSel.closest( 'tr' );
+			var modelSel = row.querySelector( '.scc-route-model' );
+			if ( ! modelSel ) {
+				return;
+			}
+			var pid = providerSel.value;
+			var wanted = modelSel.getAttribute( 'data-selected' ) || modelSel.value || '';
+			modelSel.innerHTML = '';
+			var def = document.createElement( 'option' );
+			def.value = '';
+			def.textContent = pid ? 'Default model for this provider' : 'Default model';
+			modelSel.appendChild( def );
+
+			if ( pid && providers[ pid ] && providers[ pid ].models ) {
+				modelSel.disabled = false;
+				Object.keys( providers[ pid ].models ).forEach( function ( mid ) {
+					var opt = document.createElement( 'option' );
+					opt.value = mid;
+					opt.textContent = providers[ pid ].models[ mid ];
+					if ( mid === wanted ) {
+						opt.selected = true;
+					}
+					modelSel.appendChild( opt );
+				} );
+			} else {
+				// "Use primary provider" — model is not applicable.
+				modelSel.disabled = true;
+			}
+		}
+
+		Array.prototype.forEach.call( table.querySelectorAll( '.scc-route-provider' ), function ( sel ) {
+			fillModels( sel ); // initial populate from saved values
+			sel.addEventListener( 'change', function () {
+				var row = sel.closest( 'tr' );
+				var modelSel = row.querySelector( '.scc-route-model' );
+				if ( modelSel ) {
+					modelSel.setAttribute( 'data-selected', '' ); // reset saved on manual change
+				}
+				fillModels( sel );
+			} );
+		} );
+	}
+
 	// ---- LM Studio: detect models --------------------------------------
 	function bindLmStudioDetect() {
 		var btn = document.getElementById( 'scc-lmstudio-detect' );
@@ -1117,6 +1169,7 @@
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
 		bindSettings();
+		bindRouteModels();
 		bindLmStudioDetect();
 		bindConnections();
 		bindKeywordStrategy();

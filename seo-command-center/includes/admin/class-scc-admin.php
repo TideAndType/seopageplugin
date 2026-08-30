@@ -100,13 +100,23 @@ class SCC_Admin {
 			true
 		);
 
+		// Provider → models map for per-operation routing dropdowns.
+		$provider_models = array();
+		foreach ( $this->ai->get_providers() as $pid => $prov ) {
+			$provider_models[ $pid ] = array(
+				'label'  => $prov->get_label(),
+				'models' => $prov->list_models(),
+			);
+		}
+
 		// Pass only non-secret bootstrap data + the REST nonce. Never keys.
 		wp_localize_script(
 			'scc-admin',
 			'SCC',
 			array(
-				'restUrl' => esc_url_raw( rest_url( SCC_REST::NS ) ),
-				'nonce'   => wp_create_nonce( 'wp_rest' ),
+				'restUrl'   => esc_url_raw( rest_url( SCC_REST::NS ) ),
+				'nonce'     => wp_create_nonce( 'wp_rest' ),
+				'providers' => $provider_models,
 				'i18n'    => array(
 					'analyzing' => __( 'Analyzing your site…', 'seo-command-center' ),
 					'testing'   => __( 'Testing connection…', 'seo-command-center' ),

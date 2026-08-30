@@ -64,6 +64,56 @@ class SCC_AI_Manager {
 	}
 
 	/**
+	 * Per-operation routing: which named AI tasks can use their own
+	 * provider/model. Key = settings prefix, value = human label.
+	 *
+	 * @return array
+	 */
+	public static function routable_operations() {
+		return array(
+			'keyword_strategy'   => __( 'Keyword Strategy / Topical Map', 'seo-command-center' ),
+			'content_generation' => __( 'Content Generation (pages & articles)', 'seo-command-center' ),
+			'content_brief'      => __( 'Content Briefs', 'seo-command-center' ),
+			'meta_optimization'  => __( 'Metadata Optimization', 'seo-command-center' ),
+		);
+	}
+
+	/**
+	 * Map an operation label (as passed to complete()) to a routing key.
+	 *
+	 * @param string $operation Operation label.
+	 * @return string Routing key, or '' if the operation is not routable.
+	 */
+	protected function route_key_for( $operation ) {
+		$map = array(
+			'keyword-strategy'    => 'keyword_strategy',
+			'content-generation'  => 'content_generation',
+			'regenerate-section'  => 'content_generation',
+			'content-brief'       => 'content_brief',
+			'meta-optimization'   => 'meta_optimization',
+		);
+		return isset( $map[ $operation ] ) ? $map[ $operation ] : '';
+	}
+
+	/**
+	 * Resolve the per-operation provider/model override, if any.
+	 *
+	 * @param string $operation Operation label.
+	 * @return array {provider:string, model:string} — empty strings mean "use default".
+	 */
+	protected function route_for( $operation ) {
+		$key = $this->route_key_for( $operation );
+		if ( '' === $key ) {
+			return array( 'provider' => '', 'model' => '' );
+		}
+		$settings = get_option( 'scc_settings', array() );
+		return array(
+			'provider' => isset( $settings[ "route_{$key}_provider" ] ) ? (string) $settings[ "route_{$key}_provider" ] : '',
+			'model'    => isset( $settings[ "route_{$key}_model" ] ) ? (string) $settings[ "route_{$key}_model" ] : '',
+		);
+	}
+
+	/**
 	 * Resolve the configured model for a provider from settings.
 	 *
 	 * @param string $provider_id Provider id.
@@ -119,7 +169,17 @@ class SCC_AI_Manager {
 		}
 
 		$settings = get_option( 'scc_settings', array() );
-		$primary  = isset( $settings['default_provider'] ) ? $settings['default_provider'] : 'claude';
+
+		// Per-operation routing override (e.g. use Gemini for the topical map).
+		$route         = $this->route_for( $operation );
+		$forced_model  = '';
+		$default_prov  = isset( $settings['default_provider'] ) ? $settings['default_provider'] : 'claude';
+		if ( ! empty( $route['provider'] ) && $this->get_provider( $route['provider'] ) ) {
+			$primary      = $route['provider'];
+			$forced_model = $route['model']; // may be '' -> use that provider's default model.
+		} else {
+			$primary = $default_prov;
+		}
 		$fallback = isset( $settings['fallback_provider'] ) ? $settings['fallback_provider'] : '';
 
 		$order = array( $primary );
@@ -135,7 +195,8 @@ class SCC_AI_Manager {
 			}
 			$req = $request;
 			if ( empty( $req['model'] ) ) {
-				$req['model'] = $this->model_for( $pid );
+				// Use the forced model only for the routed primary provider.
+				$req['model'] = ( $pid === $primary && '' !== $forced_model ) ? $forced_model : $this->model_for( $pid );
 			}
 			$response = $provider->complete( $req );
 			SCC_AI_Usage::record( $response, $operation );
