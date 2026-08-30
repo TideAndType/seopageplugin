@@ -446,15 +446,51 @@
 		if ( ! btn ) {
 			return;
 		}
-		var status = document.getElementById( 'scc-seed-status' );
+		var status    = document.getElementById( 'scc-seed-status' );
+		var selectAll = document.getElementById( 'scc-seed-selectall' );
+		var countEl   = document.getElementById( 'scc-seed-count' );
+
+		function picks() {
+			return Array.prototype.slice.call( document.querySelectorAll( '.scc-seed-pick' ) );
+		}
+		function selectedUrls() {
+			return picks().filter( function ( c ) { return c.checked; } ).map( function ( c ) { return c.value; } );
+		}
+		function refreshCount() {
+			var total = picks().length;
+			var sel   = selectedUrls().length;
+			if ( countEl ) {
+				countEl.textContent = total ? ' — ' + sel + ' of ' + total + ' selected' : ' — no new pages to add';
+			}
+			btn.disabled = ( sel === 0 );
+			if ( selectAll ) {
+				selectAll.checked = ( total > 0 && sel === total );
+				selectAll.indeterminate = ( sel > 0 && sel < total );
+			}
+		}
+
+		picks().forEach( function ( c ) { c.addEventListener( 'change', refreshCount ); } );
+		if ( selectAll ) {
+			selectAll.addEventListener( 'change', function () {
+				picks().forEach( function ( c ) { c.checked = selectAll.checked; } );
+				refreshCount();
+			} );
+		}
+		refreshCount();
+
 		btn.addEventListener( 'click', function () {
+			var urls = selectedUrls();
+			if ( ! urls.length ) {
+				setStatus( status, 'Select at least one page first.', 'is-error' );
+				return;
+			}
 			btn.disabled = true;
 			setStatus( status, '…' );
-			request( '/content-plan/seed', { method: 'POST' } )
+			request( '/content-plan/seed', { method: 'POST', data: { urls: urls } } )
 				.then( function ( res ) {
 					var created = ( res.data && res.data.created ) || 0;
-					setStatus( status, created + ' new page(s) added to your content plan.', 'is-ok' );
-					btn.disabled = false;
+					setStatus( status, created + ' page(s) added to your content plan.', 'is-ok' );
+					refreshCount();
 				} )
 				.catch( function ( err ) {
 					btn.disabled = false;

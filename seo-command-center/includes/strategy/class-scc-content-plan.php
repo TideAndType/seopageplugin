@@ -137,17 +137,26 @@ class SCC_Content_Plan {
 	 * @param array $tree Architecture tree from SCC_Architecture::build().
 	 * @return int Number of entries created.
 	 */
-	public static function seed_from_architecture( array $tree ) {
+	public static function seed_from_architecture( array $tree, $only_urls = null ) {
 		$created = 0;
 		$default_words = (int) SCC_Settings::get( 'default_word_count', 1200 );
 
+		// Normalize the optional allow-list for exact URL matching.
+		$allow = null;
+		if ( is_array( $only_urls ) ) {
+			$allow = array();
+			foreach ( $only_urls as $u ) {
+				$allow[ (string) $u ] = true;
+			}
+		}
+
 		foreach ( (array) ( $tree['pillars'] ?? array() ) as $pillar ) {
-			$created += self::maybe_add_node( $pillar, '', $default_words );
+			$created += self::maybe_add_node( $pillar, '', $default_words, $allow );
 			foreach ( (array) ( $pillar['children'] ?? array() ) as $child ) {
-				$created += self::maybe_add_node( $child, $pillar['title'], $default_words );
+				$created += self::maybe_add_node( $child, $pillar['title'], $default_words, $allow );
 			}
 			foreach ( (array) ( $pillar['articles'] ?? array() ) as $article ) {
-				$created += self::maybe_add_node( $article, $pillar['title'], max( 800, $default_words ) );
+				$created += self::maybe_add_node( $article, $pillar['title'], max( 800, $default_words ), $allow );
 			}
 		}
 		return $created;
@@ -156,14 +165,18 @@ class SCC_Content_Plan {
 	/**
 	 * Add a single architecture node to the plan if it doesn't already exist.
 	 *
-	 * @param array  $node   Node.
-	 * @param string $parent Parent title.
-	 * @param int    $words  Word count.
+	 * @param array      $node   Node.
+	 * @param string     $parent Parent title.
+	 * @param int        $words  Word count.
+	 * @param array|null $allow  Optional {url=>true} allow-list; null = all.
 	 * @return int 1 if created, 0 otherwise.
 	 */
-	protected static function maybe_add_node( array $node, $parent, $words ) {
+	protected static function maybe_add_node( array $node, $parent, $words, $allow = null ) {
 		if ( ! empty( $node['exists'] ) ) {
 			return 0; // Don't re-recommend pages that already exist.
+		}
+		if ( is_array( $allow ) && ! isset( $allow[ (string) ( $node['url'] ?? '' ) ] ) ) {
+			return 0; // Not in the user's selection.
 		}
 		if ( self::url_in_plan( $node['url'] ?? '' ) ) {
 			return 0;

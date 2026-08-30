@@ -19,10 +19,18 @@ $tree = isset( $data['tree'] ) ? $data['tree'] : null;
  */
 $node_line = function ( $node ) {
 	$exists = ! empty( $node['exists'] );
+	$url    = isset( $node['url'] ) ? $node['url'] : '';
 	?>
 	<div class="scc-arch-node<?php echo $exists ? ' is-existing' : ''; ?>">
+		<?php if ( ! $exists ) : ?>
+			<label class="scc-arch-pick" title="<?php esc_attr_e( 'Include this page when sending to the Content Plan', 'seo-command-center' ); ?>">
+				<input type="checkbox" class="scc-seed-pick" value="<?php echo esc_attr( $url ); ?>" checked>
+			</label>
+		<?php else : ?>
+			<span class="scc-arch-pick scc-arch-pick--spacer" aria-hidden="true"></span>
+		<?php endif; ?>
 		<span class="scc-arch-title"><?php echo esc_html( $node['title'] ); ?></span>
-		<code><?php echo esc_html( $node['url'] ); ?></code>
+		<code><?php echo esc_html( $url ); ?></code>
 		<span class="scc-flag"><?php echo esc_html( $node['intent'] ); ?></span>
 		<?php if ( $exists ) : ?>
 			<span class="scc-badge scc-badge--ok"><?php esc_html_e( 'Exists', 'seo-command-center' ); ?></span>
@@ -49,8 +57,13 @@ $node_line = function ( $node ) {
 		<div class="scc-card">
 			<div class="scc-card__head">
 				<h2><?php esc_html_e( 'Recommended architecture', 'seo-command-center' ); ?></h2>
-				<button class="button button-primary" id="scc-seed-plan"><?php esc_html_e( 'Send new pages to Content Plan', 'seo-command-center' ); ?></button>
+				<button class="button button-primary" id="scc-seed-plan"><?php esc_html_e( 'Send selected pages to Content Plan', 'seo-command-center' ); ?></button>
 			</div>
+			<p class="scc-note">
+				<?php esc_html_e( 'Tick the “Gap · new” pages you want to add to your Content Plan (existing pages are never added). ', 'seo-command-center' ); ?>
+				<label class="scc-arch-selectall"><input type="checkbox" id="scc-seed-selectall" checked> <?php esc_html_e( 'Select all', 'seo-command-center' ); ?></label>
+				<span id="scc-seed-count"></span>
+			</p>
 			<span class="scc-inline-status" id="scc-seed-status"></span>
 
 			<?php foreach ( (array) $tree['pillars'] as $pillar ) : ?>

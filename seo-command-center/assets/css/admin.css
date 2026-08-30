@@ -92,6 +92,9 @@
 .scc-arch-node { display: flex; align-items: center; gap: 10px; padding: 4px 0; flex-wrap: wrap; }
 .scc-arch-node.is-existing { opacity: .7; }
 .scc-arch-title { font-weight: 600; }
+.scc-arch-pick { display: inline-flex; align-items: center; width: 20px; }
+.scc-arch-pick--spacer { visibility: hidden; }
+.scc-arch-selectall { margin-left: 8px; font-weight: 600; }
 
 .scc-options { margin: 4px 0 0 18px; list-style: disc; }
 .scc-options li { margin-bottom: 4px; font-size: 13px; }

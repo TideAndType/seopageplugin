@@ -891,14 +891,23 @@ class SCC_REST {
 	 *
 	 * @return WP_REST_Response|WP_Error
 	 */
-	public function seed_content_plan() {
+	public function seed_content_plan( WP_REST_Request $request ) {
 		$strategy = SCC_Keyword_Strategy::latest();
 		if ( ! $strategy || empty( $strategy['map_data'] ) ) {
 			return $this->fail( 'no_strategy', __( 'Generate a keyword strategy first.', 'seo-command-center' ), 400 );
 		}
+
+		// Optional allow-list of URLs to seed (from the checkboxes). When absent,
+		// seed every new/gap page (back-compatible).
+		$only  = null;
+		$param = $request->get_param( 'urls' );
+		if ( is_array( $param ) ) {
+			$only = array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), $param ) ) );
+		}
+
 		$builder = new SCC_Architecture();
 		$tree    = $builder->build( $strategy['map_data'] );
-		$created = SCC_Content_Plan::seed_from_architecture( $tree );
+		$created = SCC_Content_Plan::seed_from_architecture( $tree, $only );
 		return $this->ok( array( 'created' => $created, 'entries' => SCC_Content_Plan::all() ) );
 	}
 
