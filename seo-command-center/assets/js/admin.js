@@ -460,6 +460,11 @@
 							window.location.reload();
 							return;
 						}
+						// Fire the generation as a separate request we do NOT await.
+						// It runs server-side with ignore_user_abort, so it finishes
+						// even if this connection is dropped by a gateway timeout.
+						request( '/keywords/auto/process', { method: 'POST', data: { job: d.job_id } } )
+							.catch( function () { /* ignore — progress is tracked by polling */ } );
 						pollAuto( d.job_id );
 					} )
 					.catch( function ( err ) {

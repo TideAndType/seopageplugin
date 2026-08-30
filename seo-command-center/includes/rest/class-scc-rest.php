@@ -174,6 +174,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/keywords/auto/process',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'process_keyword_auto' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/keywords/auto/status',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -878,41 +888,19 @@ class SCC_REST {
 			}
 		}
 
-		// Preferred: return the response immediately, THEN keep running this same
-		// request to do the (possibly long) generation. LM Studio is reached from
-		// this request context — which works — but the browser no longer waits, so
-		// a big map can't time out the front-end request. Needs PHP-FPM's
-		// fastcgi_finish_request (IONOS has it); no loopback/WP-Cron required.
-		if ( $this->jobs && function_exists( 'fastcgi_finish_request' ) ) {
+		// Enqueue the job and return IMMEDIATELY with its id. The browser then
+		// fires /keywords/auto/process (which it does not wait on) to run the
+		// generation, and polls /keywords/auto/status for progress. This works on
+		// hosts that block loopback + WP-Cron and lack fastcgi_finish_request
+		// (e.g. some IONOS plans) — the generation runs inside the process
+		// request with ignore_user_abort, so it finishes even if that request's
+		// connection is dropped by a gateway timeout.
+		if ( $this->jobs ) {
 			$res    = $this->jobs->enqueue_keyword_auto( $opts );
-			$job_id = (int) $res['job_id'];
-			$jobs   = $this->jobs;
-
-			add_action( 'shutdown', function () use ( $jobs, $job_id ) {
-				// Push WordPress's already-written REST body out to the client,
-				// then detach so the browser's request completes right away.
-				while ( ob_get_level() > 0 ) {
-					@ob_end_flush(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				if ( function_exists( 'session_write_close' ) ) {
-					@session_write_close(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				@fastcgi_finish_request(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				if ( function_exists( 'set_time_limit' ) ) {
-					@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				if ( function_exists( 'ignore_user_abort' ) ) {
-					@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				}
-				$jobs->process_job_now( $job_id );
-			}, PHP_INT_MAX );
-
-			return $this->ok( array( 'async' => true, 'job_id' => $job_id ) );
+			return $this->ok( array( 'async' => true, 'job_id' => (int) $res['job_id'] ) );
 		}
 
-		// Fallback (no fastcgi_finish_request): run inline and return the real
-		// result or error. Fine for fast providers; long generations may hit the
-		// front-end request limit on some hosts.
+		// No job queue at all — run inline.
 		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
 		foreach ( $opts as $k => $v ) {
 			$inputs[ $k ] = $v;
@@ -925,6 +913,31 @@ class SCC_REST {
 		$result['inferred'] = true;
 		$result['async']    = false;
 		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /keywords/auto/process — run a queued keyword_auto job to completion.
+	 *
+	 * The browser fires this once (without awaiting it) after enqueueing. It runs
+	 * the generation with the execution limit lifted and ignore_user_abort, so it
+	 * completes server-side even if the front-end drops this connection.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function process_keyword_auto( WP_REST_Request $request ) {
+		if ( ! $this->jobs ) {
+			return $this->ok( array( 'ran' => false ) );
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$job_id = (int) $request->get_param( 'job' );
+		$this->jobs->process_job_now( $job_id );
+		return $this->ok( array( 'ran' => true, 'job_id' => $job_id ) );
 	}
 
 	/**
