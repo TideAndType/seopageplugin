@@ -745,6 +745,10 @@
 			}
 			request( '/content-plan/' + id, { method: 'DELETE' } )
 				.then( function () {
+					var briefRow = row.nextElementSibling;
+					if ( briefRow && briefRow.classList.contains( 'scc-brief-row' ) ) {
+						briefRow.parentNode.removeChild( briefRow );
+					}
 					row.parentNode.removeChild( row );
 					setStatus( status, 'Removed.', 'is-ok' );
 				} )
@@ -803,11 +807,16 @@
 	}
 
 	function bindGenerate() {
-		var table = document.getElementById( 'scc-generate-table' );
+		// The generation actions live on both the dedicated Generate page and,
+		// for convenience, directly on the Content Plan table.
+		bindGenerateTable( document.getElementById( 'scc-generate-table' ), document.getElementById( 'scc-generate-msg' ) );
+		bindGenerateTable( document.getElementById( 'scc-plan-table' ), document.getElementById( 'scc-plan-status-msg' ) );
+	}
+
+	function bindGenerateTable( table, msg ) {
 		if ( ! table ) {
 			return;
 		}
-		var msg = document.getElementById( 'scc-generate-msg' );
 
 		table.addEventListener( 'click', function ( e ) {
 			var isBrief = e.target.classList.contains( 'scc-brief-btn' );

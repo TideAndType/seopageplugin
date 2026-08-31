@@ -352,6 +352,11 @@
 .scc-brief-panel .scc-label { margin-top: 8px; }
 .scc-brief-panel .scc-flag { margin-right: 6px; }
 
+/* Content plan row actions */
+.scc-plan-actions { white-space: nowrap; }
+.scc-plan-actions .button { margin-right: 4px; }
+.scc-plan-actions .scc-plan-delete { color: var(--scc-danger); font-size: 18px; vertical-align: middle; text-decoration: none; }
+
 /* Subtle entrance for generated content */
 @media (prefers-reduced-motion: no-preference) {
 	.scc-cluster { animation: scc-rise .28s ease both; }
