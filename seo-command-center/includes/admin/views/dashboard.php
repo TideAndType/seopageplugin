@@ -140,7 +140,10 @@ $t = function ( $totals, $key ) {
 		<div class="scc-card">
 			<div class="scc-card__head">
 				<h2><?php esc_html_e( 'Re-run analysis', 'seo-command-center' ); ?></h2>
-				<button class="button button-primary" id="scc-run-analysis"><?php esc_html_e( 'Analyze again', 'seo-command-center' ); ?></button>
+				<span>
+					<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-site-analysis' ) ); ?>"><?php esc_html_e( 'View full page-by-page analysis', 'seo-command-center' ); ?></a>
+					<button class="button button-primary" id="scc-run-analysis"><?php esc_html_e( 'Analyze again', 'seo-command-center' ); ?></button>
+				</span>
 			</div>
 			<span class="scc-inline-status" id="scc-analysis-status"></span>
 			<p class="scc-note">

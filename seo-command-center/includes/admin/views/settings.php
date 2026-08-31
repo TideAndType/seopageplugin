@@ -16,6 +16,7 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'Settings', 'seo-command-center' ); ?></h1>
 		<p class="scc-sub"><?php esc_html_e( 'Defaults for AI, SEO, publishing, and spending limits. API keys live under API Connections.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-schema' ) ); ?>"><?php esc_html_e( 'View schema (structured data) reference →', 'seo-command-center' ); ?></a></p>
 	</div>
 
 	<form id="scc-settings-form" class="scc-card">

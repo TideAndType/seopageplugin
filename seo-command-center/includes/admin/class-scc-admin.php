@@ -44,22 +44,24 @@ class SCC_Admin {
 			58
 		);
 
+		// Visible menu — grouped to follow the actual workflow, trimmed down.
 		$pages = array(
 			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
-			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
-			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
-			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
-			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' ),
-			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
-			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
+			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
 			self::SLUG . '-connections'      => array( __( 'API Connections', 'seo-command-center' ), 'render_connections' ),
 		);
+
+		// Elementor templates only matter when Elementor is active.
+		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
+			$pages[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' );
+		}
 
 		foreach ( $pages as $slug => $page ) {
 			add_submenu_page(
@@ -70,6 +72,19 @@ class SCC_Admin {
 				$slug,
 				array( $this, $page[1] )
 			);
+		}
+
+		// Routable but hidden from the menu (reached from other pages / links):
+		// - Generate Content is now built into the Content Plan.
+		// - Site Analysis feeds the Dashboard and SEO Audit.
+		// - Schema is a reference screen linked from Settings.
+		$hidden = array(
+			self::SLUG . '-site-analysis' => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
+			self::SLUG . '-generate'      => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
+			self::SLUG . '-schema'        => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+		);
+		foreach ( $hidden as $slug => $page ) {
+			add_submenu_page( null, $page[0], $page[0], $cap, $slug, array( $this, $page[1] ) );
 		}
 	}
 
