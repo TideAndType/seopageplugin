@@ -578,7 +578,7 @@
 	}
 
 	// ---- One-click content briefs (topical map) ------------------------
-	function renderBrief( brief ) {
+	function renderTopicBrief( brief ) {
 		function esc( s ) {
 			var d = document.createElement( 'div' );
 			d.textContent = s == null ? '' : String( s );
@@ -638,7 +638,7 @@
 						btn.disabled = false;
 						var brief = res.data && res.data.brief;
 						if ( out && brief ) {
-							out.innerHTML = renderBrief( brief );
+							out.innerHTML = renderTopicBrief( brief );
 							out.hidden = false;
 						}
 						setStatus( status, 'Brief ready.', 'is-ok' );
