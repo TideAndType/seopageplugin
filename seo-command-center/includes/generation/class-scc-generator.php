@@ -246,48 +246,74 @@ class SCC_Generator {
 	protected function generate_body( array $entry, array $brief ) {
 		$page_type   = $entry['page_type'] ?? 'article';
 		$intent      = strtolower( (string) ( $entry['intent'] ?? ( $brief['search_intent'] ?? '' ) ) );
-		$commercial  = in_array( $intent, array( 'commercial', 'transactional', 'local' ), true );
+		$is_local    = ( 'location' === $page_type ) || ( false !== strpos( $intent, 'local' ) );
+		$commercial  = in_array( $intent, array( 'commercial', 'transactional', 'local' ), true )
+			|| in_array( $page_type, array( 'pillar', 'service', 'location' ), true );
 		$site_name   = get_bloginfo( 'name' );
 
-		$system    = 'You are an expert SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
-			. 'Write genuinely useful, specific, original content that a knowledgeable human would value. '
-			// E-E-A-T.
-			. 'DEMONSTRATE E-E-A-T (Experience, Expertise, Authoritativeness, Trust): write with first-hand, practical '
-			. 'insight; use concrete specifics, real examples, numbers, steps and trade-offs; be accurate and never invent '
-			. 'facts, statistics, prices, awards or fake testimonials; where a claim would normally cite a source, phrase it '
-			. 'so the reader knows what kind of source backs it; take clear, confident, expert positions and note caveats '
-			. 'honestly. Sound like a seasoned practitioner, not a generic summary. '
-			// Style / no em dashes.
-			. 'STYLE: natural, direct language; short paragraphs; no keyword stuffing; no padding to hit a word count; no '
-			. 'repetition; avoid AI filler and cliches. Do NOT use em dashes or en dashes (— or –) anywhere; use commas, '
-			. 'periods, or parentheses instead. '
-			// Conversion.
-			. ( $commercial
-				? 'CONVERSION: this page should persuade as well as inform. Open with the reader\'s problem and the outcome '
-				  . 'they want, make the benefits and value concrete, address common objections, add trust signals (what makes '
-				  . 'this business credible), and finish with a clear, specific call to action that tells the reader exactly '
-				  . 'what to do next. Use the brief\'s "cta" if provided. '
-				: 'CONVERSION: end with a helpful, natural next step or call to action for the reader. ' )
-			. ( 'location' === $page_type
-				? 'This is a LOCATION page: make it specifically, meaningfully local. Reference real local context and needs, '
-				  . 'not a city-name find-and-replace. '
+		$system    = 'You are a senior SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
+			. 'Produce genuinely useful, specific, original content a knowledgeable buyer would trust. '
+			// Accuracy & E-E-A-T.
+			. 'ACCURACY & E-E-A-T: write from real, practical expertise; use concrete specifics, numbers, steps and trade-offs; '
+			. 'never invent facts, statistics, prices, awards, clients or testimonials. Use current, correct terminology '
+			. '(for example "Google Business Profile", never "GMB" or "GBP"). Do NOT repeat SEO myths or folklore tactics '
+			. '(for example, do not claim that geotagging images improves rankings). '
+			// No overpromising.
+			. 'NO OVERPROMISING: never promise or imply guaranteed results, number-one rankings, or "undeniable authority", and '
+			. 'do not phrase anything as a guarantee. Instead describe how the work builds stronger signals of relevance, trust '
+			. 'and authority, the process involved, and realistic expectations, with honest caveats. '
+			// Style / no dashes / no cliches / no duplicate intro.
+			. 'STYLE: natural, credible, plain language; short paragraphs; concrete over hypey. Do NOT use em or en dashes (— or –); '
+			. 'use commas, periods or parentheses. Avoid marketing-bro or AI cliches such as "acquisition machine", "unlock", '
+			. '"in today\'s digital landscape", "game-changer", "supercharge", "leverage". No keyword stuffing, no padding, no '
+			. 'repeated sentences. Never restate the introduction or add a generic "Overview" section that duplicates the opening. '
+			// Title / hierarchy.
+			. 'TITLE: make "title" outcome-oriented and LEAD with the primary commercial keyword the page targets (see the brief) '
+			. 'so the topic is unmistakable; keep any clever tagline as a short supporting line inside the opening, not as the title. '
+			// Local.
+			. ( $is_local
+				? 'LOCAL: real local relevance means genuinely useful, locally-specific content and expertise, not swapping in '
+				  . 'city or neighbourhood names. Where natural, use service-plus-location phrasing (for example "Emergency Plumbing '
+				  . 'in Daytona Beach") and real local angles, not filler. '
 				: '' )
-			// FAQs required.
-			. 'Always include 3 to 6 genuinely useful FAQs (real questions searchers ask, with substantive answers) in the '
-			. '"faqs" array. '
-			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul> where useful. Do not include an <h1> (the theme renders the title). Do not output the FAQs inside content_html; put them only in the faqs array. '
+			// Structure for service / money pages vs. articles.
+			. ( $commercial
+				? 'THIS IS A SERVICE / MONEY PAGE. Structure it to inform AND convert: '
+				  . '(1) open by naming the reader\'s problem and the outcome they want (calls, foot traffic, leads, visibility, '
+				  . 'local authority) and sell outcomes, not keywords; '
+				  . '(2) present a clear multi-step PROCESS using <h2> sections (for example Audit, Optimization and Fixes, '
+				  . 'Authority Building, Measurement and Growth) so it reads like a real engagement, not "we do SEO, call us"; '
+				  . '(3) include a concrete "What is included" section that groups the specific things you optimise into labelled '
+				  . '<h3> groups with <ul> bullet lists (only groups relevant to this topic), covering ongoing management and '
+				  . 'competitor / market analysis as distinct items where they fit; '
+				  . '(4) add real trust signals and answer the top objections a buyer has; '
+				  . '(5) finish with ONE specific call to action tied to the offer in the brief (for example a free audit) telling '
+				  . 'the reader exactly what to do next, never a weak "let\'s talk". '
+				: 'Write a genuinely useful, well-structured article with clear <h2>/<h3> sections and a natural, helpful next step at the end. ' )
+			// FAQs.
+			. ( $commercial
+				? 'FAQs: include 4 to 7 buyer questions with honest answers, such as how long it takes, what it costs (explain what '
+				  . 'drives price and give a realistic range without inventing a specific figure), whether results are guaranteed '
+				  . '(answer honestly that no ethical provider guarantees rankings), how this differs from the alternative, serving '
+				  . 'multiple locations or service-area businesses, and review management. '
+				: 'FAQs: include 3 to 6 real questions searchers ask, with substantive answers. ' )
+			. 'Put FAQs only in the "faqs" array, not in content_html. '
+			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul>. Do not include an <h1> (the theme renders the title). '
 			. 'Return JSON: {"title":str,"content_html":str,"faqs":[{"question":str,"answer":str}],'
 			. '"meta_title":str(<=60 chars),"meta_description":str(140-160 chars),'
 			. '"og_title":str,"og_description":str,'
 			. '"image":{"concept":str,"prompt":str,"alt":str,"filename":str,"placement":str}}';
 
-		// Size the token budget to the target length rather than a flat 6000
-		// (which is ~4500 words and can take a local model far too long).
+		// Size the token budget to the target length. Service/pillar pages get
+		// enough room for a proper 1,500-2,000 word page.
 		$words  = (int) ( $brief['recommended_words'] ?? 0 );
 		if ( $words < 300 ) {
 			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
 		}
-		$budget = (int) min( 4000, max( 1200, round( $words * 1.7 ) + 700 ) );
+		if ( $commercial && $words < 1500 ) {
+			$words = 1500;
+		}
+		$budget = (int) min( 5200, max( 1200, round( $words * 1.7 ) + 800 ) );
 
 		$response = $this->ai->complete(
 			array(
