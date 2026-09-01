@@ -46,24 +46,31 @@ if ( '' !== $gen_by ) :
 	<?php if ( ! empty( $map['gsc_quick_wins'] ) ) : ?>
 		<details class="scc-gsc-wins" open>
 			<summary><strong><?php esc_html_e( 'Search Console quick wins', 'seo-command-center' ); ?></strong> — <?php esc_html_e( 'queries you already rank on page 1-2 for (real data). Great candidates for a dedicated page.', 'seo-command-center' ); ?></summary>
-			<table class="widefat striped scc-gsc-table">
+			<table class="widefat striped scc-gsc-table" id="scc-gsc-wins-table">
 				<thead><tr>
 					<th><?php esc_html_e( 'Query', 'seo-command-center' ); ?></th>
 					<th><?php esc_html_e( 'Impressions', 'seo-command-center' ); ?></th>
 					<th><?php esc_html_e( 'Clicks', 'seo-command-center' ); ?></th>
 					<th><?php esc_html_e( 'Avg. position', 'seo-command-center' ); ?></th>
+					<th><?php esc_html_e( 'Action', 'seo-command-center' ); ?></th>
 				</tr></thead>
 				<tbody>
 				<?php foreach ( (array) $map['gsc_quick_wins'] as $w ) : ?>
+					<?php $q = (string) ( $w['query'] ?? '' ); ?>
 					<tr>
-						<td><?php echo esc_html( $w['query'] ?? '' ); ?></td>
+						<td><?php echo esc_html( $q ); ?></td>
 						<td><?php echo esc_html( number_format_i18n( (int) ( $w['impressions'] ?? 0 ) ) ); ?></td>
 						<td><?php echo esc_html( number_format_i18n( (int) ( $w['clicks'] ?? 0 ) ) ); ?></td>
 						<td><?php echo esc_html( $w['position'] ?? '' ); ?></td>
+						<td>
+							<button type="button" class="button button-small button-primary scc-gsc-plan-btn" data-query="<?php echo esc_attr( $q ); ?>"><?php esc_html_e( 'Create page', 'seo-command-center' ); ?></button>
+							<span class="scc-inline-status scc-gsc-plan-status"></span>
+						</td>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>
 			</table>
+			<p class="scc-note"><?php esc_html_e( '“Create page” adds this query to your Content Plan as a new article; open Content Plan to generate the draft.', 'seo-command-center' ); ?></p>
 		</details>
 	<?php endif; ?>
 <?php endif; ?>

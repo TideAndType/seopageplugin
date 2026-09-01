@@ -347,9 +347,12 @@ class SCC_Link_Engine {
 			return array();
 		}
 		foreach ( $rows as &$row ) {
-			$row['source_title'] = get_the_title( (int) $row['source_post_id'] );
-			$row['target_title'] = get_the_title( (int) $row['target_post_id'] );
-			$row['target_url']   = get_permalink( (int) $row['target_post_id'] );
+			$sid                    = (int) $row['source_post_id'];
+			$row['source_title']    = get_the_title( $sid );
+			$row['source_url']      = get_permalink( $sid );
+			$row['source_edit_url'] = get_edit_post_link( $sid, 'raw' );
+			$row['target_title']    = get_the_title( (int) $row['target_post_id'] );
+			$row['target_url']      = get_permalink( (int) $row['target_post_id'] );
 		}
 		return $rows;
 	}

@@ -224,6 +224,14 @@ class SCC_Generator {
 			. '"og_title":str,"og_description":str,'
 			. '"image":{"concept":str,"prompt":str,"alt":str,"filename":str,"placement":str}}';
 
+		// Size the token budget to the target length rather than a flat 6000
+		// (which is ~4500 words and can take a local model far too long).
+		$words  = (int) ( $brief['recommended_words'] ?? 0 );
+		if ( $words < 300 ) {
+			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
+		}
+		$budget = (int) min( 4000, max( 1200, round( $words * 1.7 ) + 700 ) );
+
 		$response = $this->ai->complete(
 			array(
 				'system'      => $system,
@@ -234,7 +242,7 @@ class SCC_Generator {
 					),
 				),
 				'json'        => true,
-				'max_tokens'  => 6000,
+				'max_tokens'  => $budget,
 				'temperature' => 0.7,
 			),
 			'content-generation'

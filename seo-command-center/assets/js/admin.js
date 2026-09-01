@@ -615,6 +615,41 @@
 		return html || '<p class="scc-note">No brief content returned.</p>';
 	}
 
+	// ---- Search Console quick wins → create Content Plan pages ----------
+	function bindGscQuickWins() {
+		var table = document.getElementById( 'scc-gsc-wins-table' );
+		if ( ! table ) {
+			return;
+		}
+		table.addEventListener( 'click', function ( e ) {
+			var btn = e.target.closest ? e.target.closest( '.scc-gsc-plan-btn' ) : null;
+			if ( ! btn ) {
+				return;
+			}
+			var q = btn.getAttribute( 'data-query' ) || '';
+			var cell = btn.parentNode;
+			var status = cell ? cell.querySelector( '.scc-gsc-plan-status' ) : null;
+			btn.disabled = true;
+			setStatus( status, 'Adding…' );
+			request( '/content-plan', { method: 'POST', data: {
+				title: q,
+				primary_keyword: q,
+				page_type: 'article',
+				intent: 'informational',
+				priority: 'high',
+				status: 'recommended'
+			} } )
+				.then( function () {
+					btn.textContent = 'Added ✓';
+					setStatus( status, 'In your Content Plan.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	function bindTopicBriefs() {
 		var buttons = document.querySelectorAll( '.scc-brief-btn' );
 		if ( ! buttons.length ) {
@@ -1473,6 +1508,7 @@
 		bindConnections();
 		bindKeywordStrategy();
 		bindTopicBriefs();
+		bindGscQuickWins();
 		bindSeedPlan();
 		bindContentPlan();
 		bindGenerate();

@@ -36,23 +36,10 @@
 	-webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-	.scc-wrap {
-		--scc-bg:        #0d0f16;
-		--scc-surface:   #151824;
-		--scc-surface-2: #1b1f2e;
-		--scc-border:    #262b3d;
-		--scc-border-2:  #222738;
-		--scc-ink:       #eef0f7;
-		--scc-ink-2:     #c3c8d6;
-		--scc-muted:     #93a0b4;
-		--scc-ok-bg:     #12271c;
-		--scc-warn-bg:   #2a2013;
-		--scc-danger-bg: #2a1618;
-		--scc-shadow:    0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
-		--scc-shadow-sm: 0 1px 2px rgba(0,0,0,.3);
-	}
-}
+/* NOTE: We intentionally do NOT follow prefers-color-scheme. WordPress admin
+ * chrome stays light regardless of the OS setting, so a dark plugin palette
+ * on a light admin frame made text unreadable. We keep one readable light
+ * theme everywhere. */
 
 /* Give our pages an app-like background inside the admin frame. */
 .scc-wrap { padding-right: 4px; }

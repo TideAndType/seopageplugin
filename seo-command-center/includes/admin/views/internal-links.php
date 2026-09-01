@@ -85,25 +85,51 @@ $list_block = function ( $title, $nodes, $empty ) {
 		<?php if ( empty( $recs ) ) : ?>
 			<p class="scc-note"><?php esc_html_e( 'No pending recommendations. Run a site scan to find genuinely relevant internal links.', 'seo-command-center' ); ?></p>
 		<?php else : ?>
+			<p class="scc-note"><?php esc_html_e( 'Each row means: on the “From” page, the phrase in quotes becomes a link to the “To” page. “Where” shows the exact sentence the link goes into. Click the From page title to open/edit it.', 'seo-command-center' ); ?></p>
 			<table class="widefat striped scc-table" id="scc-links-table">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'From', 'seo-command-center' ); ?></th>
-						<th><?php esc_html_e( 'Anchor', 'seo-command-center' ); ?></th>
-						<th><?php esc_html_e( 'To', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'From page (edit)', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Link this phrase', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'Where it appears', 'seo-command-center' ); ?></th>
+						<th><?php esc_html_e( 'To page', 'seo-command-center' ); ?></th>
 						<th><?php esc_html_e( 'Conf.', 'seo-command-center' ); ?></th>
-						<th><?php esc_html_e( 'Reason', 'seo-command-center' ); ?></th>
 						<th></th>
 					</tr>
 				</thead>
 				<tbody>
-					<?php foreach ( $recs as $r ) : ?>
+					<?php
+					foreach ( $recs as $r ) :
+						$src_link = ! empty( $r['source_edit_url'] ) ? $r['source_edit_url'] : ( $r['source_url'] ?? '' );
+						$sentence = isset( $r['sentence'] ) ? (string) $r['sentence'] : '';
+						$natural  = isset( $r['context'] ) && 'natural' === $r['context'];
+						?>
 						<tr data-id="<?php echo esc_attr( $r['id'] ); ?>">
-							<td><?php echo esc_html( $r['source_title'] ); ?></td>
+							<td>
+								<?php if ( $src_link ) : ?>
+									<a href="<?php echo esc_url( $src_link ); ?>"><strong><?php echo esc_html( $r['source_title'] ); ?></strong></a>
+								<?php else : ?>
+									<strong><?php echo esc_html( $r['source_title'] ); ?></strong>
+								<?php endif; ?>
+								<?php if ( ! empty( $r['source_url'] ) ) : ?>
+									<br><a class="scc-note" href="<?php echo esc_url( $r['source_url'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'view page ↗', 'seo-command-center' ); ?></a>
+								<?php endif; ?>
+							</td>
 							<td>“<?php echo esc_html( $r['anchor'] ); ?>”</td>
+							<td class="scc-note">
+								<?php if ( '' !== $sentence ) : ?>
+									…<?php echo wp_kses_post( str_ireplace( $r['anchor'], '<mark>' . esc_html( $r['anchor'] ) . '</mark>', esc_html( $sentence ) ) ); ?>…
+								<?php elseif ( $natural ) : ?>
+									<?php esc_html_e( 'Phrase already appears in the page.', 'seo-command-center' ); ?>
+								<?php else : ?>
+									<?php esc_html_e( 'Phrase not found verbatim — inserting adds a natural sentence.', 'seo-command-center' ); ?>
+								<?php endif; ?>
+								<?php if ( ! empty( $r['reason'] ) ) : ?>
+									<br><em><?php echo esc_html( $r['reason'] ); ?></em>
+								<?php endif; ?>
+							</td>
 							<td><a href="<?php echo esc_url( $r['target_url'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $r['target_title'] ); ?></a></td>
 							<td><strong><?php echo esc_html( (int) $r['confidence'] ); ?>%</strong></td>
-							<td class="scc-note"><?php echo esc_html( $r['reason'] ); ?></td>
 							<td><button class="button scc-apply-link"><?php esc_html_e( 'Insert', 'seo-command-center' ); ?></button></td>
 						</tr>
 					<?php endforeach; ?>
