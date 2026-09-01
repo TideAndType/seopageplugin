@@ -244,6 +244,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/content-plan/gen-status',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'content_plan_gen_status' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/content-plan/(?P<id>\d+)',
 			array(
 				array(
@@ -1244,6 +1254,24 @@ class SCC_REST {
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
+	public function content_plan_gen_status( WP_REST_Request $request ) {
+		$id    = (int) $request->get_param( 'id' );
+		$entry = SCC_Content_Plan::find( $id );
+		if ( ! $entry ) {
+			return $this->ok( array( 'done' => false, 'unknown' => true ) );
+		}
+		$post_id = (int) ( $entry['post_id'] ?? 0 );
+		if ( $post_id > 0 && get_post( $post_id ) ) {
+			return $this->ok( array(
+				'done'     => true,
+				'post_id'  => $post_id,
+				'edit_url' => get_edit_post_link( $post_id, 'raw' ),
+				'status'   => (string) ( $entry['status'] ?? 'draft' ),
+			) );
+		}
+		return $this->ok( array( 'done' => false ) );
+	}
+
 	public function generate( WP_REST_Request $request ) {
 		$entry = SCC_Content_Plan::find( (int) $request->get_param( 'entry_id' ) );
 		if ( ! $entry ) {

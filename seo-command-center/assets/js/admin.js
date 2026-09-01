@@ -879,43 +879,61 @@
 						e.target.disabled = false;
 					} );
 			} else {
-				setStatus( msg, 'Generating draft… this can take up to a minute.' );
+				setStatus( msg, 'Generating draft… this runs on the server and can take a minute or two with a local model. You can leave this page open.' );
 				var statusCell = row.querySelector( '.scc-gen-status' );
 				if ( statusCell ) {
 					statusCell.textContent = 'generating';
 				}
-				request( '/generate', { method: 'POST', data: { entry_id: id } } )
-					.then( function ( res ) {
-						var d = res.data || {};
-						if ( statusCell ) {
-							statusCell.textContent = d.status || 'draft';
-						}
-						if ( panel && briefRow ) {
-							briefRow.hidden = false;
-							panel.innerHTML = '';
-							var score = ( d.score && d.score.score ) || 0;
+				var settled = false;
+				function showDone( d ) {
+					if ( settled ) { return; }
+					settled = true;
+					if ( statusCell ) { statusCell.textContent = d.status || 'draft'; }
+					if ( panel && briefRow ) {
+						briefRow.hidden = false;
+						panel.innerHTML = '';
+						var score = ( d.score && d.score.score ) || 0;
+						if ( score ) {
 							panel.appendChild( el( 'p', 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) );
-							if ( d.edit_url ) {
-								var a = el( 'a', 'Edit draft in WordPress' );
-								a.href = d.edit_url;
-								a.className = 'button button-primary';
-								panel.appendChild( a );
-							}
+						} else {
+							panel.appendChild( el( 'p', 'Draft created and saved as a WordPress draft.' ) );
 						}
-						setStatus( msg, 'Draft created.', 'is-ok' );
-						e.target.disabled = false;
-					} )
-					.catch( function ( err ) {
-						if ( statusCell ) {
-							statusCell.textContent = 'failed';
+						if ( d.edit_url ) {
+							var a = el( 'a', 'Edit draft in WordPress' );
+							a.href = d.edit_url;
+							a.className = 'button button-primary';
+							panel.appendChild( a );
 						}
-						var m = err && err.message;
-						if ( ! m || /something went wrong|gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( m ) ) {
-							m = 'The request was cut off, but the draft may have finished and saved on the server. Check your WordPress Posts/Pages → Drafts in a minute. If it isn’t there, try a shorter word count or a faster model.';
+					}
+					setStatus( msg, 'Draft created.', 'is-ok' );
+					e.target.disabled = false;
+				}
+
+				// Fire the generation. It runs server-side with ignore_user_abort,
+				// so the draft finishes and saves even if this connection is cut.
+				request( '/generate', { method: 'POST', data: { entry_id: id } } )
+					.then( function ( res ) { showDone( res.data || {} ); } )
+					.catch( function () { /* rely on polling — the draft may still be saving */ } );
+
+				// Poll until the plan entry gets its post_id (generation complete).
+				var started = Date.now();
+				( function poll() {
+					if ( settled || Date.now() - started > 12 * 60 * 1000 ) {
+						if ( ! settled ) {
+							if ( statusCell ) { statusCell.textContent = 'unknown'; }
+							setStatus( msg, 'Still working (or the model stalled). Check Posts/Pages → Drafts; if nothing appears, try a shorter word count or a faster model.', 'is-error' );
+							e.target.disabled = false;
 						}
-						setStatus( msg, m, 'is-error' );
-						e.target.disabled = false;
-					} );
+						return;
+					}
+					request( '/content-plan/gen-status?id=' + encodeURIComponent( id ), { method: 'GET' } )
+						.then( function ( res ) {
+							var d = res.data || {};
+							if ( d.done ) { showDone( d ); return; }
+							window.setTimeout( poll, 4000 );
+						} )
+						.catch( function () { window.setTimeout( poll, 5000 ); } );
+				} )();
 			}
 		} );
 	}
