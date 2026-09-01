@@ -1250,11 +1250,26 @@ class SCC_REST {
 			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
 		}
 
+		// Generation runs one long AI call plus post building; don't let the host
+		// kill it, and surface any fatal as a readable message instead of a 500.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
 		$params = $request->get_json_params();
 		$brief  = ( is_array( $params ) && ! empty( $params['brief'] ) && is_array( $params['brief'] ) ) ? $params['brief'] : null;
 
-		$generator = new SCC_Generator( $this->ai );
-		$result    = $generator->generate( $entry, $brief );
+		try {
+			$generator = new SCC_Generator( $this->ai );
+			$result    = $generator->generate( $entry, $brief );
+		} catch ( \Throwable $e ) {
+			SCC_Logger::error( 'generate', 'Fatal during generation: ' . $e->getMessage() );
+			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'The draft was written but saving it failed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
+		}
+
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

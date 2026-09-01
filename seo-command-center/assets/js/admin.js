@@ -909,7 +909,11 @@
 						if ( statusCell ) {
 							statusCell.textContent = 'failed';
 						}
-						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+						var m = err && err.message;
+						if ( ! m || /something went wrong|gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( m ) ) {
+							m = 'The request was cut off, but the draft may have finished and saved on the server. Check your WordPress Posts/Pages → Drafts in a minute. If it isn’t there, try a shorter word count or a faster model.';
+						}
+						setStatus( msg, m, 'is-error' );
 						e.target.disabled = false;
 					} );
 			}

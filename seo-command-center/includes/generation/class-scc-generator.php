@@ -65,13 +65,45 @@ class SCC_Generator {
 	 * @param array|null $brief Optional approved brief; generated if null.
 	 * @return array|WP_Error {post_id, edit_url, score, status}
 	 */
+	/**
+	 * Build a minimal brief from a content-plan entry, with no AI call. Used for
+	 * one-click "Generate draft" so generation is a single, fast AI request.
+	 *
+	 * @param array $entry Content-plan entry.
+	 * @return array Brief-shaped array.
+	 */
+	protected function synthesize_brief( array $entry ) {
+		$words = (int) ( $entry['word_count'] ?? 0 );
+		if ( $words < 300 ) {
+			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
+		}
+		$secondary = $entry['secondary'] ?? array();
+		if ( ! is_array( $secondary ) ) {
+			$secondary = array();
+		}
+		return array(
+			'h1'                      => (string) ( $entry['title'] ?? ( $entry['primary_keyword'] ?? '' ) ),
+			'search_intent'           => (string) ( $entry['intent'] ?? 'informational' ),
+			'summary'                 => '',
+			'recommended_words'       => $words,
+			'primary_keyword'         => (string) ( $entry['primary_keyword'] ?? '' ),
+			'secondary'               => array_values( array_filter( array_map( 'strval', $secondary ) ) ),
+			'outline'                 => array(),
+			'entities'                => array(),
+			'questions'               => array(),
+			'internal_link_targets'   => array(),
+			'external_reference_types' => array(),
+			'cta'                     => '',
+		);
+	}
+
 	public function generate( array $entry, $brief = null ) {
 		if ( null === $brief ) {
-			$brief_service = new SCC_Content_Brief( $this->ai );
-			$brief         = $brief_service->generate( $entry );
-			if ( is_wp_error( $brief ) ) {
-				return $brief;
-			}
+			// Build the draft directly from the plan entry (one AI call). We do
+			// NOT make a separate brief AI call here — that doubled the time and
+			// was a common cause of timeouts on local models. Preview "Brief"
+			// first if you want a full brief to guide generation.
+			$brief = $this->synthesize_brief( $entry );
 		}
 
 		$body = $this->generate_body( $entry, $brief );
