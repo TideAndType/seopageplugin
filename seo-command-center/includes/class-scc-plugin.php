@@ -91,6 +91,7 @@ class SCC_Plugin {
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
+		$this->loader->add_action( 'wp_head', $this, 'front_styles', 8 );
 
 		// Background jobs dispatcher.
 		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
@@ -135,6 +136,32 @@ class SCC_Plugin {
 				. wp_json_encode( $node )
 				. '</script>' . "\n";
 		}
+	}
+
+	/**
+	 * Minimal front-end styling for the generated FAQ accordion. Only prints on
+	 * singular pages that actually contain a generated FAQ block, so it adds no
+	 * weight elsewhere. Themes can override these classes.
+	 */
+	public function front_styles() {
+		if ( ! is_singular() ) {
+			return;
+		}
+		$post = get_post( get_queried_object_id() );
+		if ( ! $post || false === strpos( (string) $post->post_content, 'scc-faq' ) ) {
+			return;
+		}
+		echo '<style id="scc-faq-style">'
+			. '.scc-faq{margin:1.25rem 0;display:flex;flex-direction:column;gap:.6rem}'
+			. '.scc-faq__item{border:1px solid #e2e4ea;border-radius:10px;background:#fff;overflow:hidden}'
+			. '.scc-faq__q{cursor:pointer;list-style:none;padding:.9rem 1.1rem;font-weight:600;position:relative;padding-right:2.4rem}'
+			. '.scc-faq__q::-webkit-details-marker{display:none}'
+			. '.scc-faq__q::after{content:"+";position:absolute;right:1.1rem;top:50%;transform:translateY(-50%);font-size:1.2rem;line-height:1;color:#6b7280}'
+			. '.scc-faq__item[open] .scc-faq__q::after{content:"–"}'
+			. '.scc-faq__item[open] .scc-faq__q{border-bottom:1px solid #eef0f4}'
+			. '.scc-faq__a{padding:.85rem 1.1rem 1rem}'
+			. '.scc-faq__a>*:first-child{margin-top:0}.scc-faq__a>*:last-child{margin-bottom:0}'
+			. '</style>' . "\n";
 	}
 
 	/**

@@ -244,13 +244,38 @@ class SCC_Generator {
 	 * @return array|WP_Error
 	 */
 	protected function generate_body( array $entry, array $brief ) {
-		$page_type = $entry['page_type'] ?? 'article';
-		$system    = 'You are an expert SEO copywriter. Write genuinely useful, specific, original content that a knowledgeable human would value. '
-			. 'Rules: natural language; no keyword stuffing; no padding to hit a word count; no repetition; avoid obvious AI filler and cliches. '
+		$page_type   = $entry['page_type'] ?? 'article';
+		$intent      = strtolower( (string) ( $entry['intent'] ?? ( $brief['search_intent'] ?? '' ) ) );
+		$commercial  = in_array( $intent, array( 'commercial', 'transactional', 'local' ), true );
+		$site_name   = get_bloginfo( 'name' );
+
+		$system    = 'You are an expert SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
+			. 'Write genuinely useful, specific, original content that a knowledgeable human would value. '
+			// E-E-A-T.
+			. 'DEMONSTRATE E-E-A-T (Experience, Expertise, Authoritativeness, Trust): write with first-hand, practical '
+			. 'insight; use concrete specifics, real examples, numbers, steps and trade-offs; be accurate and never invent '
+			. 'facts, statistics, prices, awards or fake testimonials; where a claim would normally cite a source, phrase it '
+			. 'so the reader knows what kind of source backs it; take clear, confident, expert positions and note caveats '
+			. 'honestly. Sound like a seasoned practitioner, not a generic summary. '
+			// Style / no em dashes.
+			. 'STYLE: natural, direct language; short paragraphs; no keyword stuffing; no padding to hit a word count; no '
+			. 'repetition; avoid AI filler and cliches. Do NOT use em dashes or en dashes (— or –) anywhere; use commas, '
+			. 'periods, or parentheses instead. '
+			// Conversion.
+			. ( $commercial
+				? 'CONVERSION: this page should persuade as well as inform. Open with the reader\'s problem and the outcome '
+				  . 'they want, make the benefits and value concrete, address common objections, add trust signals (what makes '
+				  . 'this business credible), and finish with a clear, specific call to action that tells the reader exactly '
+				  . 'what to do next. Use the brief\'s "cta" if provided. '
+				: 'CONVERSION: end with a helpful, natural next step or call to action for the reader. ' )
 			. ( 'location' === $page_type
-				? 'This is a LOCATION page: make it specifically, meaningfully local — reference real local context and needs, not a city-name find-and-replace. '
+				? 'This is a LOCATION page: make it specifically, meaningfully local. Reference real local context and needs, '
+				  . 'not a city-name find-and-replace. '
 				: '' )
-			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul> where useful. Do not include an <h1> (the theme renders the title). '
+			// FAQs required.
+			. 'Always include 3 to 6 genuinely useful FAQs (real questions searchers ask, with substantive answers) in the '
+			. '"faqs" array. '
+			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul> where useful. Do not include an <h1> (the theme renders the title). Do not output the FAQs inside content_html; put them only in the faqs array. '
 			. 'Return JSON: {"title":str,"content_html":str,"faqs":[{"question":str,"answer":str}],'
 			. '"meta_title":str(<=60 chars),"meta_description":str(140-160 chars),'
 			. '"og_title":str,"og_description":str,'
@@ -311,13 +336,13 @@ class SCC_Generator {
 		}
 
 		return array(
-			'title'            => SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ),
+			'title'            => self::strip_dashes( SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ) ),
 			'content_html'     => $this->sanitize_content_html( $data['content_html'], $faqs ),
 			'faqs'             => $faqs,
-			'meta_title'       => SCC_Security::sanitize_text( $data['meta_title'] ?? '' ),
-			'meta_description' => SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ),
-			'og_title'         => SCC_Security::sanitize_text( $data['og_title'] ?? '' ),
-			'og_description'   => SCC_Security::sanitize_textarea( $data['og_description'] ?? '' ),
+			'meta_title'       => self::strip_dashes( SCC_Security::sanitize_text( $data['meta_title'] ?? '' ) ),
+			'meta_description' => self::strip_dashes( SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ) ),
+			'og_title'         => self::strip_dashes( SCC_Security::sanitize_text( $data['og_title'] ?? '' ) ),
+			'og_description'   => self::strip_dashes( SCC_Security::sanitize_textarea( $data['og_description'] ?? '' ) ),
 			'image'            => $image,
 		);
 	}
@@ -331,16 +356,46 @@ class SCC_Generator {
 	 */
 	protected function sanitize_content_html( $html, array $faqs ) {
 		$allowed = wp_kses_allowed_html( 'post' );
-		$clean   = wp_kses( (string) $html, $allowed );
+		// Allow the native accordion elements for the FAQ section.
+		$allowed['details'] = array( 'class' => true, 'open' => true );
+		$allowed['summary'] = array( 'class' => true );
+
+		$clean = wp_kses( self::strip_dashes( (string) $html ), $allowed );
 
 		if ( ! empty( $faqs ) ) {
-			$clean .= "\n<h2>" . esc_html__( 'Frequently asked questions', 'seo-command-center' ) . "</h2>\n";
+			$clean .= "\n<h2 class=\"scc-faq-title\">" . esc_html__( 'Frequently asked questions', 'seo-command-center' ) . "</h2>\n";
+			$clean .= "<div class=\"scc-faq\">\n";
 			foreach ( $faqs as $faq ) {
-				$clean .= '<h3>' . esc_html( $faq['question'] ) . "</h3>\n";
-				$clean .= '<p>' . esc_html( $faq['answer'] ) . "</p>\n";
+				$q = esc_html( self::strip_dashes( $faq['question'] ) );
+				$a = wp_kses_post( wpautop( self::strip_dashes( $faq['answer'] ) ) );
+				$clean .= "<details class=\"scc-faq__item\">\n";
+				$clean .= '<summary class="scc-faq__q">' . $q . "</summary>\n";
+				$clean .= '<div class="scc-faq__a">' . $a . "</div>\n";
+				$clean .= "</details>\n";
 			}
+			$clean .= "</div>\n";
 		}
 		return $clean;
+	}
+
+	/**
+	 * Replace em/en dashes (and the common " - " connector) with plain
+	 * punctuation, per the house style. Safety net over the prompt instruction.
+	 *
+	 * @param string $text Text/HTML.
+	 * @return string
+	 */
+	protected static function strip_dashes( $text ) {
+		$text = (string) $text;
+		// Em/en dashes and horizontal bar → comma (keeps clause flow).
+		$text = str_replace( array( '—', '–', '―' ), ', ', $text );
+		// " - " used as a dash connector → comma. Leave hyphens in words alone.
+		$text = preg_replace( '/\s+-\s+/u', ', ', $text );
+		// Tidy artifacts the replacement may create.
+		$text = preg_replace( '/\s+,/', ',', $text );   // space before comma
+		$text = preg_replace( '/,\s*,/', ',', $text );  // doubled commas
+		$text = preg_replace( '/\s{2,}/', ' ', $text );  // doubled spaces
+		return $text;
 	}
 
 	/**
