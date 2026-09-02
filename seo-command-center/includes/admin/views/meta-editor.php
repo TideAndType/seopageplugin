@@ -28,6 +28,7 @@ $seo_plugin = (string) ( $init['seo_plugin'] ?? '' );
 			<h2><?php esc_html_e( 'Pages', 'seo-command-center' ); ?></h2>
 			<div>
 				<button class="button" id="scc-meta-suggest-all"><?php esc_html_e( '✨ Suggest for all visible', 'seo-command-center' ); ?></button>
+				<button class="button button-primary" id="scc-meta-save-all"><?php esc_html_e( 'Save all visible', 'seo-command-center' ); ?></button>
 				<input type="search" id="scc-meta-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search pages…', 'seo-command-center' ); ?>">
 			</div>
 		</div>

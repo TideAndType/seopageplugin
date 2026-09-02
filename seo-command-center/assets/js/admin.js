@@ -1567,12 +1567,16 @@
 						} );
 				} );
 
+				// Save this row (returns a promise; reused by "Save all").
+				row._sccSave = function () {
+					setStatus( st, 'Saving…' );
+					return request( '/metadata/save', { method: 'POST', data: { post_id: it.post_id, meta_title: tInput.value, meta_description: dInput.value } } )
+						.then( function () { setStatus( st, 'Saved ✓', 'is-ok' ); } )
+						.catch( function ( err ) { setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); throw err; } );
+				};
 				save.addEventListener( 'click', function () {
 					save.disabled = true;
-					setStatus( st, 'Saving…' );
-					request( '/metadata/save', { method: 'POST', data: { post_id: it.post_id, meta_title: tInput.value, meta_description: dInput.value } } )
-						.then( function () { save.disabled = false; setStatus( st, 'Saved ✓', 'is-ok' ); } )
-						.catch( function ( err ) { save.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
+					row._sccSave().then( function () { save.disabled = false; } ).catch( function () { save.disabled = false; } );
 				} );
 				actions.appendChild( suggest );
 				actions.appendChild( save );
@@ -1612,6 +1616,32 @@
 		} );
 		prev.addEventListener( 'click', function () { if ( paged > 1 ) { paged--; load(); } } );
 		next.addEventListener( 'click', function () { if ( paged < pages ) { paged++; load(); } } );
+
+		// Save every visible row's current values (sequential, with progress).
+		var saveAll = document.getElementById( 'scc-meta-save-all' );
+		if ( saveAll ) {
+			saveAll.addEventListener( 'click', function () {
+				var rows = Array.prototype.slice.call( list.querySelectorAll( '.scc-meta-row' ) );
+				if ( ! rows.length ) { return; }
+				if ( ! window.confirm( 'Save meta title & description for all ' + rows.length + ' visible page(s)?' ) ) {
+					return;
+				}
+				saveAll.disabled = true;
+				var i = 0, saved = 0, failed = 0;
+				function nextRow() {
+					if ( i >= rows.length ) {
+						saveAll.disabled = false;
+						setStatus( msg, 'Saved ' + saved + ' page(s)' + ( failed ? ', ' + failed + ' failed' : '' ) + '.', failed ? 'is-error' : 'is-ok' );
+						return;
+					}
+					var row = rows[ i++ ];
+					setStatus( msg, 'Saving… ' + i + ' / ' + rows.length );
+					var p = row._sccSave ? row._sccSave() : Promise.resolve();
+					p.then( function () { saved++; nextRow(); } ).catch( function () { failed++; nextRow(); } );
+				}
+				nextRow();
+			} );
+		}
 
 		// Suggest for all visible rows — one AI call per page, sequential to stay
 		// gentle on the provider. Fills the top-ranked variant (prefers a
