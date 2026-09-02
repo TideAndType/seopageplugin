@@ -56,6 +56,7 @@ class SCC_Admin {
 			self::SLUG . '-competitors'      => array( __( 'Competitor Gaps', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
+			self::SLUG . '-meta-editor'      => array( __( 'Meta Editor', 'seo-command-center' ), 'render_meta_editor' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
 			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
@@ -370,6 +371,18 @@ class SCC_Admin {
 			'keyword-strategy',
 			array(
 				'strategy' => SCC_Keyword_Strategy::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Meta Editor — bulk edit meta titles/descriptions across pages.
+	 */
+	public function render_meta_editor() {
+		$this->view(
+			'meta-editor',
+			array(
+				'data' => SCC_Metadata::list_pages( array( 'paged' => 1 ) ),
 			)
 		);
 	}

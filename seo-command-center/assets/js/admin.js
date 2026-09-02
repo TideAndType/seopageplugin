@@ -1445,6 +1445,117 @@
 		} );
 	}
 
+	// ---- Meta Editor (bulk title/description editing) -----------------
+	function bindMetaEditor() {
+		var list = document.getElementById( 'scc-meta-list' );
+		if ( ! list ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-meta-msg' );
+		var search = document.getElementById( 'scc-meta-search' );
+		var prev = document.getElementById( 'scc-meta-prev' );
+		var next = document.getElementById( 'scc-meta-next' );
+		var info = document.getElementById( 'scc-meta-pageinfo' );
+		var paged = 1;
+		var pages = 1;
+		var timer = null;
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+		function counterClass( len, min, max ) {
+			if ( len === 0 ) { return 'is-empty'; }
+			if ( len < min ) { return 'is-short'; }
+			if ( len > max ) { return 'is-long'; }
+			return 'is-good';
+		}
+		function bindCounter( inp, out, min, max ) {
+			function upd() {
+				var len = ( inp.value || '' ).length;
+				out.textContent = len;
+				out.className = 'scc-meta-count ' + counterClass( len, min, max );
+			}
+			inp.addEventListener( 'input', upd );
+			upd();
+		}
+
+		function render( res ) {
+			var d = res.data || {};
+			paged = d.paged || 1;
+			pages = d.pages || 1;
+			var items = d.items || [];
+			list.innerHTML = '';
+			if ( ! items.length ) {
+				list.appendChild( el( 'p', 'No pages found.', 'scc-note' ) );
+			}
+			items.forEach( function ( it ) {
+				var row = el( 'div', null, 'scc-meta-row' );
+				var head = el( 'div', null, 'scc-meta-row__head' );
+				head.innerHTML = '<strong>' + esc( it.title ) + '</strong> <span class="scc-flag">' + esc( it.post_type ) + '</span> <span class="scc-flag">' + esc( it.status ) + '</span>' + ( it.url ? ' <a class="scc-note" href="' + esc( it.url ) + '" target="_blank" rel="noopener">view</a>' : '' ) + ( it.edit_url ? ' <a class="scc-note" href="' + esc( it.edit_url ) + '">edit page</a>' : '' );
+				row.appendChild( head );
+
+				var tWrap = el( 'label', null, 'scc-meta-field' );
+				tWrap.appendChild( el( 'span', 'Meta title', 'scc-label' ) );
+				var tInput = document.createElement( 'input' );
+				tInput.type = 'text'; tInput.className = 'large-text scc-meta-title'; tInput.value = it.meta_title || '';
+				tWrap.appendChild( tInput );
+				var tCount = el( 'span', '', 'scc-meta-count' );
+				tWrap.appendChild( tCount );
+				row.appendChild( tWrap );
+
+				var dWrap = el( 'label', null, 'scc-meta-field' );
+				dWrap.appendChild( el( 'span', 'Meta description', 'scc-label' ) );
+				var dInput = document.createElement( 'textarea' );
+				dInput.className = 'large-text scc-meta-desc'; dInput.rows = 2; dInput.value = it.meta_description || '';
+				dWrap.appendChild( dInput );
+				var dCount = el( 'span', '', 'scc-meta-count' );
+				dWrap.appendChild( dCount );
+				row.appendChild( dWrap );
+
+				var actions = el( 'div', null, 'scc-meta-row__actions' );
+				var save = el( 'button', 'Save', 'button button-primary button-small' );
+				var st = el( 'span', '', 'scc-inline-status' );
+				save.addEventListener( 'click', function () {
+					save.disabled = true;
+					setStatus( st, 'Saving…' );
+					request( '/metadata/save', { method: 'POST', data: { post_id: it.post_id, meta_title: tInput.value, meta_description: dInput.value } } )
+						.then( function () { save.disabled = false; setStatus( st, 'Saved ✓', 'is-ok' ); } )
+						.catch( function ( err ) { save.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} );
+				actions.appendChild( save );
+				actions.appendChild( st );
+				row.appendChild( actions );
+
+				list.appendChild( row );
+				bindCounter( tInput, tCount, 30, 60 );
+				bindCounter( dInput, dCount, 70, 160 );
+			} );
+
+			info.textContent = 'Page ' + paged + ' of ' + pages + ' · ' + ( d.total || 0 ) + ' pages';
+			prev.disabled = paged <= 1;
+			next.disabled = paged >= pages;
+		}
+
+		function load() {
+			setStatus( msg, 'Loading…' );
+			var q = '/metadata?paged=' + paged + '&search=' + encodeURIComponent( search.value || '' );
+			request( q, { method: 'GET' } )
+				.then( function ( res ) { setStatus( msg, '', 'is-ok' ); render( res ); } )
+				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		}
+
+		search.addEventListener( 'input', function () {
+			clearTimeout( timer );
+			timer = setTimeout( function () { paged = 1; load(); }, 350 );
+		} );
+		prev.addEventListener( 'click', function () { if ( paged > 1 ) { paged--; load(); } } );
+		next.addEventListener( 'click', function () { if ( paged < pages ) { paged++; load(); } } );
+
+		load();
+	}
+
 	// ---- Insights: snapshot + experiments -----------------------------
 	function bindInsights() {
 		var snap = document.getElementById( 'scc-snapshot' );
@@ -2006,5 +2117,6 @@
 		bindOpportunities();
 		bindActionQueue();
 		bindInsights();
+		bindMetaEditor();
 	} );
 } )();

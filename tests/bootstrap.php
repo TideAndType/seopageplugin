@@ -214,6 +214,7 @@ if ( ! function_exists( 'is_wp_error' ) ) {
 require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-seo-meta.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-schema.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-quality-score.php';
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-metadata.php';
 
 // --- Phase 4 stubs + classes under test -----------------------------------
 if ( ! function_exists( 'esc_html' ) ) {

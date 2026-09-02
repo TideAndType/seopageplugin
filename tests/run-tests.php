@@ -1067,6 +1067,12 @@ echo "\n== Automation modes ==\n";
 assert_eq( 'assisted', SCC_Action_Queue::automation_mode(), 'default automation mode is assisted' );
 assert_true( in_array( 'autopilot', SCC_Action_Queue::MODES, true ), 'autopilot is a valid mode' );
 
+echo "\n== Meta Editor (char status) ==\n";
+assert_eq( 'empty', SCC_Metadata::char_status( '', 30, 60 ), 'blank title flagged empty' );
+assert_eq( 'short', SCC_Metadata::char_status( 'Too short', 30, 60 ), 'under min flagged short' );
+assert_eq( 'good', SCC_Metadata::char_status( str_repeat( 'a', 45 ), 30, 60 ), 'within range is good' );
+assert_eq( 'long', SCC_Metadata::char_status( str_repeat( 'a', 80 ), 30, 60 ), 'over max flagged long' );
+
 echo "\n== Action Queue (safety) ==\n";
 assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
 assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );

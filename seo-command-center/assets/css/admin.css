@@ -430,3 +430,16 @@
 .scc-entity--ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
 .scc-entity--gap { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 .scc-exp-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+
+/* Meta Editor. */
+.scc-meta-row { border: 1px solid var(--scc-border, #e2e8f0); border-radius: 10px; padding: 12px 14px; margin: 10px 0; background: var(--scc-surface, #fff); }
+.scc-meta-row__head { margin-bottom: 8px; }
+.scc-meta-field { display: block; margin: 8px 0; position: relative; }
+.scc-meta-field .scc-label { display: block; font-size: 12px; color: var(--scc-muted, #64748b); margin-bottom: 2px; }
+.scc-meta-count { font-size: 11px; color: var(--scc-muted, #64748b); float: right; }
+.scc-meta-count.is-good { color: #059669; }
+.scc-meta-count.is-long { color: #dc2626; }
+.scc-meta-count.is-short { color: #d97706; }
+.scc-meta-count.is-empty { color: #dc2626; }
+.scc-meta-row__actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.scc-meta-pager { display: flex; align-items: center; gap: 12px; margin-top: 12px; }

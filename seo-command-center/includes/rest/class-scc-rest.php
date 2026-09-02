@@ -712,6 +712,17 @@ class SCC_REST {
 			'callback'            => array( $this, 'links_scan' ),
 			'permission_callback' => $perm,
 		) );
+		register_rest_route( self::NS, '/metadata', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'metadata_list' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/metadata/save', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'metadata_save' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'post_id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
 		register_rest_route( self::NS, '/meta/variants', array(
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'meta_variants' ),
@@ -2292,6 +2303,40 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /metadata — list pages + their current metadata for the bulk editor.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function metadata_list( WP_REST_Request $request ) {
+		return $this->ok( SCC_Metadata::list_pages( array(
+			'search'    => (string) $request->get_param( 'search' ),
+			'post_type' => (string) $request->get_param( 'post_type' ),
+			'paged'     => (int) $request->get_param( 'paged' ),
+		) ) );
+	}
+
+	/**
+	 * POST /metadata/save — manually set a page's meta title/description.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function metadata_save( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$result = SCC_Metadata::save_manual(
+			(int) $request->get_param( 'post_id' ),
+			(string) ( $params['meta_title'] ?? '' ),
+			(string) ( $params['meta_description'] ?? '' )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'meta' => $result ) );
 	}
 
 	/**

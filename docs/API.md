@@ -80,6 +80,8 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | POST | `/links/apply` | Insert one recommendation (records revert history). |
 | POST | `/links/apply-high` | Insert all high-confidence recommendations. |
 | POST | `/links/scan` | Site-wide reoptimization scan. |
+| GET  | `/metadata` | List pages + current meta title/description for the bulk Meta Editor (`?search`, `?post_type`, `?paged`). |
+| POST | `/metadata/save` | Manually set a page's meta title/description (writes the active SEO plugin's keys; records revert history; `edit_post`). |
 | POST | `/meta/variants` | Generate classified metadata variants (GSC-aware). |
 | POST | `/meta/apply` | Apply a variant (cooldown-guarded; `force` to override). |
 | GET  | `/meta/opportunities` | GSC pages at position 4–20 with low CTR. |
