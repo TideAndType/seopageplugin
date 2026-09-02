@@ -132,53 +132,114 @@ class SCC_Metadata {
 	}
 
 	/**
+	 * Whether a post is an SEO template (excluded from content listings by
+	 * default): a page designated as an SEO template, or an Elementor library
+	 * template. Templates belong in Template Mapping, not the content lists.
+	 *
+	 * @param WP_Post|int $post Post.
+	 * @return bool
+	 */
+	public static function is_template_post( $post ) {
+		$post = get_post( $post );
+		if ( ! $post ) {
+			return false;
+		}
+		if ( 'elementor_library' === $post->post_type ) {
+			return true;
+		}
+		return '1' === get_post_meta( $post->ID, '_scc_is_seo_template', true );
+	}
+
+	/**
 	 * List pages/posts with their current metadata for the bulk editor.
 	 *
-	 * @param array $args {search, post_type, paged, per_page}.
-	 * @return array {items, total, pages, seo_plugin}
+	 * Templates (designated SEO templates + Elementor library items) are hidden
+	 * by default; pass include_templates to show them. The `filter` narrows to
+	 * pages missing metadata or pages that already have it. Filtering runs in PHP
+	 * over the current values (via the SEO-plugin bridge) so it is accurate for
+	 * every supported SEO plugin, including AIOSEO.
+	 *
+	 * @param array $args {search, post_type, paged, per_page, filter, include_templates}.
+	 * @return array
 	 */
 	public static function list_pages( array $args = array() ) {
 		$search    = isset( $args['search'] ) ? SCC_Security::sanitize_text( $args['search'] ) : '';
 		$post_type = isset( $args['post_type'] ) ? sanitize_key( $args['post_type'] ) : '';
 		$paged     = max( 1, (int) ( $args['paged'] ?? 1 ) );
 		$per_page  = min( 100, max( 5, (int) ( $args['per_page'] ?? 25 ) ) );
+		$filter    = in_array( ( $args['filter'] ?? 'all' ), array( 'all', 'missing', 'present' ), true ) ? $args['filter'] : 'all';
+		$include_templates = ! empty( $args['include_templates'] );
 
 		$types = class_exists( 'SCC_Analyzer' ) ? SCC_Analyzer::analyzable_post_types() : array( 'post', 'page' );
+		if ( $include_templates && ! in_array( 'elementor_library', $types, true ) && post_type_exists( 'elementor_library' ) ) {
+			$types[] = 'elementor_library';
+		}
 		if ( '' !== $post_type && in_array( $post_type, $types, true ) ) {
 			$types = array( $post_type );
 		}
 
-		$q = new WP_Query( array(
+		// Candidate set (ids, capped) — filtered in PHP for accuracy across SEO
+		// plugins, then paginated over the filtered result.
+		$candidate_ids = get_posts( array(
 			'post_type'      => $types,
 			'post_status'    => array( 'publish', 'draft', 'pending', 'future' ),
-			'posts_per_page' => $per_page,
-			'paged'          => $paged,
+			'posts_per_page' => 2000,
 			's'              => $search,
 			'orderby'        => 'modified',
 			'order'          => 'DESC',
-			'no_found_rows'  => false,
+			'fields'         => 'ids',
+			'no_found_rows'  => true,
 		) );
 
+		$filtered = array();
+		foreach ( (array) $candidate_ids as $pid ) {
+			if ( ! $include_templates && self::is_template_post( $pid ) ) {
+				continue;
+			}
+			$meta   = self::current( $pid );
+			$t      = trim( (string) $meta['title'] );
+			$d      = trim( (string) $meta['description'] );
+			$has    = ( '' !== $t && '' !== $d );
+			$missing = ( '' === $t || '' === $d );
+			if ( 'missing' === $filter && ! $missing ) {
+				continue;
+			}
+			if ( 'present' === $filter && ! $has ) {
+				continue;
+			}
+			$filtered[] = array( 'id' => (int) $pid, 'meta_title' => (string) $meta['title'], 'meta_description' => (string) $meta['description'] );
+		}
+
+		$total = count( $filtered );
+		$pages = max( 1, (int) ceil( $total / $per_page ) );
+		$paged = min( $paged, $pages );
+		$slice = array_slice( $filtered, ( $paged - 1 ) * $per_page, $per_page );
+
 		$items = array();
-		foreach ( $q->posts as $post ) {
-			$meta = self::current( $post->ID );
+		foreach ( $slice as $row ) {
+			$post = get_post( $row['id'] );
+			if ( ! $post ) {
+				continue;
+			}
 			$items[] = array(
 				'post_id'          => (int) $post->ID,
 				'title'            => get_the_title( $post ),
 				'post_type'        => $post->post_type,
 				'status'           => $post->post_status,
+				'is_template'      => self::is_template_post( $post ),
 				'url'              => get_permalink( $post->ID ),
 				'edit_url'         => get_edit_post_link( $post->ID, 'raw' ),
-				'meta_title'       => (string) $meta['title'],
-				'meta_description' => (string) $meta['description'],
+				'meta_title'       => $row['meta_title'],
+				'meta_description' => $row['meta_description'],
 			);
 		}
 
 		return array(
 			'items'      => $items,
-			'total'      => (int) $q->found_posts,
-			'pages'      => (int) $q->max_num_pages,
+			'total'      => $total,
+			'pages'      => $pages,
 			'paged'      => $paged,
+			'filter'     => $filter,
 			'post_types' => $types,
 			'seo_plugin' => class_exists( 'SCC_SEO_Meta' ) ? SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ) : '',
 		);

@@ -82,6 +82,18 @@ assert_eq( 1, $parsed['internal_links'], 'internal link count' );
 assert_eq( 1, $parsed['external_links'], 'external link count' );
 assert_true( in_array( 'Article', $parsed['schema_types'], true ), 'schema type extracted' );
 
+// Enriched competitor-analysis signals: h3 headings + a body-text excerpt.
+$html_rich = '<html><head><title>T</title>'
+	. '<script type="application/ld+json">{"@type":"Service"}</script></head>'
+	. '<body><nav>Menu Home About</nav><h1>Web Design</h1><h2>Process</h2><h3>Discovery</h3>'
+	. '<p>We build fast websites for local businesses.</p>'
+	. '<script>var x=1;</script><footer>Copyright</footer></body></html>';
+$rich = $crawler->parse( $html_rich, 'https://example.com/c' );
+assert_eq( array( 'Discovery' ), $rich['h3'], 'h3 headings captured for competitor comparison' );
+assert_true( strpos( $rich['text_excerpt'], 'We build fast websites' ) !== false, 'body content excerpt captured' );
+assert_true( strpos( $rich['text_excerpt'], 'var x=1' ) === false, 'scripts stripped from the excerpt' );
+assert_true( in_array( 'Service', $rich['schema_types'], true ), 'schema still extracted after excerpt stripping' );
+
 echo "\n== Crawler @graph schema extraction ==\n";
 $html2 = '<html><head><script type="application/ld+json">'
 	. '{"@graph":[{"@type":"Organization"},{"@type":["WebPage","FAQPage"]}]}'

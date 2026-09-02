@@ -27,6 +27,14 @@ $seo_plugin = (string) ( $init['seo_plugin'] ?? '' );
 		<div class="scc-card__head">
 			<h2><?php esc_html_e( 'Pages', 'seo-command-center' ); ?></h2>
 			<div>
+				<select id="scc-meta-filter">
+					<option value="all"><?php esc_html_e( 'All pages', 'seo-command-center' ); ?></option>
+					<option value="missing"><?php esc_html_e( 'Missing metadata', 'seo-command-center' ); ?></option>
+					<option value="present"><?php esc_html_e( 'Has metadata (refresh)', 'seo-command-center' ); ?></option>
+				</select>
+				<label class="scc-toggle" title="<?php esc_attr_e( 'Templates are managed under Template Mapping. Turn on to show them here too.', 'seo-command-center' ); ?>">
+					<input type="checkbox" id="scc-meta-templates"> <span><?php esc_html_e( 'Show templates', 'seo-command-center' ); ?></span>
+				</label>
 				<button class="button" id="scc-meta-suggest-all"><?php esc_html_e( '✨ Suggest for all visible', 'seo-command-center' ); ?></button>
 				<button class="button button-primary" id="scc-meta-save-all"><?php esc_html_e( 'Save all visible', 'seo-command-center' ); ?></button>
 				<input type="search" id="scc-meta-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search pages…', 'seo-command-center' ); ?>">

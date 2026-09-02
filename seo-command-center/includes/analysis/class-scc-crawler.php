@@ -79,6 +79,8 @@ class SCC_Crawler {
 			'canonical'       => '',
 			'h1'              => array(),
 			'h2'              => array(),
+			'h3'              => array(),
+			'text_excerpt'    => '',
 			'schema_types'    => array(),
 			'images'          => 0,
 			'images_missing_alt' => 0,
@@ -120,6 +122,29 @@ class SCC_Crawler {
 		}
 		foreach ( $xpath->query( '//h2' ) as $node ) {
 			$data['h2'][] = trim( $node->textContent );
+		}
+		foreach ( $xpath->query( '//h3' ) as $node ) {
+			$data['h3'][] = trim( $node->textContent );
+		}
+
+		// JSON-LD schema types (BEFORE stripping scripts below, so we keep them).
+		foreach ( $xpath->query( '//script[@type="application/ld+json"]' ) as $node ) {
+			$json = json_decode( trim( $node->textContent ), true );
+			$data['schema_types'] = array_merge( $data['schema_types'], $this->extract_schema_types( $json ) );
+		}
+		$data['schema_types'] = array_values( array_unique( $data['schema_types'] ) );
+
+		// Visible body text excerpt (drop script/style/nav/header/footer noise), so
+		// callers can compare actual page CONTENT, not just headings.
+		foreach ( $xpath->query( '//script | //style | //noscript | //nav | //header | //footer | //form' ) as $strip ) {
+			if ( $strip->parentNode ) {
+				$strip->parentNode->removeChild( $strip );
+			}
+		}
+		$body_nodes = $xpath->query( '//body' );
+		if ( $body_nodes && $body_nodes->length ) {
+			$text = preg_replace( '/\s+/', ' ', (string) $body_nodes->item( 0 )->textContent );
+			$data['text_excerpt'] = trim( mb_substr( $text, 0, 4000 ) );
 		}
 
 		// Images.

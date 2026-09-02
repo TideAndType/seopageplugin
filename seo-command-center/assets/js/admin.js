@@ -1240,7 +1240,7 @@
 				if ( c.error ) {
 					li.innerHTML = '<strong>' + esc( c.url ) + '</strong> — <span class="scc-flag scc-flag--prio-high">could not read: ' + esc( c.error ) + '</span>';
 				} else {
-					li.innerHTML = '<strong>' + esc( c.title || c.url ) + '</strong> <span class="scc-note">' + esc( c.url ) + '</span> — ' + ( ( c.headings || [] ).length ) + ' headings read';
+					li.innerHTML = '<strong>' + esc( c.title || c.url ) + '</strong> <span class="scc-note">' + esc( c.url ) + '</span> — read ' + ( ( c.headings || [] ).length ) + ' headings, ~' + ( c.word_count || 0 ) + ' words of content';
 				}
 				cList.appendChild( li );
 			} );
@@ -1494,7 +1494,7 @@
 				var row = el( 'div', null, 'scc-meta-row' );
 				row.setAttribute( 'data-post-id', it.post_id );
 				var head = el( 'div', null, 'scc-meta-row__head' );
-				head.innerHTML = '<strong>' + esc( it.title ) + '</strong> <span class="scc-flag">' + esc( it.post_type ) + '</span> <span class="scc-flag">' + esc( it.status ) + '</span>' + ( it.url ? ' <a class="scc-note" href="' + esc( it.url ) + '" target="_blank" rel="noopener">view</a>' : '' ) + ( it.edit_url ? ' <a class="scc-note" href="' + esc( it.edit_url ) + '">edit page</a>' : '' );
+				head.innerHTML = '<strong>' + esc( it.title ) + '</strong> <span class="scc-flag">' + esc( it.post_type ) + '</span> <span class="scc-flag">' + esc( it.status ) + '</span>' + ( it.is_template ? ' <span class="scc-badge scc-badge--warn">template</span>' : '' ) + ( it.url ? ' <a class="scc-note" href="' + esc( it.url ) + '" target="_blank" rel="noopener">view</a>' : '' ) + ( it.edit_url ? ' <a class="scc-note" href="' + esc( it.edit_url ) + '">edit page</a>' : '' );
 				row.appendChild( head );
 
 				var tWrap = el( 'label', null, 'scc-meta-field' );
@@ -1602,9 +1602,15 @@
 			next.disabled = paged >= pages;
 		}
 
+		var filterSel = document.getElementById( 'scc-meta-filter' );
+		var templatesToggle = document.getElementById( 'scc-meta-templates' );
+
 		function load() {
 			setStatus( msg, 'Loading…' );
-			var q = '/metadata?paged=' + paged + '&search=' + encodeURIComponent( search.value || '' );
+			var q = '/metadata?paged=' + paged +
+				'&search=' + encodeURIComponent( search.value || '' ) +
+				'&filter=' + encodeURIComponent( ( filterSel && filterSel.value ) || 'all' ) +
+				'&include_templates=' + ( ( templatesToggle && templatesToggle.checked ) ? '1' : '0' );
 			request( q, { method: 'GET' } )
 				.then( function ( res ) { setStatus( msg, '', 'is-ok' ); render( res ); } )
 				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
@@ -1614,6 +1620,8 @@
 			clearTimeout( timer );
 			timer = setTimeout( function () { paged = 1; load(); }, 350 );
 		} );
+		if ( filterSel ) { filterSel.addEventListener( 'change', function () { paged = 1; load(); } ); }
+		if ( templatesToggle ) { templatesToggle.addEventListener( 'change', function () { paged = 1; load(); } ); }
 		prev.addEventListener( 'click', function () { if ( paged > 1 ) { paged--; load(); } } );
 		next.addEventListener( 'click', function () { if ( paged < pages ) { paged++; load(); } } );
 

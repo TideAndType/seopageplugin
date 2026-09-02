@@ -64,10 +64,15 @@ class SCC_Competitor_Analysis {
 				continue;
 			}
 			$competitors[] = array(
-				'url'          => $data['url'],
-				'title'        => $data['title'],
-				'headings'     => array_slice( array_values( array_filter( array_merge( (array) $data['h1'], (array) $data['h2'] ) ) ), 0, 40 ),
-				'schema_types' => $data['schema_types'],
+				'url'              => $data['url'],
+				'title'            => $data['title'],
+				'meta_description' => (string) ( $data['meta_description'] ?? '' ),
+				'headings'         => array_slice( array_values( array_filter( array_merge( (array) $data['h1'], (array) $data['h2'], (array) ( $data['h3'] ?? array() ) ) ) ), 0, 60 ),
+				'schema_types'     => $data['schema_types'],
+				// The actual page CONTENT (trimmed), so the AI compares substance,
+				// not just headings.
+				'content_excerpt'  => mb_substr( (string) ( $data['text_excerpt'] ?? '' ), 0, 2500 ),
+				'word_count'       => str_word_count( (string) ( $data['text_excerpt'] ?? '' ) ),
 			);
 		}
 
@@ -83,8 +88,19 @@ class SCC_Competitor_Analysis {
 			return $gaps;
 		}
 
+		// Return a lean competitor summary to the UI (drop the big excerpt).
+		$competitor_summary = array_map( function ( $c ) {
+			return array(
+				'url'        => $c['url'] ?? '',
+				'title'      => $c['title'] ?? '',
+				'error'      => $c['error'] ?? '',
+				'headings'   => $c['headings'] ?? array(),
+				'word_count' => (int) ( $c['word_count'] ?? 0 ),
+			);
+		}, $competitors );
+
 		return array(
-			'competitors' => $competitors,
+			'competitors' => $competitor_summary,
 			'gaps'        => $gaps['gaps'],
 			'notes'       => $gaps['notes'],
 		);
@@ -99,13 +115,17 @@ class SCC_Competitor_Analysis {
 	 */
 	protected function ai_gap_map( array $competitors, array $our_pages ) {
 		$system = 'You are a senior SEO content strategist doing a competitive gap analysis. '
-			. 'You are given (1) COMPETITORS: real competitor pages with their headings and schema, and '
-			. '(2) OUR_PAGES: the {title, path} of pages our site ALREADY has. '
-			. 'Find the topics, services, comparisons, guides and questions the competitors cover that OUR site '
-			. 'does NOT already have a page for. For each real gap, propose ONE concrete page to create that would '
-			. 'match or beat the competitor. NEVER propose a page that duplicates one of OUR_PAGES. Do not copy '
+			. 'You are given (1) COMPETITORS: real competitor pages, each with its title, meta description, the '
+			. 'FULL heading outline (h1/h2/h3), schema types, an approximate word count, and a CONTENT_EXCERPT of '
+			. 'the actual visible page text; and (2) OUR_PAGES: the {title, path} of pages our site ALREADY has. '
+			. 'READ the competitor CONTENT_EXCERPT and headings carefully. Identify the specific topics, subtopics, '
+			. 'services, comparisons, buyer questions, entities, and content sections the competitors genuinely '
+			. 'cover that OUR site does NOT already have a page for. Base every gap on evidence you actually see in '
+			. 'the competitor content — do not guess generic SEO topics. For each real gap, propose ONE concrete '
+			. 'page to create that would match or beat the competitor, and in "why" cite which competitor(s) cover '
+			. 'it and what they include. NEVER propose a page that duplicates one of OUR_PAGES. Do not copy '
 			. 'competitor wording — describe the page WE should build. Ignore navigation, cookie, legal and '
-			. 'boilerplate headings. Return 8-20 of the highest-value gaps. '
+			. 'boilerplate headings. Return 8-20 of the highest-value gaps, best first. '
 			. 'Return JSON with this exact shape: '
 			. '{"gaps":[{"title":str,"primary_keyword":str,"intent":"informational|commercial|transactional|local",'
 			. '"page_type":"pillar|service|location|article","recommended_url":str,"priority":"high|medium|low",'
@@ -123,7 +143,7 @@ class SCC_Competitor_Analysis {
 					array( 'role' => 'user', 'content' => "Data (JSON):\n" . $payload . "\n\nProduce the content-gap map JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 2600,
+				'max_tokens'  => 3000,
 				'temperature' => 0.4,
 			),
 			'competitor-analysis'

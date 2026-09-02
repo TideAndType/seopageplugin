@@ -2313,9 +2313,11 @@ class SCC_REST {
 	 */
 	public function metadata_list( WP_REST_Request $request ) {
 		return $this->ok( SCC_Metadata::list_pages( array(
-			'search'    => (string) $request->get_param( 'search' ),
-			'post_type' => (string) $request->get_param( 'post_type' ),
-			'paged'     => (int) $request->get_param( 'paged' ),
+			'search'            => (string) $request->get_param( 'search' ),
+			'post_type'         => (string) $request->get_param( 'post_type' ),
+			'paged'             => (int) $request->get_param( 'paged' ),
+			'filter'            => (string) $request->get_param( 'filter' ),
+			'include_templates' => (bool) $request->get_param( 'include_templates' ),
 		) ) );
 	}
 
