@@ -1312,8 +1312,9 @@
 
 	// ---- Intelligence layer: "What should I do next?" -----------------
 	function bindOpportunities() {
-		var card = document.getElementById( 'scc-next-card' );
-		if ( ! card ) {
+		// Present on both the Dashboard ("What should I do next?") and the
+		// dedicated Action Queue screen.
+		if ( ! document.getElementById( 'scc-opps-refresh' ) && ! document.getElementById( 'scc-opps-list' ) ) {
 			return;
 		}
 		var msg = document.getElementById( 'scc-opps-msg' );
@@ -1364,6 +1365,84 @@
 				}
 			} );
 		}
+	}
+
+	// ---- Action Queue screen (lifecycle + Fix Everything Safe) --------
+	function bindActionQueue() {
+		var table = document.getElementById( 'scc-queue-table' );
+		var fixBtn = document.getElementById( 'scc-fix-safe' );
+		var msg = document.getElementById( 'scc-queue-msg' );
+
+		if ( fixBtn ) {
+			fixBtn.addEventListener( 'click', function () {
+				if ( ! window.confirm( 'Run all safe, deterministic actions now? These are reversible (internal-link insertions) — no content is edited, published, or deleted.' ) ) {
+					return;
+				}
+				fixBtn.disabled = true;
+				setStatus( msg, 'Running safe actions…' );
+				request( '/actions/fix-safe', { method: 'POST' } )
+					.then( function ( res ) {
+						var d = res.data || {};
+						setStatus( msg, ( d.executed || 0 ) + ' run, ' + ( d.failed || 0 ) + ' failed. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						fixBtn.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		if ( ! table ) {
+			return;
+		}
+		table.addEventListener( 'click', function ( e ) {
+			var row = e.target.closest( 'tr' );
+			if ( ! row ) {
+				return;
+			}
+			var id = row.getAttribute( 'data-id' );
+			var statusCell = row.querySelector( '.scc-q-status' );
+
+			function patch( body, done ) {
+				e.target.disabled = true;
+				request( '/actions/' + id, { method: 'PUT', data: body } )
+					.then( function ( res ) {
+						var a = ( res.data && res.data.action ) || {};
+						if ( statusCell && a.status ) { statusCell.textContent = a.status; }
+						setStatus( msg, done || 'Updated.', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						e.target.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			}
+
+			if ( e.target.classList.contains( 'scc-q-approve' ) ) {
+				patch( { status: 'approved' }, 'Approved.' );
+			} else if ( e.target.classList.contains( 'scc-q-dismiss' ) ) {
+				patch( { status: 'dismissed' }, 'Dismissed.' );
+			} else if ( e.target.classList.contains( 'scc-q-snooze' ) ) {
+				patch( { status: 'snoozed', days: 14 }, 'Snoozed for 14 days.' );
+			} else if ( e.target.classList.contains( 'scc-q-execute' ) ) {
+				if ( ! window.confirm( 'Run this safe action now? It is reversible from the change history.' ) ) {
+					return;
+				}
+				e.target.disabled = true;
+				setStatus( msg, 'Running…' );
+				request( '/actions/' + id + '/execute', { method: 'POST' } )
+					.then( function ( res ) {
+						var r = ( res.data && res.data.result ) || {};
+						setStatus( msg, r.message || 'Done.', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						e.target.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			}
+		} );
 	}
 
 	// ---- Batch jobs + publishing queue ---------------------------------
@@ -1818,5 +1897,6 @@
 		bindSchemaSettings();
 		bindNativeTemplates();
 		bindOpportunities();
+		bindActionQueue();
 	} );
 } )();

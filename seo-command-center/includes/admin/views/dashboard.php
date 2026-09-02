@@ -89,7 +89,7 @@ $t = function ( $totals, $key ) {
 					</div>
 				<?php endforeach; ?>
 			</div>
-			<p class="scc-note"><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-seo-audit' ) ); ?>"><?php esc_html_e( 'See the full action queue and SEO audit →', 'seo-command-center' ); ?></a></p>
+			<p class="scc-note"><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-action-queue' ) ); ?>"><?php esc_html_e( 'Open the full Action Queue →', 'seo-command-center' ); ?></a></p>
 		<?php endif; ?>
 	</div>
 

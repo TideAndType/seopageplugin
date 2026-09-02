@@ -47,6 +47,7 @@ class SCC_Admin {
 		// Visible menu — grouped to follow the actual workflow, trimmed down.
 		$pages = array(
 			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
+			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
 			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
@@ -367,6 +368,20 @@ class SCC_Admin {
 			'keyword-strategy',
 			array(
 				'strategy' => SCC_Keyword_Strategy::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Action Queue (opportunities + persistent action lifecycle).
+	 */
+	public function render_action_queue() {
+		$this->view(
+			'action-queue',
+			array(
+				'opportunities'      => class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::all() : array(),
+				'actions'            => class_exists( 'SCC_Action_Queue' ) ? SCC_Action_Queue::all() : array(),
+				'safe_pending_count' => class_exists( 'SCC_Action_Queue' ) ? SCC_Action_Queue::safe_pending_count() : 0,
 			)
 		);
 	}

@@ -255,9 +255,16 @@ inserter (`SCC_Link_Inserter`) is Elementor-aware — it writes the link into th
 
 WordPress-native admin (top-level menu + submenus) but styled to feel like a
 modern SEO SaaS. One top-level page `seo-command-center` with submenus matching
-the product nav (Dashboard, Site Analysis, Keyword Strategy, Site Architecture,
-Content Plan, Generate Content, Elementor Templates, Internal Links, SEO Audit,
-Schema, Publishing Queue, Settings, API Connections).
+the product nav (Dashboard, Action Queue, Topical Authority, Keyword Strategy,
+Site Architecture, Content Plan, Competitor Gaps, SEO Audit, Internal Links,
+Publishing Queue, Templates, Settings, API Connections).
+
+The **Action Queue** screen is the operational hub of the intelligence layer: it
+lists every computed opportunity (ranked + explained) with "Add to queue", and
+the persistent action queue with its full lifecycle (approve / snooze / dismiss /
+run). "Fix Everything Safe" runs only the deterministic, reversible subset
+(internal links) — it never edits content, publishes, deletes, or redirects. The
+Dashboard's "What should I do next?" card is a top-5 preview that links here.
 
 - Views live in `includes/admin/views/*.php` and only render markup; all data is
   prepared by the controller and passed in, all output escaped.
