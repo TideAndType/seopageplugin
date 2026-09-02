@@ -840,6 +840,58 @@ assert_eq( '/local-seo/', $m_by[20]['target_url'], 'verified target URL is prese
 assert_eq( 'seo audit', $m_by[10]['anchor'], 'AI anchor rejected when absent — deterministic anchor kept' );
 assert_true( $m_by[10]['confidence'] <= 92, 'endorsed-but-unverified anchor still merges confidence' );
 
+echo "\n== Opportunity Engine (scoring + explainability + confidence) ==\n";
+$signals = array(
+	'gsc' => array(
+		'connected'  => true,
+		'quick_wins' => array( array( 'query' => 'web design company', 'impressions' => 4821, 'clicks' => 20, 'position' => 8.7 ) ),
+		'untapped'   => array( array( 'query' => 'ecommerce web design', 'impressions' => 900, 'position' => 24 ) ),
+	),
+	'topical'  => array( 'has_map' => true, 'items' => array( array( 'title' => 'Local SEO Audits', 'pillar' => 'Local SEO', 'intent' => 'commercial', 'priority' => 'high', 'url' => '/local-seo-audits/' ) ) ),
+	'cannibal' => array( array( 'keyword' => 'local seo', 'pages' => array( array( 'post_id' => 1, 'title' => 'A', 'url' => '/a/' ), array( 'post_id' => 2, 'title' => 'B', 'url' => '/b/' ) ) ) ),
+	'orphans'  => array( array( 'post_id' => 9, 'title' => 'Orphan Page', 'url' => '/orphan/' ) ),
+	'thin'     => array( array( 'post_id' => 5, 'title' => 'Thin', 'url' => '/thin/', 'word_count' => 120 ) ),
+	'missing_meta' => array( array( 'post_id' => 6, 'title' => 'No Meta', 'url' => '/no-meta/' ) ),
+);
+$opps = SCC_Opportunity_Engine::compute( $signals );
+assert_true( count( $opps ) >= 6, 'opportunities produced from every signal source' );
+
+// Find the striking-distance opportunity.
+$sd = null; foreach ( $opps as $o ) { if ( 'striking_distance' === $o['type'] ) { $sd = $o; break; } }
+assert_true( is_array( $sd ), 'striking-distance opportunity exists' );
+assert_eq( 'verified', $sd['data_confidence'], 'GSC-derived opportunity is verified data' );
+$sum = 0; foreach ( $sd['factors'] as $f ) { $sum += (int) $f['points']; }
+assert_eq( min( 100, $sum ), $sd['score'], 'score equals the clamped sum of factor points (transparent)' );
+assert_true( $sd['confidence'] >= 80, 'verified data yields high confidence' );
+assert_true( strpos( $sd['reason'], '4,821' ) !== false || strpos( $sd['reason'], '4821' ) !== false, 'reason cites the real impression figure, not a fabricated one' );
+
+// Sorted by score desc.
+$sorted = true; for ( $i = 1; $i < count( $opps ); $i++ ) { if ( $opps[ $i ]['score'] > $opps[ $i - 1 ]['score'] ) { $sorted = false; break; } }
+assert_true( $sorted, 'opportunities are ranked by score descending' );
+
+// Without GSC, topical gaps are "estimated" (never presented as measured).
+$no_gsc = SCC_Opportunity_Engine::compute( array(
+	'gsc'     => array( 'connected' => false, 'quick_wins' => array(), 'untapped' => array() ),
+	'topical' => array( 'has_map' => true, 'items' => array( array( 'title' => 'X', 'pillar' => 'P', 'intent' => 'informational', 'priority' => 'medium' ) ) ),
+) );
+$mt = null; foreach ( $no_gsc as $o ) { if ( 'missing_topic' === $o['type'] ) { $mt = $o; break; } }
+assert_true( is_array( $mt ), 'missing-topic opportunity exists without GSC' );
+assert_eq( 'estimated', $mt['data_confidence'], 'AI topical gap is estimated when no GSC data backs it' );
+
+// Empty site → no opportunities, no errors, no fabricated data.
+assert_eq( 0, count( SCC_Opportunity_Engine::compute( array() ) ), 'empty signals produce zero opportunities (never fabricated)' );
+
+// Every opportunity has a stable id.
+$ids = array(); foreach ( $opps as $o ) { $ids[ $o['id'] ] = true; }
+assert_eq( count( $opps ), count( $ids ), 'each opportunity has a unique, stable id' );
+
+echo "\n== Action Queue (safety) ==\n";
+assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
+assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );
+assert_eq( false, SCC_Action_Queue::is_safe( 'create_page' ), 'create_page is NOT auto-executable (needs human)' );
+assert_eq( false, SCC_Action_Queue::is_safe( 'fix_cannibalization' ), 'cannibalization fix is NOT auto-executable' );
+assert_eq( false, SCC_Action_Queue::is_safe( 'improve_meta' ), 'meta change is NOT auto-executable (AI + review)' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

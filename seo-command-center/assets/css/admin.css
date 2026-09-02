@@ -392,3 +392,20 @@
 /* AI-assisted linking toggle. */
 .scc-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 13px; cursor: pointer; }
 .scc-toggle input { margin: 0; }
+
+/* Intelligence layer — "What should I do next?" opportunity cards. */
+.scc-next .scc-card__head { align-items: center; }
+.scc-opps { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.scc-opp { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--scc-border, #e2e8f0); border-radius: 12px; background: var(--scc-surface, #fff); }
+.scc-opp__score { flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(160deg, var(--scc-accent, #4f46e5), #7c3aed); color: #fff; border-radius: 10px; padding: 8px 0; }
+.scc-opp__num { font-size: 26px; font-weight: 800; line-height: 1; }
+.scc-opp__den { font-size: 11px; opacity: .85; }
+.scc-opp__body { flex: 1 1 auto; min-width: 0; }
+.scc-opp__title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.scc-opp__why { margin: 4px 0 8px; color: var(--scc-text, #1e293b); }
+.scc-opp__factors { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.scc-opp__factor { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(79,70,229,.08); color: var(--scc-accent, #4f46e5); }
+.scc-opp__meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--scc-muted, #64748b); margin-bottom: 6px; }
+.scc-opp__do { font-size: 13px; color: var(--scc-text, #1e293b); }
+.scc-opp__actions { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+@media (max-width: 782px) { .scc-opp { flex-direction: column; } .scc-opp__actions { flex-direction: row; } }

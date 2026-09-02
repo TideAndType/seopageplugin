@@ -3,7 +3,7 @@
  * Plugin Name:       SEO Command Center
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       AI-powered SEO Command Center for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.12.0
+ * Version:           1.13.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -23,8 +23,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.12.0' );
-define( 'SCC_DB_VERSION', '1.12.0' );
+define( 'SCC_VERSION', '1.13.0' );
+define( 'SCC_DB_VERSION', '1.13.0' );
 define( 'SCC_PLUGIN_FILE', __FILE__ );
 define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SCC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -105,6 +105,10 @@ require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-competitor-analys
 
 require_once SCC_PLUGIN_DIR . 'includes/jobs/class-scc-jobs.php';
 require_once SCC_PLUGIN_DIR . 'includes/publishing/class-scc-publishing.php';
+
+// Unified intelligence layer (Opportunity Engine + Action Queue).
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-opportunity-engine.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-action-queue.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';

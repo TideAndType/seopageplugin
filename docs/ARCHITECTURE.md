@@ -196,6 +196,28 @@ before/after render and are renderer-independent. Elementor is now one optional
 renderer, not a dependency; the pre-existing `SCC_Template_Mapping` +
 `SCC_Elementor_Builder` are reused by the Elementor renderer and remain intact.
 
+### Unified intelligence layer (Opportunity Engine + Action Queue)
+
+`SCC_Opportunity_Engine` is an **orchestration/read-model** layer — it does not
+re-implement any analysis. It gathers signals from the existing systems (GSC
+`gsc_signals`, the Topical Authority scorecard, cannibalization, the link graph,
+and the latest site analysis) and turns them into a single ranked list of
+**explainable** opportunities. Each opportunity carries a transparent score (a
+sum of labelled factor points, never an opaque average), a confidence, and an
+explicit data-availability state (`verified` / `partial` / `estimated` /
+`unavailable`). Missing external data (e.g. GSC not connected) simply omits those
+factors and downgrades confidence — it is never fabricated. Results are cached in
+a transient so the dashboard stays fast; `POST /opportunities/refresh` recomputes.
+
+`SCC_Action_Queue` (backed by the `scc_seo_actions` table) persists the
+opportunities the user chooses to act on, with a full lifecycle and logging.
+Execution is deliberately conservative: only genuinely SAFE, deterministic,
+reversible actions (currently internal-link insertion via the existing
+`SCC_Link_Engine`/`SCC_Link_Inserter`) can be run automatically — everything else
+stays `approved` and routes the user to the existing workflow. "Fix Everything
+Safe" runs only the safe subset. The layer orchestrates existing execution
+systems; it never becomes a second SEO system beside them.
+
 Internal-link recommendations are deterministic by default (content-index
 relevance + anchor engine). An optional **`link_ai_enabled`** setting (the
 "AI-assisted" toggle on the Internal Links page) adds a single AI pass over a

@@ -1310,6 +1310,62 @@
 		} );
 	}
 
+	// ---- Intelligence layer: "What should I do next?" -----------------
+	function bindOpportunities() {
+		var card = document.getElementById( 'scc-next-card' );
+		if ( ! card ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-opps-msg' );
+
+		var refresh = document.getElementById( 'scc-opps-refresh' );
+		if ( refresh ) {
+			refresh.addEventListener( 'click', function () {
+				refresh.disabled = true;
+				setStatus( msg, 'Recomputing opportunities…' );
+				request( '/opportunities/refresh', { method: 'POST' } )
+					.then( function () {
+						setStatus( msg, 'Updated. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						refresh.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		var list = document.getElementById( 'scc-opps-list' );
+		if ( list ) {
+			list.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( '.scc-opp' );
+				if ( ! row ) {
+					return;
+				}
+				var oid = row.getAttribute( 'data-opp-id' );
+				if ( e.target.classList.contains( 'scc-opp-approve' ) ) {
+					e.target.disabled = true;
+					setStatus( msg, 'Adding to the action queue…' );
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'approved' } } )
+						.then( function () {
+							e.target.textContent = 'Added ✓';
+							setStatus( msg, 'Added to the action queue.', 'is-ok' );
+						} )
+						.catch( function ( err ) {
+							e.target.disabled = false;
+							setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+						} );
+				} else if ( e.target.classList.contains( 'scc-opp-dismiss' ) ) {
+					row.style.opacity = '0.4';
+					// Promote as dismissed so it stays out of the queue.
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'dismissed' } } )
+						.then( function () { row.parentNode.removeChild( row ); } )
+						.catch( function () { row.style.opacity = '1'; } );
+				}
+			} );
+		}
+	}
+
 	// ---- Batch jobs + publishing queue ---------------------------------
 	function bindJobs() {
 		var msg = document.getElementById( 'scc-jobs-msg' );
@@ -1761,5 +1817,6 @@
 		bindSeoPanel();
 		bindSchemaSettings();
 		bindNativeTemplates();
+		bindOpportunities();
 	} );
 } )();

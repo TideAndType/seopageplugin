@@ -339,3 +339,19 @@ require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-wordpre
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-gutenberg-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-elementor-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-renderer-manager.php';
+
+// --- Intelligence layer (Opportunity Engine) ------------------------------
+if ( ! function_exists( 'get_transient' ) ) {
+	function get_transient( $k ) { return false; }
+}
+if ( ! function_exists( 'set_transient' ) ) {
+	function set_transient( $k, $v, $ttl = 0 ) { return true; }
+}
+if ( ! function_exists( 'delete_transient' ) ) {
+	function delete_transient( $k ) { return true; }
+}
+if ( ! function_exists( 'number_format_i18n' ) ) {
+	function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, (int) $d ); }
+}
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-opportunity-engine.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-action-queue.php';

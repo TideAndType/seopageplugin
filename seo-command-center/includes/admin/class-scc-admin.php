@@ -266,13 +266,17 @@ class SCC_Admin {
 	 */
 	public function render_dashboard() {
 		$latest = SCC_Analyzer::latest();
+		// Top opportunities are read from cache so the dashboard stays fast; the
+		// "Refresh" button recomputes on demand.
+		$opportunities = class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::top( 5 ) : array();
 		$this->view(
 			'dashboard',
 			array(
-				'latest'     => $latest,
-				'seo_plugin' => SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ),
-				'elementor'  => defined( 'ELEMENTOR_VERSION' ),
-				'usage'      => SCC_AI_Usage::month_summary(),
+				'latest'        => $latest,
+				'seo_plugin'    => SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ),
+				'elementor'     => defined( 'ELEMENTOR_VERSION' ),
+				'usage'         => SCC_AI_Usage::month_summary(),
+				'opportunities' => $opportunities,
 			)
 		);
 	}

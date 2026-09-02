@@ -279,6 +279,47 @@ class SCC_REST {
 			)
 		);
 
+		// ---- Unified intelligence layer: opportunities + action queue -----
+		register_rest_route( self::NS, '/opportunities', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'opportunities' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/opportunities/refresh', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'opportunities_refresh' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/actions', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'actions_list' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'actions_promote' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/actions/fix-safe', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'actions_fix_safe' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/actions/(?P<id>\d+)', array(
+			'methods'             => WP_REST_Server::EDITABLE,
+			'callback'            => array( $this, 'actions_update' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+		register_rest_route( self::NS, '/actions/(?P<id>\d+)/execute', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'actions_execute' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+
 		register_rest_route(
 			self::NS,
 			'/competitors/gap-map',
@@ -1256,6 +1297,134 @@ class SCC_REST {
 	public function cannibalization() {
 		$detector = new SCC_Cannibalization();
 		return $this->ok( array( 'groups' => $detector->detect() ) );
+	}
+
+	/**
+	 * GET /opportunities — the ranked, explained opportunity list.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function opportunities( WP_REST_Request $request ) {
+		$limit = (int) $request->get_param( 'limit' );
+		$opps  = SCC_Opportunity_Engine::all( false );
+		if ( $limit > 0 ) {
+			$opps = array_slice( $opps, 0, $limit );
+		}
+		return $this->ok( array( 'opportunities' => $opps ) );
+	}
+
+	/**
+	 * POST /opportunities/refresh — recompute from current data.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function opportunities_refresh() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		return $this->ok( array( 'opportunities' => SCC_Opportunity_Engine::all( true ) ) );
+	}
+
+	/**
+	 * GET /actions — the action queue.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function actions_list( WP_REST_Request $request ) {
+		$status = sanitize_key( (string) $request->get_param( 'status' ) );
+		return $this->ok( array(
+			'actions'            => SCC_Action_Queue::all( $status ),
+			'safe_pending_count' => SCC_Action_Queue::safe_pending_count(),
+		) );
+	}
+
+	/**
+	 * POST /actions — promote an opportunity into the queue.
+	 * Body: {opportunity_id} (resolved against the current opportunity list) or a
+	 * full {opportunity} object.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function actions_promote( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$opp = null;
+		if ( ! empty( $params['opportunity'] ) && is_array( $params['opportunity'] ) ) {
+			$opp = $params['opportunity'];
+		} elseif ( ! empty( $params['opportunity_id'] ) ) {
+			$oid = (string) $params['opportunity_id'];
+			foreach ( SCC_Opportunity_Engine::all( false ) as $candidate ) {
+				if ( ( $candidate['id'] ?? '' ) === $oid ) {
+					$opp = $candidate;
+					break;
+				}
+			}
+		}
+		if ( ! is_array( $opp ) ) {
+			return $this->fail( 'no_opportunity', __( 'Provide an opportunity_id from the current list, or an opportunity object.', 'seo-command-center' ), 400 );
+		}
+		$status = sanitize_key( (string) ( $params['status'] ?? 'approved' ) );
+		$id     = SCC_Action_Queue::promote( $opp, $status );
+		if ( ! $id ) {
+			return $this->fail( 'promote_failed', __( 'Could not add this to the action queue.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id, 'action' => SCC_Action_Queue::find( $id ) ) );
+	}
+
+	/**
+	 * PUT /actions/{id} — change status (approve / dismiss / snooze / …).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function actions_update( WP_REST_Request $request ) {
+		$id     = (int) $request->get_param( 'id' );
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$status = sanitize_key( (string) ( $params['status'] ?? '' ) );
+
+		if ( 'snoozed' === $status ) {
+			$days = (int) ( $params['days'] ?? 14 );
+			if ( ! SCC_Action_Queue::snooze( $id, $days ) ) {
+				return $this->fail( 'snooze_failed', __( 'Could not snooze this action.', 'seo-command-center' ), 400 );
+			}
+		} elseif ( ! SCC_Action_Queue::set_status( $id, $status ) ) {
+			return $this->fail( 'update_failed', __( 'Invalid status or action.', 'seo-command-center' ), 400 );
+		}
+		return $this->ok( array( 'action' => SCC_Action_Queue::find( $id ) ) );
+	}
+
+	/**
+	 * POST /actions/{id}/execute — run a SAFE deterministic action.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function actions_execute( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$r = SCC_Action_Queue::execute( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $r ) ) {
+			return $r;
+		}
+		return $this->ok( array( 'result' => $r, 'action' => SCC_Action_Queue::find( (int) $request->get_param( 'id' ) ) ) );
+	}
+
+	/**
+	 * POST /actions/fix-safe — execute every safe, approved/new action.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function actions_fix_safe() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		return $this->ok( SCC_Action_Queue::fix_everything_safe() );
 	}
 
 	/**

@@ -54,6 +54,12 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 6 | POST | `/competitors/analyze` | Public competitor analysis (single URL, token gaps). |
 | 6 | POST | `/competitors/gap-map` | AI competitive gap map: crawl up to 5 competitor URLs, compare to real site pages, return a content map of missing pages. Body: `{urls:[...]}`. |
 | 7 | POST | `/jobs`, GET `/jobs/{id}` | Batch job control. |
+| 8 | GET | `/opportunities` | Ranked, explained SEO opportunities (Opportunity Engine). Each has a transparent factor breakdown, score, confidence, and data-availability state. |
+| 8 | POST | `/opportunities/refresh` | Recompute opportunities from current data. |
+| 8 | GET / POST | `/actions` | List the action queue / promote an opportunity into it (`{opportunity_id}` or `{opportunity}` + `status`). |
+| 8 | PUT | `/actions/{id}` | Change status (`approved`/`dismissed`/`snoozed` (+`days`)/…). |
+| 8 | POST | `/actions/{id}/execute` | Execute a SAFE deterministic action (refuses non-safe types). |
+| 8 | POST | `/actions/fix-safe` | Execute every safe, approved/new action ("Fix Everything Safe"). |
 | 7 | POST | `/publishing/{approve\|unapprove\|publish\|schedule\|remove}` | Queue actions. `remove` trashes a generated draft (reversible) and detaches its content-plan entry. |
 
 ## v1.1 routes — advanced linking / meta / schema

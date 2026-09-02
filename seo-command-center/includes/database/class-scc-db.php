@@ -257,6 +257,33 @@ class SCC_DB {
 			KEY created_at (created_at)
 		) {$charset_collate};";
 
+		$actions = self::table( 'seo_actions' );
+		$sql[] = "CREATE TABLE {$actions} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			opportunity_id VARCHAR(40) NOT NULL DEFAULT '',
+			type VARCHAR(60) NOT NULL DEFAULT 'review',
+			title TEXT NULL,
+			target LONGTEXT NULL,
+			score INT NOT NULL DEFAULT 0,
+			confidence INT NOT NULL DEFAULT 0,
+			priority VARCHAR(10) NOT NULL DEFAULT 'medium',
+			reason TEXT NULL,
+			expected_impact VARCHAR(10) NULL,
+			effort VARCHAR(10) NULL,
+			risk VARCHAR(10) NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'new',
+			source VARCHAR(40) NULL,
+			payload LONGTEXT NULL,
+			result LONGTEXT NULL,
+			snoozed_until DATETIME NULL,
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY opportunity_id (opportunity_id),
+			KEY status (status),
+			KEY score (score)
+		) {$charset_collate};";
+
 		foreach ( $sql as $statement ) {
 			dbDelta( $statement );
 		}
@@ -281,6 +308,7 @@ class SCC_DB {
 			'change_history',
 			'meta_history',
 			'templates',
+			'seo_actions',
 		);
 		foreach ( $tables as $t ) {
 			$name = self::table( $t );
