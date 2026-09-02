@@ -1492,6 +1492,7 @@
 			}
 			items.forEach( function ( it ) {
 				var row = el( 'div', null, 'scc-meta-row' );
+				row.setAttribute( 'data-post-id', it.post_id );
 				var head = el( 'div', null, 'scc-meta-row__head' );
 				head.innerHTML = '<strong>' + esc( it.title ) + '</strong> <span class="scc-flag">' + esc( it.post_type ) + '</span> <span class="scc-flag">' + esc( it.status ) + '</span>' + ( it.url ? ' <a class="scc-note" href="' + esc( it.url ) + '" target="_blank" rel="noopener">view</a>' : '' ) + ( it.edit_url ? ' <a class="scc-note" href="' + esc( it.edit_url ) + '">edit page</a>' : '' );
 				row.appendChild( head );
@@ -1578,6 +1579,15 @@
 				actions.appendChild( st );
 				row.appendChild( actions );
 
+				// Apply a variant to this row's fields (used by "Suggest for all").
+				row._sccApply = function ( v ) {
+					tInput.value = v.title || '';
+					dInput.value = v.description || '';
+					tInput.dispatchEvent( new Event( 'input' ) );
+					dInput.dispatchEvent( new Event( 'input' ) );
+				};
+				row._sccStatus = st;
+
 				list.appendChild( row );
 				bindCounter( tInput, tCount, 30, 60 );
 				bindCounter( dInput, dCount, 70, 160 );
@@ -1602,6 +1612,51 @@
 		} );
 		prev.addEventListener( 'click', function () { if ( paged > 1 ) { paged--; load(); } } );
 		next.addEventListener( 'click', function () { if ( paged < pages ) { paged++; load(); } } );
+
+		// Suggest for all visible rows — one AI call per page, sequential to stay
+		// gentle on the provider. Fills the top-ranked variant (prefers a
+		// click-through option); the user still reviews and saves each row.
+		var suggestAll = document.getElementById( 'scc-meta-suggest-all' );
+		if ( suggestAll ) {
+			suggestAll.addEventListener( 'click', function () {
+				var rows = Array.prototype.slice.call( list.querySelectorAll( '.scc-meta-row' ) );
+				if ( ! rows.length ) { return; }
+				if ( ! window.confirm( 'Generate AI suggestions for all ' + rows.length + ' visible page(s)? This makes one AI request per page (uses AI credits). Nothing is saved automatically — you review and Save each row.' ) ) {
+					return;
+				}
+				suggestAll.disabled = true;
+				var i = 0, filled = 0, failed = 0;
+
+				function pickBest( variants ) {
+					if ( ! variants || ! variants.length ) { return null; }
+					for ( var k = 0; k < variants.length; k++ ) {
+						if ( variants[ k ].type === 'ctr' ) { return variants[ k ]; }
+					}
+					return variants[ 0 ];
+				}
+
+				function nextRow() {
+					if ( i >= rows.length ) {
+						suggestAll.disabled = false;
+						setStatus( msg, 'Suggested ' + filled + ' page(s)' + ( failed ? ', ' + failed + ' failed' : '' ) + '. Review and Save each row.', filled ? 'is-ok' : 'is-error' );
+						return;
+					}
+					var row = rows[ i++ ];
+					var pid = row.getAttribute( 'data-post-id' );
+					setStatus( msg, 'Suggesting… ' + i + ' / ' + rows.length );
+					if ( row._sccStatus ) { setStatus( row._sccStatus, 'AI…' ); }
+					request( '/meta/variants', { method: 'POST', data: { post_id: pid } } )
+						.then( function ( res ) {
+							var best = pickBest( ( res.data || {} ).variants );
+							if ( best && row._sccApply ) { row._sccApply( best ); filled++; if ( row._sccStatus ) { setStatus( row._sccStatus, 'Suggested — review + Save.', 'is-ok' ); } }
+							else { failed++; }
+							nextRow();
+						} )
+						.catch( function () { failed++; if ( row._sccStatus ) { setStatus( row._sccStatus, 'AI failed', 'is-error' ); } nextRow(); } );
+				}
+				nextRow();
+			} );
+		}
 
 		load();
 	}

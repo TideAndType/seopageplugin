@@ -26,7 +26,10 @@ $seo_plugin = (string) ( $init['seo_plugin'] ?? '' );
 	<div class="scc-card">
 		<div class="scc-card__head">
 			<h2><?php esc_html_e( 'Pages', 'seo-command-center' ); ?></h2>
-			<input type="search" id="scc-meta-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search pages…', 'seo-command-center' ); ?>">
+			<div>
+				<button class="button" id="scc-meta-suggest-all"><?php esc_html_e( '✨ Suggest for all visible', 'seo-command-center' ); ?></button>
+				<input type="search" id="scc-meta-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search pages…', 'seo-command-center' ); ?>">
+			</div>
 		</div>
 		<span class="scc-inline-status" id="scc-meta-msg"></span>
 		<div id="scc-meta-list" data-paged="1"></div>
