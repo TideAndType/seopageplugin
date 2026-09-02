@@ -58,6 +58,7 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 8 | POST | `/opportunities/refresh` | Recompute opportunities from current data (also refreshes content-decay). |
 | 8 | GET | `/content-decay` | Declining pages from a GSC period comparison (recent 90d vs prior 90d), with causes, severity, confidence and a refresh plan. `?refresh=1` recomputes. Returns `{available:false}` when GSC is not connected. |
 | 8 | GET | `/intent-drift` | Pages whose search-intent mix is shifting, inferred from the GSC query mix (recent 90d vs prior 90d). Real query/impression data with a transparent wording classifier (marked partial confidence). `?refresh=1` recomputes. `{available:false}` without GSC. |
+| 8 | GET | `/page/{id}/optimize` | Per-page SEO scorecard: component scores (Content, Technical, Metadata, Internal linking, Schema, Intent, GSC opportunity — unknown components excluded, not guessed) + prioritized fixes. Capability-checked (`edit_post`). |
 | 8 | GET / POST | `/actions` | List the action queue / promote an opportunity into it (`{opportunity_id}` or `{opportunity}` + `status`). |
 | 8 | PUT | `/actions/{id}` | Change status (`approved`/`dismissed`/`snoozed` (+`days`)/…). |
 | 8 | POST | `/actions/{id}/execute` | Execute a SAFE deterministic action (refuses non-safe types). |

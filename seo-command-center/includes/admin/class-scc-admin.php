@@ -195,6 +195,7 @@ class SCC_Admin {
 			<div class="scc-panel__rows" id="scc-panel-rows"></div>
 
 			<div class="scc-panel__actions">
+				<button type="button" class="button button-primary" id="scc-panel-optimize"><?php esc_html_e( 'Optimize this page', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-links"><?php esc_html_e( 'Internal links', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-meta"><?php esc_html_e( 'Meta variants', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-schema"><?php esc_html_e( 'Schema', 'seo-command-center' ); ?></button>

@@ -483,6 +483,55 @@ class SCC_GSC {
 	}
 
 	/**
+	 * A cached URL → {clicks, impressions, ctr, position} map for the last N days,
+	 * so per-page callers (e.g. the Page Optimizer) share one API call.
+	 *
+	 * @param int $days Lookback window.
+	 * @return array<string,array>
+	 */
+	public static function page_metrics_map( $days = 90 ) {
+		$key    = 'scc_gsc_page_metrics_' . (int) $days;
+		$cached = get_transient( $key );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+		if ( ! self::is_connected() ) {
+			return array();
+		}
+		$rows = self::query( '', array( 'page' ), $days, 5000 );
+		$map  = array();
+		if ( ! is_wp_error( $rows ) ) {
+			foreach ( (array) $rows as $row ) {
+				$url = (string) ( $row['keys'][0] ?? '' );
+				if ( '' === $url ) {
+					continue;
+				}
+				$map[ untrailingslashit( $url ) ] = array(
+					'clicks'      => (int) ( $row['clicks'] ?? 0 ),
+					'impressions' => (int) ( $row['impressions'] ?? 0 ),
+					'ctr'         => round( (float) ( $row['ctr'] ?? 0 ) * 100, 2 ),
+					'position'    => round( (float) ( $row['position'] ?? 0 ), 1 ),
+				);
+			}
+		}
+		set_transient( $key, $map, 6 * HOUR_IN_SECONDS );
+		return $map;
+	}
+
+	/**
+	 * Metrics for one page URL (from the cached map), or null if none.
+	 *
+	 * @param string $url Page URL.
+	 * @param int    $days Lookback.
+	 * @return array|null
+	 */
+	public static function page_metrics( $url, $days = 90 ) {
+		$map = self::page_metrics_map( $days );
+		$key = untrailingslashit( (string) $url );
+		return isset( $map[ $key ] ) ? $map[ $key ] : null;
+	}
+
+	/**
 	 * Identify quick-win opportunities: queries with meaningful impressions
 	 * that rank just outside the top results (positions 4-20).
 	 *

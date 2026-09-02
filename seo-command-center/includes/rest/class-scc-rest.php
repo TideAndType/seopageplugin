@@ -300,6 +300,12 @@ class SCC_REST {
 			'callback'            => array( $this, 'intent_drift' ),
 			'permission_callback' => $perm,
 		) );
+		register_rest_route( self::NS, '/page/(?P<id>\d+)/optimize', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'page_optimize' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
 		register_rest_route( self::NS, '/actions', array(
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1369,6 +1375,20 @@ class SCC_REST {
 		}
 		$refresh = (bool) $request->get_param( 'refresh' );
 		return $this->ok( SCC_Intent_Drift::detect( $refresh ) );
+	}
+
+	/**
+	 * GET /page/{id}/optimize — the per-page SEO scorecard + prioritized fixes.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function page_optimize( WP_REST_Request $request ) {
+		$id = (int) $request->get_param( 'id' );
+		if ( ! current_user_can( 'edit_post', $id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot view this page.', 'seo-command-center' ), 403 );
+		}
+		return $this->ok( array( 'scorecard' => SCC_Page_Optimizer::scorecard( $id ) ) );
 	}
 
 	/**

@@ -1616,6 +1616,60 @@
 				.catch( function () {} );
 		}
 
+		var optimizeBtn = document.getElementById( 'scc-panel-optimize' );
+		if ( optimizeBtn ) {
+			optimizeBtn.addEventListener( 'click', function () {
+				setStatus( status, 'Scoring this page…' );
+				out.innerHTML = '';
+				request( '/page/' + postId + '/optimize', { method: 'GET' } )
+					.then( function ( res ) {
+						setStatus( status, '', 'is-ok' );
+						var sc = ( res.data && res.data.scorecard ) || {};
+						var scoreEl = document.getElementById( 'scc-panel-score' );
+						if ( scoreEl ) { scoreEl.textContent = ( sc.score || 0 ) + '/100'; }
+
+						var wrap = el( 'div', null, 'scc-pageopt' );
+
+						// Component bars.
+						( sc.components || [] ).forEach( function ( c ) {
+							var b = el( 'div', null, 'scc-po-bar' );
+							var head = el( 'div', null, 'scc-po-bar__head' );
+							head.appendChild( el( 'span', c.label + ( c.note ? ' (' + c.note + ')' : '' ) ) );
+							head.appendChild( el( 'strong', c.known ? ( c.pct + '%' ) : 'n/a' ) );
+							b.appendChild( head );
+							var track = el( 'div', null, 'scc-po-track' );
+							var fill = el( 'div', null, 'scc-po-fill' + ( c.known ? '' : ' is-unknown' ) );
+							fill.style.width = ( c.known ? c.pct : 0 ) + '%';
+							track.appendChild( fill );
+							b.appendChild( track );
+							wrap.appendChild( b );
+						} );
+
+						// Prioritized recommendations.
+						var recs = sc.recommendations || [];
+						if ( recs.length ) {
+							wrap.appendChild( el( 'div', 'Prioritized fixes', 'scc-label' ) );
+							recs.forEach( function ( r ) {
+								var row = el( 'div', null, 'scc-po-rec scc-po-rec--' + r.severity );
+								row.appendChild( el( 'span', r.severity.toUpperCase(), 'scc-flag scc-flag--prio-' + r.severity ) );
+								var t = el( 'span', null, 'scc-po-rec__t' );
+								t.innerHTML = '<strong>' + ( r.label || '' ).replace( /</g, '&lt;' ) + '</strong> — ' + ( r.fix || '' ).replace( /</g, '&lt;' );
+								row.appendChild( t );
+								wrap.appendChild( row );
+							} );
+						} else {
+							wrap.appendChild( el( 'p', 'No prioritized fixes — this page looks well optimized.', 'scc-note' ) );
+						}
+
+						if ( sc.disclaimer ) { wrap.appendChild( el( 'p', sc.disclaimer, 'scc-note' ) ); }
+						out.appendChild( wrap );
+					} )
+					.catch( function ( err ) {
+						setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
 		document.getElementById( 'scc-panel-links' ).addEventListener( 'click', function () {
 			setStatus( status, 'Analyzing links…' );
 			out.innerHTML = '';

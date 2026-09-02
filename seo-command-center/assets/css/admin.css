@@ -409,3 +409,13 @@
 .scc-opp__do { font-size: 13px; color: var(--scc-text, #1e293b); }
 .scc-opp__actions { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 @media (max-width: 782px) { .scc-opp { flex-direction: column; } .scc-opp__actions { flex-direction: row; } }
+
+/* Page Optimizer (meta-box scorecard). */
+.scc-pageopt { margin-top: 10px; }
+.scc-po-bar { margin: 8px 0; }
+.scc-po-bar__head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+.scc-po-track { height: 8px; border-radius: 999px; background: rgba(0,0,0,.08); overflow: hidden; }
+.scc-po-fill { height: 100%; background: linear-gradient(90deg, var(--scc-accent, #4f46e5), #7c3aed); border-radius: 999px; }
+.scc-po-fill.is-unknown { background: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 4px, #e2e8f0 4px, #e2e8f0 8px); }
+.scc-po-rec { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--scc-border, #e2e8f0); }
+.scc-po-rec__t { font-size: 13px; }

@@ -965,6 +965,40 @@ assert_true( is_array( $idd ), 'intent drift produces an opportunity' );
 assert_eq( 'partial', $idd['data_confidence'], 'intent-drift opportunity is partial (real data, heuristic labels)' );
 assert_eq( 'realign_intent', $idd['action_type'], 'intent drift maps to a realign action' );
 
+echo "\n== Page Optimizer (composed scorecard + prioritized fixes) ==\n";
+// compose(): unknown components excluded + renormalized.
+$po = SCC_Page_Optimizer::compose( array(
+	'content'          => array( 'known' => true, 'pct' => 100 ),
+	'technical'        => array( 'known' => true, 'pct' => 100 ),
+	'metadata'         => array( 'known' => true, 'pct' => 0 ),
+	'internal_linking' => array( 'known' => true, 'pct' => 100 ),
+	'schema'           => array( 'known' => true, 'pct' => 0 ),
+	'intent'           => array( 'known' => false, 'pct' => 0 ),
+	'gsc'              => array( 'known' => false, 'pct' => 0 ),
+) );
+// Known weights: content20 tech15 meta15 links15 schema15 = 80; earned =
+// 20*100+15*100+15*0+15*100+15*0 = 5000 → 5000/80 = 62.5 → 63.
+assert_eq( 63, $po['score'], 'score renormalizes over known components only' );
+$intent_known = null; foreach ( $po['components'] as $c ) { if ( 'intent' === $c['key'] ) { $intent_known = $c['known']; } }
+assert_eq( false, $intent_known, 'unmeasured component reported as not-known (n/a), not zero-scored' );
+$all_unknown = SCC_Page_Optimizer::compose( array() );
+assert_eq( 0, $all_unknown['score'], 'no known components → 0, never fabricated' );
+
+// build_recommendations(): prioritized, high severity first.
+$recs = SCC_Page_Optimizer::build_recommendations( array(
+	'has_title' => false, 'has_desc' => true, 'schema_valid' => false,
+	'thin' => true, 'word_count' => 120, 'is_orphan' => true, 'outbound_opps' => 0,
+	'decay' => true, 'drift' => false, 'missing_h1' => false, 'images_missing_alt' => 0,
+) );
+assert_true( count( $recs ) >= 4, 'multiple prioritized fixes produced' );
+assert_eq( 'high', $recs[0]['severity'], 'highest-severity fix is first' );
+$rkeys = array(); foreach ( $recs as $r ) { $rkeys[] = $r['action']; }
+assert_true( in_array( 'refresh_content', $rkeys, true ), 'decay → refresh_content fix' );
+assert_true( in_array( 'add_internal_links', $rkeys, true ), 'orphan → add_internal_links fix' );
+assert_true( in_array( 'schema', $rkeys, true ), 'no schema → schema fix' );
+$clean = SCC_Page_Optimizer::build_recommendations( array( 'has_title' => true, 'has_desc' => true, 'schema_valid' => true, 'thin' => false, 'is_orphan' => false, 'outbound_opps' => 0 ) );
+assert_eq( 0, count( $clean ), 'a well-optimized page yields no fixes' );
+
 echo "\n== Action Queue (safety) ==\n";
 assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
 assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );

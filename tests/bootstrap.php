@@ -357,3 +357,4 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-c
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-intent-drift.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-opportunity-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-action-queue.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-page-optimizer.php';

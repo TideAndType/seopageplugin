@@ -231,6 +231,15 @@ query data is verified GSC data but the per-query labelling is heuristic, so
 these opportunities are marked **partial** confidence — never "verified". No SERP
 scraping, no DataForSEO dependency.
 
+`SCC_Page_Optimizer` is the per-page face of the same intelligence: for one post
+it composes a component scorecard (Content, Technical, Metadata, Internal linking,
+Schema, Intent, GSC opportunity) from the existing per-page systems (SEO report,
+latest analysis item, link graph, content decay, intent drift, and a cached GSC
+page-metrics map) plus a prioritized fix list. Unknown components are excluded and
+the weights renormalized (never guessed). It surfaces in the post editor's SEO
+meta box via `GET /page/{id}/optimize` (capability-checked). It reuses existing
+analysis — it does not re-crawl.
+
 `SCC_Action_Queue` (backed by the `scc_seo_actions` table) persists the
 opportunities the user chooses to act on, with a full lifecycle and logging.
 Execution is deliberately conservative: only genuinely SAFE, deterministic,
