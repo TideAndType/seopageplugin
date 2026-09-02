@@ -82,6 +82,7 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | POST | `/links/scan` | Site-wide reoptimization scan. |
 | GET  | `/metadata` | List pages + current meta title/description for the bulk Meta Editor (`?search`, `?post_type`, `?paged`). |
 | POST | `/metadata/save` | Manually set a page's meta title/description (writes the active SEO plugin's keys; records revert history; `edit_post`). |
+| POST | `/meta/variants` (Meta Editor) | Per-row "Suggest with AI" — classified, GSC-aware title/description variants optimized for SEO + click-through; clicking one fills the row. |
 | POST | `/meta/variants` | Generate classified metadata variants (GSC-aware). |
 | POST | `/meta/apply` | Apply a variant (cooldown-guarded; `force` to override). |
 | GET  | `/meta/opportunities` | GSC pages at position 4–20 with low CTR. |

@@ -1514,9 +1514,58 @@
 				dWrap.appendChild( dCount );
 				row.appendChild( dWrap );
 
+				var suggestions = el( 'div', null, 'scc-meta-suggestions' );
+				suggestions.hidden = true;
+				row.appendChild( suggestions );
+
 				var actions = el( 'div', null, 'scc-meta-row__actions' );
+				var suggest = el( 'button', '✨ Suggest with AI', 'button button-small scc-meta-suggest' );
 				var save = el( 'button', 'Save', 'button button-primary button-small' );
 				var st = el( 'span', '', 'scc-inline-status' );
+
+				suggest.addEventListener( 'click', function () {
+					suggest.disabled = true;
+					setStatus( st, 'Asking AI for the strongest SEO + click options…' );
+					request( '/meta/variants', { method: 'POST', data: { post_id: it.post_id } } )
+						.then( function ( res ) {
+							suggest.disabled = false;
+							setStatus( st, '', 'is-ok' );
+							var d = res.data || {};
+							var variants = d.variants || [];
+							suggestions.innerHTML = '';
+							suggestions.hidden = false;
+							if ( ! variants.length ) {
+								suggestions.appendChild( el( 'p', 'No suggestions returned — try again.', 'scc-note' ) );
+								return;
+							}
+							suggestions.appendChild( el( 'div', 'AI suggestions (click one to use it):', 'scc-label' ) );
+							variants.forEach( function ( v ) {
+								var opt = el( 'div', null, 'scc-meta-suggestion' );
+								opt.innerHTML =
+									'<div class="scc-meta-suggestion__head"><span class="scc-flag">' + esc( v.type ) + '</span> ' +
+									'<span class="scc-note">' + esc( v.title || '' ).length + ' / ' + esc( v.description || '' ).length + ' chars</span></div>' +
+									'<div class="scc-meta-suggestion__t"><strong>' + esc( v.title || '' ) + '</strong></div>' +
+									'<div class="scc-meta-suggestion__d">' + esc( v.description || '' ) + '</div>' +
+									( v.reason ? '<div class="scc-note">' + esc( v.reason ) + '</div>' : '' );
+								var use = el( 'button', 'Use this', 'button button-small' );
+								use.addEventListener( 'click', function () {
+									tInput.value = v.title || '';
+									dInput.value = v.description || '';
+									tInput.dispatchEvent( new Event( 'input' ) );
+									dInput.dispatchEvent( new Event( 'input' ) );
+									suggestions.hidden = true;
+									setStatus( st, 'Filled — review, then Save.', 'is-ok' );
+								} );
+								opt.appendChild( use );
+								suggestions.appendChild( opt );
+							} );
+						} )
+						.catch( function ( err ) {
+							suggest.disabled = false;
+							setStatus( st, ( err && err.message ) || i18n.error, 'is-error' );
+						} );
+				} );
+
 				save.addEventListener( 'click', function () {
 					save.disabled = true;
 					setStatus( st, 'Saving…' );
@@ -1524,6 +1573,7 @@
 						.then( function () { save.disabled = false; setStatus( st, 'Saved ✓', 'is-ok' ); } )
 						.catch( function ( err ) { save.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
 				} );
+				actions.appendChild( suggest );
 				actions.appendChild( save );
 				actions.appendChild( st );
 				row.appendChild( actions );

@@ -443,3 +443,10 @@
 .scc-meta-count.is-empty { color: #dc2626; }
 .scc-meta-row__actions { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
 .scc-meta-pager { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+
+/* Meta Editor — AI suggestions. */
+.scc-meta-suggestions { margin: 8px 0; padding: 10px; border: 1px dashed var(--scc-border, #e2e8f0); border-radius: 8px; background: rgba(79,70,229,.04); }
+.scc-meta-suggestion { padding: 8px 0; border-top: 1px solid var(--scc-border, #e2e8f0); }
+.scc-meta-suggestion:first-of-type { border-top: 0; }
+.scc-meta-suggestion__head { display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
+.scc-meta-suggestion__d { color: var(--scc-muted, #475569); font-size: 13px; margin: 2px 0 4px; }
