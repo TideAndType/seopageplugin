@@ -146,3 +146,20 @@ one it is promoted here as a durable action with a lifecycle.
 
 Created via `dbDelta` on the `SCC_DB_VERSION` 1.13.0 upgrade; no existing data is
 touched. Removed only on opt-in uninstall.
+
+### `scc_seo_snapshots` — Phase 8 (Health Timeline)
+
+Daily SEO health snapshots for the timeline: `captured_on` (one per day),
+`health_score` (transparent blend of measured coverage), `clicks`/`impressions`/
+`avg_position` (from GSC when connected, else 0), `opportunities_open`,
+`actions_completed`, and `components` (JSON). Created via dbDelta on the
+`SCC_DB_VERSION` 1.18.0 upgrade.
+
+### `scc_seo_experiments` — Phase 8 (Experiments)
+
+Records a change to a page and its GSC baseline so results can be measured:
+`post_id`, `url`, `change_type`, `note`, `status`, `baseline` (JSON), `result`
+(JSON — correlation verdict + confidence, never causation), `measure_days`,
+`start_date`. Created via dbDelta on the 1.18.0 upgrade.
+
+Both are removed only on opt-in uninstall.

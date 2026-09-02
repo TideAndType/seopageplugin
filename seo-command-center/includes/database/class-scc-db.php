@@ -284,6 +284,43 @@ class SCC_DB {
 			KEY score (score)
 		) {$charset_collate};";
 
+		$snapshots = self::table( 'seo_snapshots' );
+		$sql[] = "CREATE TABLE {$snapshots} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			captured_on DATE NOT NULL DEFAULT '0000-00-00',
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			health_score INT NOT NULL DEFAULT 0,
+			clicks INT NOT NULL DEFAULT 0,
+			impressions BIGINT NOT NULL DEFAULT 0,
+			avg_position FLOAT NOT NULL DEFAULT 0,
+			opportunities_open INT NOT NULL DEFAULT 0,
+			actions_completed INT NOT NULL DEFAULT 0,
+			components LONGTEXT NULL,
+			meta LONGTEXT NULL,
+			PRIMARY KEY  (id),
+			KEY captured_on (captured_on)
+		) {$charset_collate};";
+
+		$experiments = self::table( 'seo_experiments' );
+		$sql[] = "CREATE TABLE {$experiments} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			post_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			url TEXT NULL,
+			title TEXT NULL,
+			change_type VARCHAR(60) NOT NULL DEFAULT '',
+			note TEXT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'running',
+			baseline LONGTEXT NULL,
+			result LONGTEXT NULL,
+			measure_days INT NOT NULL DEFAULT 28,
+			start_date DATE NOT NULL DEFAULT '0000-00-00',
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY post_id (post_id),
+			KEY status (status)
+		) {$charset_collate};";
+
 		foreach ( $sql as $statement ) {
 			dbDelta( $statement );
 		}
@@ -309,6 +346,8 @@ class SCC_DB {
 			'meta_history',
 			'templates',
 			'seo_actions',
+			'seo_snapshots',
+			'seo_experiments',
 		);
 		foreach ( $tables as $t ) {
 			$name = self::table( $t );

@@ -343,3 +343,33 @@ store anything, call the AI layer, or add tables. It reuses:
 `scorecard()` gathers the live signals and calls it. Weights are filterable via
 `scc_topical_authority_weights`. Surfaced at Admin → Topical Authority and via
 `GET /topical-authority`.
+
+## 6. Intelligence layer — completion (Phase 8)
+
+The unified intelligence layer now spans the full closed loop, all orchestrating
+existing systems (no parallel SEO system, no fabricated data):
+
+- **Opportunity Engine** + **Action Queue** — scored, explainable opportunities
+  and a persistent action lifecycle with safe deterministic execution.
+- **Signals**: GSC striking-distance & untapped demand, topical-authority gaps,
+  cannibalization, orphans, thin content, missing metadata, **Content Decay**,
+  **Intent Drift** (both GSC-only).
+- **Page Optimizer** — per-page component scorecard + prioritized fixes in the
+  editor.
+- **Health Timeline** (`scc_seo_snapshots`) — daily transparent health score +
+  GSC totals, so progress is visible over time.
+- **Experiments** (`scc_seo_experiments`) — before/after measurement of a change
+  against its GSC baseline, in correlation language only.
+- **Entity Authority Graph** — organization/service/location entities and their
+  supporting-page gaps, derived from business + topical-map data.
+- **Revenue-aware prioritization** — configurable per-intent business-value
+  points so priority follows value, not volume.
+- **Automation modes** — conservative / assisted / autopilot, gating what may run
+  unattended (safe, reversible actions only; audited; capped).
+- **AI/GEO Visibility** — provider-agnostic scaffold that reports "not connected"
+  honestly (no fabricated AI-answer metrics) and surfaces real citation-readiness
+  factors.
+
+Surfaced in admin via the **Action Queue** and **Insights** screens, the
+Dashboard "What should I do next?" card, the editor's "Optimize this page", and
+Settings (automation mode + business value).

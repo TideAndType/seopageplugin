@@ -30,6 +30,24 @@ class SCC_Action_Queue {
 	/** Action types that can be executed safely and deterministically. */
 	const SAFE_TYPES = array( 'add_internal_links', 'fix_orphan' );
 
+	/** Automation modes. */
+	const MODES = array( 'conservative', 'assisted', 'autopilot' );
+
+	/**
+	 * The configured automation mode (default: assisted).
+	 *
+	 * - conservative: analysis only; no execution, even of safe actions.
+	 * - assisted: safe deterministic actions run only when a human triggers them.
+	 * - autopilot: safe deterministic actions may also run unattended (cron), with
+	 *   a per-run cap and full audit — still never risky/destructive actions.
+	 *
+	 * @return string
+	 */
+	public static function automation_mode() {
+		$mode = class_exists( 'SCC_Settings' ) ? (string) SCC_Settings::get( 'automation_mode', 'assisted' ) : 'assisted';
+		return in_array( $mode, self::MODES, true ) ? $mode : 'assisted';
+	}
+
 	/**
 	 * List actions, optionally filtered by status.
 	 *
@@ -171,6 +189,9 @@ class SCC_Action_Queue {
 		if ( ! self::is_safe( $action['type'] ) ) {
 			return new WP_Error( 'scc_not_safe', __( 'This action is not a safe automatic action — complete it from its workflow (Content Plan, Meta, etc.).', 'seo-command-center' ), array( 'status' => 409 ) );
 		}
+		if ( 'conservative' === self::automation_mode() ) {
+			return new WP_Error( 'scc_conservative', __( 'Automation mode is Conservative — no actions run automatically. Switch to Assisted in Settings to run safe actions.', 'seo-command-center' ), array( 'status' => 409 ) );
+		}
 
 		self::set_status( $id, 'in_progress' );
 
@@ -269,6 +290,38 @@ class SCC_Action_Queue {
 			}
 		}
 		return array( 'executed' => $executed, 'failed' => $failed, 'results' => $results );
+	}
+
+	/**
+	 * Autopilot: unattended execution of safe, approved actions — ONLY when the
+	 * automation mode is "autopilot". Capped per run and fully audited. Never runs
+	 * risky/destructive actions (those are not on the safe list).
+	 *
+	 * @param int $cap Max actions to run this pass.
+	 * @return array {ran:int, mode:string}
+	 */
+	public static function run_autopilot( $cap = 5 ) {
+		if ( 'autopilot' !== self::automation_mode() ) {
+			return array( 'ran' => 0, 'mode' => self::automation_mode() );
+		}
+		$cap = max( 1, min( 20, (int) $cap ) );
+		$ran = 0;
+		foreach ( self::all( 'approved', 100 ) as $a ) {
+			if ( $ran >= $cap ) {
+				break;
+			}
+			if ( ! self::is_safe( $a['type'] ) ) {
+				continue;
+			}
+			$r = self::execute( (int) $a['id'] );
+			if ( ! is_wp_error( $r ) ) {
+				$ran++;
+			}
+		}
+		if ( $ran > 0 && class_exists( 'SCC_Logger' ) ) {
+			SCC_Logger::info( 'action-queue', 'Autopilot executed safe actions', array( 'ran' => $ran ) );
+		}
+		return array( 'ran' => $ran, 'mode' => 'autopilot' );
 	}
 
 	/**

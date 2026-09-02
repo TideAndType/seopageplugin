@@ -1445,6 +1445,59 @@
 		} );
 	}
 
+	// ---- Insights: snapshot + experiments -----------------------------
+	function bindInsights() {
+		var snap = document.getElementById( 'scc-snapshot' );
+		var msg = document.getElementById( 'scc-insights-msg' );
+		if ( snap ) {
+			snap.addEventListener( 'click', function () {
+				snap.disabled = true;
+				setStatus( msg, 'Capturing…' );
+				request( '/health-timeline/snapshot', { method: 'POST' } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( err ) { snap.disabled = false; setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var startBtn = document.getElementById( 'scc-exp-start' );
+		if ( startBtn ) {
+			var emsg = document.getElementById( 'scc-exp-msg' );
+			startBtn.addEventListener( 'click', function () {
+				var pid = ( document.getElementById( 'scc-exp-post' ) || {} ).value;
+				var type = ( document.getElementById( 'scc-exp-type' ) || {} ).value;
+				var note = ( document.getElementById( 'scc-exp-note' ) || {} ).value;
+				if ( ! pid ) { setStatus( emsg, 'Enter a post ID.', 'is-error' ); return; }
+				startBtn.disabled = true;
+				setStatus( emsg, 'Capturing baseline…' );
+				request( '/experiments', { method: 'POST', data: { post_id: pid, change_type: type, note: note } } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( err ) { startBtn.disabled = false; setStatus( emsg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var expTable = document.getElementById( 'scc-exp-table' );
+		if ( expTable ) {
+			expTable.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( 'tr' );
+				if ( ! row ) { return; }
+				var id = row.getAttribute( 'data-id' );
+				var emsg2 = document.getElementById( 'scc-exp-msg' );
+				if ( e.target.classList.contains( 'scc-exp-eval' ) ) {
+					e.target.disabled = true;
+					setStatus( emsg2, 'Evaluating…' );
+					request( '/experiments/' + id, { method: 'POST' } )
+						.then( function () { window.location.reload(); } )
+						.catch( function ( err ) { e.target.disabled = false; setStatus( emsg2, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} else if ( e.target.classList.contains( 'scc-exp-del' ) ) {
+					if ( ! window.confirm( 'Delete this experiment?' ) ) { return; }
+					request( '/experiments/' + id, { method: 'DELETE' } )
+						.then( function () { row.parentNode.removeChild( row ); } )
+						.catch( function () {} );
+				}
+			} );
+		}
+	}
+
 	// ---- Batch jobs + publishing queue ---------------------------------
 	function bindJobs() {
 		var msg = document.getElementById( 'scc-jobs-msg' );
@@ -1952,5 +2005,6 @@
 		bindNativeTemplates();
 		bindOpportunities();
 		bindActionQueue();
+		bindInsights();
 	} );
 } )();

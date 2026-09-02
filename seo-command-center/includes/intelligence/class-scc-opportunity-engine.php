@@ -83,6 +83,7 @@ class SCC_Opportunity_Engine {
 			'missing_meta'=> array(),
 			'decay'       => array(),
 			'intent_drift'=> array(),
+			'value_weights' => self::value_weights(),
 		);
 
 		// Real Search Console demand.
@@ -181,6 +182,7 @@ class SCC_Opportunity_Engine {
 		$opps = array();
 
 		$gsc_connected = ! empty( $signals['gsc']['connected'] );
+		$vw            = isset( $signals['value_weights'] ) ? (array) $signals['value_weights'] : array( 'enabled' => false );
 
 		// 1) Striking-distance queries (GSC): real impressions, ranking 4-20.
 		foreach ( (array) ( $signals['gsc']['quick_wins'] ?? array() ) as $q ) {
@@ -195,6 +197,8 @@ class SCC_Opportunity_Engine {
 			$factors[] = self::factor( 'Already ranking on page 1–2 (position ' . round( $pos, 1 ) . ')', $pos > 0 && $pos <= 10 ? 22 : 16 );
 			$factors[] = self::factor( self::fmt_int( $impr ) . ' monthly impressions', min( 20, (int) round( $impr / 250 ) + 4 ) );
 			$factors[] = self::factor( 'Small ranking gap to close', 12 );
+			$vf = self::value_factor( $query, '', $vw );
+			if ( $vf ) { $factors[] = $vf; }
 
 			$opps[] = self::build( array(
 				'type'            => 'striking_distance',
@@ -224,6 +228,8 @@ class SCC_Opportunity_Engine {
 				self::factor( self::fmt_int( $impr ) . ' impressions the site does not win', min( 22, (int) round( $impr / 200 ) + 6 ) ),
 				self::factor( 'No dedicated page for this demand', 16 ),
 			);
+			$vf = self::value_factor( $query, '', $vw );
+			if ( $vf ) { $factors[] = $vf; }
 			$opps[] = self::build( array(
 				'type'            => 'untapped_demand',
 				'title'           => sprintf( 'Create or expand a page for “%s”', $query ),
@@ -257,6 +263,8 @@ class SCC_Opportunity_Engine {
 			if ( in_array( $intent, array( 'commercial', 'transactional', 'local' ), true ) ) {
 				$factors[] = self::factor( 'Commercial intent', 10 );
 			}
+			$vf = self::value_factor( '', $intent, $vw );
+			if ( $vf ) { $factors[] = $vf; }
 			$opps[] = self::build( array(
 				'type'            => 'missing_topic',
 				'title'           => sprintf( 'Create page: %s', $title ),
@@ -480,6 +488,54 @@ class SCC_Opportunity_Engine {
 		$o['id']    = 'op_' . substr( md5( ( $o['type'] ?? '' ) . '|' . $target_key ), 0, 16 );
 
 		return $o;
+	}
+
+	/**
+	 * The configured business-value weighting (revenue-aware prioritization).
+	 *
+	 * @return array {enabled:bool, commercial:int, local:int, informational:int}
+	 */
+	public static function value_weights() {
+		if ( ! class_exists( 'SCC_Settings' ) ) {
+			return array( 'enabled' => false );
+		}
+		return array(
+			'enabled'       => (bool) SCC_Settings::get( 'revenue_weighting', false ),
+			'commercial'    => (int) SCC_Settings::get( 'value_commercial', 15 ),
+			'local'         => (int) SCC_Settings::get( 'value_local', 12 ),
+			'informational' => (int) SCC_Settings::get( 'value_informational', 0 ),
+		);
+	}
+
+	/**
+	 * A business-value factor for a query/intent, when revenue weighting is on.
+	 * Search volume alone never decides priority — configured commercial value
+	 * does. Returns null when weighting is off or the value is zero.
+	 *
+	 * @param string $query  The query (classified for intent), or ''.
+	 * @param string $intent An explicit intent, or '' to classify from the query.
+	 * @param array  $vw     Value weights.
+	 * @return array|null
+	 */
+	protected static function value_factor( $query, $intent, array $vw ) {
+		if ( empty( $vw['enabled'] ) ) {
+			return null;
+		}
+		$intent = $intent ? strtolower( $intent ) : '';
+		if ( '' === $intent && '' !== $query && class_exists( 'SCC_Intent_Drift' ) ) {
+			$intent = SCC_Intent_Drift::classify_intent( $query );
+		}
+		if ( in_array( $intent, array( 'commercial', 'transactional' ), true ) ) {
+			$pts = (int) ( $vw['commercial'] ?? 0 );
+			$lbl = __( 'High commercial value (your priority)', 'seo-command-center' );
+		} elseif ( 'local' === $intent ) {
+			$pts = (int) ( $vw['local'] ?? 0 );
+			$lbl = __( 'Local business value (your priority)', 'seo-command-center' );
+		} else {
+			$pts = (int) ( $vw['informational'] ?? 0 );
+			$lbl = __( 'Informational value', 'seo-command-center' );
+		}
+		return $pts > 0 ? self::factor( $lbl, min( 30, $pts ) ) : null;
 	}
 
 	/**

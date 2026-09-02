@@ -48,6 +48,7 @@ class SCC_Admin {
 		$pages = array(
 			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
 			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
+			self::SLUG . '-insights'         => array( __( 'Insights', 'seo-command-center' ), 'render_insights' ),
 			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
@@ -369,6 +370,25 @@ class SCC_Admin {
 			'keyword-strategy',
 			array(
 				'strategy' => SCC_Keyword_Strategy::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Insights (health timeline, entity graph, experiments, AI visibility).
+	 */
+	public function render_insights() {
+		if ( class_exists( 'SCC_Health_Timeline' ) ) {
+			SCC_Health_Timeline::maybe_capture();
+		}
+		$this->view(
+			'insights',
+			array(
+				'timeline'    => class_exists( 'SCC_Health_Timeline' ) ? SCC_Health_Timeline::timeline( 60 ) : array(),
+				'entities'    => class_exists( 'SCC_Entity_Graph' ) ? SCC_Entity_Graph::build() : array(),
+				'experiments' => class_exists( 'SCC_Experiments' ) ? SCC_Experiments::all() : array(),
+				'change_types'=> class_exists( 'SCC_Experiments' ) ? SCC_Experiments::CHANGE_TYPES : array(),
+				'ai'          => class_exists( 'SCC_AI_Visibility' ) ? SCC_AI_Visibility::status() : array(),
 			)
 		);
 	}

@@ -213,6 +213,39 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 			</tr>
 		</table>
 
+		<?php
+		$automation_mode = isset( $s['automation_mode'] ) ? (string) $s['automation_mode'] : 'assisted';
+		$modes = array(
+			'conservative' => __( 'Conservative — analysis & recommendations only; nothing runs automatically', 'seo-command-center' ),
+			'assisted'     => __( 'Assisted — safe, reversible actions run only when you trigger them (recommended)', 'seo-command-center' ),
+			'autopilot'    => __( 'Autopilot — safe, reversible actions may also run unattended (capped + audited)', 'seo-command-center' ),
+		);
+		?>
+		<h2><?php esc_html_e( 'Intelligence & automation', 'seo-command-center' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Automation mode', 'seo-command-center' ); ?></th>
+				<td>
+					<select name="automation_mode" id="scc-automation-mode">
+						<?php foreach ( $modes as $val => $label ) : ?>
+							<option value="<?php echo esc_attr( $val ); ?>" <?php selected( $automation_mode, $val ); ?>><?php echo esc_html( $label ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<p class="description"><?php esc_html_e( 'Autopilot still never edits content, publishes, deletes, or redirects — only deterministic, reversible actions (internal links) run unattended.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Revenue-aware prioritization', 'seo-command-center' ); ?></th>
+				<td>
+					<label><input type="checkbox" name="revenue_weighting" <?php checked( ! empty( $s['revenue_weighting'] ) ); ?>> <?php esc_html_e( 'Prioritize by business value, not search volume alone.', 'seo-command-center' ); ?></label>
+					<p class="description"><?php esc_html_e( 'Extra opportunity-score points for opportunities by intent (0–30 each):', 'seo-command-center' ); ?></p>
+					<label><?php esc_html_e( 'Commercial', 'seo-command-center' ); ?> <input type="number" min="0" max="30" name="value_commercial" value="<?php echo esc_attr( isset( $s['value_commercial'] ) ? (int) $s['value_commercial'] : 15 ); ?>" class="small-text"></label>
+					<label><?php esc_html_e( 'Local', 'seo-command-center' ); ?> <input type="number" min="0" max="30" name="value_local" value="<?php echo esc_attr( isset( $s['value_local'] ) ? (int) $s['value_local'] : 12 ); ?>" class="small-text"></label>
+					<label><?php esc_html_e( 'Informational', 'seo-command-center' ); ?> <input type="number" min="0" max="30" name="value_informational" value="<?php echo esc_attr( isset( $s['value_informational'] ) ? (int) $s['value_informational'] : 0 ); ?>" class="small-text"></label>
+				</td>
+			</tr>
+		</table>
+
 		<h2><?php esc_html_e( 'Housekeeping', 'seo-command-center' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>

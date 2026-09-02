@@ -999,6 +999,74 @@ assert_true( in_array( 'schema', $rkeys, true ), 'no schema → schema fix' );
 $clean = SCC_Page_Optimizer::build_recommendations( array( 'has_title' => true, 'has_desc' => true, 'schema_valid' => true, 'thin' => false, 'is_orphan' => false, 'outbound_opps' => 0 ) );
 assert_eq( 0, count( $clean ), 'a well-optimized page yields no fixes' );
 
+echo "\n== Health Timeline (transparent site health) ==\n";
+$h = SCC_Health_Timeline::compute_health( array( 'analyzed' => 100, 'missing_meta' => 20, 'has_schema' => 50, 'thin_content' => 10, 'no_h1' => 0 ) );
+// metadata 80, schema 50, content 90, headings 100; weights 25/25/30/20 = 100.
+// (25*80 + 25*50 + 30*90 + 20*100)/100 = (2000+1250+2700+2000)/100 = 79.5 → 80.
+assert_eq( 80, $h['score'], 'health score is a transparent weighted blend of measured coverage' );
+$empty_h = SCC_Health_Timeline::compute_health( array( 'analyzed' => 0 ) );
+assert_eq( 0, $empty_h['score'], 'no analyzed pages → 0 health (never fabricated)' );
+$unknown = true; foreach ( $empty_h['components'] as $c ) { if ( $c['known'] ) { $unknown = false; } }
+assert_true( $unknown, 'with no data every component is not-known' );
+
+echo "\n== Experiments (correlation, not causation) ==\n";
+$pos = SCC_Experiments::evaluate_result(
+	array( 'available' => true, 'clicks' => 100, 'impressions' => 5000, 'position' => 9.0 ),
+	array( 'available' => true, 'clicks' => 140, 'impressions' => 6000, 'position' => 6.0 ),
+	28, gmdate( 'Y-m-d', time() - 40 * 86400 )
+);
+assert_eq( 'positive', $pos['verdict'], 'clicks up + position improved → positive correlation' );
+assert_eq( 'complete', $pos['status'], 'past the measurement window → complete' );
+assert_true( strpos( strtolower( $pos['detail'] ), 'causation' ) !== false, 'result explicitly disclaims causation' );
+$neg = SCC_Experiments::evaluate_result(
+	array( 'available' => true, 'clicks' => 100, 'impressions' => 5000, 'position' => 6.0 ),
+	array( 'available' => true, 'clicks' => 70, 'impressions' => 4000, 'position' => 9.0 ),
+	28, gmdate( 'Y-m-d', time() - 40 * 86400 )
+);
+assert_eq( 'negative', $neg['verdict'], 'clicks down + position worse → negative movement' );
+$nodata = SCC_Experiments::evaluate_result( array( 'available' => false ), array( 'available' => false ), 28, gmdate( 'Y-m-d' ) );
+assert_eq( 'no_data', $nodata['verdict'], 'no GSC data → cannot measure (not fabricated)' );
+
+echo "\n== Entity Graph ==\n";
+$eg = SCC_Entity_Graph::analyze( array(
+	'organization' => 'Tide & Type',
+	'services'     => array( 'Web Design', 'Local SEO' ),
+	'locations'    => array( 'Savannah', 'Daytona Beach' ),
+	'pages'        => array(
+		array( 'title' => 'Web Design Services', 'path' => '/web-design/' ),
+		array( 'title' => 'Local SEO', 'path' => '/local-seo/' ),
+		array( 'title' => 'Savannah', 'path' => '/savannah/' ),
+	),
+) );
+assert_true( ! empty( $eg['available'] ), 'entity graph built from configured data' );
+$gap_labels = array(); foreach ( $eg['gaps'] as $g ) { $gap_labels[] = $g['entity']; }
+assert_true( in_array( 'Daytona Beach', $gap_labels, true ), 'unsupported location surfaced as a gap' );
+assert_true( ! in_array( 'Web Design', $gap_labels, true ), 'supported service is not a gap' );
+assert_eq( false, SCC_Entity_Graph::analyze( array() )['available'], 'no business data → graph unavailable (never fabricated)' );
+
+echo "\n== Revenue-aware prioritization ==\n";
+$sig_rev = array(
+	'gsc' => array( 'connected' => true, 'quick_wins' => array( array( 'query' => 'best seo company', 'impressions' => 300, 'position' => 7 ) ), 'untapped' => array() ),
+	'value_weights' => array( 'enabled' => true, 'commercial' => 20, 'local' => 12, 'informational' => 0 ),
+);
+$rev_opps = SCC_Opportunity_Engine::compute( $sig_rev );
+$has_value = false; foreach ( $rev_opps[0]['factors'] as $f ) { if ( strpos( $f['label'], 'commercial value' ) !== false ) { $has_value = true; } }
+assert_true( $has_value, 'commercial query gains a business-value factor when revenue weighting is on' );
+$sig_norev = array( 'gsc' => array( 'connected' => true, 'quick_wins' => array( array( 'query' => 'best seo company', 'impressions' => 300, 'position' => 7 ) ), 'untapped' => array() ), 'value_weights' => array( 'enabled' => false ) );
+$norev = SCC_Opportunity_Engine::compute( $sig_norev );
+$has_value2 = false; foreach ( $norev[0]['factors'] as $f ) { if ( strpos( $f['label'], 'commercial value' ) !== false ) { $has_value2 = true; } }
+assert_eq( false, $has_value2, 'no value factor when revenue weighting is off' );
+
+echo "\n== AI visibility (honest) ==\n";
+$aiv = SCC_AI_Visibility::status();
+assert_eq( false, $aiv['connected'], 'no AI-visibility provider connected by default' );
+$all_unavail = true; foreach ( $aiv['providers'] as $p ) { if ( $p['connected'] ) { $all_unavail = false; } }
+assert_true( $all_unavail, 'every provider reports not-connected (no fabricated AI metrics)' );
+
+echo "\n== Automation modes ==\n";
+assert_eq( 'assisted', SCC_Action_Queue::automation_mode(), 'default automation mode is assisted' );
+assert_true( in_array( 'autopilot', SCC_Action_Queue::MODES, true ), 'autopilot is a valid mode' );
+
 echo "\n== Action Queue (safety) ==\n";
 assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
 assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );

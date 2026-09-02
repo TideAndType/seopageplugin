@@ -96,6 +96,10 @@ class SCC_Plugin {
 		// Background jobs dispatcher.
 		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
 
+		// Intelligence layer: capture a daily health snapshot and run autopilot
+		// (safe, deterministic actions only) on the existing job cron.
+		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this, 'run_intelligence_cron' );
+
 		// Internal Link Autopilot: keep the index fresh + analyze new content.
 		$this->loader->add_action( 'save_post', $this->autopilot, 'on_save_post', 20, 3 );
 		$this->loader->add_action( 'before_delete_post', $this->autopilot, 'on_delete_post', 10, 1 );
@@ -162,6 +166,20 @@ class SCC_Plugin {
 			. '.scc-faq__a{padding:.85rem 1.1rem 1rem}'
 			. '.scc-faq__a>*:first-child{margin-top:0}.scc-faq__a>*:last-child{margin-bottom:0}'
 			. '</style>' . "\n";
+	}
+
+	/**
+	 * Intelligence-layer cron work: a daily health snapshot + autopilot pass.
+	 * Both are guarded (snapshot is once/day; autopilot only runs in autopilot
+	 * mode), so this is safe to fire on the hourly job cron.
+	 */
+	public function run_intelligence_cron() {
+		if ( class_exists( 'SCC_Health_Timeline' ) ) {
+			SCC_Health_Timeline::maybe_capture();
+		}
+		if ( class_exists( 'SCC_Action_Queue' ) ) {
+			SCC_Action_Queue::run_autopilot( 5 );
+		}
 	}
 
 	/**

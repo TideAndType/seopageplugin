@@ -419,3 +419,14 @@
 .scc-po-fill.is-unknown { background: repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 4px, #e2e8f0 4px, #e2e8f0 8px); }
 .scc-po-rec { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--scc-border, #e2e8f0); }
 .scc-po-rec__t { font-size: 13px; }
+
+/* Insights (health timeline, entities, experiments). */
+.scc-health { display: flex; align-items: center; gap: 20px; margin: 8px 0 14px; }
+.scc-health__num { font-size: 34px; font-weight: 800; color: var(--scc-accent, #4f46e5); }
+.scc-health__num span { font-size: 14px; opacity: .6; }
+.scc-health__spark { flex: 1 1 auto; min-width: 0; }
+.scc-entities { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.scc-entity { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--scc-border, #e2e8f0); }
+.scc-entity--ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+.scc-entity--gap { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.scc-exp-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }

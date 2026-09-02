@@ -358,3 +358,7 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-i
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-opportunity-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-action-queue.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-page-optimizer.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-health-timeline.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-experiments.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-entity-graph.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-ai-visibility.php';

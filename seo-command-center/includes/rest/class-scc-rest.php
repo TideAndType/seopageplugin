@@ -306,6 +306,58 @@ class SCC_REST {
 			'permission_callback' => $perm,
 			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
 		) );
+
+		// Health timeline.
+		register_rest_route( self::NS, '/health-timeline', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'health_timeline' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/health-timeline/snapshot', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'health_snapshot' ),
+			'permission_callback' => $perm,
+		) );
+
+		// Experiments.
+		register_rest_route( self::NS, '/experiments', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'experiments_list' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'experiments_start' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/experiments/(?P<id>\d+)', array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'experiments_evaluate' ),
+				'permission_callback' => $perm,
+				'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+			),
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( $this, 'experiments_delete' ),
+				'permission_callback' => $perm,
+				'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+			),
+		) );
+
+		// Entity graph + AI visibility.
+		register_rest_route( self::NS, '/entities', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'entities' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/ai-visibility', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'ai_visibility' ),
+			'permission_callback' => $perm,
+		) );
 		register_rest_route( self::NS, '/actions', array(
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1375,6 +1427,96 @@ class SCC_REST {
 		}
 		$refresh = (bool) $request->get_param( 'refresh' );
 		return $this->ok( SCC_Intent_Drift::detect( $refresh ) );
+	}
+
+	/**
+	 * GET /health-timeline — SEO health snapshots over time.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function health_timeline() {
+		return $this->ok( array( 'timeline' => SCC_Health_Timeline::timeline( 180 ) ) );
+	}
+
+	/**
+	 * POST /health-timeline/snapshot — capture a snapshot now.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function health_snapshot() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		SCC_Health_Timeline::snapshot( true );
+		return $this->ok( array( 'timeline' => SCC_Health_Timeline::timeline( 180 ) ) );
+	}
+
+	/**
+	 * GET /experiments — list SEO experiments.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function experiments_list() {
+		return $this->ok( array( 'experiments' => SCC_Experiments::all(), 'change_types' => SCC_Experiments::CHANGE_TYPES ) );
+	}
+
+	/**
+	 * POST /experiments — start an experiment.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function experiments_start( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$id     = SCC_Experiments::start( is_array( $params ) ? $params : array() );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return $this->ok( array( 'id' => $id, 'experiments' => SCC_Experiments::all() ) );
+	}
+
+	/**
+	 * POST /experiments/{id} — evaluate an experiment now.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function experiments_evaluate( WP_REST_Request $request ) {
+		$r = SCC_Experiments::evaluate( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $r ) ) {
+			return $r;
+		}
+		return $this->ok( array( 'experiment' => $r, 'experiments' => SCC_Experiments::all() ) );
+	}
+
+	/**
+	 * DELETE /experiments/{id}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function experiments_delete( WP_REST_Request $request ) {
+		SCC_Experiments::delete( (int) $request->get_param( 'id' ) );
+		return $this->ok( array( 'experiments' => SCC_Experiments::all() ) );
+	}
+
+	/**
+	 * GET /entities — the entity authority graph + gaps.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function entities() {
+		return $this->ok( SCC_Entity_Graph::build() );
+	}
+
+	/**
+	 * GET /ai-visibility — provider-agnostic AI-answer visibility status.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function ai_visibility() {
+		return $this->ok( SCC_AI_Visibility::status() );
 	}
 
 	/**
