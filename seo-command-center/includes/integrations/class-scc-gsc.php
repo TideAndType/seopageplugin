@@ -383,6 +383,106 @@ class SCC_GSC {
 	}
 
 	/**
+	 * Query Search Analytics for an explicit date range (used by period
+	 * comparisons such as content-decay detection).
+	 *
+	 * @param string $site_url   GSC property.
+	 * @param array  $dimensions Dimensions.
+	 * @param string $start_date Y-m-d.
+	 * @param string $end_date   Y-m-d.
+	 * @param int    $row_limit  Max rows.
+	 * @return array|WP_Error
+	 */
+	public static function query_range( $site_url, array $dimensions, $start_date, $end_date, $row_limit = 5000 ) {
+		$token = self::access_token();
+		if ( is_wp_error( $token ) ) {
+			return $token;
+		}
+		$site_url = $site_url ? $site_url : self::property();
+		$endpoint = self::API_BASE . '/sites/' . rawurlencode( $site_url ) . '/searchAnalytics/query';
+		$response = wp_remote_post(
+			$endpoint,
+			array(
+				'timeout' => 30,
+				'headers' => array(
+					'authorization' => 'Bearer ' . $token,
+					'content-type'  => 'application/json',
+				),
+				'body'    => wp_json_encode(
+					array(
+						'startDate'  => $start_date,
+						'endDate'    => $end_date,
+						'dimensions' => array_values( $dimensions ),
+						'rowLimit'   => SCC_Security::sanitize_int( $row_limit, 1, 25000 ),
+					)
+				),
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+		$code = wp_remote_retrieve_response_code( $response );
+		$body = json_decode( wp_remote_retrieve_body( $response ), true );
+		if ( 200 !== (int) $code ) {
+			$msg = isset( $body['error']['message'] ) ? $body['error']['message'] : sprintf( 'HTTP %d', $code );
+			return new WP_Error( 'scc_gsc_api', $msg, array( 'status' => $code ) );
+		}
+		return isset( $body['rows'] ) ? $body['rows'] : array();
+	}
+
+	/**
+	 * Compare page-level performance across two consecutive windows of $days each
+	 * (recent window vs the window immediately before it). Returns a per-page map
+	 * keyed by page URL with current + previous clicks/impressions/position.
+	 *
+	 * @param string $site_url GSC property.
+	 * @param int    $days     Window length in days (each period).
+	 * @return array|WP_Error
+	 */
+	public static function compare_pages( $site_url = '', $days = 90 ) {
+		$days      = SCC_Security::sanitize_int( $days, 14, 240 );
+		$now       = time();
+		$recent_end   = gmdate( 'Y-m-d', $now );
+		$recent_start = gmdate( 'Y-m-d', $now - $days * DAY_IN_SECONDS );
+		$prev_end     = gmdate( 'Y-m-d', $now - ( $days + 1 ) * DAY_IN_SECONDS );
+		$prev_start   = gmdate( 'Y-m-d', $now - ( 2 * $days + 1 ) * DAY_IN_SECONDS );
+
+		$recent = self::query_range( $site_url, array( 'page' ), $recent_start, $recent_end, 5000 );
+		if ( is_wp_error( $recent ) ) {
+			return $recent;
+		}
+		$prev = self::query_range( $site_url, array( 'page' ), $prev_start, $prev_end, 5000 );
+		if ( is_wp_error( $prev ) ) {
+			return $prev;
+		}
+
+		$map = array();
+		$fold = function ( $rows, $which ) use ( &$map ) {
+			foreach ( (array) $rows as $row ) {
+				$url = (string) ( $row['keys'][0] ?? '' );
+				if ( '' === $url ) {
+					continue;
+				}
+				if ( ! isset( $map[ $url ] ) ) {
+					$map[ $url ] = array(
+						'url'          => $url,
+						'curr_clicks'  => 0, 'prev_clicks' => 0,
+						'curr_impr'    => 0, 'prev_impr'   => 0,
+						'curr_pos'     => 0.0, 'prev_pos'   => 0.0,
+					);
+				}
+				$map[ $url ][ $which . '_clicks' ] = (int) ( $row['clicks'] ?? 0 );
+				$map[ $url ][ $which . '_impr' ]   = (int) ( $row['impressions'] ?? 0 );
+				$map[ $url ][ $which . '_pos' ]    = round( (float) ( $row['position'] ?? 0 ), 1 );
+			}
+		};
+		$fold( $recent, 'curr' );
+		$fold( $prev, 'prev' );
+
+		return array_values( $map );
+	}
+
+	/**
 	 * Identify quick-win opportunities: queries with meaningful impressions
 	 * that rank just outside the top results (positions 4-20).
 	 *

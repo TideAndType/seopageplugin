@@ -209,6 +209,17 @@ explicit data-availability state (`verified` / `partial` / `estimated` /
 factors and downgrades confidence — it is never fabricated. Results are cached in
 a transient so the dashboard stays fast; `POST /opportunities/refresh` recomputes.
 
+`SCC_Content_Decay` is one of the engine's signal sources: it compares page-level
+Search Console performance across two consecutive windows (recent 90 days vs the
+prior 90 days via `SCC_GSC::compare_pages`) and flags genuinely declining pages.
+It is confidence-thresholded — a page needs a meaningful baseline (prior clicks
+or impressions) and a significant drop (≈30%+ clicks/impressions, or average
+position worsened by 3+) before it counts as decay, so normal fluctuation is
+never mislabelled. Each finding carries causes (clicks down, impressions down,
+rankings declining, stale), a severity, a confidence, and a concrete refresh
+plan; these become `content_decay` opportunities (verified data) in the engine.
+When GSC is not connected it returns `{available:false}` — never fabricated.
+
 `SCC_Action_Queue` (backed by the `scc_seo_actions` table) persists the
 opportunities the user chooses to act on, with a full lifecycle and logging.
 Execution is deliberately conservative: only genuinely SAFE, deterministic,

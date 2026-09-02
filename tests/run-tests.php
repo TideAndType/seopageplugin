@@ -885,6 +885,35 @@ assert_eq( 0, count( SCC_Opportunity_Engine::compute( array() ) ), 'empty signal
 $ids = array(); foreach ( $opps as $o ) { $ids[ $o['id'] ] = true; }
 assert_eq( count( $opps ), count( $ids ), 'each opportunity has a unique, stable id' );
 
+echo "\n== Content Decay Engine (confidence-thresholded) ==\n";
+$decay_pages = array(
+	// Real decay: strong baseline, clicks down 50%.
+	array( 'url' => '/local-seo/', 'post_id' => 3, 'title' => 'Local SEO', 'prev_clicks' => 200, 'curr_clicks' => 100, 'prev_impr' => 8000, 'curr_impr' => 5000, 'prev_pos' => 6.0, 'curr_pos' => 11.0, 'age_months' => 14 ),
+	// Noise: tiny baseline, big % swing — must NOT be flagged.
+	array( 'url' => '/tiny/', 'post_id' => 4, 'title' => 'Tiny', 'prev_clicks' => 3, 'curr_clicks' => 1, 'prev_impr' => 40, 'curr_impr' => 10, 'prev_pos' => 5, 'curr_pos' => 30 ),
+	// Stable page: no meaningful change — not decay.
+	array( 'url' => '/stable/', 'post_id' => 5, 'title' => 'Stable', 'prev_clicks' => 150, 'curr_clicks' => 148, 'prev_impr' => 6000, 'curr_impr' => 6100, 'prev_pos' => 4.0, 'curr_pos' => 4.1 ),
+	// Growing page: improving — never decay.
+	array( 'url' => '/growing/', 'post_id' => 6, 'title' => 'Growing', 'prev_clicks' => 100, 'curr_clicks' => 180, 'prev_impr' => 5000, 'curr_impr' => 9000, 'prev_pos' => 8.0, 'curr_pos' => 5.0 ),
+);
+$decayed = SCC_Content_Decay::analyze( $decay_pages );
+assert_eq( 1, count( $decayed ), 'only the genuinely decaying page is flagged (noise/stable/growing excluded)' );
+assert_eq( '/local-seo/', $decayed[0]['url'], 'the decaying page is identified' );
+$codes = array(); foreach ( $decayed[0]['causes'] as $c ) { $codes[] = $c['code']; }
+assert_true( in_array( 'clicks_down', $codes, true ), 'clicks-down cause detected' );
+assert_true( in_array( 'rankings_declining', $codes, true ), 'ranking-decline cause detected' );
+assert_true( in_array( 'stale', $codes, true ), 'staleness noted as a contributing cause' );
+assert_true( ! empty( $decayed[0]['refresh_plan'] ), 'a concrete refresh plan is produced' );
+assert_true( $decayed[0]['confidence'] >= 70, 'strong baseline yields solid confidence' );
+assert_eq( 0, count( SCC_Content_Decay::analyze( array() ) ), 'no pages → no decay (never fabricated)' );
+
+// Decay flows into the opportunity engine as a verified refresh_content opp.
+$opps_decay = SCC_Opportunity_Engine::compute( array( 'decay' => $decayed ) );
+$cd = null; foreach ( $opps_decay as $o ) { if ( 'content_decay' === $o['type'] ) { $cd = $o; break; } }
+assert_true( is_array( $cd ), 'decay produces a content_decay opportunity' );
+assert_eq( 'verified', $cd['data_confidence'], 'decay opportunity is verified (GSC-backed)' );
+assert_eq( 'refresh_content', $cd['action_type'], 'decay maps to a refresh action' );
+
 echo "\n== Action Queue (safety) ==\n";
 assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
 assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );

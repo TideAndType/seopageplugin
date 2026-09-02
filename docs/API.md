@@ -55,7 +55,8 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 6 | POST | `/competitors/gap-map` | AI competitive gap map: crawl up to 5 competitor URLs, compare to real site pages, return a content map of missing pages. Body: `{urls:[...]}`. |
 | 7 | POST | `/jobs`, GET `/jobs/{id}` | Batch job control. |
 | 8 | GET | `/opportunities` | Ranked, explained SEO opportunities (Opportunity Engine). Each has a transparent factor breakdown, score, confidence, and data-availability state. |
-| 8 | POST | `/opportunities/refresh` | Recompute opportunities from current data. |
+| 8 | POST | `/opportunities/refresh` | Recompute opportunities from current data (also refreshes content-decay). |
+| 8 | GET | `/content-decay` | Declining pages from a GSC period comparison (recent 90d vs prior 90d), with causes, severity, confidence and a refresh plan. `?refresh=1` recomputes. Returns `{available:false}` when GSC is not connected. |
 | 8 | GET / POST | `/actions` | List the action queue / promote an opportunity into it (`{opportunity_id}` or `{opportunity}` + `status`). |
 | 8 | PUT | `/actions/{id}` | Change status (`approved`/`dismissed`/`snoozed` (+`days`)/…). |
 | 8 | POST | `/actions/{id}/execute` | Execute a SAFE deterministic action (refuses non-safe types). |

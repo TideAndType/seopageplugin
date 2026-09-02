@@ -81,6 +81,7 @@ class SCC_Opportunity_Engine {
 			'orphans'     => array(),
 			'thin'        => array(),
 			'missing_meta'=> array(),
+			'decay'       => array(),
 		);
 
 		// Real Search Console demand.
@@ -145,6 +146,14 @@ class SCC_Opportunity_Engine {
 						$signals['missing_meta'][] = $row;
 					}
 				}
+			}
+		}
+
+		// Content decay (GSC period comparison).
+		if ( class_exists( 'SCC_Content_Decay' ) ) {
+			$decay = SCC_Content_Decay::detect();
+			if ( is_array( $decay ) && ! empty( $decay['available'] ) ) {
+				$signals['decay'] = (array) ( $decay['items'] ?? array() );
 			}
 		}
 
@@ -357,6 +366,38 @@ class SCC_Opportunity_Engine {
 				'action_type'     => 'improve_meta',
 				'recommended_action' => 'Generate and apply an optimized meta title + description.',
 				'source'          => 'analyzer',
+			) );
+		}
+
+		// 8) Content decay (GSC period comparison — measured, high value).
+		foreach ( (array) ( $signals['decay'] ?? array() ) as $d ) {
+			$causes = array();
+			foreach ( (array) ( $d['causes'] ?? array() ) as $c ) {
+				$causes[] = (string) ( $c['label'] ?? '' );
+			}
+			$sev = (int) ( $d['severity'] ?? 0 );
+			$factors = array(
+				self::factor( 'Declining Search Console performance', min( 24, 10 + (int) round( $sev / 5 ) ) ),
+				self::factor( 'Recovering lost traffic beats new content', 12 ),
+			);
+			$cc = (float) ( $d['click_change'] ?? 0 );
+			if ( $cc <= -0.5 ) {
+				$factors[] = self::factor( 'Steep click loss (' . (int) round( abs( $cc ) * 100 ) . '%)', 8 );
+			}
+			$opps[] = self::build( array(
+				'type'            => 'content_decay',
+				'title'           => sprintf( 'Refresh declining page: %s', (string) ( $d['title'] ?? $d['url'] ?? '' ) ),
+				'target'          => array( 'post_id' => (int) ( $d['post_id'] ?? 0 ), 'url' => (string) ( $d['url'] ?? '' ) ),
+				'factors'         => $factors,
+				'data_confidence' => self::DATA_VERIFIED,
+				'metrics'         => (array) ( $d['metrics'] ?? array() ),
+				'reason'          => 'Search Console shows this page is losing performance: ' . ( ! empty( $causes ) ? implode( '; ', $causes ) : 'traffic is declining' ) . '. Refreshing it recovers traffic you already earned.',
+				'expected_impact' => $sev >= 60 ? 'high' : 'medium',
+				'effort'          => 'M',
+				'risk'            => 'low',
+				'action_type'     => 'refresh_content',
+				'recommended_action' => ! empty( $d['refresh_plan'] ) ? implode( ' ', (array) $d['refresh_plan'] ) : 'Refresh the page against current search intent.',
+				'source'          => 'content_decay',
 			) );
 		}
 

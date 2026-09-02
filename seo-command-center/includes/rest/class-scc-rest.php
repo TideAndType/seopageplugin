@@ -290,6 +290,11 @@ class SCC_REST {
 			'callback'            => array( $this, 'opportunities_refresh' ),
 			'permission_callback' => $perm,
 		) );
+		register_rest_route( self::NS, '/content-decay', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'content_decay' ),
+			'permission_callback' => $perm,
+		) );
 		register_rest_route( self::NS, '/actions', array(
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1323,7 +1328,25 @@ class SCC_REST {
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
+		// Recompute the signal caches the engine reads, then the engine itself.
+		if ( class_exists( 'SCC_Content_Decay' ) ) {
+			SCC_Content_Decay::detect( true );
+		}
 		return $this->ok( array( 'opportunities' => SCC_Opportunity_Engine::all( true ) ) );
+	}
+
+	/**
+	 * GET /content-decay — declining pages from GSC period comparison.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function content_decay( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$refresh = (bool) $request->get_param( 'refresh' );
+		return $this->ok( SCC_Content_Decay::detect( $refresh ) );
 	}
 
 	/**
