@@ -1164,6 +1164,130 @@
 		} );
 	}
 
+	// ---- Competitor content-gap map ------------------------------------
+	function bindCompetitorGaps() {
+		var btn = document.getElementById( 'scc-comp-go' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-comp-status' );
+		var out = document.getElementById( 'scc-comp-results' );
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+
+		function addToPlan( gap, button ) {
+			button.disabled = true;
+			button.textContent = 'Adding…';
+			request( '/content-plan', {
+				method: 'POST',
+				data: {
+					title: gap.title,
+					url: gap.recommended_url || '',
+					primary_keyword: gap.primary_keyword || '',
+					intent: gap.intent || '',
+					page_type: gap.page_type || 'article',
+					priority: gap.priority || 'medium',
+					status: 'recommended'
+				}
+			} ).then( function () {
+				button.textContent = 'Added to plan ✓';
+				button.classList.add( 'button-disabled' );
+			} ).catch( function ( err ) {
+				button.disabled = false;
+				button.textContent = 'Add to plan';
+				setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+			} );
+		}
+
+		function render( res ) {
+			var data = res.data || {};
+			out.innerHTML = '';
+			out.hidden = false;
+
+			// Competitors summary.
+			var comps = data.competitors || [];
+			var cCard = el( 'div', null, 'scc-card' );
+			cCard.appendChild( el( 'h2', 'Competitors analyzed' ) );
+			var cList = el( 'ul', null, 'scc-options' );
+			comps.forEach( function ( c ) {
+				var li = el( 'li' );
+				if ( c.error ) {
+					li.innerHTML = '<strong>' + esc( c.url ) + '</strong> — <span class="scc-flag scc-flag--prio-high">could not read: ' + esc( c.error ) + '</span>';
+				} else {
+					li.innerHTML = '<strong>' + esc( c.title || c.url ) + '</strong> <span class="scc-note">' + esc( c.url ) + '</span> — ' + ( ( c.headings || [] ).length ) + ' headings read';
+				}
+				cList.appendChild( li );
+			} );
+			cCard.appendChild( cList );
+			if ( data.notes ) {
+				cCard.appendChild( el( 'p', data.notes, 'scc-note' ) );
+			}
+			out.appendChild( cCard );
+
+			// Gap map.
+			var gaps = data.gaps || [];
+			var gCard = el( 'div', null, 'scc-card' );
+			var head = el( 'div', null, 'scc-card__head' );
+			head.appendChild( el( 'h2', 'Content gaps to close (' + gaps.length + ')' ) );
+			gCard.appendChild( head );
+
+			if ( ! gaps.length ) {
+				gCard.appendChild( el( 'p', 'No clear gaps found — your site already covers what these competitors do. Try more or different competitor pages.', 'scc-note' ) );
+				out.appendChild( gCard );
+				return;
+			}
+
+			var table = document.createElement( 'table' );
+			table.className = 'widefat striped scc-table';
+			table.innerHTML = '<thead><tr>' +
+				'<th>Page to create</th><th>Primary keyword</th><th>Intent</th>' +
+				'<th>Why</th><th>Priority</th><th></th></tr></thead>';
+			var tbody = document.createElement( 'tbody' );
+			gaps.forEach( function ( g ) {
+				var tr = document.createElement( 'tr' );
+				tr.innerHTML =
+					'<td><strong>' + esc( g.title ) + '</strong>' + ( g.recommended_url ? '<br><code>' + esc( g.recommended_url ) + '</code>' : '' ) + '</td>' +
+					'<td>' + esc( g.primary_keyword || '' ) + '</td>' +
+					'<td><span class="scc-flag">' + esc( g.intent || '' ) + '</span></td>' +
+					'<td class="scc-note">' + esc( g.why || '' ) + '</td>' +
+					'<td><span class="scc-flag scc-flag--prio-' + esc( g.priority || 'medium' ) + '">' + esc( g.priority || 'medium' ) + '</span></td>' +
+					'<td></td>';
+				var addBtn = el( 'button', 'Add to plan', 'button button-small button-primary' );
+				addBtn.addEventListener( 'click', function () { addToPlan( g, addBtn ); } );
+				tr.lastChild.appendChild( addBtn );
+				tbody.appendChild( tr );
+			} );
+			table.appendChild( tbody );
+			gCard.appendChild( table );
+			out.appendChild( gCard );
+		}
+
+		btn.addEventListener( 'click', function () {
+			var raw = ( document.getElementById( 'scc-comp-urls' ) || {} ).value || '';
+			var urls = raw.split( /[\r\n,]+/ ).map( function ( s ) { return s.trim(); } ).filter( Boolean );
+			if ( ! urls.length ) {
+				setStatus( status, 'Add at least one competitor URL.', 'is-error' );
+				return;
+			}
+			btn.disabled = true;
+			setStatus( status, 'Reading competitors and mapping gaps… this can take up to a minute.' );
+			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls } } )
+				.then( function ( res ) {
+					btn.disabled = false;
+					setStatus( status, 'Done.', 'is-ok' );
+					render( res );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	// ---- Batch jobs + publishing queue ---------------------------------
 	function bindJobs() {
 		var msg = document.getElementById( 'scc-jobs-msg' );
@@ -1268,6 +1392,19 @@
 				act( id, on ? 'approve' : 'unapprove' ).then( function () {
 					window.location.reload();
 				} ).catch( function ( err ) {
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+			} else if ( e.target.classList.contains( 'scc-remove' ) ) {
+				if ( ! window.confirm( 'Remove this draft from the queue? It will be moved to Trash and can be restored from there.' ) ) {
+					return;
+				}
+				e.target.disabled = true;
+				setStatus( msg, 'Removing…' );
+				act( id, 'remove' ).then( function () {
+					row.parentNode.removeChild( row );
+					setStatus( msg, 'Removed. It is in Trash if you need it back.', 'is-ok' );
+				} ).catch( function ( err ) {
+					e.target.disabled = false;
 					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
 				} );
 			} else if ( e.target.classList.contains( 'scc-schedule' ) ) {
@@ -1538,6 +1675,7 @@
 		bindInternalLinks();
 		bindGscQuickWins();
 		bindCompetitor();
+		bindCompetitorGaps();
 		bindJobs();
 		bindPublishing();
 		bindSeoPanel();

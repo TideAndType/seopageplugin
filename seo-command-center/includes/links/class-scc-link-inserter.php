@@ -56,10 +56,15 @@ class SCC_Link_Inserter {
 
 		$content = $source->post_content;
 
-		// Guard: per-page cap.
-		$max = (int) SCC_Settings::get( 'max_internal_links', 5 );
-		if ( $this->count_internal_links( $content ) >= $max ) {
-			return new WP_Error( 'scc_cap', __( 'This page already has the maximum number of internal links.', 'seo-command-center' ), array( 'status' => 409 ) );
+		// Per-page cap. There is no hard SEO limit, so a manual insert is never
+		// blocked by it — the user chose to add this link. The cap only governs
+		// AUTOMATIC (autopilot) insertion, and even then acts as a high safety
+		// ceiling rather than a small quota.
+		if ( 'autopilot' === $trigger ) {
+			$max = (int) SCC_Settings::get( 'max_internal_links', 8 );
+			if ( $max > 0 && $this->count_internal_links( $content ) >= $max ) {
+				return new WP_Error( 'scc_cap', __( 'Autopilot skipped this link: the page is already at your configured internal-link limit (raise it in Settings). You can still insert it manually.', 'seo-command-center' ), array( 'status' => 409 ) );
+			}
 		}
 
 		// Guard: max links to the SAME destination (avoid over-linking one page).

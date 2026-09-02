@@ -281,6 +281,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/competitors/gap-map',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'competitors_gap_map' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/cannibalization',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -502,7 +512,7 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
-			'/publishing/(?P<action>approve|unapprove|publish|schedule)',
+			'/publishing/(?P<action>approve|unapprove|publish|schedule|remove)',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'publishing_action' ),
@@ -1209,6 +1219,37 @@ class SCC_REST {
 	}
 
 	/**
+	 * POST /competitors/gap-map — competitive content-gap analysis.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function competitors_gap_map( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$urls   = $params['urls'] ?? array();
+		if ( is_string( $urls ) ) {
+			$urls = preg_split( '/[\r\n,]+/', $urls );
+		}
+
+		// This crawls remote sites and calls the AI — give it room to finish
+		// directly (never punt to a background worker on this host).
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			ignore_user_abort( true );
+		}
+
+		$service = new SCC_Competitor_Analysis( $this->ai );
+		$result  = $service->gap_map( is_array( $urls ) ? $urls : array() );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
 	 * POST /brief — generate a content brief for approval.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1602,6 +1643,12 @@ class SCC_REST {
 				break;
 			case 'schedule':
 				$r = SCC_Publishing::schedule( $post_id, (string) ( $params['datetime'] ?? '' ) );
+				if ( is_wp_error( $r ) ) {
+					return $r;
+				}
+				break;
+			case 'remove':
+				$r = SCC_Publishing::remove( $post_id );
 				if ( is_wp_error( $r ) ) {
 					return $r;
 				}

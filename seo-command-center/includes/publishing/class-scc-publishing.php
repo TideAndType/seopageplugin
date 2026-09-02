@@ -123,6 +123,39 @@ class SCC_Publishing {
 	}
 
 	/**
+	 * Remove a generated draft from the queue.
+	 *
+	 * Sends the post to Trash (reversible from the WordPress Trash) rather than
+	 * permanently deleting it, and detaches it from its content-plan entry so the
+	 * plan no longer points at a trashed post. Published posts are never removed
+	 * from here — un-publish them first.
+	 *
+	 * @param int $post_id Post id.
+	 * @return true|WP_Error
+	 */
+	public static function remove( $post_id ) {
+		$post_id = (int) $post_id;
+		if ( ! current_user_can( 'delete_post', $post_id ) ) {
+			return new WP_Error( 'scc_forbidden', __( 'You cannot remove this post.', 'seo-command-center' ), array( 'status' => 403 ) );
+		}
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return new WP_Error( 'scc_missing', __( 'That draft no longer exists.', 'seo-command-center' ), array( 'status' => 404 ) );
+		}
+		if ( 'publish' === $post->post_status ) {
+			return new WP_Error( 'scc_published', __( 'This page is published. Un-publish it before removing it from the queue.', 'seo-command-center' ), array( 'status' => 409 ) );
+		}
+		if ( ! wp_trash_post( $post_id ) ) {
+			return new WP_Error( 'scc_trash_failed', __( 'Could not remove that draft.', 'seo-command-center' ), array( 'status' => 500 ) );
+		}
+		// Detach from the content-plan entry so it can be regenerated later.
+		global $wpdb;
+		$table = SCC_DB::table( 'content_plan' );
+		$wpdb->update( $table, array( 'post_id' => 0, 'status' => 'planned' ), array( 'post_id' => $post_id ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		return true;
+	}
+
+	/**
 	 * Keep the linked content-plan entry status in sync.
 	 *
 	 * @param int    $post_id Post id.

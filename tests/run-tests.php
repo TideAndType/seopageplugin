@@ -736,6 +736,15 @@ assert_eq( false, $known['depth'], 'depth unknown without analysis' );
 assert_eq( false, $known['links'], 'links unknown without a graph' );
 assert_true( $ta2['score'] > 0, 'score still computed from known components' );
 
+echo "\n== Competitor gap map guards ==\n";
+$comp = new SCC_Competitor_Analysis();
+$err_no_urls = $comp->gap_map( array( '', '   ' ) );
+assert_true( is_wp_error( $err_no_urls ), 'gap_map with no usable URLs errors' );
+assert_eq( 'scc_no_urls', $err_no_urls->get_error_code(), 'no-URLs error code' );
+$err_no_ai = $comp->gap_map( array( 'https://example.com/' ) );
+assert_true( is_wp_error( $err_no_ai ), 'gap_map without an AI manager errors' );
+assert_eq( 'scc_no_ai', $err_no_ai->get_error_code(), 'no-AI error code' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

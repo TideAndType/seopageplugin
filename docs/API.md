@@ -47,8 +47,10 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 5 | POST | `/internal-links/apply` | Insert approved links. |
 | 6 | POST | `/gsc/connect`, GET `/gsc/data` | Search Console. |
 | 6 | POST | `/dataforseo/keywords` | DataForSEO lookups. |
-| 6 | POST | `/competitors/analyze` | Public competitor analysis. |
+| 6 | POST | `/competitors/analyze` | Public competitor analysis (single URL, token gaps). |
+| 6 | POST | `/competitors/gap-map` | AI competitive gap map: crawl up to 5 competitor URLs, compare to real site pages, return a content map of missing pages. Body: `{urls:[...]}`. |
 | 7 | POST | `/jobs`, GET `/jobs/{id}` | Batch job control. |
+| 7 | POST | `/publishing/{approve\|unapprove\|publish\|schedule\|remove}` | Queue actions. `remove` trashes a generated draft (reversible) and detaches its content-plan entry. |
 
 ## v1.1 routes — advanced linking / meta / schema
 

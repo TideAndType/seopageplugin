@@ -51,6 +51,7 @@ class SCC_Admin {
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
+			self::SLUG . '-competitors'      => array( __( 'Competitor Gaps', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
@@ -376,6 +377,13 @@ class SCC_Admin {
 				'card' => SCC_Topical_Authority::scorecard(),
 			)
 		);
+	}
+
+	/**
+	 * Competitor Gaps page (competitive content-gap analysis).
+	 */
+	public function render_competitors() {
+		$this->view( 'competitors', array() );
 	}
 
 	/**
