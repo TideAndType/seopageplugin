@@ -375,3 +375,16 @@
 	.scc-cluster { animation: scc-rise .28s ease both; }
 	@keyframes scc-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 }
+
+/* Template Mapping 2.0 — variable reference, FAQ accordion, related links. */
+.scc-badge--warn { background: #fef3c7; color: #92400e; }
+.scc-var-group { margin: 14px 0; }
+.scc-var-group h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--scc-muted, #64748b); }
+#scc-var-search { max-width: 260px; }
+#scc-el-inspect-out { margin-top: 10px; }
+.scc-faq { margin: 16px 0; }
+.scc-faq__item { border: 1px solid var(--scc-border, #e2e8f0); border-radius: 8px; margin: 8px 0; padding: 4px 12px; }
+.scc-faq__item summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.scc-faq__a { padding: 0 0 8px; }
+.scc-related { margin: 8px 0; padding-left: 18px; }
+.scc-rel-desc { color: var(--scc-muted, #64748b); }

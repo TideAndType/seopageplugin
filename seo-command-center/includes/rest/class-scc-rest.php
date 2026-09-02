@@ -363,6 +363,46 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/templates/variables',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'templates_variables' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/(?P<id>\d+)/variables',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'template_detected_variables' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/validate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'templates_validate' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/preview-vars',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'templates_preview_vars' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/templates/map',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1397,6 +1437,108 @@ class SCC_REST {
 				'content_types' => SCC_Template_Mapping::CONTENT_TYPES,
 			)
 		);
+	}
+
+	/**
+	 * GET /templates/variables — the authoritative variable registry.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function templates_variables() {
+		return $this->ok(
+			array(
+				'categories' => SCC_Template_Variables::categories(),
+				'variables'  => array_values( SCC_Template_Variables::registry() ),
+			)
+		);
+	}
+
+	/**
+	 * GET /templates/{id}/variables — tokens detected in a template + validation.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function template_detected_variables( WP_REST_Request $request ) {
+		$id   = (int) $request->get_param( 'id' );
+		$data = class_exists( 'SCC_Elementor' ) ? SCC_Elementor::get_data( $id ) : null;
+		if ( ! is_array( $data ) ) {
+			return $this->fail( 'no_template', __( 'That template has no Elementor data to inspect.', 'seo-command-center' ), 404 );
+		}
+		$detected = SCC_Template_Variables::detect( $data );
+		$defs     = array();
+		foreach ( $detected as $token ) {
+			$defs[] = SCC_Template_Variables::definition( $token );
+		}
+		return $this->ok(
+			array(
+				'detected'   => $defs,
+				'validation' => SCC_Template_Variables::validate_template( $data ),
+			)
+		);
+	}
+
+	/**
+	 * POST /templates/validate — validate a template's tokens.
+	 * Body: {template_id} or {elements:[...]}, optional {required:[...]}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function templates_validate( WP_REST_Request $request ) {
+		$params   = $request->get_json_params();
+		$params   = is_array( $params ) ? $params : $request->get_params();
+		$required = isset( $params['required'] ) && is_array( $params['required'] ) ? $params['required'] : array();
+
+		$elements = null;
+		if ( ! empty( $params['template_id'] ) && class_exists( 'SCC_Elementor' ) ) {
+			$elements = SCC_Elementor::get_data( (int) $params['template_id'] );
+		} elseif ( ! empty( $params['elements'] ) && is_array( $params['elements'] ) ) {
+			$elements = $params['elements'];
+		}
+		if ( ! is_array( $elements ) ) {
+			return $this->fail( 'no_template', __( 'Provide a template_id or an elements array.', 'seo-command-center' ), 400 );
+		}
+		return $this->ok( array( 'validation' => SCC_Template_Variables::validate_template( $elements, $required ) ) );
+	}
+
+	/**
+	 * POST /templates/preview-vars — resolve variables to a sample TOKEN => value
+	 * map so the user can preview how a template will populate.
+	 * Body: optional {entry_id} to use a real content-plan entry; else a sample.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function templates_preview_vars( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$business = class_exists( 'SCC_Schema_Engine' ) ? SCC_Schema_Engine::business() : array();
+
+		$obj = new SCC_Content_Object();
+		$entry_id = (int) ( $params['entry_id'] ?? 0 );
+		$entry    = $entry_id ? SCC_Content_Plan::find( $entry_id ) : null;
+		if ( is_array( $entry ) ) {
+			$obj->title           = (string) ( $entry['title'] ?? '' );
+			$obj->h1              = (string) ( $entry['title'] ?? '' );
+			$obj->slug            = (string) ( $entry['url'] ?? '' );
+			$obj->content_type    = (string) ( $entry['page_type'] ?? 'article' );
+			$obj->primary_keyword = (string) ( $entry['primary_keyword'] ?? '' );
+			$obj->search_intent   = (string) ( $entry['intent'] ?? '' );
+			$obj->service         = (string) ( $entry['parent'] ?? '' );
+		} else {
+			// Sample data (clearly illustrative — never fabricated business facts).
+			$obj->title           = __( 'Sample Page Title', 'seo-command-center' );
+			$obj->h1              = __( 'Sample H1 Heading', 'seo-command-center' );
+			$obj->primary_keyword = __( 'sample primary keyword', 'seo-command-center' );
+			$obj->search_intent   = 'commercial';
+		}
+		$obj->content = '<p>' . esc_html__( 'This is sample intro content used only for previewing how your template fills in.', 'seo-command-center' ) . '</p><h2>' . esc_html__( 'Sample section heading', 'seo-command-center' ) . '</h2>';
+		$obj->faq     = array( array( 'question' => __( 'Sample question?', 'seo-command-center' ), 'answer' => __( 'Sample answer.', 'seo-command-center' ) ) );
+
+		$map = SCC_Template_Variables::render_map( $obj, array( 'business' => $business ) );
+		return $this->ok( array( 'preview' => $map ) );
 	}
 
 	/**

@@ -1657,6 +1657,64 @@
 					.catch( function ( er ) { elImport.disabled = false; setStatus( elmsg, ( er && er.message ) || i18n.error, 'is-error' ); } );
 			} );
 		}
+
+		// Inspect the tokens detected in the selected Elementor template.
+		var elInspect = document.getElementById( 'scc-el-inspect' );
+		if ( elInspect ) {
+			var inspMsg = document.getElementById( 'scc-el-msg' );
+			var inspOut = document.getElementById( 'scc-el-inspect-out' );
+			elInspect.addEventListener( 'click', function () {
+				var source = ( document.getElementById( 'scc-el-source' ) || {} ).value;
+				if ( ! source ) {
+					setStatus( inspMsg, 'Choose a template first.', 'is-error' );
+					return;
+				}
+				elInspect.disabled = true;
+				setStatus( inspMsg, 'Reading template…' );
+				request( '/templates/' + source + '/variables', { method: 'GET' } )
+					.then( function ( res ) {
+						elInspect.disabled = false;
+						setStatus( inspMsg, '', 'is-ok' );
+						var d = res.data || {};
+						var v = d.validation || {};
+						inspOut.innerHTML = '';
+						inspOut.hidden = false;
+						var badge = v.status === 'ready'
+							? '<span class="scc-badge scc-badge--ok">Ready</span>'
+							: '<span class="scc-badge scc-badge--warn">Needs attention</span>';
+						inspOut.appendChild( el( 'p' ) ).innerHTML = 'Template status: ' + badge;
+						( v.errors || [] ).forEach( function ( m ) {
+							inspOut.appendChild( el( 'div', '✕ ' + m, 'scc-flag scc-flag--prio-high' ) );
+						} );
+						( v.warnings || [] ).forEach( function ( m ) {
+							inspOut.appendChild( el( 'div', '! ' + m, 'scc-note' ) );
+						} );
+						var tokens = ( d.detected || [] ).map( function ( t ) { return t.token; } );
+						inspOut.appendChild( el( 'div', tokens.length ? ( 'Detected tokens: ' + tokens.join( ', ' ) ) : 'No {{tokens}} found in this template.', 'scc-note' ) );
+					} )
+					.catch( function ( er ) {
+						elInspect.disabled = false;
+						setStatus( inspMsg, ( er && er.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		// Live filter for the token reference table.
+		var varSearch = document.getElementById( 'scc-var-search' );
+		if ( varSearch ) {
+			varSearch.addEventListener( 'input', function () {
+				var q = varSearch.value.toLowerCase();
+				document.querySelectorAll( '#scc-var-reference .scc-var-group' ).forEach( function ( group ) {
+					var any = false;
+					group.querySelectorAll( '.scc-var-row' ).forEach( function ( row ) {
+						var match = row.textContent.toLowerCase().indexOf( q ) !== -1;
+						row.hidden = ! match;
+						if ( match ) { any = true; }
+					} );
+					group.hidden = ! any;
+				} );
+			} );
+		}
 	}
 
 	document.addEventListener( 'DOMContentLoaded', function () {

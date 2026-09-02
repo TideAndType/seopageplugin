@@ -178,6 +178,13 @@ SEO Strategy Engine  →  Content + Template Engine  →  Renderer  →  WordPre
   benefits, process, local_content, faq, cta, metadata, schema, internal_links).
   `SCC_Template` / `SCC_Template_Store` define reusable structures; deterministic
   `SCC_Template_Selector` chooses one (never the AI). See `docs/TEMPLATES.md`.
+- **Template Variables (Mapping 2.0)**: `SCC_Template_Variables` is the single
+  authoritative registry of every `{{TOKEN}}` — label, category, data type and
+  safety flags — extensible via the `scc_template_variables` filter. It resolves
+  the content object to raw values once, escapes each by type (text/rich/html/
+  url/list; schema is never visible text), validates a template's tokens, and is
+  what `SCC_Content_Object::variables()` now delegates to. No new tables; no AI
+  or DB call per token. See `docs/TEMPLATES.md`.
 - **Renderer**: `SCC_Renderer_Interface` implementations (`gutenberg` default,
   `wordpress`, optional `elementor`) turn the content object + template into
   `post_content` (+ optional builder meta). `SCC_Renderer_Manager` picks one with

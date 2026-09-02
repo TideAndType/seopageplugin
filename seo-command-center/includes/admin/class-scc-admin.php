@@ -490,6 +490,8 @@ class SCC_Admin {
 				'default_renderer' => SCC_Settings::get( 'default_renderer', 'gutenberg' ),
 				'elementor_active' => SCC_Elementor::is_active(),
 				'elementor_sources'=> SCC_Elementor::is_active() ? SCC_Elementor::list_templates() : array(),
+				'variables'        => SCC_Template_Variables::registry(),
+				'var_categories'   => SCC_Template_Variables::categories(),
 			)
 		);
 	}

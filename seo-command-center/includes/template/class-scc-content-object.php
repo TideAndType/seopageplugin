@@ -135,44 +135,35 @@ class SCC_Content_Object {
 	/**
 	 * Field/variable map for template placeholder replacement.
 	 *
-	 * @return array TOKEN => value.
+	 * Delegates to the central SCC_Template_Variables registry (Template Mapping
+	 * 2.0) for type-aware resolution and escaping — a single source of truth — and
+	 * keeps a few legacy keys for backward compatibility with older templates.
+	 *
+	 * @param array $context Optional extra context (business, links, related…).
+	 * @return array TOKEN => escaped value.
 	 */
-	public function variables() {
-		$benefits_html = '';
-		if ( ! empty( $this->benefits ) ) {
-			$benefits_html = '<ul>' . implode( '', array_map( function ( $b ) {
-				return '<li>' . esc_html( $b ) . '</li>';
-			}, $this->benefits ) ) . '</ul>';
-		}
-
-		$faq_html = '';
-		foreach ( $this->faq as $faq ) {
-			$q = is_array( $faq ) ? ( $faq['question'] ?? '' ) : '';
-			$a = is_array( $faq ) ? ( $faq['answer'] ?? '' ) : '';
-			if ( '' !== $q ) {
-				$faq_html .= '<h3>' . esc_html( $q ) . '</h3><p>' . esc_html( $a ) . '</p>';
+	public function variables( array $context = array() ) {
+		if ( class_exists( 'SCC_Template_Variables' ) ) {
+			if ( empty( $context['business'] ) && class_exists( 'SCC_Schema_Engine' ) ) {
+				$context['business'] = SCC_Schema_Engine::business();
 			}
+			$map = SCC_Template_Variables::render_map( $this, $context );
+
+			// Legacy tokens some existing templates may still use.
+			$map['SERVICE_DESCRIPTION'] = esc_html( wp_strip_all_tags( (string) $this->intro ) );
+			$map['DATE_PUBLISHED']      = gmdate( 'c' );
+			$map['DATE_MODIFIED']       = gmdate( 'c' );
+			return $map;
 		}
 
+		// Fallback (registry unavailable): minimal legacy map.
 		return array(
-			'TITLE'              => $this->title,
-			'H1'                 => $this->h1,
-			'INTRO'              => $this->intro,
-			'CONTENT'            => $this->content,
-			'SERVICE'            => $this->service,
-			'SERVICE_DESCRIPTION'=> $this->intro,
-			'CITY'               => $this->city,
-			'STATE'              => $this->state,
-			'PRIMARY_KEYWORD'    => $this->primary_keyword,
-			'SECONDARY_KEYWORDS' => implode( ', ', (array) $this->secondary_keywords ),
-			'BENEFITS'           => $benefits_html,
-			'PROCESS'            => $this->process_html(),
-			'LOCAL_CONTENT'      => $this->local_content,
-			'FAQ'                => $faq_html,
-			'CTA'                => $this->cta,
-			'AUTHOR'             => (string) ( $this->metadata['author'] ?? '' ),
-			'DATE_PUBLISHED'     => gmdate( 'c' ),
-			'DATE_MODIFIED'      => gmdate( 'c' ),
+			'TITLE'           => esc_html( $this->title ),
+			'H1'              => esc_html( $this->h1 ),
+			'INTRO'           => wp_kses_post( $this->intro ),
+			'CONTENT'         => wp_kses_post( $this->content ),
+			'PRIMARY_KEYWORD' => esc_html( $this->primary_keyword ),
+			'CTA'             => wp_kses_post( $this->cta ),
 		);
 	}
 

@@ -772,6 +772,53 @@ $done2 = false;
 $ref->invokeArgs( $inserter, array( $tree, 'nonexistent phrase', 'https://example.com/x/', &$done2 ) );
 assert_eq( false, $done2, 'missing anchor does not force a link' );
 
+echo "\n== Template Variables 2.0 registry ==\n";
+$reg = SCC_Template_Variables::registry();
+assert_true( isset( $reg['H1'] ) && isset( $reg['PRIMARY_KEYWORD'] ) && isset( $reg['FAQ_SCHEMA'] ), 'registry has core + schema tokens' );
+assert_eq( true, $reg['H1']['required'], 'H1 is required' );
+assert_eq( true, $reg['CTA_URL']['url'], 'CTA_URL is a URL type' );
+assert_eq( true, $reg['SCHEMA']['schema'], 'SCHEMA is schema type' );
+assert_eq( false, $reg['SCHEMA']['safe_for_text'], 'schema is not safe for visible text' );
+
+// Type-aware escaping.
+assert_eq( 'a &amp; b', SCC_Template_Variables::escape_value( 'H1', 'a & b' ), 'text token is html-escaped' );
+assert_eq( '', SCC_Template_Variables::escape_value( 'SCHEMA', '{"@type":"x"}' ), 'schema token never renders as text' );
+assert_eq( 'one, two', SCC_Template_Variables::escape_value( 'SECONDARY_KEYWORDS', array( 'one', 'two' ) ), 'list token joins + escapes' );
+$html_out = SCC_Template_Variables::escape_value( 'CONTENT', '<p>hi</p><script>alert(1)</script>' );
+assert_true( false !== strpos( $html_out, '<p>hi</p>' ) && false === strpos( $html_out, '<script' ), 'html token keeps markup but drops script' );
+
+// Custom value sanitizer.
+assert_eq( 'safe', SCC_Template_Variables::sanitize_custom_value( 'safe[shortcode]' ), 'custom value strips shortcodes' );
+assert_eq( 'x', SCC_Template_Variables::sanitize_custom_value( 'x<script>bad()</script>' ), 'custom value strips scripts' );
+
+// Resolve + render_map from a content object.
+$co = new SCC_Content_Object();
+$co->title = 'Local SEO Services';
+$co->h1 = 'Local SEO Services in Daytona Beach';
+$co->content = '<p>Intro paragraph.</p><h2>How it works</h2>';
+$co->primary_keyword = 'local seo services';
+$co->secondary_keywords = array( 'seo audit', 'gmb' );
+$co->faq = array( array( 'question' => 'How much?', 'answer' => 'It depends.' ) );
+$map = SCC_Template_Variables::render_map( $co, array( 'business' => array( 'phone' => '555-1234', 'organization_name' => 'Tide & Type' ) ), array( 'H1', 'CONTENT', 'CUSTOM_THING' ) );
+assert_eq( 'Local SEO Services in Daytona Beach', $map['H1'], 'H1 resolved from content object' );
+assert_true( false !== strpos( $map['FAQ'], 'How much?' ), 'FAQ resolved as accordion HTML' );
+assert_eq( '555-1234', $map['PHONE'], 'PHONE resolved from verified business data' );
+assert_eq( '', $map['CUSTOM_THING'], 'unknown custom token resolves to empty (never leaks the raw token)' );
+assert_eq( '', $map['SCHEMA'], 'schema token empty in the visible map' );
+
+// Validation.
+$tree_ok = array( array( 'elType' => 'widget', 'settings' => array( 'title' => '{{H1}}', 'editor' => '{{CONTENT}}' ) ) );
+$v_ok = SCC_Template_Variables::validate_template( $tree_ok );
+assert_eq( 'ready', $v_ok['status'], 'template with H1 + content validates ready' );
+$tree_bad = array( array( 'elType' => 'widget', 'settings' => array( 'editor' => '{{INTRO}} {{SCHEMA}} {{FOO}}' ) ) );
+$v_bad = SCC_Template_Variables::validate_template( $tree_bad );
+assert_eq( 'attention', $v_bad['status'], 'template missing H1 needs attention' );
+assert_true( ! empty( $v_bad['warnings'] ), 'schema-in-widget / custom token produce warnings' );
+
+// Backward compatibility: variables() still returns the legacy keys.
+$legacy = $co->variables();
+assert_true( isset( $legacy['TITLE'] ) && isset( $legacy['H1'] ) && isset( $legacy['CONTENT'] ) && isset( $legacy['DATE_PUBLISHED'] ), 'variables() keeps legacy keys' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

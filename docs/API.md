@@ -43,6 +43,10 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 3 | POST | `/regenerate-section` | Regenerate one section of a draft. |
 | 4 | GET | `/templates` | List Elementor templates + mappings. |
 | 4 | POST | `/templates/map` | Map a template to a content type. |
+| 4 | GET | `/templates/variables` | Authoritative template-variable registry (Template Mapping 2.0): token, label, description, category, type, flags. |
+| 4 | GET | `/templates/{id}/variables` | Tokens detected in an Elementor template + validation status. |
+| 4 | POST | `/templates/validate` | Validate a template's tokens. Body: `{template_id}` or `{elements:[...]}`, optional `{required:[...]}`. |
+| 4 | POST | `/templates/preview-vars` | Resolve variables to a sample `TOKEN => value` map (optional `{entry_id}` for a real content-plan entry). |
 | 5 | GET | `/internal-links` | Link recommendations / orphan report. |
 | 5 | POST | `/internal-links/apply` | Insert approved links. |
 | 6 | POST | `/gsc/connect`, GET `/gsc/data` | Search Console. |

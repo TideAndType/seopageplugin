@@ -221,7 +221,25 @@ if ( ! function_exists( 'esc_html' ) ) {
 		return htmlspecialchars( (string) $t, ENT_QUOTES );
 	}
 }
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) {
+		$url = trim( (string) $url );
+		return preg_match( '#^(https?:)?//#i', $url ) || 0 === strpos( $url, '/' ) ? $url : '';
+	}
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+	function esc_attr( $t ) {
+		return htmlspecialchars( (string) $t, ENT_QUOTES );
+	}
+}
+if ( ! function_exists( 'wp_kses_post' ) ) {
+	function wp_kses_post( $html ) {
+		// Minimal test stub: drop script/style/iframe blocks, keep other markup.
+		return preg_replace( '#<\s*(script|style|iframe)[^>]*>.*?<\s*/\s*\1\s*>#is', '', (string) $html );
+	}
+}
 require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-placeholders.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-variables.php';
 // SCC_Elementor_Builder::build_replacements is pure; the file references
 // SCC_Elementor only inside build_tree/apply_to_post, not at load time.
 require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor-builder.php';
