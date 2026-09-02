@@ -248,3 +248,20 @@ room for a real queue/Action Scheduler later.
 WordPress Coding Standards (WPCS). All classes prefixed `SCC_`, functions/hooks
 `scc_`, constants `SCC_`. Text domain `seo-command-center`. Files use the
 one-class-per-file convention with `class-scc-*.php` naming.
+
+## Topical Authority Engine (read model)
+
+`SCC_Topical_Authority` (includes/strategy/) turns existing data into an
+explainable topical-authority scorecard. It is a pure read model — it does not
+store anything, call the AI layer, or add tables. It reuses:
+
+- `SCC_Keyword_Strategy::latest()` — the topical map (pillars/subtopics with
+  existing-vs-gap status, priorities, GSC quick-wins).
+- `SCC_Analyzer::latest()` — content depth (thin-content share).
+- `SCC_Link_Graph` / `SCC_Link_Engine` — internal-link health + opportunities.
+- `SCC_Cannibalization` — overlap count.
+
+`compute($map, $signals, $quick)` is the pure, unit-tested scoring function;
+`scorecard()` gathers the live signals and calls it. Weights are filterable via
+`scc_topical_authority_weights`. Surfaced at Admin → Topical Authority and via
+`GET /topical-authority`.

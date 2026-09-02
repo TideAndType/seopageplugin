@@ -686,6 +686,56 @@ assert_true( is_array( $smart ) && 'b' === $smart['a'], 'smart quotes are normal
 $garbage = $mk( 'I could not build a map.' )->json();
 assert_eq( null, $garbage, 'non-JSON returns null' );
 
+echo "\n== Topical Authority scorecard ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-topical-authority.php';
+
+$ta_map = array( 'clusters' => array(
+	array(
+		'service' => 'Local SEO', 'primary_keyword' => 'local seo', 'supporting_terms' => array( 'a', 'b' ),
+		'intent' => 'commercial', 'recommended_url' => '/local-seo/', 'priority' => 'high', 'status' => 'existing',
+		'subtopics' => array(
+			array( 'title' => 'GBP', 'primary_keyword' => 'google business profile', 'intent' => 'commercial', 'recommended_url' => '/gbp/', 'status' => 'existing' ),
+			array( 'title' => 'Citations', 'primary_keyword' => 'local citations', 'intent' => 'commercial', 'recommended_url' => '/citations/', 'status' => 'new' ),
+		),
+	),
+	array(
+		'service' => 'Content Marketing', 'primary_keyword' => 'content marketing', 'supporting_terms' => array(),
+		'intent' => 'informational', 'recommended_url' => '/content/', 'priority' => 'medium', 'status' => 'new',
+		'subtopics' => array(
+			array( 'title' => 'Blogging', 'primary_keyword' => 'blogging', 'intent' => 'informational', 'recommended_url' => '/blog/', 'status' => 'new' ),
+		),
+	),
+) );
+$ta_signals = array( 'depth_analyzed' => 10, 'depth_thin' => 2, 'link_pages' => 10, 'link_orphans' => 2, 'cannibalization' => 3, 'link_opportunities' => 7 );
+$ta = SCC_Topical_Authority::compute( $ta_map, $ta_signals, array() );
+
+assert_eq( 5, $ta['totals']['topics'], 'topics = pillars + subtopics' );
+assert_eq( 2, $ta['totals']['existing_topics'], 'existing topics counted' );
+assert_eq( 3, $ta['totals']['missing_topics'], 'missing topics counted' );
+assert_eq( 3, $ta['totals']['cannibalization'], 'cannibalization passed through' );
+assert_eq( 7, $ta['totals']['link_opportunities'], 'link opportunities passed through' );
+// Cluster statuses.
+$byname = array();
+foreach ( $ta['clusters'] as $c ) { $byname[ $c['name'] ] = $c; }
+assert_eq( 'attention', $byname['Local SEO']['status'], 'existing pillar with a gap subtopic needs attention' );
+assert_eq( 'missing', $byname['Content Marketing']['status'], 'new pillar is missing' );
+// Opportunities: Citations(new), Content Marketing(new pillar), Blogging(new) = 3.
+assert_eq( 3, $ta['opportunities']['high'] + $ta['opportunities']['medium'] + $ta['opportunities']['low'], 'three new opportunities' );
+assert_true( $ta['score'] >= 0 && $ta['score'] <= 100, 'score in range' );
+// Component percentages are deterministic.
+$pcts = array();
+foreach ( $ta['components'] as $c ) { $pcts[ $c['key'] ] = $c['pct']; }
+assert_eq( 40, $pcts['topic'], 'topic coverage 2/5 = 40%' );
+assert_eq( 33, $pcts['supporting'], 'supporting 1/3 = 33%' );
+
+// Unknown components (no analysis / no link graph) are excluded, not zeroed.
+$ta2 = SCC_Topical_Authority::compute( $ta_map, array(), array() );
+$known = array();
+foreach ( $ta2['components'] as $c ) { $known[ $c['key'] ] = $c['known']; }
+assert_eq( false, $known['depth'], 'depth unknown without analysis' );
+assert_eq( false, $known['links'], 'links unknown without a graph' );
+assert_true( $ta2['score'] > 0, 'score still computed from known components' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

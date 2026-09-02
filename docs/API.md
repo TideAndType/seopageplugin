@@ -79,3 +79,20 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 - `502` — upstream AI/API transport error (after fallback attempted).
 - All errors are logged (redacted) via `SCC_Logger`; responses never leak keys
   or stack traces.
+
+## Topical Authority
+
+`GET /seo-command/v1/topical-authority` — returns the explainable coverage
+scorecard computed from the latest topical map plus the analyzer, internal-link
+graph and cannibalization detector. No parameters. Response `data`:
+
+- `has_map` (bool) — false when no topical map exists yet.
+- `score` (0-100) — weighted, explainable overall.
+- `components[]` — `{key,label,pct,weight,known}`. Unknown components (e.g. no
+  site analysis yet) are excluded from the weighting rather than guessed.
+- `clusters[]` — `{name,score,status(strong|attention|missing),existing_subs,new_subs,priority,url}`.
+- `opportunities` — `{high,medium,low,items[]}` (new/gap topics to create).
+- `totals` — topics, keywords, covered/missing keywords, existing/missing
+  topics, cluster status counts, cannibalization, link opportunities.
+
+Read-only, capability-gated like every other route. Deterministic — no AI call.

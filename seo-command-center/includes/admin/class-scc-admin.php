@@ -47,6 +47,7 @@ class SCC_Admin {
 		// Visible menu — grouped to follow the actual workflow, trimmed down.
 		$pages = array(
 			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
+			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
@@ -361,6 +362,18 @@ class SCC_Admin {
 			'keyword-strategy',
 			array(
 				'strategy' => SCC_Keyword_Strategy::latest(),
+			)
+		);
+	}
+
+	/**
+	 * Topical Authority dashboard (coverage scorecard over the latest map).
+	 */
+	public function render_topical_authority() {
+		$this->view(
+			'topical-authority',
+			array(
+				'card' => SCC_Topical_Authority::scorecard(),
 			)
 		);
 	}

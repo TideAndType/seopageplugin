@@ -184,6 +184,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/topical-authority',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'topical_authority' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/keywords/auto/status',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -887,6 +897,15 @@ class SCC_REST {
 	 *
 	 * @return WP_REST_Response|WP_Error
 	 */
+	/**
+	 * GET /topical-authority — explainable coverage scorecard from live data.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function topical_authority() {
+		return $this->ok( SCC_Topical_Authority::scorecard() );
+	}
+
 	public function auto_keywords( WP_REST_Request $request ) {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();

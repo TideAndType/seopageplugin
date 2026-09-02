@@ -339,6 +339,32 @@
 .scc-brief-panel .scc-label { margin-top: 8px; }
 .scc-brief-panel .scc-flag { margin-right: 6px; }
 
+/* Topical Authority dashboard */
+.scc-ta-score { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+.scc-ta-ring {
+	--pct: 0; width: 108px; height: 108px; border-radius: 50%; flex: 0 0 auto;
+	background: conic-gradient(var(--scc-brand) calc(var(--pct) * 1%), var(--scc-surface-2) 0);
+	display: grid; place-items: center; position: relative;
+}
+.scc-ta-ring::after { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: var(--scc-surface); }
+.scc-ta-ring__num { position: relative; font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: var(--scc-ink); }
+.scc-ta-ring__num span { font-size: 12px; font-weight: 600; color: var(--scc-muted); }
+.scc-ta-bars { display: flex; flex-direction: column; gap: 12px; }
+.scc-ta-bar__head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.scc-ta-track { height: 9px; border-radius: 999px; background: var(--scc-surface-2); overflow: hidden; }
+.scc-ta-track--sm { height: 7px; max-width: 160px; display: inline-block; width: 160px; vertical-align: middle; }
+.scc-ta-fill { height: 100%; border-radius: 999px; background: var(--scc-grad); }
+.scc-ta-fill.is-unknown { background: repeating-linear-gradient(45deg, #d7dae2, #d7dae2 6px, #e8eaf0 6px, #e8eaf0 12px); }
+.scc-ta-fill--strong { background: linear-gradient(90deg, #10b981, #0f9d58); }
+.scc-ta-fill--attention { background: linear-gradient(90deg, #f59e0b, #f97316); }
+.scc-ta-fill--missing { background: linear-gradient(90deg, #ef4444, #dc2626); }
+.scc-ta-badge--strong { background: var(--scc-ok-bg); color: var(--scc-ok); }
+.scc-ta-badge--attention { background: var(--scc-warn-bg); color: var(--scc-warn); }
+.scc-ta-badge--missing { background: var(--scc-danger-bg); color: var(--scc-danger); }
+.scc-ta-totals { width: 100%; border-collapse: collapse; }
+.scc-ta-totals td { padding: 7px 0; border-bottom: 1px solid var(--scc-border-2); font-size: 13px; }
+.scc-ta-totals td:last-child { text-align: right; }
+
 /* Content plan row actions */
 .scc-plan-actions { white-space: nowrap; }
 .scc-plan-actions .button { margin-right: 4px; }
