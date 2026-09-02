@@ -295,6 +295,11 @@ class SCC_REST {
 			'callback'            => array( $this, 'content_decay' ),
 			'permission_callback' => $perm,
 		) );
+		register_rest_route( self::NS, '/intent-drift', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'intent_drift' ),
+			'permission_callback' => $perm,
+		) );
 		register_rest_route( self::NS, '/actions', array(
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1332,6 +1337,9 @@ class SCC_REST {
 		if ( class_exists( 'SCC_Content_Decay' ) ) {
 			SCC_Content_Decay::detect( true );
 		}
+		if ( class_exists( 'SCC_Intent_Drift' ) ) {
+			SCC_Intent_Drift::detect( true );
+		}
 		return $this->ok( array( 'opportunities' => SCC_Opportunity_Engine::all( true ) ) );
 	}
 
@@ -1347,6 +1355,20 @@ class SCC_REST {
 		}
 		$refresh = (bool) $request->get_param( 'refresh' );
 		return $this->ok( SCC_Content_Decay::detect( $refresh ) );
+	}
+
+	/**
+	 * GET /intent-drift — pages whose search-intent mix is shifting (GSC-only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function intent_drift( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$refresh = (bool) $request->get_param( 'refresh' );
+		return $this->ok( SCC_Intent_Drift::detect( $refresh ) );
 	}
 
 	/**

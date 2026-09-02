@@ -82,6 +82,7 @@ class SCC_Opportunity_Engine {
 			'thin'        => array(),
 			'missing_meta'=> array(),
 			'decay'       => array(),
+			'intent_drift'=> array(),
 		);
 
 		// Real Search Console demand.
@@ -154,6 +155,14 @@ class SCC_Opportunity_Engine {
 			$decay = SCC_Content_Decay::detect();
 			if ( is_array( $decay ) && ! empty( $decay['available'] ) ) {
 				$signals['decay'] = (array) ( $decay['items'] ?? array() );
+			}
+		}
+
+		// Search intent drift (GSC query-mix comparison).
+		if ( class_exists( 'SCC_Intent_Drift' ) ) {
+			$drift = SCC_Intent_Drift::detect();
+			if ( is_array( $drift ) && ! empty( $drift['available'] ) ) {
+				$signals['intent_drift'] = (array) ( $drift['items'] ?? array() );
 			}
 		}
 
@@ -398,6 +407,34 @@ class SCC_Opportunity_Engine {
 				'action_type'     => 'refresh_content',
 				'recommended_action' => ! empty( $d['refresh_plan'] ) ? implode( ' ', (array) $d['refresh_plan'] ) : 'Refresh the page against current search intent.',
 				'source'          => 'content_decay',
+			) );
+		}
+
+		// 9) Search intent drift (GSC query-mix comparison — real data, heuristic
+		// classification, so "partial" confidence).
+		$intent_labels = array( 'informational' => 'informational', 'commercial' => 'commercial', 'local' => 'local' );
+		foreach ( (array) ( $signals['intent_drift'] ?? array() ) as $d ) {
+			$from = (string) ( $d['prev_dominant'] ?? '' );
+			$to   = (string) ( $d['curr_dominant'] ?? '' );
+			$sev  = (int) ( $d['severity'] ?? 0 );
+			$factors = array(
+				self::factor( sprintf( 'Search intent shifted %s → %s', $intent_labels[ $from ] ?? $from, $intent_labels[ $to ] ?? $to ), min( 22, 12 + (int) round( $sev / 6 ) ) ),
+				self::factor( 'Matching intent lifts rankings + conversions', 12 ),
+			);
+			$opps[] = self::build( array(
+				'type'            => 'intent_drift',
+				'title'           => sprintf( 'Realign for shifting intent: %s', (string) ( $d['title'] ?? $d['url'] ?? '' ) ),
+				'target'          => array( 'post_id' => (int) ( $d['post_id'] ?? 0 ), 'url' => (string) ( $d['url'] ?? '' ) ),
+				'factors'         => $factors,
+				'data_confidence' => self::DATA_PARTIAL,
+				'metrics'         => array( 'prev_dist' => $d['prev_dist'] ?? array(), 'curr_dist' => $d['curr_dist'] ?? array() ),
+				'reason'          => sprintf( 'The searches this page earns impressions for have shifted from mostly %s to mostly %s intent. %s', $intent_labels[ $from ] ?? $from, $intent_labels[ $to ] ?? $to, (string) ( $d['recommendation'] ?? '' ) ),
+				'expected_impact' => $sev >= 55 ? 'high' : 'medium',
+				'effort'          => 'M',
+				'risk'            => 'low',
+				'action_type'     => 'realign_intent',
+				'recommended_action' => (string) ( $d['recommendation'] ?? 'Review the page against the new dominant intent.' ),
+				'source'          => 'intent_drift',
 			) );
 		}
 

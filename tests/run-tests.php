@@ -914,6 +914,57 @@ assert_true( is_array( $cd ), 'decay produces a content_decay opportunity' );
 assert_eq( 'verified', $cd['data_confidence'], 'decay opportunity is verified (GSC-backed)' );
 assert_eq( 'refresh_content', $cd['action_type'], 'decay maps to a refresh action' );
 
+echo "\n== Search Intent Drift (GSC-only) ==\n";
+// Query wording classifier.
+assert_eq( 'informational', SCC_Intent_Drift::classify_intent( 'how to do local seo' ), 'how-to → informational' );
+assert_eq( 'commercial', SCC_Intent_Drift::classify_intent( 'best seo company' ), 'best/company → commercial' );
+assert_eq( 'commercial', SCC_Intent_Drift::classify_intent( 'seo services pricing' ), 'services/pricing → commercial' );
+assert_eq( 'local', SCC_Intent_Drift::classify_intent( 'seo agency near me' ), 'near me → local' );
+assert_eq( 'unspecified', SCC_Intent_Drift::classify_intent( 'tideandtype' ), 'brand term → unspecified' );
+
+// A page whose mix flips informational → commercial with a real baseline.
+$drift_pages = array(
+	array(
+		'url' => '/seo/', 'post_id' => 7, 'title' => 'SEO',
+		'prev_queries' => array(
+			array( 'query' => 'what is seo', 'impressions' => 600 ),
+			array( 'query' => 'how to learn seo', 'impressions' => 400 ),
+			array( 'query' => 'best seo company', 'impressions' => 100 ),
+		),
+		'curr_queries' => array(
+			array( 'query' => 'best seo company', 'impressions' => 700 ),
+			array( 'query' => 'seo services pricing', 'impressions' => 300 ),
+			array( 'query' => 'what is seo', 'impressions' => 100 ),
+		),
+	),
+	// Below baseline → ignored.
+	array(
+		'url' => '/tiny/', 'post_id' => 8, 'title' => 'Tiny',
+		'prev_queries' => array( array( 'query' => 'what is x', 'impressions' => 30 ) ),
+		'curr_queries' => array( array( 'query' => 'best x', 'impressions' => 40 ) ),
+	),
+	// Stable mix → not drift.
+	array(
+		'url' => '/stable/', 'post_id' => 9, 'title' => 'Stable',
+		'prev_queries' => array( array( 'query' => 'how to garden', 'impressions' => 800 ) ),
+		'curr_queries' => array( array( 'query' => 'how to garden tips', 'impressions' => 820 ) ),
+	),
+);
+$drifts = SCC_Intent_Drift::analyze( $drift_pages );
+assert_eq( 1, count( $drifts ), 'only the page with a real intent flip + baseline is flagged' );
+assert_eq( '/seo/', $drifts[0]['url'], 'the drifting page is identified' );
+assert_eq( 'informational', $drifts[0]['prev_dominant'], 'previous dominant intent was informational' );
+assert_eq( 'commercial', $drifts[0]['curr_dominant'], 'current dominant intent is commercial' );
+assert_true( $drifts[0]['confidence'] <= 85, 'intent classification is heuristic → capped confidence (never verified)' );
+assert_eq( 0, count( SCC_Intent_Drift::analyze( array() ) ), 'no pages → no drift (never fabricated)' );
+
+// Drift flows into the engine as a "partial"-confidence realign opportunity.
+$opps_drift = SCC_Opportunity_Engine::compute( array( 'intent_drift' => $drifts ) );
+$idd = null; foreach ( $opps_drift as $o ) { if ( 'intent_drift' === $o['type'] ) { $idd = $o; break; } }
+assert_true( is_array( $idd ), 'intent drift produces an opportunity' );
+assert_eq( 'partial', $idd['data_confidence'], 'intent-drift opportunity is partial (real data, heuristic labels)' );
+assert_eq( 'realign_intent', $idd['action_type'], 'intent drift maps to a realign action' );
+
 echo "\n== Action Queue (safety) ==\n";
 assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
 assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );

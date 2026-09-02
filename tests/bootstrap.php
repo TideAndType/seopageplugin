@@ -354,5 +354,6 @@ if ( ! function_exists( 'number_format_i18n' ) ) {
 	function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, (int) $d ); }
 }
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-content-decay.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-intent-drift.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-opportunity-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-action-queue.php';

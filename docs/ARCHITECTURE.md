@@ -220,6 +220,17 @@ rankings declining, stale), a severity, a confidence, and a concrete refresh
 plan; these become `content_decay` opportunities (verified data) in the engine.
 When GSC is not connected it returns `{available:false}` — never fabricated.
 
+`SCC_Intent_Drift` is a second GSC-only signal source: rather than requiring
+historical SERP snapshots, it reads the REAL queries each page earns impressions
+for, classifies each query's intent from its wording (informational / commercial
+/ local, via transparent lexicons), weights by impressions, and compares the
+intent mix of the recent window against the prior one. When the dominant intent
+flips with a real baseline (≥200 impressions per window) and a meaningful share
+shift, it emits an `intent_drift` opportunity with a from→to recommendation. The
+query data is verified GSC data but the per-query labelling is heuristic, so
+these opportunities are marked **partial** confidence — never "verified". No SERP
+scraping, no DataForSEO dependency.
+
 `SCC_Action_Queue` (backed by the `scc_seo_actions` table) persists the
 opportunities the user chooses to act on, with a full lifecycle and logging.
 Execution is deliberately conservative: only genuinely SAFE, deterministic,
