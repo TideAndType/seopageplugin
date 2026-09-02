@@ -745,6 +745,33 @@ $err_no_ai = $comp->gap_map( array( 'https://example.com/' ) );
 assert_true( is_wp_error( $err_no_ai ), 'gap_map without an AI manager errors' );
 assert_eq( 'scc_no_ai', $err_no_ai->get_error_code(), 'no-AI error code' );
 
+echo "\n== Internal link insertion into Elementor widgets ==\n";
+$inserter = new SCC_Link_Inserter();
+$ref = new ReflectionMethod( 'SCC_Link_Inserter', 'walk_elementor' );
+$ref->setAccessible( true );
+$tree = array(
+	array(
+		'elType'   => 'section',
+		'elements' => array(
+			array(
+				'elType'     => 'widget',
+				'widgetType' => 'text-editor',
+				'settings'   => array( 'editor' => '<p>We offer local SEO services to small businesses.</p>' ),
+			),
+		),
+	),
+);
+$done = false;
+$out  = $ref->invokeArgs( $inserter, array( $tree, 'local SEO services', 'https://example.com/local-seo/', &$done ) );
+assert_true( $done, 'anchor found and linked in Elementor editor field' );
+$edited = $out[0]['elements'][0]['settings']['editor'];
+assert_true( false !== strpos( $edited, '<a href="https://example.com/local-seo/">local SEO services</a>' ), 'editor field now contains the real hyperlink' );
+
+// A phrase that is not present leaves the tree untouched.
+$done2 = false;
+$ref->invokeArgs( $inserter, array( $tree, 'nonexistent phrase', 'https://example.com/x/', &$done2 ) );
+assert_eq( false, $done2, 'missing anchor does not force a link' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
