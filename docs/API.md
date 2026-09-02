@@ -61,7 +61,7 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | Method | Route | Purpose |
 |--------|-------|---------|
 | POST | `/index/reindex`, GET `/index/status` | Build/inspect the content index. |
-| POST | `/links/analyze` | New→existing + existing→new opportunities for a post. |
+| POST | `/links/analyze` | New→existing + existing→new opportunities for a post. When the `link_ai_enabled` setting is on, an AI pass reads the page and picks the most natural anchor + best targets from the verified candidate list (never inventing a URL). |
 | GET  | `/links/recommendations` | Stored recommendations (filter by direction/confidence). |
 | POST | `/links/apply` | Insert one recommendation (records revert history). |
 | POST | `/links/apply-high` | Insert all high-confidence recommendations. |

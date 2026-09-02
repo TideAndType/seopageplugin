@@ -1825,7 +1825,11 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function links_analyze( WP_REST_Request $request ) {
-		$engine = new SCC_Link_Engine();
+		// AI-assisted linking crawls the page + one AI call — allow it to finish.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$engine = new SCC_Link_Engine( $this->ai );
 		$result = $engine->analyze( (int) $request->get_param( 'post_id' ), true );
 		return $this->ok( $result );
 	}
@@ -1892,7 +1896,10 @@ class SCC_REST {
 		if ( SCC_Content_Index::count() < 1 ) {
 			SCC_Content_Index::reindex_all( 2000 );
 		}
-		$engine = new SCC_Link_Engine();
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$engine = new SCC_Link_Engine( $this->ai );
 		return $this->ok( $engine->scan_site( 500 ) );
 	}
 

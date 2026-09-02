@@ -819,6 +819,27 @@ assert_true( ! empty( $v_bad['warnings'] ), 'schema-in-widget / custom token pro
 $legacy = $co->variables();
 assert_true( isset( $legacy['TITLE'] ) && isset( $legacy['H1'] ) && isset( $legacy['CONTENT'] ) && isset( $legacy['DATE_PUBLISHED'] ), 'variables() keeps legacy keys' );
 
+echo "\n== AI-assisted internal linking (merge safety) ==\n";
+$det_recs = array(
+	array( 'target_post_id' => 10, 'target_title' => 'SEO Audit', 'target_url' => '/seo-audit/', 'anchor' => 'seo audit', 'natural' => true, 'sentence' => '', 'confidence' => 60, 'reason' => 'det' ),
+	array( 'target_post_id' => 20, 'target_title' => 'Local SEO', 'target_url' => '/local-seo/', 'anchor' => 'local seo', 'natural' => true, 'sentence' => '', 'confidence' => 58, 'reason' => 'det' ),
+);
+$page_text = 'We provide a full local SEO service and a detailed technical review for small businesses.';
+$ai_links = array(
+	array( 'id' => 20, 'anchor' => 'local SEO service', 'confidence' => 92, 'reason' => 'Great match' ), // valid, anchor present.
+	array( 'id' => 10, 'anchor' => 'keyword research', 'confidence' => 80, 'reason' => 'Nope' ),          // anchor NOT in page.
+	array( 'id' => 99, 'anchor' => 'invented', 'confidence' => 99, 'reason' => 'Invented' ),              // id not a candidate.
+);
+$merged = SCC_Link_Engine::merge_ai_links( $det_recs, $ai_links, $page_text );
+$m_by = array();
+foreach ( $merged as $r ) { $m_by[ $r['target_post_id'] ] = $r; }
+assert_eq( 2, count( $merged ), 'invented target id is never added' );
+assert_eq( 'local SEO service', $m_by[20]['anchor'], 'AI anchor accepted when it appears verbatim in the page' );
+assert_eq( 92, $m_by[20]['confidence'], 'AI confidence applied' );
+assert_eq( '/local-seo/', $m_by[20]['target_url'], 'verified target URL is preserved, never AI-invented' );
+assert_eq( 'seo audit', $m_by[10]['anchor'], 'AI anchor rejected when absent — deterministic anchor kept' );
+assert_true( $m_by[10]['confidence'] <= 92, 'endorsed-but-unverified anchor still merges confidence' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

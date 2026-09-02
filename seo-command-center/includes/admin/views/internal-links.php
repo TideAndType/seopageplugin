@@ -61,11 +61,18 @@ $list_block = function ( $title, $nodes, $empty ) {
 		<div class="scc-card__head">
 			<h2><?php esc_html_e( 'Internal Link Autopilot', 'seo-command-center' ); ?></h2>
 			<div>
+				<label class="scc-toggle" title="<?php esc_attr_e( 'When on, the AI reads each page and picks the most natural anchor and best targets from your verified pages. Slower and uses AI credits.', 'seo-command-center' ); ?>">
+					<input type="checkbox" id="scc-links-ai" <?php checked( (bool) SCC_Settings::get( 'link_ai_enabled', false ) ); ?>>
+					<span><?php esc_html_e( 'AI-assisted', 'seo-command-center' ); ?></span>
+				</label>
 				<button class="button" id="scc-links-scan"><?php esc_html_e( 'Scan site for opportunities', 'seo-command-center' ); ?></button>
 				<button class="button button-primary" id="scc-links-apply-high"><?php esc_html_e( 'Apply high-confidence links', 'seo-command-center' ); ?></button>
 			</div>
 		</div>
 		<span class="scc-inline-status" id="scc-links-msg"></span>
+		<p class="scc-note" id="scc-links-ai-note"<?php echo SCC_Settings::get( 'link_ai_enabled', false ) ? '' : ' hidden'; ?>>
+			<?php esc_html_e( 'AI-assisted linking is ON: scanning reads each page with the AI to choose the most natural anchor and the best targets from your real pages. It never invents a URL. This is slower and uses AI credits.', 'seo-command-center' ); ?>
+		</p>
 		<p class="scc-note">
 			<?php
 			echo esc_html( sprintf(

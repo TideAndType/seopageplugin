@@ -980,11 +980,33 @@
 	function bindInternalLinks() {
 		var msg = document.getElementById( 'scc-links-msg' );
 
+		// AI-assisted linking toggle (persists to settings).
+		var aiToggle = document.getElementById( 'scc-links-ai' );
+		if ( aiToggle ) {
+			var aiNote = document.getElementById( 'scc-links-ai-note' );
+			aiToggle.addEventListener( 'change', function () {
+				var on = aiToggle.checked;
+				aiToggle.disabled = true;
+				request( '/settings', { method: 'POST', data: { settings: { link_ai_enabled: on ? 1 : 0 } } } )
+					.then( function () {
+						aiToggle.disabled = false;
+						if ( aiNote ) { aiNote.hidden = ! on; }
+						setStatus( msg, on ? 'AI-assisted linking enabled.' : 'AI-assisted linking disabled.', 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						aiToggle.disabled = false;
+						aiToggle.checked = ! on;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
 		var scanBtn = document.getElementById( 'scc-links-scan' );
 		if ( scanBtn ) {
 			scanBtn.addEventListener( 'click', function () {
 				scanBtn.disabled = true;
-				setStatus( msg, 'Indexing and scanning the site… this can take a moment.' );
+				var aiOn = aiToggle && aiToggle.checked;
+				setStatus( msg, aiOn ? 'Scanning with AI — reading each page… this can take a while.' : 'Indexing and scanning the site… this can take a moment.' );
 				request( '/links/scan', { method: 'POST' } )
 					.then( function ( res ) {
 						var n = ( res.data && res.data.opportunities ) || 0;

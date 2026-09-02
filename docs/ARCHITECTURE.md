@@ -196,6 +196,17 @@ before/after render and are renderer-independent. Elementor is now one optional
 renderer, not a dependency; the pre-existing `SCC_Template_Mapping` +
 `SCC_Elementor_Builder` are reused by the Elementor renderer and remain intact.
 
+Internal-link recommendations are deterministic by default (content-index
+relevance + anchor engine). An optional **`link_ai_enabled`** setting (the
+"AI-assisted" toggle on the Internal Links page) adds a single AI pass over a
+page's outbound candidates: the model reads the page and picks the most natural
+anchor and best targets **from the verified candidate list only**.
+`SCC_Link_Engine::merge_ai_links()` guarantees the AI can never introduce a page
+or URL of its own, and accepts an AI anchor only if it appears verbatim in the
+page; if the AI call fails, the deterministic recommendations stand. The
+inserter (`SCC_Link_Inserter`) is Elementor-aware — it writes the link into the
+`_elementor_data` widget that holds the anchor text, not unused `post_content`.
+
 ## 5. Admin UI
 
 WordPress-native admin (top-level menu + submenus) but styled to feel like a

@@ -71,6 +71,7 @@ class SCC_Settings {
 			'link_max_per_destination' => 'int',
 			'link_avoid_headings'      => 'bool',
 			'link_vary_anchor'         => 'bool',
+			'link_ai_enabled'          => 'bool',
 			'meta_storage'             => 'text',
 			'default_renderer'         => 'text',
 			'gsc_site_url'             => 'text',

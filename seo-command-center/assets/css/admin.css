@@ -388,3 +388,7 @@
 .scc-faq__a { padding: 0 0 8px; }
 .scc-related { margin: 8px 0; padding-left: 18px; }
 .scc-rel-desc { color: var(--scc-muted, #64748b); }
+
+/* AI-assisted linking toggle. */
+.scc-toggle { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 13px; cursor: pointer; }
+.scc-toggle input { margin: 0; }

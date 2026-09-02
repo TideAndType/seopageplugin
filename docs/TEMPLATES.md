@@ -155,3 +155,4 @@ Every legacy token (`{{TITLE}}`, `{{H1}}`, `{{INTRO}}`, `{{BODY}}`,
 `{{FAQ}}`, `{{META_TITLE}}`, `{{META_DESCRIPTION}}`) still resolves.
 `SCC_Content_Object::variables()` now delegates to the registry while keeping
 its old keys, so existing templates and generated pages are unaffected.
+
