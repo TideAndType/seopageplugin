@@ -696,6 +696,15 @@
 		var selectAll = document.getElementById( 'scc-seed-selectall' );
 		var countEl   = document.getElementById( 'scc-seed-count' );
 
+		// "Only show gaps" — collapse existing pages so the page is shorter.
+		var gapsOnly = document.getElementById( 'scc-arch-gaps-only' );
+		if ( gapsOnly ) {
+			var wrap = gapsOnly.closest( '.scc-wrap' ) || document.body;
+			gapsOnly.addEventListener( 'change', function () {
+				wrap.classList.toggle( 'scc-arch--gaps-only', gapsOnly.checked );
+			} );
+		}
+
 		function picks() {
 			return Array.prototype.slice.call( document.querySelectorAll( '.scc-seed-pick' ) );
 		}

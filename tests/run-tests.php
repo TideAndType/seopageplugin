@@ -94,6 +94,17 @@ assert_true( strpos( $rich['text_excerpt'], 'We build fast websites' ) !== false
 assert_true( strpos( $rich['text_excerpt'], 'var x=1' ) === false, 'scripts stripped from the excerpt' );
 assert_true( in_array( 'Service', $rich['schema_types'], true ), 'schema still extracted after excerpt stripping' );
 
+// Internal link URLs are collected (for multi-page competitor crawling).
+$html_links = '<html><head><title>T</title></head><body>'
+	. '<a href="/services/">Services</a><a href="/about">About</a>'
+	. '<a href="https://other.com/x">ext</a><a href="#top">anchor</a>'
+	. '<a href="mailto:a@b.com">mail</a><a href="/logo.png">img</a></body></html>';
+$lp = $crawler->parse( $html_links, 'https://example.com/' );
+assert_true( in_array( 'https://example.com/services/', $lp['internal_link_urls'], true ), 'relative internal link absolutized' );
+assert_true( ! in_array( 'https://other.com/x', $lp['internal_link_urls'], true ), 'external link excluded from internal list' );
+$has_asset = false; foreach ( $lp['internal_link_urls'] as $u ) { if ( strpos( $u, 'logo.png' ) !== false ) { $has_asset = true; } }
+assert_eq( false, $has_asset, 'asset/anchor/mailto links excluded from internal list' );
+
 echo "\n== Crawler @graph schema extraction ==\n";
 $html2 = '<html><head><script type="application/ld+json">'
 	. '{"@graph":[{"@type":"Organization"},{"@type":["WebPage","FAQPage"]}]}'

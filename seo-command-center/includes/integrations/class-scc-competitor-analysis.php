@@ -57,23 +57,37 @@ class SCC_Competitor_Analysis {
 
 		$crawler     = new SCC_Crawler();
 		$competitors = array();
+		$crawled     = 0;
+		$max_crawls  = 15;             // Hard ceiling across all competitors.
+		$per_site    = count( $urls ) === 1 ? 6 : 3; // Extra pages to sample per site.
+
 		foreach ( $urls as $url ) {
+			if ( $crawled >= $max_crawls ) {
+				break;
+			}
 			$data = $crawler->fetch( $url, true );
+			$crawled++;
 			if ( is_wp_error( $data ) ) {
 				$competitors[] = array( 'url' => $url, 'error' => $data->get_error_message(), 'headings' => array() );
 				continue;
 			}
-			$competitors[] = array(
-				'url'              => $data['url'],
-				'title'            => $data['title'],
-				'meta_description' => (string) ( $data['meta_description'] ?? '' ),
-				'headings'         => array_slice( array_values( array_filter( array_merge( (array) $data['h1'], (array) $data['h2'], (array) ( $data['h3'] ?? array() ) ) ) ), 0, 60 ),
-				'schema_types'     => $data['schema_types'],
-				// The actual page CONTENT (trimmed), so the AI compares substance,
-				// not just headings.
-				'content_excerpt'  => mb_substr( (string) ( $data['text_excerpt'] ?? '' ), 0, 2500 ),
-				'word_count'       => str_word_count( (string) ( $data['text_excerpt'] ?? '' ) ),
-			);
+			$competitors[] = $this->summarize_page( $data );
+
+			// Look at MORE than the entered page: sample a few of this site's own
+			// key pages (services/about/etc.) so the comparison reflects the whole
+			// site, not just one URL.
+			$extra = $this->pick_internal_pages( (array) ( $data['internal_link_urls'] ?? array() ), $url, $per_site );
+			foreach ( $extra as $sub_url ) {
+				if ( $crawled >= $max_crawls ) {
+					break;
+				}
+				$sub = $crawler->fetch( $sub_url, true );
+				$crawled++;
+				if ( is_wp_error( $sub ) ) {
+					continue;
+				}
+				$competitors[] = $this->summarize_page( $sub );
+			}
 		}
 
 		$reachable = array_filter( $competitors, function ( $c ) { return empty( $c['error'] ); } );
@@ -104,6 +118,63 @@ class SCC_Competitor_Analysis {
 			'gaps'        => $gaps['gaps'],
 			'notes'       => $gaps['notes'],
 		);
+	}
+
+	/**
+	 * Summarize one crawled page into the compact shape the gap map consumes.
+	 *
+	 * @param array $data Crawler output.
+	 * @return array
+	 */
+	protected function summarize_page( array $data ) {
+		return array(
+			'url'              => $data['url'],
+			'title'            => $data['title'],
+			'meta_description' => (string) ( $data['meta_description'] ?? '' ),
+			'headings'         => array_slice( array_values( array_filter( array_merge( (array) ( $data['h1'] ?? array() ), (array) ( $data['h2'] ?? array() ), (array) ( $data['h3'] ?? array() ) ) ) ), 0, 40 ),
+			'schema_types'     => $data['schema_types'] ?? array(),
+			'content_excerpt'  => mb_substr( (string) ( $data['text_excerpt'] ?? '' ), 0, 1800 ),
+			'word_count'       => str_word_count( (string) ( $data['text_excerpt'] ?? '' ) ),
+		);
+	}
+
+	/**
+	 * Pick a few informative internal pages to also sample (services, about,
+	 * pricing, guides…), skipping template/utility/legal URLs. Same host only.
+	 *
+	 * @param array  $urls  Internal link URLs from the entry page.
+	 * @param string $base  The entry URL (for host + to skip itself).
+	 * @param int    $limit Max pages to return.
+	 * @return array
+	 */
+	protected function pick_internal_pages( array $urls, $base, $limit ) {
+		$host = wp_parse_url( $base, PHP_URL_HOST );
+		$skip = '/(cart|checkout|account|login|register|wp-admin|wp-login|privacy|terms|cookie|disclaimer|refund|feed|tag|author|/page/|template|elementor|library|popup)/i';
+
+		$preferred = array(); $others = array();
+		$seen = array( untrailingslashit( (string) $base ) => true );
+		foreach ( $urls as $u ) {
+			$u = esc_url_raw( (string) $u );
+			if ( '' === $u || ( $host && wp_parse_url( $u, PHP_URL_HOST ) !== $host ) ) {
+				continue;
+			}
+			$key = untrailingslashit( $u );
+			if ( isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			$seen[ $key ] = true;
+			$path = strtolower( (string) wp_parse_url( $u, PHP_URL_PATH ) );
+			if ( preg_match( $skip, $path ) ) {
+				continue;
+			}
+			// Prefer commercially meaningful pages.
+			if ( preg_match( '/(service|solution|product|pricing|about|industr|feature|case-?stud|portfolio|work|guide|resource|blog|faq|contact)/', $path ) ) {
+				$preferred[] = $u;
+			} else {
+				$others[] = $u;
+			}
+		}
+		return array_slice( array_merge( $preferred, $others ), 0, max( 0, (int) $limit ) );
 	}
 
 	/**

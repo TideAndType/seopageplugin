@@ -450,3 +450,8 @@
 .scc-meta-suggestion:first-of-type { border-top: 0; }
 .scc-meta-suggestion__head { display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
 .scc-meta-suggestion__d { color: var(--scc-muted, #475569); font-size: 13px; margin: 2px 0 4px; }
+
+/* Architecture: "Only show gaps" collapses existing pages + empties. */
+.scc-arch--gaps-only .scc-arch-node.is-existing { display: none; }
+.scc-arch--gaps-only .scc-arch-children:empty,
+.scc-arch--gaps-only .scc-arch-articles:has(> .scc-label:only-child) { display: none; }

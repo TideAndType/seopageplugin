@@ -57,7 +57,12 @@ $node_line = function ( $node ) {
 		<div class="scc-card">
 			<div class="scc-card__head">
 				<h2><?php esc_html_e( 'Recommended architecture', 'seo-command-center' ); ?></h2>
-				<button class="button button-primary" id="scc-seed-plan"><?php esc_html_e( 'Send selected pages to Content Plan', 'seo-command-center' ); ?></button>
+				<div>
+					<label class="scc-toggle" title="<?php esc_attr_e( 'Hide pages you already have and show only the new/gap suggestions.', 'seo-command-center' ); ?>">
+						<input type="checkbox" id="scc-arch-gaps-only"> <span><?php esc_html_e( 'Only show gaps', 'seo-command-center' ); ?></span>
+					</label>
+					<button class="button button-primary" id="scc-seed-plan"><?php esc_html_e( 'Send selected pages to Content Plan', 'seo-command-center' ); ?></button>
+				</div>
 			</div>
 			<p class="scc-note">
 				<?php esc_html_e( 'Tick the “Gap · new” pages you want to add to your Content Plan (existing pages are never added). ', 'seo-command-center' ); ?>

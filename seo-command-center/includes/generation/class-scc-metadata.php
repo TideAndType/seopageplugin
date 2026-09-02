@@ -144,7 +144,13 @@ class SCC_Metadata {
 		if ( ! $post ) {
 			return false;
 		}
-		if ( 'elementor_library' === $post->post_type ) {
+		// A template/builder post type (elementor_library, pixfort_template, …).
+		if ( class_exists( 'SCC_Analyzer' ) && SCC_Analyzer::is_template_post_type( $post->post_type ) ) {
+			return true;
+		}
+		// A normal page/post that is actually an Elementor template or is flagged
+		// as an SEO template.
+		if ( '' !== (string) get_post_meta( $post->ID, '_elementor_template_type', true ) ) {
 			return true;
 		}
 		return '1' === get_post_meta( $post->ID, '_scc_is_seo_template', true );
@@ -170,10 +176,14 @@ class SCC_Metadata {
 		$filter    = in_array( ( $args['filter'] ?? 'all' ), array( 'all', 'missing', 'present' ), true ) ? $args['filter'] : 'all';
 		$include_templates = ! empty( $args['include_templates'] );
 
-		$types = class_exists( 'SCC_Analyzer' ) ? SCC_Analyzer::analyzable_post_types() : array( 'post', 'page' );
-		if ( $include_templates && ! in_array( 'elementor_library', $types, true ) && post_type_exists( 'elementor_library' ) ) {
-			$types[] = 'elementor_library';
+		if ( $include_templates ) {
+			// Show everything public, including template/builder types.
+			$types = array_values( get_post_types( array( 'public' => true ), 'names' ) );
+			$types = array_diff( $types, array( 'attachment' ) );
+		} else {
+			$types = class_exists( 'SCC_Analyzer' ) ? SCC_Analyzer::analyzable_post_types() : array( 'post', 'page' );
 		}
+		$types = array_values( $types );
 		if ( '' !== $post_type && in_array( $post_type, $types, true ) ) {
 			$types = array( $post_type );
 		}

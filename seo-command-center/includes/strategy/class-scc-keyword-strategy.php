@@ -206,7 +206,7 @@ class SCC_Keyword_Strategy {
 			if ( count( $pages ) >= (int) $limit ) {
 				break;
 			}
-			if ( isset( $seen[ $sp['path'] ] ) ) {
+			if ( isset( $seen[ $sp['path'] ] ) || self::is_template_like( $sp['path'], $sp['title'] ) ) {
 				continue;
 			}
 			$seen[ $sp['path'] ] = true;
@@ -326,6 +326,26 @@ class SCC_Keyword_Strategy {
 		}
 		$words = str_replace( array( '-', '_' ), ' ', $slug );
 		return ucwords( trim( $words ) );
+	}
+
+	/**
+	 * Whether a sitemap URL path/title looks like a page-builder template rather
+	 * than real content (so the topical map / architecture never lists it). Prefers
+	 * resolving the URL to a real post and checking its type; falls back to markers.
+	 *
+	 * @param string $path  Normalized path.
+	 * @param string $title Title.
+	 * @return bool
+	 */
+	protected static function is_template_like( $path, $title ) {
+		if ( function_exists( 'url_to_postid' ) ) {
+			$pid = (int) url_to_postid( home_url( $path ) );
+			if ( $pid && class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_template_post( $pid ) ) {
+				return true;
+			}
+		}
+		$hay = strtolower( $path . ' ' . $title );
+		return (bool) preg_match( '/(template|elementor|library|popup|mega[_-]?menu|landing[_-]?page|wp-json|\/hello-|header|footer|block-)/', $hay );
 	}
 
 	/**

@@ -86,6 +86,7 @@ class SCC_Crawler {
 			'images_missing_alt' => 0,
 			'internal_links'  => 0,
 			'external_links'  => 0,
+			'internal_link_urls' => array(),
 		);
 
 		if ( '' === trim( (string) $html ) ) {
@@ -159,15 +160,29 @@ class SCC_Crawler {
 
 		// Links (internal vs external relative to host).
 		$host = wp_parse_url( $url, PHP_URL_HOST );
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$scheme = $scheme ? $scheme : 'https';
+		$link_seen = array();
 		foreach ( $xpath->query( '//a[@href]' ) as $a ) {
-			$href = $a->getAttribute( 'href' );
+			$href = trim( (string) $a->getAttribute( 'href' ) );
+			if ( '' === $href || 0 === strpos( $href, '#' ) || 0 === stripos( $href, 'mailto:' ) || 0 === stripos( $href, 'tel:' ) || 0 === stripos( $href, 'javascript:' ) ) {
+				continue;
+			}
 			$link_host = wp_parse_url( $href, PHP_URL_HOST );
 			if ( ! $link_host || ( $host && $link_host === $host ) ) {
 				$data['internal_links']++;
+				// Absolutize relative links so callers can crawl them.
+				$abs = $link_host ? $href : ( $scheme . '://' . $host . '/' . ltrim( $href, '/' ) );
+				$path = (string) wp_parse_url( $abs, PHP_URL_PATH );
+				if ( '' !== $path && '/' !== $path && ! preg_match( '/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js)$/i', $path ) && ! isset( $link_seen[ $path ] ) ) {
+					$link_seen[ $path ]        = true;
+					$data['internal_link_urls'][] = $abs;
+				}
 			} else {
 				$data['external_links']++;
 			}
 		}
+		$data['internal_link_urls'] = array_slice( $data['internal_link_urls'], 0, 60 );
 
 		// JSON-LD schema types.
 		foreach ( $xpath->query( '//script[@type="application/ld+json"]' ) as $node ) {

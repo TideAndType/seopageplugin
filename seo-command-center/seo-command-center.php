@@ -3,7 +3,7 @@
  * Plugin Name:       SEO Command Center
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       AI-powered SEO Command Center for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.20.0
+ * Version:           1.21.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -23,7 +23,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // ---------------------------------------------------------------------------
 // Constants.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.20.0' );
+define( 'SCC_VERSION', '1.21.0' );
 define( 'SCC_DB_VERSION', '1.18.0' );
 define( 'SCC_PLUGIN_FILE', __FILE__ );
 define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
