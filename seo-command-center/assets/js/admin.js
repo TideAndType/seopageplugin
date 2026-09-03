@@ -696,12 +696,32 @@
 		var selectAll = document.getElementById( 'scc-seed-selectall' );
 		var countEl   = document.getElementById( 'scc-seed-count' );
 
-		// "Only show gaps" — collapse existing pages so the page is shorter.
+		// "Only show gaps" — collapse existing pages AND the now-empty groups /
+		// pillars / "Supporting articles" labels, so no blank lines remain.
 		var gapsOnly = document.getElementById( 'scc-arch-gaps-only' );
 		if ( gapsOnly ) {
 			var wrap = gapsOnly.closest( '.scc-wrap' ) || document.body;
+			var applyGaps = function ( on ) {
+				// 1) Individual existing rows.
+				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-node' ), function ( n ) {
+					n.style.display = ( on && n.classList.contains( 'is-existing' ) ) ? 'none' : '';
+				} );
+				var hasVisibleNode = function ( container ) {
+					return Array.prototype.some.call( container.querySelectorAll( '.scc-arch-node' ), function ( n ) {
+						return n.style.display !== 'none';
+					} );
+				};
+				// 2) Child/article groups with no remaining gap rows (hides the label too).
+				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-children, .scc-arch-articles' ), function ( g ) {
+					g.style.display = ( on && ! hasVisibleNode( g ) ) ? 'none' : '';
+				} );
+				// 3) Whole pillars where nothing is a gap.
+				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-pillar' ), function ( p ) {
+					p.style.display = ( on && ! hasVisibleNode( p ) ) ? 'none' : '';
+				} );
+			};
 			gapsOnly.addEventListener( 'change', function () {
-				wrap.classList.toggle( 'scc-arch--gaps-only', gapsOnly.checked );
+				applyGaps( gapsOnly.checked );
 			} );
 		}
 
