@@ -373,3 +373,39 @@ existing systems (no parallel SEO system, no fabricated data):
 Surfaced in admin via the **Action Queue** and **Insights** screens, the
 Dashboard "What should I do next?" card, the editor's "Optimize this page", and
 Settings (automation mode + business value).
+
+## Outbound network safety (`includes/net/`)
+
+A small, dependency-free layer centralizes every outbound-URL decision so the
+crawler, the AI providers, and the integrations behave consistently.
+
+- **`SCC_URL`**
+  - `is_safe_outbound_url()` — the SSRF guard. It is called **immediately before**
+    an outbound request (not only when a setting is saved). Loopback
+    (`127.0.0.0/8`, `::1`, and the literal host `localhost`) is allowed so local
+    model servers such as **LM Studio** keep working; RFC1918 private ranges,
+    link-local (incl. the cloud metadata endpoint `169.254.169.254`), multicast,
+    reserved, unspecified, and IPv6 ULA/link-local targets are refused, as are
+    URLs with embedded credentials or a non-HTTP(S) scheme. Hostnames are resolved
+    and the resolved IPs are judged too (a basic DNS-rebinding mitigation).
+    Overridable via the `scc_allow_outbound_url` filter.
+  - `resolve()` — RFC 3986 relative-reference resolution for the crawler.
+  - `normalize_for_crawl()` / `strip_tracking_params()` — a stable crawl identity
+    (lowercased scheme/host, no default port, no fragment, tracking-only query
+    params such as `utm_*`/`fbclid`/`gclid` dropped) so one page is not crawled
+    many times.
+- **`SCC_Robots`** — a proper robots.txt matcher: multiple user-agent groups,
+  `Allow`/`Disallow` with longest-match precedence (Allow wins ties), `*`
+  wildcards and `$` end-anchors, comments and blank lines. The crawler evaluates
+  it under its product token `SEO-Command-Center`.
+
+The guard is applied where the target is user-configurable or user-supplied (the
+LM Studio provider and the crawler). Fixed vendor endpoints (Anthropic, OpenAI,
+Google) are not attacker-controllable, so they are intentionally not subjected to
+a per-request DNS lookup.
+
+REST routes additionally enforce **object-level authorization**: post-scoped
+mutations (metadata, schema, publishing, link analysis, page optimize) verify
+`current_user_can( 'edit_post', $id )` on the specific object, so relaxing the
+plugin capability via `scc_required_capability` never grants blanket per-object
+access.

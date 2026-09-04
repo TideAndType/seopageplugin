@@ -102,6 +102,13 @@ class SCC_Settings {
 					break;
 				case 'url':
 					$value = esc_url_raw( trim( (string) $value ) );
+					// Never persist an unsafe outbound URL (bad scheme, embedded
+					// credentials, or a private/metadata target). Loopback is fine
+					// for local model servers. Keep the previous value on rejection;
+					// the request-time guard is the real enforcement point.
+					if ( '' !== $value && class_exists( 'SCC_URL' ) && is_wp_error( SCC_URL::is_safe_outbound_url( $value ) ) ) {
+						continue 2;
+					}
 					break;
 				case 'int':
 					$value = SCC_Security::sanitize_int( $value, 0, 100000 );

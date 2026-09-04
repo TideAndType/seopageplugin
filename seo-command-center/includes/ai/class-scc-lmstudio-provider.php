@@ -86,6 +86,11 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	public function discover_models( $base_override = '' ) {
 		$base = '' !== trim( (string) $base_override ) ? untrailingslashit( trim( (string) $base_override ) ) : $this->base_url();
 
+		$safe = SCC_URL::is_safe_outbound_url( $base . '/models' );
+		if ( is_wp_error( $safe ) ) {
+			return array( 'ok' => false, 'models' => array(), 'base' => $base, 'error' => $safe->get_error_message() );
+		}
+
 		$headers = array();
 		$key     = $this->get_key();
 		if ( '' !== $key ) {
@@ -189,6 +194,15 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		}
 
 		$url = $this->base_url() . '/chat/completions';
+
+		// SSRF guard, checked immediately before the outbound request (not only at
+		// save time). Loopback is allowed so local LM Studio keeps working.
+		$safe = SCC_URL::is_safe_outbound_url( $url );
+		if ( is_wp_error( $safe ) ) {
+			SCC_Logger::error( 'lmstudio', 'Blocked outbound URL: ' . $safe->get_error_message() );
+			$response->error = $safe;
+			return $response;
+		}
 
 		$http = $this->post_chat( $url, $headers, $body );
 

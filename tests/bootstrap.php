@@ -65,8 +65,28 @@ if ( ! function_exists( '__' ) ) {
 		return $text;
 	}
 }
+$GLOBALS['scc_test_filters'] = array();
+if ( ! function_exists( 'add_filter' ) ) {
+	function add_filter( $tag, $cb, $priority = 10, $args = 1 ) {
+		$GLOBALS['scc_test_filters'][ $tag ][] = $cb;
+		return true;
+	}
+}
+if ( ! function_exists( 'remove_all_filters' ) ) {
+	function remove_all_filters( $tag ) {
+		unset( $GLOBALS['scc_test_filters'][ $tag ] );
+		return true;
+	}
+}
 if ( ! function_exists( 'apply_filters' ) ) {
 	function apply_filters( $tag, $value ) {
+		$args = array_slice( func_get_args(), 1 );
+		if ( ! empty( $GLOBALS['scc_test_filters'][ $tag ] ) ) {
+			foreach ( $GLOBALS['scc_test_filters'][ $tag ] as $cb ) {
+				$args[0] = call_user_func_array( $cb, $args );
+			}
+			return $args[0];
+		}
 		return $value;
 	}
 }
@@ -112,6 +132,8 @@ if ( ! class_exists( 'WP_Error' ) ) {
 
 // --- Classes under test (pure-logic subset) -------------------------------
 require_once __DIR__ . '/../seo-command-center/includes/security/class-scc-security.php';
+require_once __DIR__ . '/../seo-command-center/includes/net/class-scc-url.php';
+require_once __DIR__ . '/../seo-command-center/includes/net/class-scc-robots.php';
 require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-response.php';
 require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-crawler.php';
 require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-seo-meta.php';
