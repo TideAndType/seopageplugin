@@ -418,3 +418,6 @@ if ( ! function_exists( 'get_term_by' ) ) {
 	}
 }
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-generator.php';
+
+// --- Admin (pure hub_active_tab helper under test) --------------------------
+require_once __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php';

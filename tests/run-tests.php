@@ -1245,6 +1245,14 @@ assert_true( false !== strpos( $native['post_content'], '<h2>What to look for</h
 assert_eq( 'choose-local-seo-agency', $native['post_name'], 'slug derived from last URL segment' );
 assert_eq( array(), $native['post_meta'], 'native render adds no builder post_meta' );
 
+echo "\n== Admin hubs (tab resolution) ==\n";
+$hub_tabs = array( 'audit', 'keywords', 'architecture', 'links', 'meta' );
+assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, '' ), 'no tab requested falls back to first tab' );
+assert_eq( 'keywords', SCC_Admin::hub_active_tab( $hub_tabs, 'keywords' ), 'valid requested tab is honored' );
+assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, 'bogus' ), 'unknown tab falls back to first tab' );
+assert_eq( 'meta', SCC_Admin::hub_active_tab( $hub_tabs, 'META' ), 'requested tab is normalized (case) before matching' );
+assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, '../evil' ), 'unsafe tab value is rejected, falls back to first' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

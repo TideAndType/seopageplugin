@@ -19,9 +19,6 @@ class SCC_Admin {
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
-	/** @var array<string,string> Submenu slug => section-header label, injected after registration. */
-	protected $menu_sections = array();
-
 	/**
 	 * Constructor.
 	 *
@@ -47,98 +44,164 @@ class SCC_Admin {
 			58
 		);
 
-		// Visible menu, organized into a few clear areas (Content / SEO / Strategy
-		// / Automation / Settings) via section headers. Every screen is still here
-		// — the grouping just removes the "flat wall of 15 links" sprawl.
-		// Each row: slug => [ label, render_method, section_header|null ].
+		// A small, clear menu. Overlapping screens are consolidated into three
+		// tabbed hubs (Content / SEO / Strategy) instead of a flat wall of links.
+		// Every individual screen still exists — it is registered as a hidden route
+		// (reached through its hub's tabs and from in-app links), so nothing breaks.
 		$pages = array(
-			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard', null ),
-
-			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan', __( 'Content', 'seo-command-center' ) ),
-			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas', null ),
-			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate', null ),
-			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing', null ),
-
-			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit', __( 'SEO', 'seo-command-center' ) ),
-			self::SLUG . '-keyword-strategy' => array( __( 'Keywords', 'seo-command-center' ), 'render_keyword_strategy', null ),
-			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture', null ),
-			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links', null ),
-			self::SLUG . '-meta-editor'      => array( __( 'Meta Editor', 'seo-command-center' ), 'render_meta_editor', null ),
-
-			self::SLUG . '-insights'         => array( __( 'Opportunities', 'seo-command-center' ), 'render_insights', __( 'Strategy', 'seo-command-center' ) ),
-			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority', null ),
-			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors', null ),
-
-			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue', __( 'Automation', 'seo-command-center' ) ),
-
-			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates', __( 'Settings', 'seo-command-center' ) ),
-			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings', null ),
-			self::SLUG . '-connections'      => array( __( 'Connections', 'seo-command-center' ), 'render_connections', null ),
+			self::SLUG                   => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
+			self::SLUG . '-content'      => array( __( 'Content', 'seo-command-center' ), 'render_content_hub' ),
+			self::SLUG . '-seo'          => array( __( 'SEO', 'seo-command-center' ), 'render_seo_hub' ),
+			self::SLUG . '-strategy'     => array( __( 'Strategy', 'seo-command-center' ), 'render_strategy_hub' ),
+			self::SLUG . '-action-queue' => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
+			self::SLUG . '-templates'    => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
+			self::SLUG . '-settings'     => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
+			self::SLUG . '-connections'  => array( __( 'Connections', 'seo-command-center' ), 'render_connections' ),
 		);
 
-		// Elementor templates only matter when Elementor is active.
-		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
-			$pages[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor', null );
-		}
-
-		$this->menu_sections = array();
 		foreach ( $pages as $slug => $page ) {
-			add_submenu_page(
-				self::SLUG,
-				$page[0],
-				$page[0],
-				$cap,
-				$slug,
-				array( $this, $page[1] )
-			);
-			if ( ! empty( $page[2] ) ) {
-				$this->menu_sections[ $slug ] = $page[2];
-			}
+			add_submenu_page( self::SLUG, $page[0], $page[0], $cap, $slug, array( $this, $page[1] ) );
 		}
 
-		// Inject the non-clickable section headers into the submenu after all
-		// items are registered (runs late on admin_menu).
-		add_action( 'admin_menu', array( $this, 'inject_menu_sections' ), 999 );
-
-		// Routable but hidden from the menu (reached from other pages / links):
-		// - Site Analysis feeds the Dashboard and SEO Audit.
-		// - Schema is a reference screen linked from Settings.
+		// Individual screens: routable but hidden from the menu. Each is reached
+		// through its hub's tabs and from in-app links (deep links keep working).
 		$hidden = array(
-			self::SLUG . '-site-analysis' => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
-			self::SLUG . '-schema'        => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
+			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
+			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
+			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
+			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
+			self::SLUG . '-keyword-strategy' => array( __( 'Keywords', 'seo-command-center' ), 'render_keyword_strategy' ),
+			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
+			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
+			self::SLUG . '-meta-editor'      => array( __( 'Meta Editor', 'seo-command-center' ), 'render_meta_editor' ),
+			self::SLUG . '-insights'         => array( __( 'Opportunities', 'seo-command-center' ), 'render_insights' ),
+			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
+			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
+			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
+			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
 		);
+		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
+			$hidden[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' );
+		}
 		foreach ( $hidden as $slug => $page ) {
 			add_submenu_page( null, $page[0], $page[0], $cap, $slug, array( $this, $page[1] ) );
 		}
 	}
 
 	/**
-	 * Insert non-clickable section-header rows into our submenu so the items read
-	 * as a few clear areas rather than one long flat list. Purely cosmetic — if
-	 * anything is unexpected the real items still work.
+	 * Definition of the tabbed hubs: hub slug => {title, default, tabs}.
+	 * Each tab: key => [ label, screen slug, render method ].
+	 *
+	 * @return array
 	 */
-	public function inject_menu_sections() {
-		global $submenu;
-		if ( empty( $submenu[ self::SLUG ] ) || empty( $this->menu_sections ) ) {
+	protected function hubs() {
+		return array(
+			self::SLUG . '-content'  => array(
+				'title'   => __( 'Content', 'seo-command-center' ),
+				'tabs'    => array(
+					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
+					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
+					'generate'   => array( __( 'Generate', 'seo-command-center' ), self::SLUG . '-generate', 'render_generate' ),
+					'publishing' => array( __( 'Publishing', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
+				),
+			),
+			self::SLUG . '-seo'      => array(
+				'title'   => __( 'SEO', 'seo-command-center' ),
+				'tabs'    => array(
+					'audit'        => array( __( 'Site Audit', 'seo-command-center' ), self::SLUG . '-seo-audit', 'render_seo_audit' ),
+					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
+					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
+					'links'        => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
+					'meta'         => array( __( 'Meta Editor', 'seo-command-center' ), self::SLUG . '-meta-editor', 'render_meta_editor' ),
+				),
+			),
+			self::SLUG . '-strategy' => array(
+				'title'   => __( 'Strategy', 'seo-command-center' ),
+				'tabs'    => array(
+					'opportunities' => array( __( 'Opportunities', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
+					'topical'       => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
+					'competitors'   => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
+				),
+			),
+		);
+	}
+
+	/**
+	 * Resolve the active tab key for a hub: the requested tab when valid, else the
+	 * first tab. Pure — unit-tested.
+	 *
+	 * @param array  $tab_keys  Ordered list of valid tab keys.
+	 * @param string $requested Requested tab key (raw).
+	 * @return string
+	 */
+	public static function hub_active_tab( array $tab_keys, $requested ) {
+		$requested = sanitize_key( (string) $requested );
+		if ( '' !== $requested && in_array( $requested, $tab_keys, true ) ) {
+			return $requested;
+		}
+		return isset( $tab_keys[0] ) ? $tab_keys[0] : '';
+	}
+
+	/**
+	 * Render a tabbed hub: a tab bar, then the active screen (delegated to its
+	 * existing render method, unchanged).
+	 *
+	 * @param string $hub_slug Hub slug (a key of hubs()).
+	 * @return void
+	 */
+	protected function render_hub( $hub_slug ) {
+		$hubs = $this->hubs();
+		if ( empty( $hubs[ $hub_slug ] ) ) {
 			return;
 		}
-		$cap   = SCC_Security::capability();
-		$rebuilt = array();
-		foreach ( $submenu[ self::SLUG ] as $item ) {
-			$item_slug = isset( $item[2] ) ? $item[2] : '';
-			if ( isset( $this->menu_sections[ $item_slug ] ) ) {
-				// A header row: label wrapped for styling, inert slug, marker class.
-				$rebuilt[] = array(
-					'<span class="scc-menu-section-label">' . esc_html( $this->menu_sections[ $item_slug ] ) . '</span>',
-					$cap,
-					'#scc-section-' . sanitize_key( $this->menu_sections[ $item_slug ] ),
-					'',
-					'scc-menu-section',
-				);
-			}
-			$rebuilt[] = $item;
+		$hub  = $hubs[ $hub_slug ];
+		$keys = array_keys( $hub['tabs'] );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only tab navigation.
+		$requested = isset( $_GET['tab'] ) ? wp_unslash( $_GET['tab'] ) : '';
+		$active    = self::hub_active_tab( $keys, $requested );
+
+		echo '<div class="wrap scc-wrap scc-hub"><nav class="nav-tab-wrapper scc-hub-tabs">';
+		foreach ( $hub['tabs'] as $key => $tab ) {
+			$url = add_query_arg(
+				array( 'page' => $hub_slug, 'tab' => $key ),
+				admin_url( 'admin.php' )
+			);
+			printf(
+				'<a href="%1$s" class="nav-tab%2$s">%3$s</a>',
+				esc_url( $url ),
+				( $key === $active ) ? ' nav-tab-active' : '',
+				esc_html( $tab[0] )
+			);
 		}
-		$submenu[ self::SLUG ] = $rebuilt;
+		echo '</nav></div>';
+
+		// Delegate to the existing screen's render method (unchanged view).
+		$method = isset( $hub['tabs'][ $active ][2] ) ? $hub['tabs'][ $active ][2] : '';
+		if ( $method && method_exists( $this, $method ) ) {
+			$this->{$method}();
+		}
+	}
+
+	/**
+	 * Content hub (Plan / Ideas / Generate / Publishing).
+	 */
+	public function render_content_hub() {
+		$this->render_hub( self::SLUG . '-content' );
+	}
+
+	/**
+	 * SEO hub (Audit / Keywords / Architecture / Internal Links / Meta).
+	 */
+	public function render_seo_hub() {
+		$this->render_hub( self::SLUG . '-seo' );
+	}
+
+	/**
+	 * Strategy hub (Opportunities / Topical Authority / Competitors).
+	 */
+	public function render_strategy_hub() {
+		$this->render_hub( self::SLUG . '-strategy' );
 	}
 
 	/**

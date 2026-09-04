@@ -438,5 +438,21 @@ they are simply no longer required to generate an ordinary blog post.
 
 The Generate screen mirrors this: a **Content type** selector (Blog Post default)
 with a topic and a few optional fields up front, and everything else behind
-**Advanced**. The admin menu is grouped into Content / SEO / Strategy /
-Automation / Settings sections (no screens removed).
+**Advanced**.
+
+## Admin navigation: tabbed hubs
+
+Overlapping screens are consolidated into three tabbed hubs instead of a long
+flat menu — the top-level menu is Dashboard, **Content**, **SEO**, **Strategy**,
+Action Queue, Templates, Settings, Connections:
+
+- **Content** — Content Plan · Ideas · Generate · Publishing
+- **SEO** — Site Audit · Keywords · Site Architecture · Internal Links · Meta Editor
+- **Strategy** — Opportunities · Topical Authority · Competitors
+
+A hub (`render_hub()`) prints a `nav-tab-wrapper` bar and then delegates to the
+selected screen's existing render method — the individual views are unchanged.
+`hub_active_tab()` resolves `?tab=` (whitelisted, sanitized) to a valid tab and
+otherwise falls back to the first. Every individual screen is still registered as
+a hidden route, so deep links and in-app links keep working; no screen or feature
+was removed.

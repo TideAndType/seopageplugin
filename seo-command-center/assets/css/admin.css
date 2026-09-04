@@ -473,23 +473,11 @@
  * Simplification pass: grouped admin menu + simple Generate form.
  * ------------------------------------------------------------------------- */
 
-/* Non-clickable section headers inside our submenu. */
-#adminmenu .scc-menu-section > a,
-#adminmenu li.scc-menu-section > a {
-	pointer-events: none;
-	cursor: default;
-	padding-top: 12px;
-	padding-bottom: 2px;
-	opacity: 1;
-}
-#adminmenu .scc-menu-section .scc-menu-section-label {
-	display: block;
-	font-size: 10px;
-	font-weight: 600;
-	letter-spacing: .08em;
-	text-transform: uppercase;
-	opacity: .55;
-}
+/* Tabbed hubs (Content / SEO / Strategy) consolidate the old flat menu. */
+.scc-hub { margin-bottom: 0; padding-bottom: 0; }
+.scc-hub-tabs { margin-bottom: 0; }
+.scc-hub + .wrap { margin-top: 0; }
+.scc-hub + .wrap > h1:first-child { margin-top: 12px; }
 
 /* Simple Generate form. */
 .scc-quickgen .scc-field { margin: 0 0 14px; }
