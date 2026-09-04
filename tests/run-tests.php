@@ -1090,6 +1090,19 @@ echo "\n== Automation modes ==\n";
 assert_eq( 'assisted', SCC_Action_Queue::automation_mode(), 'default automation mode is assisted' );
 assert_true( in_array( 'autopilot', SCC_Action_Queue::MODES, true ), 'autopilot is a valid mode' );
 
+echo "\n== Content Ideas (sanitize) ==\n";
+$ideas = SCC_Content_Ideas::sanitize_ideas( array( 'ideas' => array(
+	array( 'title' => 'Manufacturing SEO', 'meta_title' => 'Manufacturing SEO Services', 'meta_description' => 'Grow leads.', 'primary_keyword' => 'manufacturing seo', 'secondary_keywords' => array( 'industrial seo', '', 'factory marketing' ), 'intent' => 'commercial', 'page_type' => 'industry', 'recommended_url' => '/industries/manufacturing/', 'priority' => 'high', 'why' => 'Targets untapped industry demand.' ),
+	array( 'title' => '', 'page_type' => 'article' ), // dropped: no title.
+	array( 'title' => 'Weird', 'page_type' => 'nonsense', 'priority' => 'urgent' ), // type/priority normalized.
+) ) );
+assert_eq( 2, count( $ideas ), 'ideas without a title are dropped' );
+assert_eq( 'industry', $ideas[0]['page_type'], 'valid page_type kept' );
+assert_eq( 'high', $ideas[0]['priority'], 'valid priority kept' );
+assert_eq( array( 'industrial seo', 'factory marketing' ), $ideas[0]['secondary_keywords'], 'blank secondary keywords filtered' );
+assert_eq( 'article', $ideas[1]['page_type'], 'unknown page_type falls back to article' );
+assert_eq( 'medium', $ideas[1]['priority'], 'unknown priority falls back to medium' );
+
 echo "\n== Meta Editor (char status) ==\n";
 assert_eq( 'empty', SCC_Metadata::char_status( '', 30, 60 ), 'blank title flagged empty' );
 assert_eq( 'short', SCC_Metadata::char_status( 'Too short', 30, 60 ), 'under min flagged short' );

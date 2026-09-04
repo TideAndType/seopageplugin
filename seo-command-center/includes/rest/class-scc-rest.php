@@ -280,6 +280,12 @@ class SCC_REST {
 		);
 
 		// ---- Unified intelligence layer: opportunities + action queue -----
+		register_rest_route( self::NS, '/ideas', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'content_ideas' ),
+			'permission_callback' => $perm,
+		) );
+
 		register_rest_route( self::NS, '/opportunities', array(
 			'methods'             => WP_REST_Server::READABLE,
 			'callback'            => array( $this, 'opportunities' ),
@@ -1376,6 +1382,26 @@ class SCC_REST {
 	public function cannibalization() {
 		$detector = new SCC_Cannibalization();
 		return $this->ok( array( 'groups' => $detector->detect() ) );
+	}
+
+	/**
+	 * POST /ideas — natural-language page-idea suggestions, SEO + CTR driven.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function content_ideas( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$service = new SCC_Content_Ideas( $this->ai );
+		$result  = $service->suggest( (string) ( $params['question'] ?? '' ), (int) ( $params['count'] ?? 8 ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
 	}
 
 	/**

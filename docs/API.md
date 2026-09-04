@@ -39,6 +39,7 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | 2 | GET/POST | `/content-plan` | Read/create content plan entries. |
 | 2 | GET | `/cannibalization` | Keyword-overlap findings. |
 | 3 | POST | `/brief` | Generate a content brief for approval. |
+| 3 | POST | `/ideas` | Ask in plain language for SEO + CTR-driven page suggestions, grounded in real pages + GSC demand. Body: `{question, count}`. Each idea drops into the Content Plan / generator. |
 | 3 | POST | `/generate` | Run the multi-step generator → draft. |
 | 3 | POST | `/regenerate-section` | Regenerate one section of a draft. |
 | 4 | GET | `/templates` | List Elementor templates + mappings. |

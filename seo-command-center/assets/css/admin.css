@@ -453,3 +453,12 @@
 
 /* Architecture: "Only show gaps" collapsing is handled in JS (inline display),
    which reliably hides empty groups/pillars including their labels. */
+
+/* Content Ideas. */
+.scc-ideas-examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.scc-idea { border-left: 3px solid var(--scc-accent, #4f46e5); }
+.scc-idea__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 6px; }
+.scc-idea__meta, .scc-idea__kw { font-size: 13px; margin: 3px 0; }
+.scc-idea__meta .scc-label, .scc-idea__kw .scc-label { display: inline; margin-right: 4px; }
+.scc-idea__why { font-size: 13px; color: var(--scc-muted, #475569); margin: 6px 0; }
+.scc-idea__actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }

@@ -215,6 +215,7 @@ require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-seo-m
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-schema.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-quality-score.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-metadata.php';
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-content-ideas.php';
 
 // --- Phase 4 stubs + classes under test -----------------------------------
 if ( ! function_exists( 'esc_html' ) ) {

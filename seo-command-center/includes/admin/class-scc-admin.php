@@ -53,6 +53,7 @@ class SCC_Admin {
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
+			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
 			self::SLUG . '-competitors'      => array( __( 'Competitor Gaps', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
@@ -373,6 +374,13 @@ class SCC_Admin {
 				'strategy' => SCC_Keyword_Strategy::latest(),
 			)
 		);
+	}
+
+	/**
+	 * Content Ideas — ask for SEO-driven page suggestions and generate them.
+	 */
+	public function render_ideas() {
+		$this->view( 'ideas', array() );
 	}
 
 	/**

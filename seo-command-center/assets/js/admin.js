@@ -1474,6 +1474,134 @@
 		} );
 	}
 
+	// ---- Content Ideas (ask → suggestions → generate) -----------------
+	function bindContentIdeas() {
+		var go = document.getElementById( 'scc-ideas-go' );
+		if ( ! go ) {
+			return;
+		}
+		var qEl = document.getElementById( 'scc-ideas-q' );
+		var countEl = document.getElementById( 'scc-ideas-count' );
+		var msg = document.getElementById( 'scc-ideas-msg' );
+		var out = document.getElementById( 'scc-ideas-results' );
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+
+		Array.prototype.forEach.call( document.querySelectorAll( '.scc-idea-example' ), function ( b ) {
+			b.addEventListener( 'click', function () { qEl.value = b.textContent; qEl.focus(); } );
+		} );
+
+		function planData( idea ) {
+			return {
+				title: idea.title,
+				url: idea.recommended_url || '',
+				primary_keyword: idea.primary_keyword || '',
+				secondary: idea.secondary_keywords || [],
+				intent: idea.intent || '',
+				page_type: idea.page_type || 'article',
+				priority: idea.priority || 'medium',
+				status: 'recommended'
+			};
+		}
+
+		// Create the plan entry, then generate a draft, polling until it lands.
+		function generateDraft( idea, statusEl, btn ) {
+			btn.disabled = true;
+			setStatus( statusEl, 'Adding to plan…' );
+			var entryId = 0;
+			request( '/content-plan', { method: 'POST', data: planData( idea ) } )
+				.then( function ( res ) {
+					entryId = ( res.data && res.data.id ) || 0;
+					if ( ! entryId ) { throw new Error( 'Could not create the plan entry.' ); }
+					setStatus( statusEl, 'Generating draft… this can take up to a minute.' );
+					// Fire generation; if the gateway drops it, polling still catches the draft.
+					request( '/generate', { method: 'POST', data: { entry_id: entryId } } ).catch( function () {} );
+					return poll( entryId, 0 );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( statusEl, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+
+			function poll( id, tries ) {
+				return request( '/content-plan/gen-status?id=' + id, { method: 'GET' } ).then( function ( res ) {
+					var d = res.data || {};
+					if ( d.done && d.edit_url ) {
+						btn.textContent = 'Draft ready';
+						statusEl.innerHTML = 'Draft created — <a href="' + esc( d.edit_url ) + '">edit it</a>.';
+						statusEl.className = 'scc-inline-status is-ok';
+						return;
+					}
+					if ( tries >= 24 ) {
+						btn.disabled = false;
+						setStatus( statusEl, 'Still generating — check the Publishing Queue shortly.', 'is-ok' );
+						return;
+					}
+					return new Promise( function ( r ) { setTimeout( r, 4000 ); } ).then( function () { return poll( id, tries + 1 ); } );
+				} );
+			}
+		}
+
+		function render( res ) {
+			var d = res.data || {};
+			var ideas = d.ideas || [];
+			out.innerHTML = '';
+			out.hidden = false;
+			var head = el( 'div', null, 'scc-card' );
+			var grounded = ( d.grounded && d.grounded.gsc ) ? 'grounded in your real pages + Search Console demand' : 'grounded in your real pages';
+			head.appendChild( el( 'p', ideas.length + ' page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			if ( d.notes ) { head.appendChild( el( 'p', d.notes, 'scc-note' ) ); }
+			out.appendChild( head );
+
+			ideas.forEach( function ( idea ) {
+				var card = el( 'div', null, 'scc-card scc-idea' );
+				card.innerHTML =
+					'<div class="scc-idea__head"><strong>' + esc( idea.title ) + '</strong>' +
+					' <span class="scc-flag">' + esc( idea.page_type ) + '</span>' +
+					' <span class="scc-flag scc-flag--prio-' + esc( idea.priority ) + '">' + esc( idea.priority ) + '</span>' +
+					' <span class="scc-flag">' + esc( idea.intent ) + '</span></div>' +
+					'<div class="scc-idea__meta"><span class="scc-label">Meta title</span> ' + esc( idea.meta_title || '' ) + ' <span class="scc-note">(' + ( idea.meta_title || '' ).length + ')</span></div>' +
+					'<div class="scc-idea__meta"><span class="scc-label">Meta description</span> ' + esc( idea.meta_description || '' ) + '</div>' +
+					'<div class="scc-idea__kw"><span class="scc-label">Keyword</span> <code>' + esc( idea.primary_keyword || '' ) + '</code>' +
+					( ( idea.secondary_keywords || [] ).length ? ' <span class="scc-note">+ ' + esc( ( idea.secondary_keywords || [] ).join( ', ' ) ) + '</span>' : '' ) + '</div>' +
+					( idea.recommended_url ? '<div class="scc-note"><code>' + esc( idea.recommended_url ) + '</code></div>' : '' ) +
+					( idea.why ? '<div class="scc-idea__why">' + esc( idea.why ) + '</div>' : '' );
+
+				var actions = el( 'div', null, 'scc-idea__actions' );
+				var add = el( 'button', 'Add to Content Plan', 'button button-small' );
+				var gen = el( 'button', '✨ Generate draft', 'button button-small button-primary' );
+				var st = el( 'span', '', 'scc-inline-status' );
+				add.addEventListener( 'click', function () {
+					add.disabled = true;
+					setStatus( st, 'Adding…' );
+					request( '/content-plan', { method: 'POST', data: planData( idea ) } )
+						.then( function () { add.textContent = 'Added ✓'; setStatus( st, 'Added to Content Plan.', 'is-ok' ); } )
+						.catch( function ( err ) { add.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} );
+				gen.addEventListener( 'click', function () { generateDraft( idea, st, gen ); } );
+				actions.appendChild( add );
+				actions.appendChild( gen );
+				actions.appendChild( st );
+				card.appendChild( actions );
+				out.appendChild( card );
+			} );
+		}
+
+		go.addEventListener( 'click', function () {
+			var q = ( qEl.value || '' ).trim();
+			if ( ! q ) { setStatus( msg, 'Type what you want ideas for.', 'is-error' ); return; }
+			go.disabled = true;
+			setStatus( msg, 'Thinking about the best SEO pages for you…' );
+			request( '/ideas', { method: 'POST', data: { question: q, count: ( countEl && countEl.value ) || 8 } } )
+				.then( function ( res ) { go.disabled = false; setStatus( msg, 'Done.', 'is-ok' ); render( res ); } )
+				.catch( function ( err ) { go.disabled = false; setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		} );
+	}
+
 	// ---- Meta Editor (bulk title/description editing) -----------------
 	function bindMetaEditor() {
 		var list = document.getElementById( 'scc-meta-list' );
@@ -2290,5 +2418,6 @@
 		bindActionQueue();
 		bindInsights();
 		bindMetaEditor();
+		bindContentIdeas();
 	} );
 } )();
