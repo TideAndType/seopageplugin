@@ -19,6 +19,9 @@ class SCC_Admin {
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
+	/** @var array<string,string> Submenu slug => section-header label, injected after registration. */
+	protected $menu_sections = array();
+
 	/**
 	 * Constructor.
 	 *
@@ -44,31 +47,41 @@ class SCC_Admin {
 			58
 		);
 
-		// Visible menu — grouped to follow the actual workflow, trimmed down.
+		// Visible menu, organized into a few clear areas (Content / SEO / Strategy
+		// / Automation / Settings) via section headers. Every screen is still here
+		// — the grouping just removes the "flat wall of 15 links" sprawl.
+		// Each row: slug => [ label, render_method, section_header|null ].
 		$pages = array(
-			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
-			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
-			self::SLUG . '-insights'         => array( __( 'Insights', 'seo-command-center' ), 'render_insights' ),
-			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
-			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
-			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
-			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
-			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
-			self::SLUG . '-competitors'      => array( __( 'Competitor Gaps', 'seo-command-center' ), 'render_competitors' ),
-			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
-			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
-			self::SLUG . '-meta-editor'      => array( __( 'Meta Editor', 'seo-command-center' ), 'render_meta_editor' ),
-			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
-			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
-			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
-			self::SLUG . '-connections'      => array( __( 'API Connections', 'seo-command-center' ), 'render_connections' ),
+			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard', null ),
+
+			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan', __( 'Content', 'seo-command-center' ) ),
+			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas', null ),
+			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate', null ),
+			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing', null ),
+
+			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit', __( 'SEO', 'seo-command-center' ) ),
+			self::SLUG . '-keyword-strategy' => array( __( 'Keywords', 'seo-command-center' ), 'render_keyword_strategy', null ),
+			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture', null ),
+			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links', null ),
+			self::SLUG . '-meta-editor'      => array( __( 'Meta Editor', 'seo-command-center' ), 'render_meta_editor', null ),
+
+			self::SLUG . '-insights'         => array( __( 'Opportunities', 'seo-command-center' ), 'render_insights', __( 'Strategy', 'seo-command-center' ) ),
+			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority', null ),
+			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors', null ),
+
+			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue', __( 'Automation', 'seo-command-center' ) ),
+
+			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates', __( 'Settings', 'seo-command-center' ) ),
+			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings', null ),
+			self::SLUG . '-connections'      => array( __( 'Connections', 'seo-command-center' ), 'render_connections', null ),
 		);
 
 		// Elementor templates only matter when Elementor is active.
 		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
-			$pages[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' );
+			$pages[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor', null );
 		}
 
+		$this->menu_sections = array();
 		foreach ( $pages as $slug => $page ) {
 			add_submenu_page(
 				self::SLUG,
@@ -78,20 +91,54 @@ class SCC_Admin {
 				$slug,
 				array( $this, $page[1] )
 			);
+			if ( ! empty( $page[2] ) ) {
+				$this->menu_sections[ $slug ] = $page[2];
+			}
 		}
 
+		// Inject the non-clickable section headers into the submenu after all
+		// items are registered (runs late on admin_menu).
+		add_action( 'admin_menu', array( $this, 'inject_menu_sections' ), 999 );
+
 		// Routable but hidden from the menu (reached from other pages / links):
-		// - Generate Content is now built into the Content Plan.
 		// - Site Analysis feeds the Dashboard and SEO Audit.
 		// - Schema is a reference screen linked from Settings.
 		$hidden = array(
 			self::SLUG . '-site-analysis' => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
-			self::SLUG . '-generate'      => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
 			self::SLUG . '-schema'        => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
 		);
 		foreach ( $hidden as $slug => $page ) {
 			add_submenu_page( null, $page[0], $page[0], $cap, $slug, array( $this, $page[1] ) );
 		}
+	}
+
+	/**
+	 * Insert non-clickable section-header rows into our submenu so the items read
+	 * as a few clear areas rather than one long flat list. Purely cosmetic — if
+	 * anything is unexpected the real items still work.
+	 */
+	public function inject_menu_sections() {
+		global $submenu;
+		if ( empty( $submenu[ self::SLUG ] ) || empty( $this->menu_sections ) ) {
+			return;
+		}
+		$cap   = SCC_Security::capability();
+		$rebuilt = array();
+		foreach ( $submenu[ self::SLUG ] as $item ) {
+			$item_slug = isset( $item[2] ) ? $item[2] : '';
+			if ( isset( $this->menu_sections[ $item_slug ] ) ) {
+				// A header row: label wrapped for styling, inert slug, marker class.
+				$rebuilt[] = array(
+					'<span class="scc-menu-section-label">' . esc_html( $this->menu_sections[ $item_slug ] ) . '</span>',
+					$cap,
+					'#scc-section-' . sanitize_key( $this->menu_sections[ $item_slug ] ),
+					'',
+					'scc-menu-section',
+				);
+			}
+			$rebuilt[] = $item;
+		}
+		$submenu[ self::SLUG ] = $rebuilt;
 	}
 
 	/**
@@ -507,11 +554,19 @@ class SCC_Admin {
 				return empty( $e['post_id'] ) && in_array( $e['status'], array( 'recommended', 'approved', 'review', 'needs_update' ), true );
 			}
 		);
+		// Existing categories for the simple form (we never create new ones here).
+		$categories = array();
+		if ( function_exists( 'get_categories' ) ) {
+			foreach ( get_categories( array( 'hide_empty' => false, 'number' => 200 ) ) as $cat ) {
+				$categories[] = array( 'id' => (int) $cat->term_id, 'name' => $cat->name );
+			}
+		}
 		$this->view(
 			'generate',
 			array(
 				'entries'      => array_values( $generatable ),
 				'auto_publish' => (bool) SCC_Settings::get( 'auto_publish', false ),
+				'categories'   => $categories,
 			)
 		);
 	}

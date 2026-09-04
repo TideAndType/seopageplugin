@@ -409,3 +409,34 @@ mutations (metadata, schema, publishing, link analysis, page optimize) verify
 `current_user_can( 'edit_post', $id )` on the specific object, so relaxing the
 plugin capability via `scc_required_capability` never grants blanket per-object
 access.
+
+## Generation modes: Normal vs Template
+
+SEO Command Center is "normal WordPress, with an SEO intelligence layer." The
+generator (`SCC_Generator`) has two explicit paths, chosen deterministically by
+content type — the AI never decides:
+
+- **NORMAL (native)** — the default. Content types in `SCC_Generator::NATIVE_TYPES`
+  (`article`/`blog`/`blog_post`/`post`) become a plain WordPress **post**: the
+  sanitized AI body (H2 sections, lists, an FAQ, a closing CTA — and **no in-body
+  `<h1>`**, because the theme renders the post title as the page H1) is saved as
+  `post_content` verbatim. No template, no tokens, no page builder — never pulled
+  into Elementor even if a builder is the site's default renderer. Native excerpt,
+  tags (from the keywords) and an existing-only category are applied through core
+  taxonomies (`resolve_existing_category()` never creates duplicate categories).
+- **TEMPLATE (advanced)** — structured pages (`service`/`location`/`landing`/
+  `custom`, …) go through the existing template + renderer layer
+  (`SCC_Template_Selector` → Elementor / Gutenberg / native renderer). Tokens
+  (`{{TITLE}}`, `{{SERVICE}}`, `{{CITY}}`, …) apply here only. Choosing a template
+  family for any type (even an article) opts it into TEMPLATE mode — the escape
+  hatch — so nothing existing breaks.
+
+`is_native_mode( $content_type, $manual_family )` decides; `post_type_for()` maps
+native types to `post` and structured types to `page`. Tokens and the whole
+template system remain fully supported for TEMPLATE mode and existing mappings —
+they are simply no longer required to generate an ordinary blog post.
+
+The Generate screen mirrors this: a **Content type** selector (Blog Post default)
+with a topic and a few optional fields up front, and everything else behind
+**Advanced**. The admin menu is grouped into Content / SEO / Strategy /
+Automation / Settings sections (no screens removed).

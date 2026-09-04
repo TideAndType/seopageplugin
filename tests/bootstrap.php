@@ -386,3 +386,35 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-h
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-experiments.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-entity-graph.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-ai-visibility.php';
+
+// --- Generator (native vs template mode: pure static helpers under test) ----
+if ( ! function_exists( 'get_bloginfo' ) ) {
+	function get_bloginfo( $show = '' ) { return 'Test Site'; }
+}
+if ( ! function_exists( 'wpautop' ) ) {
+	function wpautop( $t ) { return $t; }
+}
+if ( ! function_exists( 'sanitize_file_name' ) ) {
+	function sanitize_file_name( $n ) { return preg_replace( '/[^a-z0-9_.-]/i', '', (string) $n ); }
+}
+// Category resolver stub: a small fake taxonomy for resolve_existing_category().
+$GLOBALS['scc_test_categories'] = array( 'seo' => 11, 'local seo' => 12 );
+if ( ! function_exists( 'get_term_by' ) ) {
+	function get_term_by( $field, $value, $taxonomy ) {
+		if ( 'category' !== $taxonomy ) {
+			return false;
+		}
+		$map = $GLOBALS['scc_test_categories'];
+		$key = ( 'slug' === $field ) ? sanitize_title( $value ) : strtolower( (string) $value );
+		// Slugs in the fake map: 'seo' and 'local-seo'.
+		$slugs = array( 'seo' => 11, 'local-seo' => 12 );
+		if ( 'slug' === $field && isset( $slugs[ $key ] ) ) {
+			return (object) array( 'term_id' => $slugs[ $key ], 'name' => $value );
+		}
+		if ( 'name' === $field && isset( $map[ $key ] ) ) {
+			return (object) array( 'term_id' => $map[ $key ], 'name' => $value );
+		}
+		return false;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-generator.php';

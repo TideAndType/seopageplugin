@@ -1206,6 +1206,45 @@ $canon = '<html><head><link rel="canonical" href="/canonical-home"></head><body>
 $cp = $crawler2->parse( $canon, 'https://example.com/some/deep/page' );
 assert_eq( 'https://example.com/canonical-home', $cp['canonical_resolved'], 'relative canonical resolved to absolute' );
 
+echo "\n== Generation mode (native vs template) ==\n";
+// Blog posts generate as normal native WordPress — no template required.
+assert_true( SCC_Generator::is_native_mode( 'article' ), 'article is native mode' );
+assert_true( SCC_Generator::is_native_mode( 'blog_post' ), 'blog_post is native mode' );
+assert_true( SCC_Generator::is_native_mode( '' ), 'empty type defaults to native' );
+assert_eq( false, SCC_Generator::is_native_mode( 'service' ), 'service page is TEMPLATE mode' );
+assert_eq( false, SCC_Generator::is_native_mode( 'location' ), 'location page is TEMPLATE mode' );
+assert_eq( false, SCC_Generator::is_native_mode( 'landing' ), 'landing page is TEMPLATE mode' );
+assert_eq( false, SCC_Generator::is_native_mode( 'custom' ), 'custom page is TEMPLATE mode' );
+// Choosing a template explicitly opts even an article into TEMPLATE mode (escape hatch).
+assert_eq( false, SCC_Generator::is_native_mode( 'article', 'my-family' ), 'article + template family => template mode' );
+
+echo "\n== Post type mapping ==\n";
+assert_eq( 'post', SCC_Generator::post_type_for( 'article' ), 'article => post' );
+assert_eq( 'page', SCC_Generator::post_type_for( 'service' ), 'service => page' );
+assert_eq( 'page', SCC_Generator::post_type_for( 'location' ), 'location => page' );
+assert_eq( 'page', SCC_Generator::post_type_for( 'landing' ), 'landing => page' );
+
+echo "\n== Category resolution (existing terms only) ==\n";
+assert_eq( 11, SCC_Generator::resolve_existing_category( 'SEO' ), 'matches existing category by name (case-insensitive)' );
+assert_eq( 12, SCC_Generator::resolve_existing_category( 'Local SEO' ), 'matches multi-word existing category' );
+assert_eq( 12, SCC_Generator::resolve_existing_category( 'local-seo' ), 'matches existing category by slug' );
+assert_eq( 0, SCC_Generator::resolve_existing_category( 'Totally New Topic' ), 'unknown category is NOT created (returns 0)' );
+assert_eq( 0, SCC_Generator::resolve_existing_category( '' ), 'blank category hint returns 0' );
+
+echo "\n== Native render: no in-body H1, uses content verbatim ==\n";
+$co = new SCC_Content_Object();
+$co->title   = 'How To Choose A Local SEO Agency';
+$co->slug    = '/guides/choose-local-seo-agency/';
+$co->content = "<p>Intro paragraph.</p>\n<h2>What to look for</h2>\n<p>Body.</p>";
+$ref = new ReflectionMethod( 'SCC_Generator', 'render_native' );
+$ref->setAccessible( true );
+$gen_stub = ( new ReflectionClass( 'SCC_Generator' ) )->newInstanceWithoutConstructor();
+$native = $ref->invoke( $gen_stub, $co );
+assert_true( false === strpos( $native['post_content'], '<h1' ), 'native post_content contains no <h1> (theme renders the title)' );
+assert_true( false !== strpos( $native['post_content'], '<h2>What to look for</h2>' ), 'native post_content preserves H2 sections verbatim' );
+assert_eq( 'choose-local-seo-agency', $native['post_name'], 'slug derived from last URL segment' );
+assert_eq( array(), $native['post_meta'], 'native render adds no builder post_meta' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

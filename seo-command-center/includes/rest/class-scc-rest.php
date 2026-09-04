@@ -453,6 +453,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/generate/quick',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'generate_quick' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/regenerate-section',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1816,6 +1826,81 @@ class SCC_REST {
 			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'The draft was written but saving it failed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
 		}
 
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /generate/quick — the simple path: enter a topic, get a draft.
+	 *
+	 * Builds an ad-hoc entry from a handful of fields and runs the existing
+	 * generator directly (synchronously). A Blog Post generates as a normal
+	 * native WordPress post; a structured type (service/location/landing/custom)
+	 * uses the template + renderer layer. No content-plan row is created.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function generate_quick( WP_REST_Request $request ) {
+		// Generation runs one long AI call; never punt it to a background worker.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$topic = SCC_Security::sanitize_text( $params['topic'] ?? '' );
+		if ( '' === $topic ) {
+			return $this->fail( 'no_topic', __( 'Enter a topic to generate.', 'seo-command-center' ), 400 );
+		}
+
+		$types = class_exists( 'SCC_Template' ) ? SCC_Template::TYPES : array( 'article', 'service', 'location', 'landing', 'custom' );
+		$type  = sanitize_key( (string) ( $params['content_type'] ?? 'article' ) );
+		if ( ! in_array( $type, $types, true ) ) {
+			$type = 'article';
+		}
+
+		$secondary = array();
+		$raw_sec   = $params['secondary'] ?? array();
+		if ( is_string( $raw_sec ) ) {
+			$raw_sec = preg_split( '/[\r\n,]+/', $raw_sec );
+		}
+		foreach ( (array) $raw_sec as $s ) {
+			$s = SCC_Security::sanitize_text( $s );
+			if ( '' !== $s ) {
+				$secondary[] = $s;
+			}
+		}
+
+		$word_count = isset( $params['word_count'] ) ? SCC_Security::sanitize_int( $params['word_count'], 0, 8000 ) : 0;
+
+		$entry = array(
+			'title'           => $topic,
+			'primary_keyword' => SCC_Security::sanitize_text( $params['primary_keyword'] ?? $topic ),
+			'secondary'       => array_slice( $secondary, 0, 8 ),
+			'intent'          => SCC_Security::sanitize_text( $params['intent'] ?? '' ),
+			'page_type'       => $type,
+			'location'        => SCC_Security::sanitize_text( $params['location'] ?? '' ),
+			'category'        => SCC_Security::sanitize_text( $params['category'] ?? '' ),
+			'tone'            => SCC_Security::sanitize_text( $params['tone'] ?? '' ),
+			'template_family' => SCC_Security::sanitize_text( $params['template_family'] ?? '' ),
+			'word_count'      => $word_count,
+			'url'             => '',
+		);
+
+		try {
+			$generator = new SCC_Generator( $this->ai );
+			$result    = $generator->generate( $entry );
+		} catch ( \Throwable $e ) {
+			SCC_Logger::error( 'generate', 'Fatal during quick generation: ' . $e->getMessage() );
+			return $this->fail( 'generate_exception', $e->getMessage(), 500 );
+		}
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
