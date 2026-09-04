@@ -1484,6 +1484,8 @@
 		var countEl = document.getElementById( 'scc-ideas-count' );
 		var msg = document.getElementById( 'scc-ideas-msg' );
 		var out = document.getElementById( 'scc-ideas-results' );
+		var lastQuestion = '';
+		var lastIdeas = [];
 
 		function esc( s ) {
 			var d = document.createElement( 'div' );
@@ -1549,12 +1551,43 @@
 		function render( res ) {
 			var d = res.data || {};
 			var ideas = d.ideas || [];
+			lastIdeas = ideas;
 			out.innerHTML = '';
 			out.hidden = false;
 			var head = el( 'div', null, 'scc-card' );
 			var grounded = ( d.grounded && d.grounded.gsc ) ? 'grounded in your real pages + Search Console demand' : 'grounded in your real pages';
 			head.appendChild( el( 'p', ideas.length + ' page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
 			if ( d.notes ) { head.appendChild( el( 'p', d.notes, 'scc-note' ) ); }
+
+			// Refine bar — adjust or extend this set with a follow-up instruction.
+			var refine = el( 'div', null, 'scc-refine' );
+			var chips = [ 'Add 5 more', 'Make them more local', 'Focus on commercial intent', 'Fewer, stronger ideas', 'More informational / blog' ];
+			var chipRow = el( 'div', null, 'scc-refine__chips' );
+			chips.forEach( function ( c ) {
+				var b = el( 'button', c, 'button button-small scc-refine-chip' );
+				b.addEventListener( 'click', function () { rInput.value = c; runRefine(); } );
+				chipRow.appendChild( b );
+			} );
+			var rWrap = el( 'div', null, 'scc-refine__row' );
+			var rInput = document.createElement( 'input' );
+			rInput.type = 'text'; rInput.className = 'regular-text'; rInput.placeholder = 'Refine these ideas… (e.g. more local, add 5, commercial only)';
+			var rBtn = el( 'button', 'Refine', 'button button-small button-primary' );
+			var rStatus = el( 'span', '', 'scc-inline-status' );
+			function runRefine() {
+				var instr = ( rInput.value || '' ).trim();
+				if ( ! instr ) { setStatus( rStatus, 'Type a refinement first.', 'is-error' ); return; }
+				rBtn.disabled = true;
+				setStatus( rStatus, 'Refining…' );
+				run( { question: lastQuestion, count: ( countEl && countEl.value ) || 8, refine: instr, previous: lastIdeas }, rStatus, function () { rBtn.disabled = false; } );
+			}
+			rBtn.addEventListener( 'click', runRefine );
+			rInput.addEventListener( 'keydown', function ( e ) { if ( e.key === 'Enter' ) { runRefine(); } } );
+			rWrap.appendChild( rInput ); rWrap.appendChild( rBtn ); rWrap.appendChild( rStatus );
+			refine.appendChild( el( 'div', 'Refine this set:', 'scc-label' ) );
+			refine.appendChild( chipRow );
+			refine.appendChild( rWrap );
+			head.appendChild( refine );
+
 			out.appendChild( head );
 
 			ideas.forEach( function ( idea ) {
@@ -1591,14 +1624,28 @@
 			} );
 		}
 
+		// Shared runner for the initial ask and refinements.
+		function run( data, statusEl, done ) {
+			request( '/ideas', { method: 'POST', data: data } )
+				.then( function ( res ) {
+					if ( done ) { done(); }
+					setStatus( statusEl, 'Done.', 'is-ok' );
+					render( res );
+					out.scrollIntoView( { behavior: 'smooth', block: 'start' } );
+				} )
+				.catch( function ( err ) {
+					if ( done ) { done(); }
+					setStatus( statusEl, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		}
+
 		go.addEventListener( 'click', function () {
 			var q = ( qEl.value || '' ).trim();
 			if ( ! q ) { setStatus( msg, 'Type what you want ideas for.', 'is-error' ); return; }
+			lastQuestion = q;
 			go.disabled = true;
 			setStatus( msg, 'Thinking about the best SEO pages for you…' );
-			request( '/ideas', { method: 'POST', data: { question: q, count: ( countEl && countEl.value ) || 8 } } )
-				.then( function ( res ) { go.disabled = false; setStatus( msg, 'Done.', 'is-ok' ); render( res ); } )
-				.catch( function ( err ) { go.disabled = false; setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+			run( { question: q, count: ( countEl && countEl.value ) || 8 }, msg, function () { go.disabled = false; } );
 		} );
 	}
 

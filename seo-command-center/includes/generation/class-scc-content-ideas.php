@@ -34,18 +34,23 @@ class SCC_Content_Ideas {
 	}
 
 	/**
-	 * Suggest pages for a natural-language request.
+	 * Suggest pages for a natural-language request. Optionally REFINE a previous
+	 * set (e.g. "make them more local", "add 5 more", "focus on commercial intent").
 	 *
-	 * @param string $question The user's request.
+	 * @param string $question The original request.
 	 * @param int    $count    How many ideas to return (1-20).
+	 * @param string $refine   A refinement instruction (optional).
+	 * @param array  $previous The previously-returned ideas to refine (optional).
 	 * @return array|WP_Error {ideas:array, grounded:array}
 	 */
-	public function suggest( $question, $count = 8 ) {
+	public function suggest( $question, $count = 8, $refine = '', $previous = array() ) {
 		$question = trim( wp_strip_all_tags( (string) $question ) );
-		if ( '' === $question ) {
+		$refine   = trim( wp_strip_all_tags( (string) $refine ) );
+		if ( '' === $question && '' === $refine ) {
 			return new WP_Error( 'scc_no_question', __( 'Tell me what you want ideas for.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
-		$count = max( 1, min( 20, (int) $count ) );
+		$count    = max( 1, min( 20, (int) $count ) );
+		$previous = self::sanitize_ideas( array( 'ideas' => is_array( $previous ) ? $previous : array() ) );
 
 		// Real site context — never invent what the site is or already has.
 		$existing = class_exists( 'SCC_Keyword_Strategy' ) ? SCC_Keyword_Strategy::existing_site_pages( 200 ) : array();
@@ -79,9 +84,22 @@ class SCC_Content_Ideas {
 			'gsc_untapped'     => array_slice( (array) ( $gsc['untapped'] ?? array() ), 0, 25 ),
 			'count'            => $count,
 		);
+		if ( '' !== $refine ) {
+			$context['refine_instruction'] = $refine;
+			$context['previous_ideas']     = array_map( function ( $i ) {
+				return array( 'title' => $i['title'], 'primary_keyword' => $i['primary_keyword'], 'page_type' => $i['page_type'], 'intent' => $i['intent'], 'recommended_url' => $i['recommended_url'] );
+			}, $previous );
+		}
+
+		$refine_rule = ( '' !== $refine )
+			? 'This is a REFINEMENT of PREVIOUS_IDEAS. Apply REFINE_INSTRUCTION: keep the ideas that already fit, '
+				. 'revise the others to match, and add new ones so there are EXACTLY ' . $count . ' in total. Keep '
+				. 'everything grounded and never duplicate existing_pages. '
+			: '';
 
 		$system = 'You are a senior SEO content strategist. The user will describe pages they want. Propose EXACTLY '
 			. $count . ' concrete, distinct pages that fulfil the request, each optimized for SEO and click-through. '
+			. $refine_rule
 			. 'GROUND every idea in the provided context: infer the real business from existing_pages + business; '
 			. 'reuse REAL demand from gsc_top_queries / gsc_quick_wins / gsc_untapped for keywords where relevant; '
 			. 'and NEVER duplicate a page already in existing_pages. If the request names a page TYPE (e.g. industry '

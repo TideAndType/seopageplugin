@@ -462,3 +462,9 @@
 .scc-idea__meta .scc-label, .scc-idea__kw .scc-label { display: inline; margin-right: 4px; }
 .scc-idea__why { font-size: 13px; color: var(--scc-muted, #475569); margin: 6px 0; }
 .scc-idea__actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+/* Content Ideas — refine bar. */
+.scc-refine { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--scc-border, #e2e8f0); }
+.scc-refine__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.scc-refine__row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.scc-refine__row input { min-width: 320px; flex: 1 1 320px; }

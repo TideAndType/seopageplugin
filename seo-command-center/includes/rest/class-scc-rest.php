@@ -1397,7 +1397,12 @@ class SCC_REST {
 		$params  = $request->get_json_params();
 		$params  = is_array( $params ) ? $params : $request->get_params();
 		$service = new SCC_Content_Ideas( $this->ai );
-		$result  = $service->suggest( (string) ( $params['question'] ?? '' ), (int) ( $params['count'] ?? 8 ) );
+		$result  = $service->suggest(
+			(string) ( $params['question'] ?? '' ),
+			(int) ( $params['count'] ?? 8 ),
+			(string) ( $params['refine'] ?? '' ),
+			isset( $params['previous'] ) && is_array( $params['previous'] ) ? $params['previous'] : array()
+		);
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
