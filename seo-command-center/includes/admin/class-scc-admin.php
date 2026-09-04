@@ -44,22 +44,30 @@ class SCC_Admin {
 			58
 		);
 
+		// Visible menu — grouped to follow the actual workflow, trimmed down.
 		$pages = array(
 			self::SLUG                       => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
-			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
+			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
+			self::SLUG . '-insights'         => array( __( 'Insights', 'seo-command-center' ), 'render_insights' ),
+			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keyword Strategy', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
-			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
-			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
-			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' ),
-			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
+			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
+			self::SLUG . '-competitors'      => array( __( 'Competitor Gaps', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
-			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 'render_internal_links' ),
+			self::SLUG . '-meta-editor'      => array( __( 'Meta Editor', 'seo-command-center' ), 'render_meta_editor' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
+			self::SLUG . '-templates'        => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-settings'         => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
 			self::SLUG . '-connections'      => array( __( 'API Connections', 'seo-command-center' ), 'render_connections' ),
 		);
+
+		// Elementor templates only matter when Elementor is active.
+		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
+			$pages[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' );
+		}
 
 		foreach ( $pages as $slug => $page ) {
 			add_submenu_page(
@@ -70,6 +78,19 @@ class SCC_Admin {
 				$slug,
 				array( $this, $page[1] )
 			);
+		}
+
+		// Routable but hidden from the menu (reached from other pages / links):
+		// - Generate Content is now built into the Content Plan.
+		// - Site Analysis feeds the Dashboard and SEO Audit.
+		// - Schema is a reference screen linked from Settings.
+		$hidden = array(
+			self::SLUG . '-site-analysis' => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
+			self::SLUG . '-generate'      => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
+			self::SLUG . '-schema'        => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+		);
+		foreach ( $hidden as $slug => $page ) {
+			add_submenu_page( null, $page[0], $page[0], $cap, $slug, array( $this, $page[1] ) );
 		}
 	}
 
@@ -177,6 +198,7 @@ class SCC_Admin {
 			<div class="scc-panel__rows" id="scc-panel-rows"></div>
 
 			<div class="scc-panel__actions">
+				<button type="button" class="button button-primary" id="scc-panel-optimize"><?php esc_html_e( 'Optimize this page', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-links"><?php esc_html_e( 'Internal links', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-meta"><?php esc_html_e( 'Meta variants', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-schema"><?php esc_html_e( 'Schema', 'seo-command-center' ); ?></button>
@@ -249,13 +271,17 @@ class SCC_Admin {
 	 */
 	public function render_dashboard() {
 		$latest = SCC_Analyzer::latest();
+		// Top opportunities are read from cache so the dashboard stays fast; the
+		// "Refresh" button recomputes on demand.
+		$opportunities = class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::top( 5 ) : array();
 		$this->view(
 			'dashboard',
 			array(
-				'latest'     => $latest,
-				'seo_plugin' => SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ),
-				'elementor'  => defined( 'ELEMENTOR_VERSION' ),
-				'usage'      => SCC_AI_Usage::month_summary(),
+				'latest'        => $latest,
+				'seo_plugin'    => SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ),
+				'elementor'     => defined( 'ELEMENTOR_VERSION' ),
+				'usage'         => SCC_AI_Usage::month_summary(),
+				'opportunities' => $opportunities,
 			)
 		);
 	}
@@ -348,6 +374,77 @@ class SCC_Admin {
 				'strategy' => SCC_Keyword_Strategy::latest(),
 			)
 		);
+	}
+
+	/**
+	 * Content Ideas — ask for SEO-driven page suggestions and generate them.
+	 */
+	public function render_ideas() {
+		$this->view( 'ideas', array() );
+	}
+
+	/**
+	 * Meta Editor — bulk edit meta titles/descriptions across pages.
+	 */
+	public function render_meta_editor() {
+		$this->view(
+			'meta-editor',
+			array(
+				'data' => SCC_Metadata::list_pages( array( 'paged' => 1 ) ),
+			)
+		);
+	}
+
+	/**
+	 * Insights (health timeline, entity graph, experiments, AI visibility).
+	 */
+	public function render_insights() {
+		if ( class_exists( 'SCC_Health_Timeline' ) ) {
+			SCC_Health_Timeline::maybe_capture();
+		}
+		$this->view(
+			'insights',
+			array(
+				'timeline'    => class_exists( 'SCC_Health_Timeline' ) ? SCC_Health_Timeline::timeline( 60 ) : array(),
+				'entities'    => class_exists( 'SCC_Entity_Graph' ) ? SCC_Entity_Graph::build() : array(),
+				'experiments' => class_exists( 'SCC_Experiments' ) ? SCC_Experiments::all() : array(),
+				'change_types'=> class_exists( 'SCC_Experiments' ) ? SCC_Experiments::CHANGE_TYPES : array(),
+				'ai'          => class_exists( 'SCC_AI_Visibility' ) ? SCC_AI_Visibility::status() : array(),
+			)
+		);
+	}
+
+	/**
+	 * Action Queue (opportunities + persistent action lifecycle).
+	 */
+	public function render_action_queue() {
+		$this->view(
+			'action-queue',
+			array(
+				'opportunities'      => class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::all() : array(),
+				'actions'            => class_exists( 'SCC_Action_Queue' ) ? SCC_Action_Queue::all() : array(),
+				'safe_pending_count' => class_exists( 'SCC_Action_Queue' ) ? SCC_Action_Queue::safe_pending_count() : 0,
+			)
+		);
+	}
+
+	/**
+	 * Topical Authority dashboard (coverage scorecard over the latest map).
+	 */
+	public function render_topical_authority() {
+		$this->view(
+			'topical-authority',
+			array(
+				'card' => SCC_Topical_Authority::scorecard(),
+			)
+		);
+	}
+
+	/**
+	 * Competitor Gaps page (competitive content-gap analysis).
+	 */
+	public function render_competitors() {
+		$this->view( 'competitors', array() );
 	}
 
 	/**
@@ -454,6 +551,8 @@ class SCC_Admin {
 				'default_renderer' => SCC_Settings::get( 'default_renderer', 'gutenberg' ),
 				'elementor_active' => SCC_Elementor::is_active(),
 				'elementor_sources'=> SCC_Elementor::is_active() ? SCC_Elementor::list_templates() : array(),
+				'variables'        => SCC_Template_Variables::registry(),
+				'var_categories'   => SCC_Template_Variables::categories(),
 			)
 		);
 	}

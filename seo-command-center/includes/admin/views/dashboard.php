@@ -38,6 +38,61 @@ $t = function ( $totals, $key ) {
 		<span class="scc-chip"><?php esc_html_e( 'AI spend this month (est.):', 'seo-command-center' ); ?> <strong>$<?php echo esc_html( number_format( (float) ( $usage['cost'] ?? 0 ), 2 ) ); ?></strong></span>
 	</div>
 
+	<?php
+	// "What should I do next?" — the top opportunities from the intelligence layer.
+	$opportunities = isset( $data['opportunities'] ) ? (array) $data['opportunities'] : array();
+	$dc_label = array(
+		'verified'    => __( 'Verified data', 'seo-command-center' ),
+		'partial'     => __( 'Partial data', 'seo-command-center' ),
+		'estimated'   => __( 'Estimated', 'seo-command-center' ),
+		'unavailable' => __( 'Data unavailable', 'seo-command-center' ),
+	);
+	?>
+	<div class="scc-card scc-next" id="scc-next-card">
+		<div class="scc-card__head">
+			<h2><?php esc_html_e( 'What should I do next?', 'seo-command-center' ); ?></h2>
+			<button class="button" id="scc-opps-refresh"><?php esc_html_e( 'Refresh', 'seo-command-center' ); ?></button>
+		</div>
+		<span class="scc-inline-status" id="scc-opps-msg"></span>
+		<?php if ( empty( $opportunities ) ) : ?>
+			<p class="scc-note"><?php esc_html_e( 'No opportunities computed yet. Run a site analysis and connect Google Search Console for the sharpest recommendations, then hit Refresh.', 'seo-command-center' ); ?></p>
+		<?php else : ?>
+			<div class="scc-opps" id="scc-opps-list">
+				<?php foreach ( $opportunities as $op ) : ?>
+					<div class="scc-opp" data-opp-id="<?php echo esc_attr( $op['id'] ); ?>">
+						<div class="scc-opp__score" title="<?php esc_attr_e( 'Opportunity score', 'seo-command-center' ); ?>">
+							<span class="scc-opp__num"><?php echo esc_html( (int) $op['score'] ); ?></span><span class="scc-opp__den">/100</span>
+						</div>
+						<div class="scc-opp__body">
+							<div class="scc-opp__title"><strong><?php echo esc_html( $op['title'] ); ?></strong>
+								<span class="scc-flag scc-flag--prio-<?php echo esc_attr( $op['priority'] ); ?>"><?php echo esc_html( ucfirst( $op['priority'] ) ); ?></span>
+								<span class="scc-flag" title="<?php esc_attr_e( 'Data confidence', 'seo-command-center' ); ?>"><?php echo esc_html( $dc_label[ $op['data_confidence'] ] ?? $op['data_confidence'] ); ?></span>
+							</div>
+							<p class="scc-opp__why"><?php echo esc_html( $op['reason'] ); ?></p>
+							<div class="scc-opp__factors">
+								<?php foreach ( (array) $op['factors'] as $f ) : ?>
+									<span class="scc-opp__factor">+<?php echo esc_html( (int) $f['points'] ); ?> <?php echo esc_html( $f['label'] ); ?></span>
+								<?php endforeach; ?>
+							</div>
+							<div class="scc-opp__meta">
+								<span><?php esc_html_e( 'Impact:', 'seo-command-center' ); ?> <strong><?php echo esc_html( ucfirst( (string) $op['expected_impact'] ) ); ?></strong></span>
+								<span><?php esc_html_e( 'Effort:', 'seo-command-center' ); ?> <strong><?php echo esc_html( (string) $op['effort'] ); ?></strong></span>
+								<span><?php esc_html_e( 'Risk:', 'seo-command-center' ); ?> <strong><?php echo esc_html( ucfirst( (string) $op['risk'] ) ); ?></strong></span>
+								<span><?php esc_html_e( 'Confidence:', 'seo-command-center' ); ?> <strong><?php echo esc_html( (int) $op['confidence'] ); ?>%</strong></span>
+							</div>
+							<div class="scc-opp__do"><?php echo esc_html( (string) ( $op['recommended_action'] ?? '' ) ); ?></div>
+						</div>
+						<div class="scc-opp__actions">
+							<button class="button button-primary button-small scc-opp-approve"><?php esc_html_e( 'Add to queue', 'seo-command-center' ); ?></button>
+							<button class="button button-small scc-opp-dismiss"><?php esc_html_e( 'Dismiss', 'seo-command-center' ); ?></button>
+						</div>
+					</div>
+				<?php endforeach; ?>
+			</div>
+			<p class="scc-note"><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-action-queue' ) ); ?>"><?php esc_html_e( 'Open the full Action Queue →', 'seo-command-center' ); ?></a></p>
+		<?php endif; ?>
+	</div>
+
 	<?php if ( ! $latest ) : ?>
 		<div class="scc-card scc-empty">
 			<h2><?php esc_html_e( 'Start with a site analysis', 'seo-command-center' ); ?></h2>
@@ -140,7 +195,10 @@ $t = function ( $totals, $key ) {
 		<div class="scc-card">
 			<div class="scc-card__head">
 				<h2><?php esc_html_e( 'Re-run analysis', 'seo-command-center' ); ?></h2>
-				<button class="button button-primary" id="scc-run-analysis"><?php esc_html_e( 'Analyze again', 'seo-command-center' ); ?></button>
+				<span>
+					<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-site-analysis' ) ); ?>"><?php esc_html_e( 'View full page-by-page analysis', 'seo-command-center' ); ?></a>
+					<button class="button button-primary" id="scc-run-analysis"><?php esc_html_e( 'Analyze again', 'seo-command-center' ); ?></button>
+				</span>
 			</div>
 			<span class="scc-inline-status" id="scc-analysis-status"></span>
 			<p class="scc-note">

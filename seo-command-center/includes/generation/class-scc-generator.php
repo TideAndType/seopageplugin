@@ -65,13 +65,45 @@ class SCC_Generator {
 	 * @param array|null $brief Optional approved brief; generated if null.
 	 * @return array|WP_Error {post_id, edit_url, score, status}
 	 */
+	/**
+	 * Build a minimal brief from a content-plan entry, with no AI call. Used for
+	 * one-click "Generate draft" so generation is a single, fast AI request.
+	 *
+	 * @param array $entry Content-plan entry.
+	 * @return array Brief-shaped array.
+	 */
+	protected function synthesize_brief( array $entry ) {
+		$words = (int) ( $entry['word_count'] ?? 0 );
+		if ( $words < 300 ) {
+			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
+		}
+		$secondary = $entry['secondary'] ?? array();
+		if ( ! is_array( $secondary ) ) {
+			$secondary = array();
+		}
+		return array(
+			'h1'                      => (string) ( $entry['title'] ?? ( $entry['primary_keyword'] ?? '' ) ),
+			'search_intent'           => (string) ( $entry['intent'] ?? 'informational' ),
+			'summary'                 => '',
+			'recommended_words'       => $words,
+			'primary_keyword'         => (string) ( $entry['primary_keyword'] ?? '' ),
+			'secondary'               => array_values( array_filter( array_map( 'strval', $secondary ) ) ),
+			'outline'                 => array(),
+			'entities'                => array(),
+			'questions'               => array(),
+			'internal_link_targets'   => array(),
+			'external_reference_types' => array(),
+			'cta'                     => '',
+		);
+	}
+
 	public function generate( array $entry, $brief = null ) {
 		if ( null === $brief ) {
-			$brief_service = new SCC_Content_Brief( $this->ai );
-			$brief         = $brief_service->generate( $entry );
-			if ( is_wp_error( $brief ) ) {
-				return $brief;
-			}
+			// Build the draft directly from the plan entry (one AI call). We do
+			// NOT make a separate brief AI call here — that doubled the time and
+			// was a common cause of timeouts on local models. Preview "Brief"
+			// first if you want a full brief to guide generation.
+			$brief = $this->synthesize_brief( $entry );
 		}
 
 		$body = $this->generate_body( $entry, $brief );
@@ -212,17 +244,76 @@ class SCC_Generator {
 	 * @return array|WP_Error
 	 */
 	protected function generate_body( array $entry, array $brief ) {
-		$page_type = $entry['page_type'] ?? 'article';
-		$system    = 'You are an expert SEO copywriter. Write genuinely useful, specific, original content that a knowledgeable human would value. '
-			. 'Rules: natural language; no keyword stuffing; no padding to hit a word count; no repetition; avoid obvious AI filler and cliches. '
-			. ( 'location' === $page_type
-				? 'This is a LOCATION page: make it specifically, meaningfully local — reference real local context and needs, not a city-name find-and-replace. '
+		$page_type   = $entry['page_type'] ?? 'article';
+		$intent      = strtolower( (string) ( $entry['intent'] ?? ( $brief['search_intent'] ?? '' ) ) );
+		$is_local    = ( 'location' === $page_type ) || ( false !== strpos( $intent, 'local' ) );
+		$commercial  = in_array( $intent, array( 'commercial', 'transactional', 'local' ), true )
+			|| in_array( $page_type, array( 'pillar', 'service', 'location' ), true );
+		$site_name   = get_bloginfo( 'name' );
+
+		$system    = 'You are a senior SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
+			. 'Produce genuinely useful, specific, original content a knowledgeable buyer would trust. '
+			// Accuracy & E-E-A-T.
+			. 'ACCURACY & E-E-A-T: write from real, practical expertise; use concrete specifics, numbers, steps and trade-offs; '
+			. 'never invent facts, statistics, prices, awards, clients or testimonials. Use current, correct terminology '
+			. '(for example "Google Business Profile", never "GMB" or "GBP"). Do NOT repeat SEO myths or folklore tactics '
+			. '(for example, do not claim that geotagging images improves rankings). '
+			// No overpromising.
+			. 'NO OVERPROMISING: never promise or imply guaranteed results, number-one rankings, or "undeniable authority", and '
+			. 'do not phrase anything as a guarantee. Instead describe how the work builds stronger signals of relevance, trust '
+			. 'and authority, the process involved, and realistic expectations, with honest caveats. '
+			// Style / no dashes / no cliches / no duplicate intro.
+			. 'STYLE: natural, credible, plain language; short paragraphs; concrete over hypey. Do NOT use em or en dashes (— or –); '
+			. 'use commas, periods or parentheses. Avoid marketing-bro or AI cliches such as "acquisition machine", "unlock", '
+			. '"in today\'s digital landscape", "game-changer", "supercharge", "leverage". No keyword stuffing, no padding, no '
+			. 'repeated sentences. Never restate the introduction or add a generic "Overview" section that duplicates the opening. '
+			// Title / hierarchy.
+			. 'TITLE: make "title" outcome-oriented and LEAD with the primary commercial keyword the page targets (see the brief) '
+			. 'so the topic is unmistakable; keep any clever tagline as a short supporting line inside the opening, not as the title. '
+			// Local.
+			. ( $is_local
+				? 'LOCAL: real local relevance means genuinely useful, locally-specific content and expertise, not swapping in '
+				  . 'city or neighbourhood names. Where natural, use service-plus-location phrasing (for example "Emergency Plumbing '
+				  . 'in Daytona Beach") and real local angles, not filler. '
 				: '' )
-			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul> where useful. Do not include an <h1> (the theme renders the title). '
+			// Structure for service / money pages vs. articles.
+			. ( $commercial
+				? 'THIS IS A SERVICE / MONEY PAGE. Structure it to inform AND convert: '
+				  . '(1) open by naming the reader\'s problem and the outcome they want (calls, foot traffic, leads, visibility, '
+				  . 'local authority) and sell outcomes, not keywords; '
+				  . '(2) present a clear multi-step PROCESS using <h2> sections (for example Audit, Optimization and Fixes, '
+				  . 'Authority Building, Measurement and Growth) so it reads like a real engagement, not "we do SEO, call us"; '
+				  . '(3) include a concrete "What is included" section that groups the specific things you optimise into labelled '
+				  . '<h3> groups with <ul> bullet lists (only groups relevant to this topic), covering ongoing management and '
+				  . 'competitor / market analysis as distinct items where they fit; '
+				  . '(4) add real trust signals and answer the top objections a buyer has; '
+				  . '(5) finish with ONE specific call to action tied to the offer in the brief (for example a free audit) telling '
+				  . 'the reader exactly what to do next, never a weak "let\'s talk". '
+				: 'Write a genuinely useful, well-structured article with clear <h2>/<h3> sections and a natural, helpful next step at the end. ' )
+			// FAQs.
+			. ( $commercial
+				? 'FAQs: include 4 to 7 buyer questions with honest answers, such as how long it takes, what it costs (explain what '
+				  . 'drives price and give a realistic range without inventing a specific figure), whether results are guaranteed '
+				  . '(answer honestly that no ethical provider guarantees rankings), how this differs from the alternative, serving '
+				  . 'multiple locations or service-area businesses, and review management. '
+				: 'FAQs: include 3 to 6 real questions searchers ask, with substantive answers. ' )
+			. 'Put FAQs only in the "faqs" array, not in content_html. '
+			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul>. Do not include an <h1> (the theme renders the title). '
 			. 'Return JSON: {"title":str,"content_html":str,"faqs":[{"question":str,"answer":str}],'
 			. '"meta_title":str(<=60 chars),"meta_description":str(140-160 chars),'
 			. '"og_title":str,"og_description":str,'
 			. '"image":{"concept":str,"prompt":str,"alt":str,"filename":str,"placement":str}}';
+
+		// Size the token budget to the target length. Service/pillar pages get
+		// enough room for a proper 1,500-2,000 word page.
+		$words  = (int) ( $brief['recommended_words'] ?? 0 );
+		if ( $words < 300 ) {
+			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
+		}
+		if ( $commercial && $words < 1500 ) {
+			$words = 1500;
+		}
+		$budget = (int) min( 5200, max( 1200, round( $words * 1.7 ) + 800 ) );
 
 		$response = $this->ai->complete(
 			array(
@@ -234,7 +325,7 @@ class SCC_Generator {
 					),
 				),
 				'json'        => true,
-				'max_tokens'  => 6000,
+				'max_tokens'  => $budget,
 				'temperature' => 0.7,
 			),
 			'content-generation'
@@ -271,13 +362,13 @@ class SCC_Generator {
 		}
 
 		return array(
-			'title'            => SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ),
+			'title'            => self::strip_dashes( SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ) ),
 			'content_html'     => $this->sanitize_content_html( $data['content_html'], $faqs ),
 			'faqs'             => $faqs,
-			'meta_title'       => SCC_Security::sanitize_text( $data['meta_title'] ?? '' ),
-			'meta_description' => SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ),
-			'og_title'         => SCC_Security::sanitize_text( $data['og_title'] ?? '' ),
-			'og_description'   => SCC_Security::sanitize_textarea( $data['og_description'] ?? '' ),
+			'meta_title'       => self::strip_dashes( SCC_Security::sanitize_text( $data['meta_title'] ?? '' ) ),
+			'meta_description' => self::strip_dashes( SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ) ),
+			'og_title'         => self::strip_dashes( SCC_Security::sanitize_text( $data['og_title'] ?? '' ) ),
+			'og_description'   => self::strip_dashes( SCC_Security::sanitize_textarea( $data['og_description'] ?? '' ) ),
 			'image'            => $image,
 		);
 	}
@@ -291,16 +382,46 @@ class SCC_Generator {
 	 */
 	protected function sanitize_content_html( $html, array $faqs ) {
 		$allowed = wp_kses_allowed_html( 'post' );
-		$clean   = wp_kses( (string) $html, $allowed );
+		// Allow the native accordion elements for the FAQ section.
+		$allowed['details'] = array( 'class' => true, 'open' => true );
+		$allowed['summary'] = array( 'class' => true );
+
+		$clean = wp_kses( self::strip_dashes( (string) $html ), $allowed );
 
 		if ( ! empty( $faqs ) ) {
-			$clean .= "\n<h2>" . esc_html__( 'Frequently asked questions', 'seo-command-center' ) . "</h2>\n";
+			$clean .= "\n<h2 class=\"scc-faq-title\">" . esc_html__( 'Frequently asked questions', 'seo-command-center' ) . "</h2>\n";
+			$clean .= "<div class=\"scc-faq\">\n";
 			foreach ( $faqs as $faq ) {
-				$clean .= '<h3>' . esc_html( $faq['question'] ) . "</h3>\n";
-				$clean .= '<p>' . esc_html( $faq['answer'] ) . "</p>\n";
+				$q = esc_html( self::strip_dashes( $faq['question'] ) );
+				$a = wp_kses_post( wpautop( self::strip_dashes( $faq['answer'] ) ) );
+				$clean .= "<details class=\"scc-faq__item\">\n";
+				$clean .= '<summary class="scc-faq__q">' . $q . "</summary>\n";
+				$clean .= '<div class="scc-faq__a">' . $a . "</div>\n";
+				$clean .= "</details>\n";
 			}
+			$clean .= "</div>\n";
 		}
 		return $clean;
+	}
+
+	/**
+	 * Replace em/en dashes (and the common " - " connector) with plain
+	 * punctuation, per the house style. Safety net over the prompt instruction.
+	 *
+	 * @param string $text Text/HTML.
+	 * @return string
+	 */
+	protected static function strip_dashes( $text ) {
+		$text = (string) $text;
+		// Em/en dashes and horizontal bar → comma (keeps clause flow).
+		$text = str_replace( array( '—', '–', '―' ), ', ', $text );
+		// " - " used as a dash connector → comma. Leave hyphens in words alone.
+		$text = preg_replace( '/\s+-\s+/u', ', ', $text );
+		// Tidy artifacts the replacement may create.
+		$text = preg_replace( '/\s+,/', ',', $text );   // space before comma
+		$text = preg_replace( '/,\s*,/', ',', $text );  // doubled commas
+		$text = preg_replace( '/\s{2,}/', ' ', $text );  // doubled spaces
+		return $text;
 	}
 
 	/**

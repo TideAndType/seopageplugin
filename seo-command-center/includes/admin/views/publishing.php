@@ -77,6 +77,7 @@ $budget = isset( $data['budget'] ) ? (float) $data['budget'] : 0;
 									<button class="button button-small button-primary scc-publish"><?php esc_html_e( 'Publish', 'seo-command-center' ); ?></button>
 									<input type="datetime-local" class="scc-schedule-dt">
 									<button class="button button-small scc-schedule"><?php esc_html_e( 'Schedule', 'seo-command-center' ); ?></button>
+									<button class="button button-small button-link-delete scc-remove"><?php esc_html_e( 'Remove', 'seo-command-center' ); ?></button>
 								<?php else : ?>
 									<a class="button button-small" href="<?php echo esc_url( $row['view_url'] ); ?>" target="_blank" rel="noopener"><?php esc_html_e( 'View', 'seo-command-center' ); ?></a>
 								<?php endif; ?>

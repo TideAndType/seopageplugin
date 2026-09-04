@@ -150,8 +150,45 @@ foreach ( $templates as $t ) {
 					<?php endforeach; ?>
 				</select>
 				<button class="button button-primary" id="scc-el-import"><?php esc_html_e( 'Import as template', 'seo-command-center' ); ?></button>
+				<button class="button" id="scc-el-inspect"><?php esc_html_e( 'Inspect tokens', 'seo-command-center' ); ?></button>
 				<span class="scc-inline-status" id="scc-el-msg"></span>
 			</p>
+			<div id="scc-el-inspect-out" hidden></div>
 		<?php endif; ?>
+	</div>
+
+	<?php
+	$variables      = isset( $data['variables'] ) ? (array) $data['variables'] : array();
+	$var_categories = isset( $data['var_categories'] ) ? (array) $data['var_categories'] : array();
+	$by_cat = array();
+	foreach ( $variables as $v ) {
+		$by_cat[ $v['category'] ][] = $v;
+	}
+	?>
+	<div class="scc-card">
+		<div class="scc-card__head">
+			<h2><?php esc_html_e( 'Template variables reference', 'seo-command-center' ); ?></h2>
+			<input type="search" id="scc-var-search" class="regular-text" placeholder="<?php esc_attr_e( 'Search tokens…', 'seo-command-center' ); ?>">
+		</div>
+		<p class="scc-note"><?php esc_html_e( 'Type any of these into an Elementor widget, e.g. {{H1}}. Values come from your SEO strategy and generated content. Schema tokens are structured data — added to the page head automatically, never shown as text. Unknown tokens are cleared safely.', 'seo-command-center' ); ?></p>
+		<div id="scc-var-reference">
+			<?php foreach ( $var_categories as $cat_key => $cat_label ) : ?>
+				<?php if ( empty( $by_cat[ $cat_key ] ) ) { continue; } ?>
+				<div class="scc-var-group" data-cat="<?php echo esc_attr( $cat_key ); ?>">
+					<h3><?php echo esc_html( $cat_label ); ?></h3>
+					<table class="widefat striped scc-table">
+						<tbody>
+							<?php foreach ( $by_cat[ $cat_key ] as $v ) : ?>
+								<tr class="scc-var-row" data-token="<?php echo esc_attr( $v['token'] ); ?>">
+									<td style="white-space:nowrap;"><code>{{<?php echo esc_html( $v['token'] ); ?>}}</code></td>
+									<td><strong><?php echo esc_html( $v['label'] ); ?></strong> <span class="scc-flag"><?php echo esc_html( $v['type'] ); ?></span><?php if ( ! empty( $v['required'] ) ) : ?> <span class="scc-badge scc-badge--ok"><?php esc_html_e( 'required', 'seo-command-center' ); ?></span><?php endif; ?><?php if ( ! empty( $v['seo_critical'] ) ) : ?> <span class="scc-flag scc-flag--prio-high">SEO</span><?php endif; ?></td>
+									<td class="scc-note"><?php echo esc_html( $v['description'] ); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+			<?php endforeach; ?>
+		</div>
 	</div>
 </div>

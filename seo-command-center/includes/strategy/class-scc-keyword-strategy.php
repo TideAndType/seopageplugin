@@ -114,6 +114,62 @@ class SCC_Keyword_Strategy {
 	}
 
 	/**
+	 * Real search-demand signals from Google Search Console (when connected):
+	 * the site's top queries by impressions, plus "quick win" queries where the
+	 * site already ranks on page 1-2 (positions 4-20) — strong candidates for
+	 * dedicated pages. These are MEASURED numbers, so they may be shown as-is.
+	 *
+	 * @return array {connected:bool, top_queries:array, quick_wins:array}
+	 */
+	public static function gsc_signals() {
+		$out = array( 'connected' => false, 'top_queries' => array(), 'quick_wins' => array(), 'untapped' => array() );
+		if ( ! class_exists( 'SCC_GSC' ) || ! SCC_GSC::is_connected() ) {
+			return $out;
+		}
+		$rows = SCC_GSC::query( '', array( 'query' ), 90, 500 );
+		if ( is_wp_error( $rows ) || empty( $rows ) ) {
+			return $out;
+		}
+		$out['connected'] = true;
+
+		$queries = array();
+		foreach ( $rows as $row ) {
+			$q = SCC_Security::sanitize_text( $row['keys'][0] ?? '' );
+			if ( '' === $q ) {
+				continue;
+			}
+			$queries[] = array(
+				'query'       => $q,
+				'impressions' => (int) ( $row['impressions'] ?? 0 ),
+				'clicks'      => (int) ( $row['clicks'] ?? 0 ),
+				'position'    => round( (float) ( $row['position'] ?? 0 ), 1 ),
+			);
+		}
+
+		// Top queries by impressions (the demand the site already sees).
+		usort( $queries, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
+		$out['top_queries'] = array_slice( $queries, 0, 40 );
+
+		// Quick wins: real impressions and ranking just off the top.
+		$wins = array_filter( $queries, function ( $q ) {
+			return $q['impressions'] >= 20 && $q['position'] >= 4 && $q['position'] <= 20;
+		} );
+		$out['quick_wins'] = array_slice( array_values( $wins ), 0, 30 );
+
+		// Untapped demand: lots of impressions but almost no clicks (poor CTR or
+		// ranking beyond page 2). These are real searches the site is seen for but
+		// doesn't win — strong candidates for a new or upgraded page.
+		$untapped = array_filter( $queries, function ( $q ) {
+			$ctr = $q['impressions'] > 0 ? $q['clicks'] / $q['impressions'] : 0;
+			return $q['impressions'] >= 50 && ( $q['position'] > 20 || $ctr < 0.01 );
+		} );
+		usort( $untapped, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
+		$out['untapped'] = array_slice( array_values( $untapped ), 0, 25 );
+
+		return $out;
+	}
+
+	/**
 	 * The site's real published pages/posts as {title, path} pairs, so the
 	 * topical map can be anchored to the actual URLs the site already has.
 	 *
@@ -131,16 +187,165 @@ class SCC_Keyword_Strategy {
 			'order'          => 'ASC',
 			'fields'         => 'ids',
 		) );
+		$seen = array();
 		foreach ( $q->posts as $pid ) {
 			$title = trim( (string) get_the_title( $pid ) );
 			$path  = wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH );
 			$path  = self::normalize_site_path( (string) $path );
-			if ( '' === $title || '' === $path ) {
+			if ( '' === $title || '' === $path || isset( $seen[ $path ] ) ) {
 				continue;
 			}
-			$pages[] = array( 'title' => $title, 'path' => $path );
+			$seen[ $path ]  = true;
+			$pages[]        = array( 'title' => $title, 'path' => $path );
+		}
+
+		// Also merge any URLs the site's sitemap exposes but WP_Query missed
+		// (custom post types, front-page builders, headless routes, etc.), so
+		// the topical map mirrors the REAL live site, not just standard posts.
+		foreach ( self::sitemap_pages( $limit ) as $sp ) {
+			if ( count( $pages ) >= (int) $limit ) {
+				break;
+			}
+			if ( isset( $seen[ $sp['path'] ] ) || self::is_template_like( $sp['path'], $sp['title'] ) ) {
+				continue;
+			}
+			$seen[ $sp['path'] ] = true;
+			$pages[]             = $sp;
 		}
 		return $pages;
+	}
+
+	/**
+	 * Real URLs from the site's XML sitemap, as {title, path} pairs.
+	 *
+	 * Tries the WordPress core sitemap and the common /sitemap.xml / sitemap_index
+	 * locations, follows one level of sitemap index, and derives a readable title
+	 * from each slug. Everything is best-effort and same-host only — a missing or
+	 * unreachable sitemap simply yields an empty list.
+	 *
+	 * @param int $limit Max URLs to return.
+	 * @return array<int,array{title:string,path:string}>
+	 */
+	public static function sitemap_pages( $limit = 200 ) {
+		$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+		if ( ! $home_host ) {
+			return array();
+		}
+
+		$candidates = array(
+			home_url( '/wp-sitemap.xml' ),
+			home_url( '/sitemap.xml' ),
+			home_url( '/sitemap_index.xml' ),
+		);
+
+		$locs = array();
+		foreach ( $candidates as $url ) {
+			$found = self::fetch_sitemap_locs( $url );
+			if ( ! empty( $found ) ) {
+				$locs = $found;
+				break;
+			}
+		}
+		if ( empty( $locs ) ) {
+			return array();
+		}
+
+		// If this looks like a sitemap index (entries are themselves .xml), pull
+		// one level of child sitemaps and collect their page URLs instead.
+		$child_xml = array_filter( $locs, function ( $u ) {
+			return (bool) preg_match( '/\.xml(\?|$)/i', $u );
+		} );
+		if ( count( $child_xml ) === count( $locs ) ) {
+			$pages_locs = array();
+			foreach ( array_slice( array_values( $child_xml ), 0, 20 ) as $child ) {
+				$pages_locs = array_merge( $pages_locs, self::fetch_sitemap_locs( $child ) );
+				if ( count( $pages_locs ) >= (int) $limit * 2 ) {
+					break;
+				}
+			}
+			$locs = $pages_locs;
+		}
+
+		$out  = array();
+		$seen = array();
+		foreach ( $locs as $loc ) {
+			if ( count( $out ) >= (int) $limit ) {
+				break;
+			}
+			$host = wp_parse_url( $loc, PHP_URL_HOST );
+			if ( $host && $host !== $home_host ) {
+				continue;
+			}
+			if ( preg_match( '/\.xml(\?|$)/i', $loc ) ) {
+				continue;
+			}
+			$path = self::normalize_site_path( (string) wp_parse_url( $loc, PHP_URL_PATH ) );
+			if ( '' === $path || '/' === $path || isset( $seen[ $path ] ) ) {
+				continue;
+			}
+			$seen[ $path ] = true;
+			$out[]         = array( 'title' => self::title_from_path( $path ), 'path' => $path );
+		}
+		return $out;
+	}
+
+	/**
+	 * Fetch a sitemap URL and return its <loc> values.
+	 *
+	 * @param string $url Sitemap URL.
+	 * @return array<int,string>
+	 */
+	protected static function fetch_sitemap_locs( $url ) {
+		$response = wp_remote_get( $url, array( 'timeout' => 12, 'redirection' => 3, 'user-agent' => 'SEO-Command-Center/' . ( defined( 'SCC_VERSION' ) ? SCC_VERSION : '1' ) ) );
+		if ( is_wp_error( $response ) || 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
+			return array();
+		}
+		$body = (string) wp_remote_retrieve_body( $response );
+		if ( '' === $body || false === stripos( $body, '<loc' ) ) {
+			return array();
+		}
+		if ( ! preg_match_all( '/<loc>\s*(.*?)\s*<\/loc>/is', $body, $m ) ) {
+			return array();
+		}
+		return array_map( function ( $u ) {
+			return esc_url_raw( trim( html_entity_decode( $u, ENT_QUOTES ) ) );
+		}, $m[1] );
+	}
+
+	/**
+	 * Derive a human title from a URL path (last non-empty slug, title-cased).
+	 *
+	 * @param string $path Normalized path.
+	 * @return string
+	 */
+	protected static function title_from_path( $path ) {
+		$segments = array_values( array_filter( explode( '/', (string) $path ) ) );
+		$slug     = end( $segments );
+		if ( ! $slug ) {
+			return '';
+		}
+		$words = str_replace( array( '-', '_' ), ' ', $slug );
+		return ucwords( trim( $words ) );
+	}
+
+	/**
+	 * Whether a sitemap URL path/title looks like a page-builder template rather
+	 * than real content (so the topical map / architecture never lists it). Prefers
+	 * resolving the URL to a real post and checking its type; falls back to markers.
+	 *
+	 * @param string $path  Normalized path.
+	 * @param string $title Title.
+	 * @return bool
+	 */
+	protected static function is_template_like( $path, $title ) {
+		if ( function_exists( 'url_to_postid' ) ) {
+			$pid = (int) url_to_postid( home_url( $path ) );
+			if ( $pid && class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_template_post( $pid ) ) {
+				return true;
+			}
+		}
+		$hay = strtolower( $path . ' ' . $title );
+		return (bool) preg_match( '/(template|elementor|library|popup|mega[_-]?menu|landing[_-]?page|wp-json|\/hello-|header|footer|block-)/', $hay );
 	}
 
 	/**
@@ -168,10 +373,14 @@ class SCC_Keyword_Strategy {
 
 		// Depth presets: how many pillars / subtopics / content nodes to aim for,
 		// and a token budget sized to match.
+		// Token budgets are kept modest so a synchronous generation finishes within
+		// a typical hosting request window (some hosts cap requests at ~60-120s).
+		// The tolerant parser salvages any truncated tail, so a smaller budget
+		// degrades gracefully rather than failing.
 		$presets = array(
-			'compact'  => array( 'pillars' => '4-6',  'subs' => '3-4', 'nodes' => '2-3', 'tokens' => 3000 ),
-			'standard' => array( 'pillars' => '6-9',  'subs' => '4-6', 'nodes' => '3-4', 'tokens' => 4000 ),
-			'deep'     => array( 'pillars' => '9-14', 'subs' => '5-8', 'nodes' => '4-6', 'tokens' => 5500 ),
+			'compact'  => array( 'pillars' => '4-5', 'subs' => '2-3', 'nodes' => '2-3', 'tokens' => 1800 ),
+			'standard' => array( 'pillars' => '5-7', 'subs' => '3-4', 'nodes' => '2-3', 'tokens' => 2600 ),
+			'deep'     => array( 'pillars' => '7-10', 'subs' => '4-6', 'nodes' => '3-4', 'tokens' => 3600 ),
 		);
 		$p = isset( $presets[ $depth ] ) ? $presets[ $depth ] : $presets['standard'];
 
@@ -206,6 +415,13 @@ class SCC_Keyword_Strategy {
 			. 'pillars/subtopics with "status":"new" for genuine gaps. Infer the business\'s real services, '
 			. 'products and locations from the existing page titles. Never propose a near-duplicate of a page '
 			. 'that already exists. '
+			. 'USE REAL SEARCH DEMAND. If "gsc_top_queries" (real Google Search Console queries with impressions, '
+			. 'clicks and average position) and "gsc_quick_wins" (queries already ranking on page 1-2 without a '
+			. 'dedicated page) are provided, ground your keywords and NEW suggestions in them: add new '
+			. 'pillars/subtopics targeting the highest-impression queries the site has no page for, and mark '
+			. 'quick-win topics "high" priority. If "gsc_untapped" (queries with real impressions but almost no '
+			. 'clicks — demand the site is seen for but does not win) is provided, propose NEW pages that directly '
+			. 'answer those searches. Prefer the real query phrasing for primary keywords where natural. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
 			. '"intent":str,"recommended_url":str,"meta_title":str,"priority":"high|medium|low","related":[str],'
@@ -215,6 +431,18 @@ class SCC_Keyword_Strategy {
 
 		$existing = self::existing_site_pages();
 		$inputs['existing_site_pages'] = $existing;
+
+		// Real Search Console demand, if the caller supplied it (see generate()).
+		if ( ! empty( $inputs['gsc_top_queries'] ) ) {
+			$inputs['gsc_top_queries'] = array_slice( (array) $inputs['gsc_top_queries'], 0, 40 );
+		}
+		if ( ! empty( $inputs['gsc_quick_wins'] ) ) {
+			$inputs['gsc_quick_wins'] = array_slice( (array) $inputs['gsc_quick_wins'], 0, 30 );
+		}
+		if ( ! empty( $inputs['gsc_untapped'] ) ) {
+			$inputs['gsc_untapped'] = array_slice( (array) $inputs['gsc_untapped'], 0, 25 );
+		}
+
 		$payload  = wp_json_encode( $inputs );
 
 		return array(
@@ -246,6 +474,18 @@ class SCC_Keyword_Strategy {
 			return new WP_Error( 'scc_missing_inputs', __( 'Enter at least a business name, a service, or a seed keyword — or use “Build from my site”.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 
+		// Pull real Search Console demand (when connected) to ground suggestions.
+		$gsc = self::gsc_signals();
+		if ( ! empty( $gsc['top_queries'] ) ) {
+			$inputs['gsc_top_queries'] = $gsc['top_queries'];
+		}
+		if ( ! empty( $gsc['quick_wins'] ) ) {
+			$inputs['gsc_quick_wins'] = $gsc['quick_wins'];
+		}
+		if ( ! empty( $gsc['untapped'] ) ) {
+			$inputs['gsc_untapped'] = $gsc['untapped'];
+		}
+
 		$response = $this->ai->complete( $this->build_prompt( $inputs ), 'keyword-strategy' );
 		if ( $response->is_error() ) {
 			return $response->error;
@@ -275,6 +515,11 @@ class SCC_Keyword_Strategy {
 		// in the UI what generated it (and easy to confirm LM Studio was used).
 		$map['generated_by']    = isset( $response->provider ) ? (string) $response->provider : '';
 		$map['generated_model'] = isset( $response->model ) ? (string) $response->model : '';
+
+		// Attach the real Search Console quick-win opportunities (measured data)
+		// so the map can surface them alongside the AI suggestions.
+		$map['gsc_connected']  = ! empty( $gsc['connected'] );
+		$map['gsc_quick_wins'] = isset( $gsc['quick_wins'] ) ? $gsc['quick_wins'] : array();
 
 		$strategy_id = SCC_DB::insert(
 			'keyword_strategies',

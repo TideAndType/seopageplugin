@@ -257,6 +257,70 @@ class SCC_DB {
 			KEY created_at (created_at)
 		) {$charset_collate};";
 
+		$actions = self::table( 'seo_actions' );
+		$sql[] = "CREATE TABLE {$actions} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			opportunity_id VARCHAR(40) NOT NULL DEFAULT '',
+			type VARCHAR(60) NOT NULL DEFAULT 'review',
+			title TEXT NULL,
+			target LONGTEXT NULL,
+			score INT NOT NULL DEFAULT 0,
+			confidence INT NOT NULL DEFAULT 0,
+			priority VARCHAR(10) NOT NULL DEFAULT 'medium',
+			reason TEXT NULL,
+			expected_impact VARCHAR(10) NULL,
+			effort VARCHAR(10) NULL,
+			risk VARCHAR(10) NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'new',
+			source VARCHAR(40) NULL,
+			payload LONGTEXT NULL,
+			result LONGTEXT NULL,
+			snoozed_until DATETIME NULL,
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY opportunity_id (opportunity_id),
+			KEY status (status),
+			KEY score (score)
+		) {$charset_collate};";
+
+		$snapshots = self::table( 'seo_snapshots' );
+		$sql[] = "CREATE TABLE {$snapshots} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			captured_on DATE NOT NULL DEFAULT '0000-00-00',
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			health_score INT NOT NULL DEFAULT 0,
+			clicks INT NOT NULL DEFAULT 0,
+			impressions BIGINT NOT NULL DEFAULT 0,
+			avg_position FLOAT NOT NULL DEFAULT 0,
+			opportunities_open INT NOT NULL DEFAULT 0,
+			actions_completed INT NOT NULL DEFAULT 0,
+			components LONGTEXT NULL,
+			meta LONGTEXT NULL,
+			PRIMARY KEY  (id),
+			KEY captured_on (captured_on)
+		) {$charset_collate};";
+
+		$experiments = self::table( 'seo_experiments' );
+		$sql[] = "CREATE TABLE {$experiments} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			post_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+			url TEXT NULL,
+			title TEXT NULL,
+			change_type VARCHAR(60) NOT NULL DEFAULT '',
+			note TEXT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'running',
+			baseline LONGTEXT NULL,
+			result LONGTEXT NULL,
+			measure_days INT NOT NULL DEFAULT 28,
+			start_date DATE NOT NULL DEFAULT '0000-00-00',
+			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY  (id),
+			KEY post_id (post_id),
+			KEY status (status)
+		) {$charset_collate};";
+
 		foreach ( $sql as $statement ) {
 			dbDelta( $statement );
 		}
@@ -281,6 +345,9 @@ class SCC_DB {
 			'change_history',
 			'meta_history',
 			'templates',
+			'seo_actions',
+			'seo_snapshots',
+			'seo_experiments',
 		);
 		foreach ( $tables as $t ) {
 			$name = self::table( $t );

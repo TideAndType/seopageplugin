@@ -184,6 +184,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/topical-authority',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'topical_authority' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/keywords/auto/status',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -244,6 +254,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/content-plan/gen-status',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'content_plan_gen_status' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/content-plan/(?P<id>\d+)',
 			array(
 				array(
@@ -256,6 +276,131 @@ class SCC_REST {
 					'callback'            => array( $this, 'delete_content_plan' ),
 					'permission_callback' => $perm,
 				),
+			)
+		);
+
+		// ---- Unified intelligence layer: opportunities + action queue -----
+		register_rest_route( self::NS, '/ideas', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'content_ideas' ),
+			'permission_callback' => $perm,
+		) );
+
+		register_rest_route( self::NS, '/opportunities', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'opportunities' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/opportunities/refresh', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'opportunities_refresh' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/content-decay', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'content_decay' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/intent-drift', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'intent_drift' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/page/(?P<id>\d+)/optimize', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'page_optimize' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+
+		// Health timeline.
+		register_rest_route( self::NS, '/health-timeline', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'health_timeline' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/health-timeline/snapshot', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'health_snapshot' ),
+			'permission_callback' => $perm,
+		) );
+
+		// Experiments.
+		register_rest_route( self::NS, '/experiments', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'experiments_list' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'experiments_start' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/experiments/(?P<id>\d+)', array(
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'experiments_evaluate' ),
+				'permission_callback' => $perm,
+				'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+			),
+			array(
+				'methods'             => WP_REST_Server::DELETABLE,
+				'callback'            => array( $this, 'experiments_delete' ),
+				'permission_callback' => $perm,
+				'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+			),
+		) );
+
+		// Entity graph + AI visibility.
+		register_rest_route( self::NS, '/entities', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'entities' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/ai-visibility', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'ai_visibility' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/actions', array(
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'actions_list' ),
+				'permission_callback' => $perm,
+			),
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'actions_promote' ),
+				'permission_callback' => $perm,
+			),
+		) );
+		register_rest_route( self::NS, '/actions/fix-safe', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'actions_fix_safe' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/actions/(?P<id>\d+)', array(
+			'methods'             => WP_REST_Server::EDITABLE,
+			'callback'            => array( $this, 'actions_update' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+		register_rest_route( self::NS, '/actions/(?P<id>\d+)/execute', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'actions_execute' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
+
+		register_rest_route(
+			self::NS,
+			'/competitors/gap-map',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'competitors_gap_map' ),
+				'permission_callback' => $perm,
 			)
 		);
 
@@ -327,6 +472,46 @@ class SCC_REST {
 			array(
 				'methods'             => WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_templates' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/variables',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'templates_variables' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/(?P<id>\d+)/variables',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'template_detected_variables' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/validate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'templates_validate' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/templates/preview-vars',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'templates_preview_vars' ),
 				'permission_callback' => $perm,
 			)
 		);
@@ -482,7 +667,7 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
-			'/publishing/(?P<action>approve|unapprove|publish|schedule)',
+			'/publishing/(?P<action>approve|unapprove|publish|schedule|remove)',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'publishing_action' ),
@@ -532,6 +717,17 @@ class SCC_REST {
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'links_scan' ),
 			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/metadata', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'metadata_list' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/metadata/save', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'metadata_save' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'post_id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
 		) );
 		register_rest_route( self::NS, '/meta/variants', array(
 			'methods'             => WP_REST_Server::CREATABLE,
@@ -877,34 +1073,38 @@ class SCC_REST {
 	 *
 	 * @return WP_REST_Response|WP_Error
 	 */
+	/**
+	 * GET /topical-authority — explainable coverage scorecard from live data.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function topical_authority() {
+		return $this->ok( SCC_Topical_Authority::scorecard() );
+	}
+
 	public function auto_keywords( WP_REST_Request $request ) {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
 
-		$opts = array();
+		// Run synchronously: this reaches LM Studio directly (proven to work on
+		// this host) and returns the real result — or the real error — straight to
+		// the UI. The AI manager lifts PHP's execution limit. Backgrounding was
+		// tried and this host blocks loopback, WP-Cron, and fastcgi_finish_request,
+		// so the direct synchronous call is the reliable path.
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
 		foreach ( array( 'map_type', 'depth', 'language' ) as $opt ) {
 			if ( isset( $params[ $opt ] ) ) {
-				$opts[ $opt ] = $params[ $opt ];
+				$inputs[ $opt ] = $params[ $opt ];
 			}
 		}
 
-		// Enqueue the job and return IMMEDIATELY with its id. The browser then
-		// fires /keywords/auto/process (which it does not wait on) to run the
-		// generation, and polls /keywords/auto/status for progress. This works on
-		// hosts that block loopback + WP-Cron and lack fastcgi_finish_request
-		// (e.g. some IONOS plans) — the generation runs inside the process
-		// request with ignore_user_abort, so it finishes even if that request's
-		// connection is dropped by a gateway timeout.
-		if ( $this->jobs ) {
-			$res    = $this->jobs->enqueue_keyword_auto( $opts );
-			return $this->ok( array( 'async' => true, 'job_id' => (int) $res['job_id'] ) );
-		}
-
-		// No job queue at all — run inline.
-		$inputs = SCC_Keyword_Strategy::infer_inputs_from_site();
-		foreach ( $opts as $k => $v ) {
-			$inputs[ $k ] = $v;
-		}
 		$service = new SCC_Keyword_Strategy( $this->ai );
 		$result  = $service->generate( $inputs );
 		if ( is_wp_error( $result ) ) {
@@ -1185,6 +1385,329 @@ class SCC_REST {
 	}
 
 	/**
+	 * POST /ideas — natural-language page-idea suggestions, SEO + CTR driven.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function content_ideas( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$service = new SCC_Content_Ideas( $this->ai );
+		$result  = $service->suggest(
+			(string) ( $params['question'] ?? '' ),
+			(int) ( $params['count'] ?? 8 ),
+			(string) ( $params['refine'] ?? '' ),
+			isset( $params['previous'] ) && is_array( $params['previous'] ) ? $params['previous'] : array()
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /opportunities — the ranked, explained opportunity list.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function opportunities( WP_REST_Request $request ) {
+		$limit = (int) $request->get_param( 'limit' );
+		$opps  = SCC_Opportunity_Engine::all( false );
+		if ( $limit > 0 ) {
+			$opps = array_slice( $opps, 0, $limit );
+		}
+		return $this->ok( array( 'opportunities' => $opps ) );
+	}
+
+	/**
+	 * POST /opportunities/refresh — recompute from current data.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function opportunities_refresh() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		// Recompute the signal caches the engine reads, then the engine itself.
+		if ( class_exists( 'SCC_Content_Decay' ) ) {
+			SCC_Content_Decay::detect( true );
+		}
+		if ( class_exists( 'SCC_Intent_Drift' ) ) {
+			SCC_Intent_Drift::detect( true );
+		}
+		return $this->ok( array( 'opportunities' => SCC_Opportunity_Engine::all( true ) ) );
+	}
+
+	/**
+	 * GET /content-decay — declining pages from GSC period comparison.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function content_decay( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$refresh = (bool) $request->get_param( 'refresh' );
+		return $this->ok( SCC_Content_Decay::detect( $refresh ) );
+	}
+
+	/**
+	 * GET /intent-drift — pages whose search-intent mix is shifting (GSC-only).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function intent_drift( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$refresh = (bool) $request->get_param( 'refresh' );
+		return $this->ok( SCC_Intent_Drift::detect( $refresh ) );
+	}
+
+	/**
+	 * GET /health-timeline — SEO health snapshots over time.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function health_timeline() {
+		return $this->ok( array( 'timeline' => SCC_Health_Timeline::timeline( 180 ) ) );
+	}
+
+	/**
+	 * POST /health-timeline/snapshot — capture a snapshot now.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function health_snapshot() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		SCC_Health_Timeline::snapshot( true );
+		return $this->ok( array( 'timeline' => SCC_Health_Timeline::timeline( 180 ) ) );
+	}
+
+	/**
+	 * GET /experiments — list SEO experiments.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function experiments_list() {
+		return $this->ok( array( 'experiments' => SCC_Experiments::all(), 'change_types' => SCC_Experiments::CHANGE_TYPES ) );
+	}
+
+	/**
+	 * POST /experiments — start an experiment.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function experiments_start( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$id     = SCC_Experiments::start( is_array( $params ) ? $params : array() );
+		if ( is_wp_error( $id ) ) {
+			return $id;
+		}
+		return $this->ok( array( 'id' => $id, 'experiments' => SCC_Experiments::all() ) );
+	}
+
+	/**
+	 * POST /experiments/{id} — evaluate an experiment now.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function experiments_evaluate( WP_REST_Request $request ) {
+		$r = SCC_Experiments::evaluate( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $r ) ) {
+			return $r;
+		}
+		return $this->ok( array( 'experiment' => $r, 'experiments' => SCC_Experiments::all() ) );
+	}
+
+	/**
+	 * DELETE /experiments/{id}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function experiments_delete( WP_REST_Request $request ) {
+		SCC_Experiments::delete( (int) $request->get_param( 'id' ) );
+		return $this->ok( array( 'experiments' => SCC_Experiments::all() ) );
+	}
+
+	/**
+	 * GET /entities — the entity authority graph + gaps.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function entities() {
+		return $this->ok( SCC_Entity_Graph::build() );
+	}
+
+	/**
+	 * GET /ai-visibility — provider-agnostic AI-answer visibility status.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function ai_visibility() {
+		return $this->ok( SCC_AI_Visibility::status() );
+	}
+
+	/**
+	 * GET /page/{id}/optimize — the per-page SEO scorecard + prioritized fixes.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function page_optimize( WP_REST_Request $request ) {
+		$id = (int) $request->get_param( 'id' );
+		if ( ! current_user_can( 'edit_post', $id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot view this page.', 'seo-command-center' ), 403 );
+		}
+		return $this->ok( array( 'scorecard' => SCC_Page_Optimizer::scorecard( $id ) ) );
+	}
+
+	/**
+	 * GET /actions — the action queue.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function actions_list( WP_REST_Request $request ) {
+		$status = sanitize_key( (string) $request->get_param( 'status' ) );
+		return $this->ok( array(
+			'actions'            => SCC_Action_Queue::all( $status ),
+			'safe_pending_count' => SCC_Action_Queue::safe_pending_count(),
+		) );
+	}
+
+	/**
+	 * POST /actions — promote an opportunity into the queue.
+	 * Body: {opportunity_id} (resolved against the current opportunity list) or a
+	 * full {opportunity} object.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function actions_promote( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$opp = null;
+		if ( ! empty( $params['opportunity'] ) && is_array( $params['opportunity'] ) ) {
+			$opp = $params['opportunity'];
+		} elseif ( ! empty( $params['opportunity_id'] ) ) {
+			$oid = (string) $params['opportunity_id'];
+			foreach ( SCC_Opportunity_Engine::all( false ) as $candidate ) {
+				if ( ( $candidate['id'] ?? '' ) === $oid ) {
+					$opp = $candidate;
+					break;
+				}
+			}
+		}
+		if ( ! is_array( $opp ) ) {
+			return $this->fail( 'no_opportunity', __( 'Provide an opportunity_id from the current list, or an opportunity object.', 'seo-command-center' ), 400 );
+		}
+		$status = sanitize_key( (string) ( $params['status'] ?? 'approved' ) );
+		$id     = SCC_Action_Queue::promote( $opp, $status );
+		if ( ! $id ) {
+			return $this->fail( 'promote_failed', __( 'Could not add this to the action queue.', 'seo-command-center' ), 500 );
+		}
+		return $this->ok( array( 'id' => $id, 'action' => SCC_Action_Queue::find( $id ) ) );
+	}
+
+	/**
+	 * PUT /actions/{id} — change status (approve / dismiss / snooze / …).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function actions_update( WP_REST_Request $request ) {
+		$id     = (int) $request->get_param( 'id' );
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$status = sanitize_key( (string) ( $params['status'] ?? '' ) );
+
+		if ( 'snoozed' === $status ) {
+			$days = (int) ( $params['days'] ?? 14 );
+			if ( ! SCC_Action_Queue::snooze( $id, $days ) ) {
+				return $this->fail( 'snooze_failed', __( 'Could not snooze this action.', 'seo-command-center' ), 400 );
+			}
+		} elseif ( ! SCC_Action_Queue::set_status( $id, $status ) ) {
+			return $this->fail( 'update_failed', __( 'Invalid status or action.', 'seo-command-center' ), 400 );
+		}
+		return $this->ok( array( 'action' => SCC_Action_Queue::find( $id ) ) );
+	}
+
+	/**
+	 * POST /actions/{id}/execute — run a SAFE deterministic action.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function actions_execute( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$r = SCC_Action_Queue::execute( (int) $request->get_param( 'id' ) );
+		if ( is_wp_error( $r ) ) {
+			return $r;
+		}
+		return $this->ok( array( 'result' => $r, 'action' => SCC_Action_Queue::find( (int) $request->get_param( 'id' ) ) ) );
+	}
+
+	/**
+	 * POST /actions/fix-safe — execute every safe, approved/new action.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function actions_fix_safe() {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		return $this->ok( SCC_Action_Queue::fix_everything_safe() );
+	}
+
+	/**
+	 * POST /competitors/gap-map — competitive content-gap analysis.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function competitors_gap_map( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$urls   = $params['urls'] ?? array();
+		if ( is_string( $urls ) ) {
+			$urls = preg_split( '/[\r\n,]+/', $urls );
+		}
+
+		// This crawls remote sites and calls the AI — give it room to finish
+		// directly (never punt to a background worker on this host).
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			ignore_user_abort( true );
+		}
+
+		$service = new SCC_Competitor_Analysis( $this->ai );
+		$result  = $service->gap_map( is_array( $urls ) ? $urls : array() );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
 	 * POST /brief — generate a content brief for approval.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1249,17 +1772,50 @@ class SCC_REST {
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
+	public function content_plan_gen_status( WP_REST_Request $request ) {
+		$id    = (int) $request->get_param( 'id' );
+		$entry = SCC_Content_Plan::find( $id );
+		if ( ! $entry ) {
+			return $this->ok( array( 'done' => false, 'unknown' => true ) );
+		}
+		$post_id = (int) ( $entry['post_id'] ?? 0 );
+		if ( $post_id > 0 && get_post( $post_id ) ) {
+			return $this->ok( array(
+				'done'     => true,
+				'post_id'  => $post_id,
+				'edit_url' => get_edit_post_link( $post_id, 'raw' ),
+				'status'   => (string) ( $entry['status'] ?? 'draft' ),
+			) );
+		}
+		return $this->ok( array( 'done' => false ) );
+	}
+
 	public function generate( WP_REST_Request $request ) {
 		$entry = SCC_Content_Plan::find( (int) $request->get_param( 'entry_id' ) );
 		if ( ! $entry ) {
 			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
 		}
 
+		// Generation runs one long AI call plus post building; don't let the host
+		// kill it, and surface any fatal as a readable message instead of a 500.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
 		$params = $request->get_json_params();
 		$brief  = ( is_array( $params ) && ! empty( $params['brief'] ) && is_array( $params['brief'] ) ) ? $params['brief'] : null;
 
-		$generator = new SCC_Generator( $this->ai );
-		$result    = $generator->generate( $entry, $brief );
+		try {
+			$generator = new SCC_Generator( $this->ai );
+			$result    = $generator->generate( $entry, $brief );
+		} catch ( \Throwable $e ) {
+			SCC_Logger::error( 'generate', 'Fatal during generation: ' . $e->getMessage() );
+			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'The draft was written but saving it failed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
+		}
+
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -1299,6 +1855,108 @@ class SCC_REST {
 				'content_types' => SCC_Template_Mapping::CONTENT_TYPES,
 			)
 		);
+	}
+
+	/**
+	 * GET /templates/variables — the authoritative variable registry.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function templates_variables() {
+		return $this->ok(
+			array(
+				'categories' => SCC_Template_Variables::categories(),
+				'variables'  => array_values( SCC_Template_Variables::registry() ),
+			)
+		);
+	}
+
+	/**
+	 * GET /templates/{id}/variables — tokens detected in a template + validation.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function template_detected_variables( WP_REST_Request $request ) {
+		$id   = (int) $request->get_param( 'id' );
+		$data = class_exists( 'SCC_Elementor' ) ? SCC_Elementor::get_data( $id ) : null;
+		if ( ! is_array( $data ) ) {
+			return $this->fail( 'no_template', __( 'That template has no Elementor data to inspect.', 'seo-command-center' ), 404 );
+		}
+		$detected = SCC_Template_Variables::detect( $data );
+		$defs     = array();
+		foreach ( $detected as $token ) {
+			$defs[] = SCC_Template_Variables::definition( $token );
+		}
+		return $this->ok(
+			array(
+				'detected'   => $defs,
+				'validation' => SCC_Template_Variables::validate_template( $data ),
+			)
+		);
+	}
+
+	/**
+	 * POST /templates/validate — validate a template's tokens.
+	 * Body: {template_id} or {elements:[...]}, optional {required:[...]}.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function templates_validate( WP_REST_Request $request ) {
+		$params   = $request->get_json_params();
+		$params   = is_array( $params ) ? $params : $request->get_params();
+		$required = isset( $params['required'] ) && is_array( $params['required'] ) ? $params['required'] : array();
+
+		$elements = null;
+		if ( ! empty( $params['template_id'] ) && class_exists( 'SCC_Elementor' ) ) {
+			$elements = SCC_Elementor::get_data( (int) $params['template_id'] );
+		} elseif ( ! empty( $params['elements'] ) && is_array( $params['elements'] ) ) {
+			$elements = $params['elements'];
+		}
+		if ( ! is_array( $elements ) ) {
+			return $this->fail( 'no_template', __( 'Provide a template_id or an elements array.', 'seo-command-center' ), 400 );
+		}
+		return $this->ok( array( 'validation' => SCC_Template_Variables::validate_template( $elements, $required ) ) );
+	}
+
+	/**
+	 * POST /templates/preview-vars — resolve variables to a sample TOKEN => value
+	 * map so the user can preview how a template will populate.
+	 * Body: optional {entry_id} to use a real content-plan entry; else a sample.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function templates_preview_vars( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$business = class_exists( 'SCC_Schema_Engine' ) ? SCC_Schema_Engine::business() : array();
+
+		$obj = new SCC_Content_Object();
+		$entry_id = (int) ( $params['entry_id'] ?? 0 );
+		$entry    = $entry_id ? SCC_Content_Plan::find( $entry_id ) : null;
+		if ( is_array( $entry ) ) {
+			$obj->title           = (string) ( $entry['title'] ?? '' );
+			$obj->h1              = (string) ( $entry['title'] ?? '' );
+			$obj->slug            = (string) ( $entry['url'] ?? '' );
+			$obj->content_type    = (string) ( $entry['page_type'] ?? 'article' );
+			$obj->primary_keyword = (string) ( $entry['primary_keyword'] ?? '' );
+			$obj->search_intent   = (string) ( $entry['intent'] ?? '' );
+			$obj->service         = (string) ( $entry['parent'] ?? '' );
+		} else {
+			// Sample data (clearly illustrative — never fabricated business facts).
+			$obj->title           = __( 'Sample Page Title', 'seo-command-center' );
+			$obj->h1              = __( 'Sample H1 Heading', 'seo-command-center' );
+			$obj->primary_keyword = __( 'sample primary keyword', 'seo-command-center' );
+			$obj->search_intent   = 'commercial';
+		}
+		$obj->content = '<p>' . esc_html__( 'This is sample intro content used only for previewing how your template fills in.', 'seo-command-center' ) . '</p><h2>' . esc_html__( 'Sample section heading', 'seo-command-center' ) . '</h2>';
+		$obj->faq     = array( array( 'question' => __( 'Sample question?', 'seo-command-center' ), 'answer' => __( 'Sample answer.', 'seo-command-center' ) ) );
+
+		$map = SCC_Template_Variables::render_map( $obj, array( 'business' => $business ) );
+		return $this->ok( array( 'preview' => $map ) );
 	}
 
 	/**
@@ -1549,6 +2207,12 @@ class SCC_REST {
 					return $r;
 				}
 				break;
+			case 'remove':
+				$r = SCC_Publishing::remove( $post_id );
+				if ( is_wp_error( $r ) ) {
+					return $r;
+				}
+				break;
 		}
 		return $this->ok( array( 'queue' => SCC_Publishing::queue() ) );
 	}
@@ -1579,7 +2243,11 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function links_analyze( WP_REST_Request $request ) {
-		$engine = new SCC_Link_Engine();
+		// AI-assisted linking crawls the page + one AI call — allow it to finish.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$engine = new SCC_Link_Engine( $this->ai );
 		$result = $engine->analyze( (int) $request->get_param( 'post_id' ), true );
 		return $this->ok( $result );
 	}
@@ -1646,7 +2314,10 @@ class SCC_REST {
 		if ( SCC_Content_Index::count() < 1 ) {
 			SCC_Content_Index::reindex_all( 2000 );
 		}
-		$engine = new SCC_Link_Engine();
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$engine = new SCC_Link_Engine( $this->ai );
 		return $this->ok( $engine->scan_site( 500 ) );
 	}
 
@@ -1663,6 +2334,42 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /metadata — list pages + their current metadata for the bulk editor.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function metadata_list( WP_REST_Request $request ) {
+		return $this->ok( SCC_Metadata::list_pages( array(
+			'search'            => (string) $request->get_param( 'search' ),
+			'post_type'         => (string) $request->get_param( 'post_type' ),
+			'paged'             => (int) $request->get_param( 'paged' ),
+			'filter'            => (string) $request->get_param( 'filter' ),
+			'include_templates' => (bool) $request->get_param( 'include_templates' ),
+		) ) );
+	}
+
+	/**
+	 * POST /metadata/save — manually set a page's meta title/description.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function metadata_save( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$result = SCC_Metadata::save_manual(
+			(int) $request->get_param( 'post_id' ),
+			(string) ( $params['meta_title'] ?? '' ),
+			(string) ( $params['meta_description'] ?? '' )
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( array( 'meta' => $result ) );
 	}
 
 	/**

@@ -178,6 +178,13 @@ SEO Strategy Engine  →  Content + Template Engine  →  Renderer  →  WordPre
   benefits, process, local_content, faq, cta, metadata, schema, internal_links).
   `SCC_Template` / `SCC_Template_Store` define reusable structures; deterministic
   `SCC_Template_Selector` chooses one (never the AI). See `docs/TEMPLATES.md`.
+- **Template Variables (Mapping 2.0)**: `SCC_Template_Variables` is the single
+  authoritative registry of every `{{TOKEN}}` — label, category, data type and
+  safety flags — extensible via the `scc_template_variables` filter. It resolves
+  the content object to raw values once, escapes each by type (text/rich/html/
+  url/list; schema is never visible text), validates a template's tokens, and is
+  what `SCC_Content_Object::variables()` now delegates to. No new tables; no AI
+  or DB call per token. See `docs/TEMPLATES.md`.
 - **Renderer**: `SCC_Renderer_Interface` implementations (`gutenberg` default,
   `wordpress`, optional `elementor`) turn the content object + template into
   `post_content` (+ optional builder meta). `SCC_Renderer_Manager` picks one with
@@ -189,13 +196,84 @@ before/after render and are renderer-independent. Elementor is now one optional
 renderer, not a dependency; the pre-existing `SCC_Template_Mapping` +
 `SCC_Elementor_Builder` are reused by the Elementor renderer and remain intact.
 
+### Unified intelligence layer (Opportunity Engine + Action Queue)
+
+`SCC_Opportunity_Engine` is an **orchestration/read-model** layer — it does not
+re-implement any analysis. It gathers signals from the existing systems (GSC
+`gsc_signals`, the Topical Authority scorecard, cannibalization, the link graph,
+and the latest site analysis) and turns them into a single ranked list of
+**explainable** opportunities. Each opportunity carries a transparent score (a
+sum of labelled factor points, never an opaque average), a confidence, and an
+explicit data-availability state (`verified` / `partial` / `estimated` /
+`unavailable`). Missing external data (e.g. GSC not connected) simply omits those
+factors and downgrades confidence — it is never fabricated. Results are cached in
+a transient so the dashboard stays fast; `POST /opportunities/refresh` recomputes.
+
+`SCC_Content_Decay` is one of the engine's signal sources: it compares page-level
+Search Console performance across two consecutive windows (recent 90 days vs the
+prior 90 days via `SCC_GSC::compare_pages`) and flags genuinely declining pages.
+It is confidence-thresholded — a page needs a meaningful baseline (prior clicks
+or impressions) and a significant drop (≈30%+ clicks/impressions, or average
+position worsened by 3+) before it counts as decay, so normal fluctuation is
+never mislabelled. Each finding carries causes (clicks down, impressions down,
+rankings declining, stale), a severity, a confidence, and a concrete refresh
+plan; these become `content_decay` opportunities (verified data) in the engine.
+When GSC is not connected it returns `{available:false}` — never fabricated.
+
+`SCC_Intent_Drift` is a second GSC-only signal source: rather than requiring
+historical SERP snapshots, it reads the REAL queries each page earns impressions
+for, classifies each query's intent from its wording (informational / commercial
+/ local, via transparent lexicons), weights by impressions, and compares the
+intent mix of the recent window against the prior one. When the dominant intent
+flips with a real baseline (≥200 impressions per window) and a meaningful share
+shift, it emits an `intent_drift` opportunity with a from→to recommendation. The
+query data is verified GSC data but the per-query labelling is heuristic, so
+these opportunities are marked **partial** confidence — never "verified". No SERP
+scraping, no DataForSEO dependency.
+
+`SCC_Page_Optimizer` is the per-page face of the same intelligence: for one post
+it composes a component scorecard (Content, Technical, Metadata, Internal linking,
+Schema, Intent, GSC opportunity) from the existing per-page systems (SEO report,
+latest analysis item, link graph, content decay, intent drift, and a cached GSC
+page-metrics map) plus a prioritized fix list. Unknown components are excluded and
+the weights renormalized (never guessed). It surfaces in the post editor's SEO
+meta box via `GET /page/{id}/optimize` (capability-checked). It reuses existing
+analysis — it does not re-crawl.
+
+`SCC_Action_Queue` (backed by the `scc_seo_actions` table) persists the
+opportunities the user chooses to act on, with a full lifecycle and logging.
+Execution is deliberately conservative: only genuinely SAFE, deterministic,
+reversible actions (currently internal-link insertion via the existing
+`SCC_Link_Engine`/`SCC_Link_Inserter`) can be run automatically — everything else
+stays `approved` and routes the user to the existing workflow. "Fix Everything
+Safe" runs only the safe subset. The layer orchestrates existing execution
+systems; it never becomes a second SEO system beside them.
+
+Internal-link recommendations are deterministic by default (content-index
+relevance + anchor engine). An optional **`link_ai_enabled`** setting (the
+"AI-assisted" toggle on the Internal Links page) adds a single AI pass over a
+page's outbound candidates: the model reads the page and picks the most natural
+anchor and best targets **from the verified candidate list only**.
+`SCC_Link_Engine::merge_ai_links()` guarantees the AI can never introduce a page
+or URL of its own, and accepts an AI anchor only if it appears verbatim in the
+page; if the AI call fails, the deterministic recommendations stand. The
+inserter (`SCC_Link_Inserter`) is Elementor-aware — it writes the link into the
+`_elementor_data` widget that holds the anchor text, not unused `post_content`.
+
 ## 5. Admin UI
 
 WordPress-native admin (top-level menu + submenus) but styled to feel like a
 modern SEO SaaS. One top-level page `seo-command-center` with submenus matching
-the product nav (Dashboard, Site Analysis, Keyword Strategy, Site Architecture,
-Content Plan, Generate Content, Elementor Templates, Internal Links, SEO Audit,
-Schema, Publishing Queue, Settings, API Connections).
+the product nav (Dashboard, Action Queue, Topical Authority, Keyword Strategy,
+Site Architecture, Content Plan, Competitor Gaps, SEO Audit, Internal Links,
+Publishing Queue, Templates, Settings, API Connections).
+
+The **Action Queue** screen is the operational hub of the intelligence layer: it
+lists every computed opportunity (ranked + explained) with "Add to queue", and
+the persistent action queue with its full lifecycle (approve / snooze / dismiss /
+run). "Fix Everything Safe" runs only the deterministic, reversible subset
+(internal links) — it never edits content, publishes, deletes, or redirects. The
+Dashboard's "What should I do next?" card is a top-5 preview that links here.
 
 - Views live in `includes/admin/views/*.php` and only render markup; all data is
   prepared by the controller and passed in, all output escaped.
@@ -248,3 +326,50 @@ room for a real queue/Action Scheduler later.
 WordPress Coding Standards (WPCS). All classes prefixed `SCC_`, functions/hooks
 `scc_`, constants `SCC_`. Text domain `seo-command-center`. Files use the
 one-class-per-file convention with `class-scc-*.php` naming.
+
+## Topical Authority Engine (read model)
+
+`SCC_Topical_Authority` (includes/strategy/) turns existing data into an
+explainable topical-authority scorecard. It is a pure read model — it does not
+store anything, call the AI layer, or add tables. It reuses:
+
+- `SCC_Keyword_Strategy::latest()` — the topical map (pillars/subtopics with
+  existing-vs-gap status, priorities, GSC quick-wins).
+- `SCC_Analyzer::latest()` — content depth (thin-content share).
+- `SCC_Link_Graph` / `SCC_Link_Engine` — internal-link health + opportunities.
+- `SCC_Cannibalization` — overlap count.
+
+`compute($map, $signals, $quick)` is the pure, unit-tested scoring function;
+`scorecard()` gathers the live signals and calls it. Weights are filterable via
+`scc_topical_authority_weights`. Surfaced at Admin → Topical Authority and via
+`GET /topical-authority`.
+
+## 6. Intelligence layer — completion (Phase 8)
+
+The unified intelligence layer now spans the full closed loop, all orchestrating
+existing systems (no parallel SEO system, no fabricated data):
+
+- **Opportunity Engine** + **Action Queue** — scored, explainable opportunities
+  and a persistent action lifecycle with safe deterministic execution.
+- **Signals**: GSC striking-distance & untapped demand, topical-authority gaps,
+  cannibalization, orphans, thin content, missing metadata, **Content Decay**,
+  **Intent Drift** (both GSC-only).
+- **Page Optimizer** — per-page component scorecard + prioritized fixes in the
+  editor.
+- **Health Timeline** (`scc_seo_snapshots`) — daily transparent health score +
+  GSC totals, so progress is visible over time.
+- **Experiments** (`scc_seo_experiments`) — before/after measurement of a change
+  against its GSC baseline, in correlation language only.
+- **Entity Authority Graph** — organization/service/location entities and their
+  supporting-page gaps, derived from business + topical-map data.
+- **Revenue-aware prioritization** — configurable per-intent business-value
+  points so priority follows value, not volume.
+- **Automation modes** — conservative / assisted / autopilot, gating what may run
+  unattended (safe, reversible actions only; audited; capped).
+- **AI/GEO Visibility** — provider-agnostic scaffold that reports "not connected"
+  honestly (no fabricated AI-answer metrics) and surfaces real citation-readiness
+  factors.
+
+Surfaced in admin via the **Action Queue** and **Insights** screens, the
+Dashboard "What should I do next?" card, the editor's "Optimize this page", and
+Settings (automation mode + business value).

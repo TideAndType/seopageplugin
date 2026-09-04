@@ -122,3 +122,44 @@ Secrets are redacted before insert. Log is capped (oldest rows pruned).
   is dropped (deactivation ≠ uninstall).
 - **Uninstall** (`uninstall.php`): only drops tables / deletes options if the
   user enabled "remove data on uninstall" in settings. Default keeps data.
+
+### `scc_seo_actions` — Phase 8 (Intelligence layer)
+
+Persists the **unified SEO action queue**. Opportunities from
+`SCC_Opportunity_Engine` are transient (computed + cached); when the user acts on
+one it is promoted here as a durable action with a lifecycle.
+
+| Column | Notes |
+|--------|-------|
+| `id` | PK |
+| `opportunity_id` | Stable id from the engine (dedupes promotes) |
+| `type` | Action type (e.g. `add_internal_links`, `create_page`, `improve_meta`) |
+| `title`, `target` (JSON), `reason` | What + where + why |
+| `score`, `confidence`, `priority` | From the engine |
+| `expected_impact`, `effort`, `risk` | Decision context |
+| `status` | new / reviewing / approved / in_progress / completed / dismissed / snoozed / failed |
+| `source` | Originating system (gsc, topical_authority, cannibalization, link_graph, analyzer) |
+| `payload` (JSON) | factors + metrics + recommended_action |
+| `result` (JSON) | Execution outcome |
+| `snoozed_until` | When a snoozed action returns |
+| `created_at`, `updated_at` | Timestamps |
+
+Created via `dbDelta` on the `SCC_DB_VERSION` 1.13.0 upgrade; no existing data is
+touched. Removed only on opt-in uninstall.
+
+### `scc_seo_snapshots` — Phase 8 (Health Timeline)
+
+Daily SEO health snapshots for the timeline: `captured_on` (one per day),
+`health_score` (transparent blend of measured coverage), `clicks`/`impressions`/
+`avg_position` (from GSC when connected, else 0), `opportunities_open`,
+`actions_completed`, and `components` (JSON). Created via dbDelta on the
+`SCC_DB_VERSION` 1.18.0 upgrade.
+
+### `scc_seo_experiments` — Phase 8 (Experiments)
+
+Records a change to a page and its GSC baseline so results can be measured:
+`post_id`, `url`, `change_type`, `note`, `status`, `baseline` (JSON), `result`
+(JSON — correlation verdict + confidence, never causation), `measure_days`,
+`start_date`. Created via dbDelta on the 1.18.0 upgrade.
+
+Both are removed only on opt-in uninstall.

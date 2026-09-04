@@ -97,3 +97,62 @@ The original is untouched.
   always builds a new content instance.
 - On failure: the template is preserved, partial changes are rolled back, the
   error is logged, and the user can retry.
+
+## Template Mapping 2.0 — the variable registry
+
+`SCC_Template_Variables` is the single authoritative definition of every
+`{{TOKEN}}` the plugin understands. Token definitions live **only** here — the
+Elementor builder, renderers and admin all read from this registry.
+
+Each variable carries: `token`, `label`, `description`, `category`, `type`
+(`text`, `rich`, `html`, `url`, `list`, `schema`), and boolean flags
+(`rich`, `html`, `url`, `list`, `repeater`, `schema`, `seo_critical`,
+`safe_for_text`, `safe_for_url`, `required`). Modules extend the set with the
+`scc_template_variables` filter; resolved values can be adjusted with
+`scc_template_resolved_values`.
+
+### Resolution and escaping
+
+The generator produces one structured `SCC_Content_Object`; the renderer
+consumes it. `SCC_Template_Variables::resolve()` maps that object (plus a light
+context: business info, verified internal links, related pages, author, GSC)
+to raw values **once** — no token makes its own AI or DB call.
+`render_map()` then escapes each value **by type**:
+
+- `text` → `esc_html`
+- `rich` / `html` → `wp_kses_post` (markup kept, scripts dropped)
+- `url` → `esc_url`
+- `list` → comma-joined, each item escaped
+- `schema` → **empty** (structured data never renders as visible text; schema
+  is emitted into the page head by the schema engine)
+
+Custom/unknown tokens are stripped of shortcodes/scripts/PHP, escaped as text,
+and cleared when they have no value — a raw `{{TOKEN}}` never reaches a
+published page.
+
+### Structured, render-many-ways data
+
+FAQ is a structured `[{question, answer}]` list, generated once and rendered as
+a visible accordion (`{{FAQ}}`), individual items (`{{FAQ_1}}`…), a question
+list (`{{QUESTIONS}}`), a direct answer (`{{DIRECT_ANSWER}}`) and the FAQPage
+schema — never regenerated per surface. Internal-link tokens
+(`{{INTERNAL_LINKS}}`, `{{RELATED_CONTENT}}`, `{{PARENT_PAGE}}`,
+`{{CHILD_PAGES}}`) only output **verified WordPress URLs** from the link graph.
+
+### Validation
+
+`validate_template( $elements, $required )` returns
+`{status: ready|attention, errors[], warnings[], detected[], required[],
+optional[]}`. Errors: a missing required field (`H1`, main content). Warnings:
+duplicate H1 placement, a schema token in a visible widget, or an
+unknown/custom token. Validation never blocks generation — it informs the
+quality score and the admin's template status.
+
+### Backward compatibility
+
+Every legacy token (`{{TITLE}}`, `{{H1}}`, `{{INTRO}}`, `{{BODY}}`,
+`{{CONTENT}}`, `{{SERVICE}}`, `{{CITY}}`, `{{PRIMARY_KEYWORD}}`, `{{CTA}}`,
+`{{FAQ}}`, `{{META_TITLE}}`, `{{META_DESCRIPTION}}`) still resolves.
+`SCC_Content_Object::variables()` now delegates to the registry while keeping
+its old keys, so existing templates and generated pages are unaffected.
+

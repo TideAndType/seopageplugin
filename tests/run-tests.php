@@ -82,6 +82,29 @@ assert_eq( 1, $parsed['internal_links'], 'internal link count' );
 assert_eq( 1, $parsed['external_links'], 'external link count' );
 assert_true( in_array( 'Article', $parsed['schema_types'], true ), 'schema type extracted' );
 
+// Enriched competitor-analysis signals: h3 headings + a body-text excerpt.
+$html_rich = '<html><head><title>T</title>'
+	. '<script type="application/ld+json">{"@type":"Service"}</script></head>'
+	. '<body><nav>Menu Home About</nav><h1>Web Design</h1><h2>Process</h2><h3>Discovery</h3>'
+	. '<p>We build fast websites for local businesses.</p>'
+	. '<script>var x=1;</script><footer>Copyright</footer></body></html>';
+$rich = $crawler->parse( $html_rich, 'https://example.com/c' );
+assert_eq( array( 'Discovery' ), $rich['h3'], 'h3 headings captured for competitor comparison' );
+assert_true( strpos( $rich['text_excerpt'], 'We build fast websites' ) !== false, 'body content excerpt captured' );
+assert_true( strpos( $rich['text_excerpt'], 'var x=1' ) === false, 'scripts stripped from the excerpt' );
+assert_true( in_array( 'Service', $rich['schema_types'], true ), 'schema still extracted after excerpt stripping' );
+
+// Internal link URLs are collected (for multi-page competitor crawling).
+$html_links = '<html><head><title>T</title></head><body>'
+	. '<a href="/services/">Services</a><a href="/about">About</a>'
+	. '<a href="https://other.com/x">ext</a><a href="#top">anchor</a>'
+	. '<a href="mailto:a@b.com">mail</a><a href="/logo.png">img</a></body></html>';
+$lp = $crawler->parse( $html_links, 'https://example.com/' );
+assert_true( in_array( 'https://example.com/services/', $lp['internal_link_urls'], true ), 'relative internal link absolutized' );
+assert_true( ! in_array( 'https://other.com/x', $lp['internal_link_urls'], true ), 'external link excluded from internal list' );
+$has_asset = false; foreach ( $lp['internal_link_urls'] as $u ) { if ( strpos( $u, 'logo.png' ) !== false ) { $has_asset = true; } }
+assert_eq( false, $has_asset, 'asset/anchor/mailto links excluded from internal list' );
+
 echo "\n== Crawler @graph schema extraction ==\n";
 $html2 = '<html><head><script type="application/ld+json">'
 	. '{"@graph":[{"@type":"Organization"},{"@type":["WebPage","FAQPage"]}]}'
@@ -685,6 +708,413 @@ $smart = $mk( '{“a”:“b”}' )->json();
 assert_true( is_array( $smart ) && 'b' === $smart['a'], 'smart quotes are normalized' );
 $garbage = $mk( 'I could not build a map.' )->json();
 assert_eq( null, $garbage, 'non-JSON returns null' );
+
+echo "\n== Topical Authority scorecard ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-topical-authority.php';
+
+$ta_map = array( 'clusters' => array(
+	array(
+		'service' => 'Local SEO', 'primary_keyword' => 'local seo', 'supporting_terms' => array( 'a', 'b' ),
+		'intent' => 'commercial', 'recommended_url' => '/local-seo/', 'priority' => 'high', 'status' => 'existing',
+		'subtopics' => array(
+			array( 'title' => 'GBP', 'primary_keyword' => 'google business profile', 'intent' => 'commercial', 'recommended_url' => '/gbp/', 'status' => 'existing' ),
+			array( 'title' => 'Citations', 'primary_keyword' => 'local citations', 'intent' => 'commercial', 'recommended_url' => '/citations/', 'status' => 'new' ),
+		),
+	),
+	array(
+		'service' => 'Content Marketing', 'primary_keyword' => 'content marketing', 'supporting_terms' => array(),
+		'intent' => 'informational', 'recommended_url' => '/content/', 'priority' => 'medium', 'status' => 'new',
+		'subtopics' => array(
+			array( 'title' => 'Blogging', 'primary_keyword' => 'blogging', 'intent' => 'informational', 'recommended_url' => '/blog/', 'status' => 'new' ),
+		),
+	),
+) );
+$ta_signals = array( 'depth_analyzed' => 10, 'depth_thin' => 2, 'link_pages' => 10, 'link_orphans' => 2, 'cannibalization' => 3, 'link_opportunities' => 7 );
+$ta = SCC_Topical_Authority::compute( $ta_map, $ta_signals, array() );
+
+assert_eq( 5, $ta['totals']['topics'], 'topics = pillars + subtopics' );
+assert_eq( 2, $ta['totals']['existing_topics'], 'existing topics counted' );
+assert_eq( 3, $ta['totals']['missing_topics'], 'missing topics counted' );
+assert_eq( 3, $ta['totals']['cannibalization'], 'cannibalization passed through' );
+assert_eq( 7, $ta['totals']['link_opportunities'], 'link opportunities passed through' );
+// Cluster statuses.
+$byname = array();
+foreach ( $ta['clusters'] as $c ) { $byname[ $c['name'] ] = $c; }
+assert_eq( 'attention', $byname['Local SEO']['status'], 'existing pillar with a gap subtopic needs attention' );
+assert_eq( 'missing', $byname['Content Marketing']['status'], 'new pillar is missing' );
+// Opportunities: Citations(new), Content Marketing(new pillar), Blogging(new) = 3.
+assert_eq( 3, $ta['opportunities']['high'] + $ta['opportunities']['medium'] + $ta['opportunities']['low'], 'three new opportunities' );
+assert_true( $ta['score'] >= 0 && $ta['score'] <= 100, 'score in range' );
+// Component percentages are deterministic.
+$pcts = array();
+foreach ( $ta['components'] as $c ) { $pcts[ $c['key'] ] = $c['pct']; }
+assert_eq( 40, $pcts['topic'], 'topic coverage 2/5 = 40%' );
+assert_eq( 33, $pcts['supporting'], 'supporting 1/3 = 33%' );
+
+// Unknown components (no analysis / no link graph) are excluded, not zeroed.
+$ta2 = SCC_Topical_Authority::compute( $ta_map, array(), array() );
+$known = array();
+foreach ( $ta2['components'] as $c ) { $known[ $c['key'] ] = $c['known']; }
+assert_eq( false, $known['depth'], 'depth unknown without analysis' );
+assert_eq( false, $known['links'], 'links unknown without a graph' );
+assert_true( $ta2['score'] > 0, 'score still computed from known components' );
+
+echo "\n== Competitor gap map guards ==\n";
+$comp = new SCC_Competitor_Analysis();
+$err_no_urls = $comp->gap_map( array( '', '   ' ) );
+assert_true( is_wp_error( $err_no_urls ), 'gap_map with no usable URLs errors' );
+assert_eq( 'scc_no_urls', $err_no_urls->get_error_code(), 'no-URLs error code' );
+$err_no_ai = $comp->gap_map( array( 'https://example.com/' ) );
+assert_true( is_wp_error( $err_no_ai ), 'gap_map without an AI manager errors' );
+assert_eq( 'scc_no_ai', $err_no_ai->get_error_code(), 'no-AI error code' );
+
+echo "\n== Internal link insertion into Elementor widgets ==\n";
+$inserter = new SCC_Link_Inserter();
+$ref = new ReflectionMethod( 'SCC_Link_Inserter', 'walk_elementor' );
+$ref->setAccessible( true );
+$tree = array(
+	array(
+		'elType'   => 'section',
+		'elements' => array(
+			array(
+				'elType'     => 'widget',
+				'widgetType' => 'text-editor',
+				'settings'   => array( 'editor' => '<p>We offer local SEO services to small businesses.</p>' ),
+			),
+		),
+	),
+);
+$done = false;
+$out  = $ref->invokeArgs( $inserter, array( $tree, 'local SEO services', 'https://example.com/local-seo/', &$done ) );
+assert_true( $done, 'anchor found and linked in Elementor editor field' );
+$edited = $out[0]['elements'][0]['settings']['editor'];
+assert_true( false !== strpos( $edited, '<a href="https://example.com/local-seo/">local SEO services</a>' ), 'editor field now contains the real hyperlink' );
+
+// A phrase that is not present leaves the tree untouched.
+$done2 = false;
+$ref->invokeArgs( $inserter, array( $tree, 'nonexistent phrase', 'https://example.com/x/', &$done2 ) );
+assert_eq( false, $done2, 'missing anchor does not force a link' );
+
+echo "\n== Template Variables 2.0 registry ==\n";
+$reg = SCC_Template_Variables::registry();
+assert_true( isset( $reg['H1'] ) && isset( $reg['PRIMARY_KEYWORD'] ) && isset( $reg['FAQ_SCHEMA'] ), 'registry has core + schema tokens' );
+assert_eq( true, $reg['H1']['required'], 'H1 is required' );
+assert_eq( true, $reg['CTA_URL']['url'], 'CTA_URL is a URL type' );
+assert_eq( true, $reg['SCHEMA']['schema'], 'SCHEMA is schema type' );
+assert_eq( false, $reg['SCHEMA']['safe_for_text'], 'schema is not safe for visible text' );
+
+// Type-aware escaping.
+assert_eq( 'a &amp; b', SCC_Template_Variables::escape_value( 'H1', 'a & b' ), 'text token is html-escaped' );
+assert_eq( '', SCC_Template_Variables::escape_value( 'SCHEMA', '{"@type":"x"}' ), 'schema token never renders as text' );
+assert_eq( 'one, two', SCC_Template_Variables::escape_value( 'SECONDARY_KEYWORDS', array( 'one', 'two' ) ), 'list token joins + escapes' );
+$html_out = SCC_Template_Variables::escape_value( 'CONTENT', '<p>hi</p><script>alert(1)</script>' );
+assert_true( false !== strpos( $html_out, '<p>hi</p>' ) && false === strpos( $html_out, '<script' ), 'html token keeps markup but drops script' );
+
+// Custom value sanitizer.
+assert_eq( 'safe', SCC_Template_Variables::sanitize_custom_value( 'safe[shortcode]' ), 'custom value strips shortcodes' );
+assert_eq( 'x', SCC_Template_Variables::sanitize_custom_value( 'x<script>bad()</script>' ), 'custom value strips scripts' );
+
+// Resolve + render_map from a content object.
+$co = new SCC_Content_Object();
+$co->title = 'Local SEO Services';
+$co->h1 = 'Local SEO Services in Daytona Beach';
+$co->content = '<p>Intro paragraph.</p><h2>How it works</h2>';
+$co->primary_keyword = 'local seo services';
+$co->secondary_keywords = array( 'seo audit', 'gmb' );
+$co->faq = array( array( 'question' => 'How much?', 'answer' => 'It depends.' ) );
+$map = SCC_Template_Variables::render_map( $co, array( 'business' => array( 'phone' => '555-1234', 'organization_name' => 'Tide & Type' ) ), array( 'H1', 'CONTENT', 'CUSTOM_THING' ) );
+assert_eq( 'Local SEO Services in Daytona Beach', $map['H1'], 'H1 resolved from content object' );
+assert_true( false !== strpos( $map['FAQ'], 'How much?' ), 'FAQ resolved as accordion HTML' );
+assert_eq( '555-1234', $map['PHONE'], 'PHONE resolved from verified business data' );
+assert_eq( '', $map['CUSTOM_THING'], 'unknown custom token resolves to empty (never leaks the raw token)' );
+assert_eq( '', $map['SCHEMA'], 'schema token empty in the visible map' );
+
+// Validation.
+$tree_ok = array( array( 'elType' => 'widget', 'settings' => array( 'title' => '{{H1}}', 'editor' => '{{CONTENT}}' ) ) );
+$v_ok = SCC_Template_Variables::validate_template( $tree_ok );
+assert_eq( 'ready', $v_ok['status'], 'template with H1 + content validates ready' );
+$tree_bad = array( array( 'elType' => 'widget', 'settings' => array( 'editor' => '{{INTRO}} {{SCHEMA}} {{FOO}}' ) ) );
+$v_bad = SCC_Template_Variables::validate_template( $tree_bad );
+assert_eq( 'attention', $v_bad['status'], 'template missing H1 needs attention' );
+assert_true( ! empty( $v_bad['warnings'] ), 'schema-in-widget / custom token produce warnings' );
+
+// Backward compatibility: variables() still returns the legacy keys.
+$legacy = $co->variables();
+assert_true( isset( $legacy['TITLE'] ) && isset( $legacy['H1'] ) && isset( $legacy['CONTENT'] ) && isset( $legacy['DATE_PUBLISHED'] ), 'variables() keeps legacy keys' );
+
+echo "\n== AI-assisted internal linking (merge safety) ==\n";
+$det_recs = array(
+	array( 'target_post_id' => 10, 'target_title' => 'SEO Audit', 'target_url' => '/seo-audit/', 'anchor' => 'seo audit', 'natural' => true, 'sentence' => '', 'confidence' => 60, 'reason' => 'det' ),
+	array( 'target_post_id' => 20, 'target_title' => 'Local SEO', 'target_url' => '/local-seo/', 'anchor' => 'local seo', 'natural' => true, 'sentence' => '', 'confidence' => 58, 'reason' => 'det' ),
+);
+$page_text = 'We provide a full local SEO service and a detailed technical review for small businesses.';
+$ai_links = array(
+	array( 'id' => 20, 'anchor' => 'local SEO service', 'confidence' => 92, 'reason' => 'Great match' ), // valid, anchor present.
+	array( 'id' => 10, 'anchor' => 'keyword research', 'confidence' => 80, 'reason' => 'Nope' ),          // anchor NOT in page.
+	array( 'id' => 99, 'anchor' => 'invented', 'confidence' => 99, 'reason' => 'Invented' ),              // id not a candidate.
+);
+$merged = SCC_Link_Engine::merge_ai_links( $det_recs, $ai_links, $page_text );
+$m_by = array();
+foreach ( $merged as $r ) { $m_by[ $r['target_post_id'] ] = $r; }
+assert_eq( 2, count( $merged ), 'invented target id is never added' );
+assert_eq( 'local SEO service', $m_by[20]['anchor'], 'AI anchor accepted when it appears verbatim in the page' );
+assert_eq( 92, $m_by[20]['confidence'], 'AI confidence applied' );
+assert_eq( '/local-seo/', $m_by[20]['target_url'], 'verified target URL is preserved, never AI-invented' );
+assert_eq( 'seo audit', $m_by[10]['anchor'], 'AI anchor rejected when absent — deterministic anchor kept' );
+assert_true( $m_by[10]['confidence'] <= 92, 'endorsed-but-unverified anchor still merges confidence' );
+
+echo "\n== Opportunity Engine (scoring + explainability + confidence) ==\n";
+$signals = array(
+	'gsc' => array(
+		'connected'  => true,
+		'quick_wins' => array( array( 'query' => 'web design company', 'impressions' => 4821, 'clicks' => 20, 'position' => 8.7 ) ),
+		'untapped'   => array( array( 'query' => 'ecommerce web design', 'impressions' => 900, 'position' => 24 ) ),
+	),
+	'topical'  => array( 'has_map' => true, 'items' => array( array( 'title' => 'Local SEO Audits', 'pillar' => 'Local SEO', 'intent' => 'commercial', 'priority' => 'high', 'url' => '/local-seo-audits/' ) ) ),
+	'cannibal' => array( array( 'keyword' => 'local seo', 'pages' => array( array( 'post_id' => 1, 'title' => 'A', 'url' => '/a/' ), array( 'post_id' => 2, 'title' => 'B', 'url' => '/b/' ) ) ) ),
+	'orphans'  => array( array( 'post_id' => 9, 'title' => 'Orphan Page', 'url' => '/orphan/' ) ),
+	'thin'     => array( array( 'post_id' => 5, 'title' => 'Thin', 'url' => '/thin/', 'word_count' => 120 ) ),
+	'missing_meta' => array( array( 'post_id' => 6, 'title' => 'No Meta', 'url' => '/no-meta/' ) ),
+);
+$opps = SCC_Opportunity_Engine::compute( $signals );
+assert_true( count( $opps ) >= 6, 'opportunities produced from every signal source' );
+
+// Find the striking-distance opportunity.
+$sd = null; foreach ( $opps as $o ) { if ( 'striking_distance' === $o['type'] ) { $sd = $o; break; } }
+assert_true( is_array( $sd ), 'striking-distance opportunity exists' );
+assert_eq( 'verified', $sd['data_confidence'], 'GSC-derived opportunity is verified data' );
+$sum = 0; foreach ( $sd['factors'] as $f ) { $sum += (int) $f['points']; }
+assert_eq( min( 100, $sum ), $sd['score'], 'score equals the clamped sum of factor points (transparent)' );
+assert_true( $sd['confidence'] >= 80, 'verified data yields high confidence' );
+assert_true( strpos( $sd['reason'], '4,821' ) !== false || strpos( $sd['reason'], '4821' ) !== false, 'reason cites the real impression figure, not a fabricated one' );
+
+// Sorted by score desc.
+$sorted = true; for ( $i = 1; $i < count( $opps ); $i++ ) { if ( $opps[ $i ]['score'] > $opps[ $i - 1 ]['score'] ) { $sorted = false; break; } }
+assert_true( $sorted, 'opportunities are ranked by score descending' );
+
+// Without GSC, topical gaps are "estimated" (never presented as measured).
+$no_gsc = SCC_Opportunity_Engine::compute( array(
+	'gsc'     => array( 'connected' => false, 'quick_wins' => array(), 'untapped' => array() ),
+	'topical' => array( 'has_map' => true, 'items' => array( array( 'title' => 'X', 'pillar' => 'P', 'intent' => 'informational', 'priority' => 'medium' ) ) ),
+) );
+$mt = null; foreach ( $no_gsc as $o ) { if ( 'missing_topic' === $o['type'] ) { $mt = $o; break; } }
+assert_true( is_array( $mt ), 'missing-topic opportunity exists without GSC' );
+assert_eq( 'estimated', $mt['data_confidence'], 'AI topical gap is estimated when no GSC data backs it' );
+
+// Empty site → no opportunities, no errors, no fabricated data.
+assert_eq( 0, count( SCC_Opportunity_Engine::compute( array() ) ), 'empty signals produce zero opportunities (never fabricated)' );
+
+// Every opportunity has a stable id.
+$ids = array(); foreach ( $opps as $o ) { $ids[ $o['id'] ] = true; }
+assert_eq( count( $opps ), count( $ids ), 'each opportunity has a unique, stable id' );
+
+echo "\n== Content Decay Engine (confidence-thresholded) ==\n";
+$decay_pages = array(
+	// Real decay: strong baseline, clicks down 50%.
+	array( 'url' => '/local-seo/', 'post_id' => 3, 'title' => 'Local SEO', 'prev_clicks' => 200, 'curr_clicks' => 100, 'prev_impr' => 8000, 'curr_impr' => 5000, 'prev_pos' => 6.0, 'curr_pos' => 11.0, 'age_months' => 14 ),
+	// Noise: tiny baseline, big % swing — must NOT be flagged.
+	array( 'url' => '/tiny/', 'post_id' => 4, 'title' => 'Tiny', 'prev_clicks' => 3, 'curr_clicks' => 1, 'prev_impr' => 40, 'curr_impr' => 10, 'prev_pos' => 5, 'curr_pos' => 30 ),
+	// Stable page: no meaningful change — not decay.
+	array( 'url' => '/stable/', 'post_id' => 5, 'title' => 'Stable', 'prev_clicks' => 150, 'curr_clicks' => 148, 'prev_impr' => 6000, 'curr_impr' => 6100, 'prev_pos' => 4.0, 'curr_pos' => 4.1 ),
+	// Growing page: improving — never decay.
+	array( 'url' => '/growing/', 'post_id' => 6, 'title' => 'Growing', 'prev_clicks' => 100, 'curr_clicks' => 180, 'prev_impr' => 5000, 'curr_impr' => 9000, 'prev_pos' => 8.0, 'curr_pos' => 5.0 ),
+);
+$decayed = SCC_Content_Decay::analyze( $decay_pages );
+assert_eq( 1, count( $decayed ), 'only the genuinely decaying page is flagged (noise/stable/growing excluded)' );
+assert_eq( '/local-seo/', $decayed[0]['url'], 'the decaying page is identified' );
+$codes = array(); foreach ( $decayed[0]['causes'] as $c ) { $codes[] = $c['code']; }
+assert_true( in_array( 'clicks_down', $codes, true ), 'clicks-down cause detected' );
+assert_true( in_array( 'rankings_declining', $codes, true ), 'ranking-decline cause detected' );
+assert_true( in_array( 'stale', $codes, true ), 'staleness noted as a contributing cause' );
+assert_true( ! empty( $decayed[0]['refresh_plan'] ), 'a concrete refresh plan is produced' );
+assert_true( $decayed[0]['confidence'] >= 70, 'strong baseline yields solid confidence' );
+assert_eq( 0, count( SCC_Content_Decay::analyze( array() ) ), 'no pages → no decay (never fabricated)' );
+
+// Decay flows into the opportunity engine as a verified refresh_content opp.
+$opps_decay = SCC_Opportunity_Engine::compute( array( 'decay' => $decayed ) );
+$cd = null; foreach ( $opps_decay as $o ) { if ( 'content_decay' === $o['type'] ) { $cd = $o; break; } }
+assert_true( is_array( $cd ), 'decay produces a content_decay opportunity' );
+assert_eq( 'verified', $cd['data_confidence'], 'decay opportunity is verified (GSC-backed)' );
+assert_eq( 'refresh_content', $cd['action_type'], 'decay maps to a refresh action' );
+
+echo "\n== Search Intent Drift (GSC-only) ==\n";
+// Query wording classifier.
+assert_eq( 'informational', SCC_Intent_Drift::classify_intent( 'how to do local seo' ), 'how-to → informational' );
+assert_eq( 'commercial', SCC_Intent_Drift::classify_intent( 'best seo company' ), 'best/company → commercial' );
+assert_eq( 'commercial', SCC_Intent_Drift::classify_intent( 'seo services pricing' ), 'services/pricing → commercial' );
+assert_eq( 'local', SCC_Intent_Drift::classify_intent( 'seo agency near me' ), 'near me → local' );
+assert_eq( 'unspecified', SCC_Intent_Drift::classify_intent( 'tideandtype' ), 'brand term → unspecified' );
+
+// A page whose mix flips informational → commercial with a real baseline.
+$drift_pages = array(
+	array(
+		'url' => '/seo/', 'post_id' => 7, 'title' => 'SEO',
+		'prev_queries' => array(
+			array( 'query' => 'what is seo', 'impressions' => 600 ),
+			array( 'query' => 'how to learn seo', 'impressions' => 400 ),
+			array( 'query' => 'best seo company', 'impressions' => 100 ),
+		),
+		'curr_queries' => array(
+			array( 'query' => 'best seo company', 'impressions' => 700 ),
+			array( 'query' => 'seo services pricing', 'impressions' => 300 ),
+			array( 'query' => 'what is seo', 'impressions' => 100 ),
+		),
+	),
+	// Below baseline → ignored.
+	array(
+		'url' => '/tiny/', 'post_id' => 8, 'title' => 'Tiny',
+		'prev_queries' => array( array( 'query' => 'what is x', 'impressions' => 30 ) ),
+		'curr_queries' => array( array( 'query' => 'best x', 'impressions' => 40 ) ),
+	),
+	// Stable mix → not drift.
+	array(
+		'url' => '/stable/', 'post_id' => 9, 'title' => 'Stable',
+		'prev_queries' => array( array( 'query' => 'how to garden', 'impressions' => 800 ) ),
+		'curr_queries' => array( array( 'query' => 'how to garden tips', 'impressions' => 820 ) ),
+	),
+);
+$drifts = SCC_Intent_Drift::analyze( $drift_pages );
+assert_eq( 1, count( $drifts ), 'only the page with a real intent flip + baseline is flagged' );
+assert_eq( '/seo/', $drifts[0]['url'], 'the drifting page is identified' );
+assert_eq( 'informational', $drifts[0]['prev_dominant'], 'previous dominant intent was informational' );
+assert_eq( 'commercial', $drifts[0]['curr_dominant'], 'current dominant intent is commercial' );
+assert_true( $drifts[0]['confidence'] <= 85, 'intent classification is heuristic → capped confidence (never verified)' );
+assert_eq( 0, count( SCC_Intent_Drift::analyze( array() ) ), 'no pages → no drift (never fabricated)' );
+
+// Drift flows into the engine as a "partial"-confidence realign opportunity.
+$opps_drift = SCC_Opportunity_Engine::compute( array( 'intent_drift' => $drifts ) );
+$idd = null; foreach ( $opps_drift as $o ) { if ( 'intent_drift' === $o['type'] ) { $idd = $o; break; } }
+assert_true( is_array( $idd ), 'intent drift produces an opportunity' );
+assert_eq( 'partial', $idd['data_confidence'], 'intent-drift opportunity is partial (real data, heuristic labels)' );
+assert_eq( 'realign_intent', $idd['action_type'], 'intent drift maps to a realign action' );
+
+echo "\n== Page Optimizer (composed scorecard + prioritized fixes) ==\n";
+// compose(): unknown components excluded + renormalized.
+$po = SCC_Page_Optimizer::compose( array(
+	'content'          => array( 'known' => true, 'pct' => 100 ),
+	'technical'        => array( 'known' => true, 'pct' => 100 ),
+	'metadata'         => array( 'known' => true, 'pct' => 0 ),
+	'internal_linking' => array( 'known' => true, 'pct' => 100 ),
+	'schema'           => array( 'known' => true, 'pct' => 0 ),
+	'intent'           => array( 'known' => false, 'pct' => 0 ),
+	'gsc'              => array( 'known' => false, 'pct' => 0 ),
+) );
+// Known weights: content20 tech15 meta15 links15 schema15 = 80; earned =
+// 20*100+15*100+15*0+15*100+15*0 = 5000 → 5000/80 = 62.5 → 63.
+assert_eq( 63, $po['score'], 'score renormalizes over known components only' );
+$intent_known = null; foreach ( $po['components'] as $c ) { if ( 'intent' === $c['key'] ) { $intent_known = $c['known']; } }
+assert_eq( false, $intent_known, 'unmeasured component reported as not-known (n/a), not zero-scored' );
+$all_unknown = SCC_Page_Optimizer::compose( array() );
+assert_eq( 0, $all_unknown['score'], 'no known components → 0, never fabricated' );
+
+// build_recommendations(): prioritized, high severity first.
+$recs = SCC_Page_Optimizer::build_recommendations( array(
+	'has_title' => false, 'has_desc' => true, 'schema_valid' => false,
+	'thin' => true, 'word_count' => 120, 'is_orphan' => true, 'outbound_opps' => 0,
+	'decay' => true, 'drift' => false, 'missing_h1' => false, 'images_missing_alt' => 0,
+) );
+assert_true( count( $recs ) >= 4, 'multiple prioritized fixes produced' );
+assert_eq( 'high', $recs[0]['severity'], 'highest-severity fix is first' );
+$rkeys = array(); foreach ( $recs as $r ) { $rkeys[] = $r['action']; }
+assert_true( in_array( 'refresh_content', $rkeys, true ), 'decay → refresh_content fix' );
+assert_true( in_array( 'add_internal_links', $rkeys, true ), 'orphan → add_internal_links fix' );
+assert_true( in_array( 'schema', $rkeys, true ), 'no schema → schema fix' );
+$clean = SCC_Page_Optimizer::build_recommendations( array( 'has_title' => true, 'has_desc' => true, 'schema_valid' => true, 'thin' => false, 'is_orphan' => false, 'outbound_opps' => 0 ) );
+assert_eq( 0, count( $clean ), 'a well-optimized page yields no fixes' );
+
+echo "\n== Health Timeline (transparent site health) ==\n";
+$h = SCC_Health_Timeline::compute_health( array( 'analyzed' => 100, 'missing_meta' => 20, 'has_schema' => 50, 'thin_content' => 10, 'no_h1' => 0 ) );
+// metadata 80, schema 50, content 90, headings 100; weights 25/25/30/20 = 100.
+// (25*80 + 25*50 + 30*90 + 20*100)/100 = (2000+1250+2700+2000)/100 = 79.5 → 80.
+assert_eq( 80, $h['score'], 'health score is a transparent weighted blend of measured coverage' );
+$empty_h = SCC_Health_Timeline::compute_health( array( 'analyzed' => 0 ) );
+assert_eq( 0, $empty_h['score'], 'no analyzed pages → 0 health (never fabricated)' );
+$unknown = true; foreach ( $empty_h['components'] as $c ) { if ( $c['known'] ) { $unknown = false; } }
+assert_true( $unknown, 'with no data every component is not-known' );
+
+echo "\n== Experiments (correlation, not causation) ==\n";
+$pos = SCC_Experiments::evaluate_result(
+	array( 'available' => true, 'clicks' => 100, 'impressions' => 5000, 'position' => 9.0 ),
+	array( 'available' => true, 'clicks' => 140, 'impressions' => 6000, 'position' => 6.0 ),
+	28, gmdate( 'Y-m-d', time() - 40 * 86400 )
+);
+assert_eq( 'positive', $pos['verdict'], 'clicks up + position improved → positive correlation' );
+assert_eq( 'complete', $pos['status'], 'past the measurement window → complete' );
+assert_true( strpos( strtolower( $pos['detail'] ), 'causation' ) !== false, 'result explicitly disclaims causation' );
+$neg = SCC_Experiments::evaluate_result(
+	array( 'available' => true, 'clicks' => 100, 'impressions' => 5000, 'position' => 6.0 ),
+	array( 'available' => true, 'clicks' => 70, 'impressions' => 4000, 'position' => 9.0 ),
+	28, gmdate( 'Y-m-d', time() - 40 * 86400 )
+);
+assert_eq( 'negative', $neg['verdict'], 'clicks down + position worse → negative movement' );
+$nodata = SCC_Experiments::evaluate_result( array( 'available' => false ), array( 'available' => false ), 28, gmdate( 'Y-m-d' ) );
+assert_eq( 'no_data', $nodata['verdict'], 'no GSC data → cannot measure (not fabricated)' );
+
+echo "\n== Entity Graph ==\n";
+$eg = SCC_Entity_Graph::analyze( array(
+	'organization' => 'Tide & Type',
+	'services'     => array( 'Web Design', 'Local SEO' ),
+	'locations'    => array( 'Savannah', 'Daytona Beach' ),
+	'pages'        => array(
+		array( 'title' => 'Web Design Services', 'path' => '/web-design/' ),
+		array( 'title' => 'Local SEO', 'path' => '/local-seo/' ),
+		array( 'title' => 'Savannah', 'path' => '/savannah/' ),
+	),
+) );
+assert_true( ! empty( $eg['available'] ), 'entity graph built from configured data' );
+$gap_labels = array(); foreach ( $eg['gaps'] as $g ) { $gap_labels[] = $g['entity']; }
+assert_true( in_array( 'Daytona Beach', $gap_labels, true ), 'unsupported location surfaced as a gap' );
+assert_true( ! in_array( 'Web Design', $gap_labels, true ), 'supported service is not a gap' );
+assert_eq( false, SCC_Entity_Graph::analyze( array() )['available'], 'no business data → graph unavailable (never fabricated)' );
+
+echo "\n== Revenue-aware prioritization ==\n";
+$sig_rev = array(
+	'gsc' => array( 'connected' => true, 'quick_wins' => array( array( 'query' => 'best seo company', 'impressions' => 300, 'position' => 7 ) ), 'untapped' => array() ),
+	'value_weights' => array( 'enabled' => true, 'commercial' => 20, 'local' => 12, 'informational' => 0 ),
+);
+$rev_opps = SCC_Opportunity_Engine::compute( $sig_rev );
+$has_value = false; foreach ( $rev_opps[0]['factors'] as $f ) { if ( strpos( $f['label'], 'commercial value' ) !== false ) { $has_value = true; } }
+assert_true( $has_value, 'commercial query gains a business-value factor when revenue weighting is on' );
+$sig_norev = array( 'gsc' => array( 'connected' => true, 'quick_wins' => array( array( 'query' => 'best seo company', 'impressions' => 300, 'position' => 7 ) ), 'untapped' => array() ), 'value_weights' => array( 'enabled' => false ) );
+$norev = SCC_Opportunity_Engine::compute( $sig_norev );
+$has_value2 = false; foreach ( $norev[0]['factors'] as $f ) { if ( strpos( $f['label'], 'commercial value' ) !== false ) { $has_value2 = true; } }
+assert_eq( false, $has_value2, 'no value factor when revenue weighting is off' );
+
+echo "\n== AI visibility (honest) ==\n";
+$aiv = SCC_AI_Visibility::status();
+assert_eq( false, $aiv['connected'], 'no AI-visibility provider connected by default' );
+$all_unavail = true; foreach ( $aiv['providers'] as $p ) { if ( $p['connected'] ) { $all_unavail = false; } }
+assert_true( $all_unavail, 'every provider reports not-connected (no fabricated AI metrics)' );
+
+echo "\n== Automation modes ==\n";
+assert_eq( 'assisted', SCC_Action_Queue::automation_mode(), 'default automation mode is assisted' );
+assert_true( in_array( 'autopilot', SCC_Action_Queue::MODES, true ), 'autopilot is a valid mode' );
+
+echo "\n== Content Ideas (sanitize) ==\n";
+$ideas = SCC_Content_Ideas::sanitize_ideas( array( 'ideas' => array(
+	array( 'title' => 'Manufacturing SEO', 'meta_title' => 'Manufacturing SEO Services', 'meta_description' => 'Grow leads.', 'primary_keyword' => 'manufacturing seo', 'secondary_keywords' => array( 'industrial seo', '', 'factory marketing' ), 'intent' => 'commercial', 'page_type' => 'industry', 'recommended_url' => '/industries/manufacturing/', 'priority' => 'high', 'why' => 'Targets untapped industry demand.' ),
+	array( 'title' => '', 'page_type' => 'article' ), // dropped: no title.
+	array( 'title' => 'Weird', 'page_type' => 'nonsense', 'priority' => 'urgent' ), // type/priority normalized.
+) ) );
+assert_eq( 2, count( $ideas ), 'ideas without a title are dropped' );
+assert_eq( 'industry', $ideas[0]['page_type'], 'valid page_type kept' );
+assert_eq( 'high', $ideas[0]['priority'], 'valid priority kept' );
+assert_eq( array( 'industrial seo', 'factory marketing' ), $ideas[0]['secondary_keywords'], 'blank secondary keywords filtered' );
+assert_eq( 'article', $ideas[1]['page_type'], 'unknown page_type falls back to article' );
+assert_eq( 'medium', $ideas[1]['priority'], 'unknown priority falls back to medium' );
+
+echo "\n== Meta Editor (char status) ==\n";
+assert_eq( 'empty', SCC_Metadata::char_status( '', 30, 60 ), 'blank title flagged empty' );
+assert_eq( 'short', SCC_Metadata::char_status( 'Too short', 30, 60 ), 'under min flagged short' );
+assert_eq( 'good', SCC_Metadata::char_status( str_repeat( 'a', 45 ), 30, 60 ), 'within range is good' );
+assert_eq( 'long', SCC_Metadata::char_status( str_repeat( 'a', 80 ), 30, 60 ), 'over max flagged long' );
+
+echo "\n== Action Queue (safety) ==\n";
+assert_true( SCC_Action_Queue::is_safe( 'add_internal_links' ), 'add_internal_links is a safe auto action' );
+assert_true( SCC_Action_Queue::is_safe( 'fix_orphan' ), 'fix_orphan is a safe auto action' );
+assert_eq( false, SCC_Action_Queue::is_safe( 'create_page' ), 'create_page is NOT auto-executable (needs human)' );
+assert_eq( false, SCC_Action_Queue::is_safe( 'fix_cannibalization' ), 'cannibalization fix is NOT auto-executable' );
+assert_eq( false, SCC_Action_Queue::is_safe( 'improve_meta' ), 'meta change is NOT auto-executable (AI + review)' );
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";

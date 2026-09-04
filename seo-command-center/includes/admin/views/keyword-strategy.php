@@ -21,6 +21,7 @@ $val = function ( $inputs, $key ) {
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
+		<span class="scc-phase-badge">✦ <?php esc_html_e( 'AI-driven topical maps', 'seo-command-center' ); ?></span>
 		<h1><?php esc_html_e( 'Keyword Strategy', 'seo-command-center' ); ?></h1>
 		<p class="scc-sub"><?php esc_html_e( 'Describe the business and let the AI build a structured topical map — clusters, primary and supporting terms, intent, and recommended URLs. These are strategic recommendations, not measured search volume.', 'seo-command-center' ); ?></p>
 	</div>

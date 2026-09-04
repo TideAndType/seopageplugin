@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 
 	const DEFAULT_BASE    = 'http://localhost:1234/v1';
-	const DEFAULT_TIMEOUT = 120; // Local models can be slower to first token.
+	const DEFAULT_TIMEOUT = 300; // Local models can be slow; allow long generations.
 
 	/**
 	 * @inheritDoc

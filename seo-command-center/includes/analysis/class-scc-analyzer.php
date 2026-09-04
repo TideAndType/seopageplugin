@@ -37,12 +37,58 @@ class SCC_Analyzer {
 	public static function analyzable_post_types() {
 		$types = get_post_types( array( 'public' => true ), 'names' );
 		unset( $types['attachment'] );
+
+		// Drop page-builder / template / library post types — they are not real
+		// content and should never appear in content listings, the link graph,
+		// the topical map, or the meta editor.
+		$types = array_filter( $types, function ( $name ) {
+			return ! self::is_template_post_type( $name );
+		} );
+
 		/**
 		 * Filter the analyzable post types.
 		 *
 		 * @param string[] $types Post type names.
 		 */
 		return apply_filters( 'scc_analyzable_post_types', array_values( $types ) );
+	}
+
+	/**
+	 * Whether a post-type name is a page-builder / template / library type
+	 * (Elementor, Pixfort, Brizy, WP block templates, popups, mega menus, etc.)
+	 * rather than genuine page/post content. Filterable.
+	 *
+	 * @param string $name Post type name.
+	 * @return bool
+	 */
+	public static function is_template_post_type( $name ) {
+		$name = strtolower( (string) $name );
+
+		$deny = array(
+			'elementor_library', 'e-landing-page', 'e-floating-buttons',
+			'pixfort_template', 'pix_template',
+			'brizy_template', 'fl-builder-template', 'fusion_template', 'fusion_element',
+			'ct_template', 'oxy_user_library', 'cornerstone_template',
+			'wp_template', 'wp_template_part', 'wp_global_styles', 'wp_navigation', 'wp_block',
+			'jet-menu', 'jet-popup', 'jet-theme-core', 'jet-engine',
+			'themer_layout', 'mega_menu', 'nav_menu_item', 'custom_css', 'customize_changeset',
+			'popup', 'popupbuilder', 'sticky', 'templatera',
+		);
+		if ( in_array( $name, $deny, true ) ) {
+			return true;
+		}
+		// Common markers in builder/template CPT names.
+		if ( preg_match( '/(^|_|-)(template|library|layout|popup|mega[_-]?menu|landing[_-]?page|block[_-]?template|header|footer|megamenu)($|_|-)/', $name ) ) {
+			return true;
+		}
+
+		/**
+		 * Filter whether a post type is treated as a template/builder type.
+		 *
+		 * @param bool   $is_template Whether it is a template type.
+		 * @param string $name        Post type name.
+		 */
+		return (bool) apply_filters( 'scc_is_template_post_type', false, $name );
 	}
 
 	/**

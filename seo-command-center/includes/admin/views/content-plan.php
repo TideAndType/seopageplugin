@@ -16,7 +16,7 @@ $statuses = isset( $data['statuses'] ) ? $data['statuses'] : array();
 <div class="wrap scc-wrap">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'Content Plan', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Your recommended pages and articles. Approve the ones you want, then generate them (Phase 3). Nothing is created or published automatically.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Your recommended pages and articles. Click “Brief” to see an outline, or “Generate draft” to create it — every page is saved as a WordPress draft for your review. Nothing is published automatically.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<div class="scc-card">
@@ -55,7 +55,14 @@ $statuses = isset( $data['statuses'] ) ? $data['statuses'] : array();
 									<?php endforeach; ?>
 								</select>
 							</td>
-							<td><button class="button-link scc-plan-delete" aria-label="<?php esc_attr_e( 'Delete', 'seo-command-center' ); ?>">&times;</button></td>
+							<td class="scc-plan-actions">
+								<button class="button button-small scc-brief-btn"><?php esc_html_e( 'Brief', 'seo-command-center' ); ?></button>
+								<button class="button button-small button-primary scc-generate-btn"><?php esc_html_e( 'Generate draft', 'seo-command-center' ); ?></button>
+								<button class="button-link scc-plan-delete" aria-label="<?php esc_attr_e( 'Delete', 'seo-command-center' ); ?>">&times;</button>
+							</td>
+						</tr>
+						<tr class="scc-brief-row" hidden>
+							<td colspan="9"><div class="scc-brief-panel"></div></td>
 						</tr>
 					<?php endforeach; ?>
 				</tbody>

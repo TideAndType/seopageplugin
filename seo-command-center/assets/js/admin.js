@@ -470,7 +470,7 @@
 						autoBtn.disabled = false;
 						var msg = err && err.message;
 						if ( ! msg || /something went wrong|gateway|cloudflare|timed? ?out|HTTP 50[0-9]|HTTP 52[0-9]|<html/i.test( msg ) ) {
-							msg = 'Couldn’t start the build. First confirm your AI provider works: go to API Connections and click “Test LM Studio” (or Test Gemini). If that fails, fix the server URL/tunnel there. If it passes, try again, or route the topical map to Gemini under Settings → AI.';
+							msg = 'The request was cut off before the map finished — the model usually took longer than your host allows for one request. The map may have finished and saved anyway: reload this page in a minute to check. Otherwise pick a lower “Depth” (Compact) and try again.';
 						}
 						setStatus( autoStatus, msg, 'is-error' );
 					} );
@@ -578,7 +578,7 @@
 	}
 
 	// ---- One-click content briefs (topical map) ------------------------
-	function renderBrief( brief ) {
+	function renderTopicBrief( brief ) {
 		function esc( s ) {
 			var d = document.createElement( 'div' );
 			d.textContent = s == null ? '' : String( s );
@@ -615,6 +615,41 @@
 		return html || '<p class="scc-note">No brief content returned.</p>';
 	}
 
+	// ---- Search Console quick wins → create Content Plan pages ----------
+	function bindGscQuickWins() {
+		var table = document.getElementById( 'scc-gsc-wins-table' );
+		if ( ! table ) {
+			return;
+		}
+		table.addEventListener( 'click', function ( e ) {
+			var btn = e.target.closest ? e.target.closest( '.scc-gsc-plan-btn' ) : null;
+			if ( ! btn ) {
+				return;
+			}
+			var q = btn.getAttribute( 'data-query' ) || '';
+			var cell = btn.parentNode;
+			var status = cell ? cell.querySelector( '.scc-gsc-plan-status' ) : null;
+			btn.disabled = true;
+			setStatus( status, 'Adding…' );
+			request( '/content-plan', { method: 'POST', data: {
+				title: q,
+				primary_keyword: q,
+				page_type: 'article',
+				intent: 'informational',
+				priority: 'high',
+				status: 'recommended'
+			} } )
+				.then( function () {
+					btn.textContent = 'Added ✓';
+					setStatus( status, 'In your Content Plan.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
 	function bindTopicBriefs() {
 		var buttons = document.querySelectorAll( '.scc-brief-btn' );
 		if ( ! buttons.length ) {
@@ -638,7 +673,7 @@
 						btn.disabled = false;
 						var brief = res.data && res.data.brief;
 						if ( out && brief ) {
-							out.innerHTML = renderBrief( brief );
+							out.innerHTML = renderTopicBrief( brief );
 							out.hidden = false;
 						}
 						setStatus( status, 'Brief ready.', 'is-ok' );
@@ -660,6 +695,35 @@
 		var status    = document.getElementById( 'scc-seed-status' );
 		var selectAll = document.getElementById( 'scc-seed-selectall' );
 		var countEl   = document.getElementById( 'scc-seed-count' );
+
+		// "Only show gaps" — collapse existing pages AND the now-empty groups /
+		// pillars / "Supporting articles" labels, so no blank lines remain.
+		var gapsOnly = document.getElementById( 'scc-arch-gaps-only' );
+		if ( gapsOnly ) {
+			var wrap = gapsOnly.closest( '.scc-wrap' ) || document.body;
+			var applyGaps = function ( on ) {
+				// 1) Individual existing rows.
+				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-node' ), function ( n ) {
+					n.style.display = ( on && n.classList.contains( 'is-existing' ) ) ? 'none' : '';
+				} );
+				var hasVisibleNode = function ( container ) {
+					return Array.prototype.some.call( container.querySelectorAll( '.scc-arch-node' ), function ( n ) {
+						return n.style.display !== 'none';
+					} );
+				};
+				// 2) Child/article groups with no remaining gap rows (hides the label too).
+				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-children, .scc-arch-articles' ), function ( g ) {
+					g.style.display = ( on && ! hasVisibleNode( g ) ) ? 'none' : '';
+				} );
+				// 3) Whole pillars where nothing is a gap.
+				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-pillar' ), function ( p ) {
+					p.style.display = ( on && ! hasVisibleNode( p ) ) ? 'none' : '';
+				} );
+			};
+			gapsOnly.addEventListener( 'change', function () {
+				applyGaps( gapsOnly.checked );
+			} );
+		}
 
 		function picks() {
 			return Array.prototype.slice.call( document.querySelectorAll( '.scc-seed-pick' ) );
@@ -745,6 +809,10 @@
 			}
 			request( '/content-plan/' + id, { method: 'DELETE' } )
 				.then( function () {
+					var briefRow = row.nextElementSibling;
+					if ( briefRow && briefRow.classList.contains( 'scc-brief-row' ) ) {
+						briefRow.parentNode.removeChild( briefRow );
+					}
 					row.parentNode.removeChild( row );
 					setStatus( status, 'Removed.', 'is-ok' );
 				} )
@@ -803,11 +871,16 @@
 	}
 
 	function bindGenerate() {
-		var table = document.getElementById( 'scc-generate-table' );
+		// The generation actions live on both the dedicated Generate page and,
+		// for convenience, directly on the Content Plan table.
+		bindGenerateTable( document.getElementById( 'scc-generate-table' ), document.getElementById( 'scc-generate-msg' ) );
+		bindGenerateTable( document.getElementById( 'scc-plan-table' ), document.getElementById( 'scc-plan-status-msg' ) );
+	}
+
+	function bindGenerateTable( table, msg ) {
 		if ( ! table ) {
 			return;
 		}
-		var msg = document.getElementById( 'scc-generate-msg' );
 
 		table.addEventListener( 'click', function ( e ) {
 			var isBrief = e.target.classList.contains( 'scc-brief-btn' );
@@ -835,39 +908,61 @@
 						e.target.disabled = false;
 					} );
 			} else {
-				setStatus( msg, 'Generating draft… this can take up to a minute.' );
+				setStatus( msg, 'Generating draft… this runs on the server and can take a minute or two with a local model. You can leave this page open.' );
 				var statusCell = row.querySelector( '.scc-gen-status' );
 				if ( statusCell ) {
 					statusCell.textContent = 'generating';
 				}
-				request( '/generate', { method: 'POST', data: { entry_id: id } } )
-					.then( function ( res ) {
-						var d = res.data || {};
-						if ( statusCell ) {
-							statusCell.textContent = d.status || 'draft';
-						}
-						if ( panel && briefRow ) {
-							briefRow.hidden = false;
-							panel.innerHTML = '';
-							var score = ( d.score && d.score.score ) || 0;
+				var settled = false;
+				function showDone( d ) {
+					if ( settled ) { return; }
+					settled = true;
+					if ( statusCell ) { statusCell.textContent = d.status || 'draft'; }
+					if ( panel && briefRow ) {
+						briefRow.hidden = false;
+						panel.innerHTML = '';
+						var score = ( d.score && d.score.score ) || 0;
+						if ( score ) {
 							panel.appendChild( el( 'p', 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) );
-							if ( d.edit_url ) {
-								var a = el( 'a', 'Edit draft in WordPress' );
-								a.href = d.edit_url;
-								a.className = 'button button-primary';
-								panel.appendChild( a );
-							}
+						} else {
+							panel.appendChild( el( 'p', 'Draft created and saved as a WordPress draft.' ) );
 						}
-						setStatus( msg, 'Draft created.', 'is-ok' );
-						e.target.disabled = false;
-					} )
-					.catch( function ( err ) {
-						if ( statusCell ) {
-							statusCell.textContent = 'failed';
+						if ( d.edit_url ) {
+							var a = el( 'a', 'Edit draft in WordPress' );
+							a.href = d.edit_url;
+							a.className = 'button button-primary';
+							panel.appendChild( a );
 						}
-						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
-						e.target.disabled = false;
-					} );
+					}
+					setStatus( msg, 'Draft created.', 'is-ok' );
+					e.target.disabled = false;
+				}
+
+				// Fire the generation. It runs server-side with ignore_user_abort,
+				// so the draft finishes and saves even if this connection is cut.
+				request( '/generate', { method: 'POST', data: { entry_id: id } } )
+					.then( function ( res ) { showDone( res.data || {} ); } )
+					.catch( function () { /* rely on polling — the draft may still be saving */ } );
+
+				// Poll until the plan entry gets its post_id (generation complete).
+				var started = Date.now();
+				( function poll() {
+					if ( settled || Date.now() - started > 12 * 60 * 1000 ) {
+						if ( ! settled ) {
+							if ( statusCell ) { statusCell.textContent = 'unknown'; }
+							setStatus( msg, 'Still working (or the model stalled). Check Posts/Pages → Drafts; if nothing appears, try a shorter word count or a faster model.', 'is-error' );
+							e.target.disabled = false;
+						}
+						return;
+					}
+					request( '/content-plan/gen-status?id=' + encodeURIComponent( id ), { method: 'GET' } )
+						.then( function ( res ) {
+							var d = res.data || {};
+							if ( d.done ) { showDone( d ); return; }
+							window.setTimeout( poll, 4000 );
+						} )
+						.catch( function () { window.setTimeout( poll, 5000 ); } );
+				} )();
 			}
 		} );
 	}
@@ -914,11 +1009,33 @@
 	function bindInternalLinks() {
 		var msg = document.getElementById( 'scc-links-msg' );
 
+		// AI-assisted linking toggle (persists to settings).
+		var aiToggle = document.getElementById( 'scc-links-ai' );
+		if ( aiToggle ) {
+			var aiNote = document.getElementById( 'scc-links-ai-note' );
+			aiToggle.addEventListener( 'change', function () {
+				var on = aiToggle.checked;
+				aiToggle.disabled = true;
+				request( '/settings', { method: 'POST', data: { settings: { link_ai_enabled: on ? 1 : 0 } } } )
+					.then( function () {
+						aiToggle.disabled = false;
+						if ( aiNote ) { aiNote.hidden = ! on; }
+						setStatus( msg, on ? 'AI-assisted linking enabled.' : 'AI-assisted linking disabled.', 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						aiToggle.disabled = false;
+						aiToggle.checked = ! on;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
 		var scanBtn = document.getElementById( 'scc-links-scan' );
 		if ( scanBtn ) {
 			scanBtn.addEventListener( 'click', function () {
 				scanBtn.disabled = true;
-				setStatus( msg, 'Indexing and scanning the site… this can take a moment.' );
+				var aiOn = aiToggle && aiToggle.checked;
+				setStatus( msg, aiOn ? 'Scanning with AI — reading each page… this can take a while.' : 'Indexing and scanning the site… this can take a moment.' );
 				request( '/links/scan', { method: 'POST' } )
 					.then( function ( res ) {
 						var n = ( res.data && res.data.opportunities ) || 0;
@@ -1098,6 +1215,747 @@
 		} );
 	}
 
+	// ---- Competitor content-gap map ------------------------------------
+	function bindCompetitorGaps() {
+		var btn = document.getElementById( 'scc-comp-go' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-comp-status' );
+		var out = document.getElementById( 'scc-comp-results' );
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+
+		function addToPlan( gap, button ) {
+			button.disabled = true;
+			button.textContent = 'Adding…';
+			request( '/content-plan', {
+				method: 'POST',
+				data: {
+					title: gap.title,
+					url: gap.recommended_url || '',
+					primary_keyword: gap.primary_keyword || '',
+					intent: gap.intent || '',
+					page_type: gap.page_type || 'article',
+					priority: gap.priority || 'medium',
+					status: 'recommended'
+				}
+			} ).then( function () {
+				button.textContent = 'Added to plan ✓';
+				button.classList.add( 'button-disabled' );
+			} ).catch( function ( err ) {
+				button.disabled = false;
+				button.textContent = 'Add to plan';
+				setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+			} );
+		}
+
+		function render( res ) {
+			var data = res.data || {};
+			out.innerHTML = '';
+			out.hidden = false;
+
+			// Competitors summary.
+			var comps = data.competitors || [];
+			var cCard = el( 'div', null, 'scc-card' );
+			cCard.appendChild( el( 'h2', 'Competitors analyzed' ) );
+			var cList = el( 'ul', null, 'scc-options' );
+			comps.forEach( function ( c ) {
+				var li = el( 'li' );
+				if ( c.error ) {
+					li.innerHTML = '<strong>' + esc( c.url ) + '</strong> — <span class="scc-flag scc-flag--prio-high">could not read: ' + esc( c.error ) + '</span>';
+				} else {
+					li.innerHTML = '<strong>' + esc( c.title || c.url ) + '</strong> <span class="scc-note">' + esc( c.url ) + '</span> — read ' + ( ( c.headings || [] ).length ) + ' headings, ~' + ( c.word_count || 0 ) + ' words of content';
+				}
+				cList.appendChild( li );
+			} );
+			cCard.appendChild( cList );
+			if ( data.notes ) {
+				cCard.appendChild( el( 'p', data.notes, 'scc-note' ) );
+			}
+			out.appendChild( cCard );
+
+			// Gap map.
+			var gaps = data.gaps || [];
+			var gCard = el( 'div', null, 'scc-card' );
+			var head = el( 'div', null, 'scc-card__head' );
+			head.appendChild( el( 'h2', 'Content gaps to close (' + gaps.length + ')' ) );
+			gCard.appendChild( head );
+
+			if ( ! gaps.length ) {
+				gCard.appendChild( el( 'p', 'No clear gaps found — your site already covers what these competitors do. Try more or different competitor pages.', 'scc-note' ) );
+				out.appendChild( gCard );
+				return;
+			}
+
+			var table = document.createElement( 'table' );
+			table.className = 'widefat striped scc-table';
+			table.innerHTML = '<thead><tr>' +
+				'<th>Page to create</th><th>Primary keyword</th><th>Intent</th>' +
+				'<th>Why</th><th>Priority</th><th></th></tr></thead>';
+			var tbody = document.createElement( 'tbody' );
+			gaps.forEach( function ( g ) {
+				var tr = document.createElement( 'tr' );
+				tr.innerHTML =
+					'<td><strong>' + esc( g.title ) + '</strong>' + ( g.recommended_url ? '<br><code>' + esc( g.recommended_url ) + '</code>' : '' ) + '</td>' +
+					'<td>' + esc( g.primary_keyword || '' ) + '</td>' +
+					'<td><span class="scc-flag">' + esc( g.intent || '' ) + '</span></td>' +
+					'<td class="scc-note">' + esc( g.why || '' ) + '</td>' +
+					'<td><span class="scc-flag scc-flag--prio-' + esc( g.priority || 'medium' ) + '">' + esc( g.priority || 'medium' ) + '</span></td>' +
+					'<td></td>';
+				var addBtn = el( 'button', 'Add to plan', 'button button-small button-primary' );
+				addBtn.addEventListener( 'click', function () { addToPlan( g, addBtn ); } );
+				tr.lastChild.appendChild( addBtn );
+				tbody.appendChild( tr );
+			} );
+			table.appendChild( tbody );
+			gCard.appendChild( table );
+			out.appendChild( gCard );
+		}
+
+		btn.addEventListener( 'click', function () {
+			var raw = ( document.getElementById( 'scc-comp-urls' ) || {} ).value || '';
+			var urls = raw.split( /[\r\n,]+/ ).map( function ( s ) { return s.trim(); } ).filter( Boolean );
+			if ( ! urls.length ) {
+				setStatus( status, 'Add at least one competitor URL.', 'is-error' );
+				return;
+			}
+			btn.disabled = true;
+			setStatus( status, 'Reading competitors and mapping gaps… this can take up to a minute.' );
+			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls } } )
+				.then( function ( res ) {
+					btn.disabled = false;
+					setStatus( status, 'Done.', 'is-ok' );
+					render( res );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
+	}
+
+	// ---- Intelligence layer: "What should I do next?" -----------------
+	function bindOpportunities() {
+		// Present on both the Dashboard ("What should I do next?") and the
+		// dedicated Action Queue screen.
+		if ( ! document.getElementById( 'scc-opps-refresh' ) && ! document.getElementById( 'scc-opps-list' ) ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-opps-msg' );
+
+		var refresh = document.getElementById( 'scc-opps-refresh' );
+		if ( refresh ) {
+			refresh.addEventListener( 'click', function () {
+				refresh.disabled = true;
+				setStatus( msg, 'Recomputing opportunities…' );
+				request( '/opportunities/refresh', { method: 'POST' } )
+					.then( function () {
+						setStatus( msg, 'Updated. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						refresh.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		var list = document.getElementById( 'scc-opps-list' );
+		if ( list ) {
+			list.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( '.scc-opp' );
+				if ( ! row ) {
+					return;
+				}
+				var oid = row.getAttribute( 'data-opp-id' );
+				if ( e.target.classList.contains( 'scc-opp-approve' ) ) {
+					e.target.disabled = true;
+					setStatus( msg, 'Adding to the action queue…' );
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'approved' } } )
+						.then( function () {
+							e.target.textContent = 'Added ✓';
+							setStatus( msg, 'Added to the action queue.', 'is-ok' );
+						} )
+						.catch( function ( err ) {
+							e.target.disabled = false;
+							setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+						} );
+				} else if ( e.target.classList.contains( 'scc-opp-dismiss' ) ) {
+					row.style.opacity = '0.4';
+					// Promote as dismissed so it stays out of the queue.
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'dismissed' } } )
+						.then( function () { row.parentNode.removeChild( row ); } )
+						.catch( function () { row.style.opacity = '1'; } );
+				}
+			} );
+		}
+	}
+
+	// ---- Action Queue screen (lifecycle + Fix Everything Safe) --------
+	function bindActionQueue() {
+		var table = document.getElementById( 'scc-queue-table' );
+		var fixBtn = document.getElementById( 'scc-fix-safe' );
+		var msg = document.getElementById( 'scc-queue-msg' );
+
+		if ( fixBtn ) {
+			fixBtn.addEventListener( 'click', function () {
+				if ( ! window.confirm( 'Run all safe, deterministic actions now? These are reversible (internal-link insertions) — no content is edited, published, or deleted.' ) ) {
+					return;
+				}
+				fixBtn.disabled = true;
+				setStatus( msg, 'Running safe actions…' );
+				request( '/actions/fix-safe', { method: 'POST' } )
+					.then( function ( res ) {
+						var d = res.data || {};
+						setStatus( msg, ( d.executed || 0 ) + ' run, ' + ( d.failed || 0 ) + ' failed. Reloading…', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						fixBtn.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		if ( ! table ) {
+			return;
+		}
+		table.addEventListener( 'click', function ( e ) {
+			var row = e.target.closest( 'tr' );
+			if ( ! row ) {
+				return;
+			}
+			var id = row.getAttribute( 'data-id' );
+			var statusCell = row.querySelector( '.scc-q-status' );
+
+			function patch( body, done ) {
+				e.target.disabled = true;
+				request( '/actions/' + id, { method: 'PUT', data: body } )
+					.then( function ( res ) {
+						var a = ( res.data && res.data.action ) || {};
+						if ( statusCell && a.status ) { statusCell.textContent = a.status; }
+						setStatus( msg, done || 'Updated.', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						e.target.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			}
+
+			if ( e.target.classList.contains( 'scc-q-approve' ) ) {
+				patch( { status: 'approved' }, 'Approved.' );
+			} else if ( e.target.classList.contains( 'scc-q-dismiss' ) ) {
+				patch( { status: 'dismissed' }, 'Dismissed.' );
+			} else if ( e.target.classList.contains( 'scc-q-snooze' ) ) {
+				patch( { status: 'snoozed', days: 14 }, 'Snoozed for 14 days.' );
+			} else if ( e.target.classList.contains( 'scc-q-execute' ) ) {
+				if ( ! window.confirm( 'Run this safe action now? It is reversible from the change history.' ) ) {
+					return;
+				}
+				e.target.disabled = true;
+				setStatus( msg, 'Running…' );
+				request( '/actions/' + id + '/execute', { method: 'POST' } )
+					.then( function ( res ) {
+						var r = ( res.data && res.data.result ) || {};
+						setStatus( msg, r.message || 'Done.', 'is-ok' );
+						window.location.reload();
+					} )
+					.catch( function ( err ) {
+						e.target.disabled = false;
+						setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			}
+		} );
+	}
+
+	// ---- Content Ideas (ask → suggestions → generate) -----------------
+	function bindContentIdeas() {
+		var go = document.getElementById( 'scc-ideas-go' );
+		if ( ! go ) {
+			return;
+		}
+		var qEl = document.getElementById( 'scc-ideas-q' );
+		var countEl = document.getElementById( 'scc-ideas-count' );
+		var msg = document.getElementById( 'scc-ideas-msg' );
+		var out = document.getElementById( 'scc-ideas-results' );
+		var lastQuestion = '';
+		var lastIdeas = [];
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+
+		Array.prototype.forEach.call( document.querySelectorAll( '.scc-idea-example' ), function ( b ) {
+			b.addEventListener( 'click', function () { qEl.value = b.textContent; qEl.focus(); } );
+		} );
+
+		function planData( idea ) {
+			return {
+				title: idea.title,
+				url: idea.recommended_url || '',
+				primary_keyword: idea.primary_keyword || '',
+				secondary: idea.secondary_keywords || [],
+				intent: idea.intent || '',
+				page_type: idea.page_type || 'article',
+				priority: idea.priority || 'medium',
+				status: 'recommended'
+			};
+		}
+
+		// Create the plan entry, then generate a draft, polling until it lands.
+		function generateDraft( idea, statusEl, btn ) {
+			btn.disabled = true;
+			setStatus( statusEl, 'Adding to plan…' );
+			var entryId = 0;
+			request( '/content-plan', { method: 'POST', data: planData( idea ) } )
+				.then( function ( res ) {
+					entryId = ( res.data && res.data.id ) || 0;
+					if ( ! entryId ) { throw new Error( 'Could not create the plan entry.' ); }
+					setStatus( statusEl, 'Generating draft… this can take up to a minute.' );
+					// Fire generation; if the gateway drops it, polling still catches the draft.
+					request( '/generate', { method: 'POST', data: { entry_id: entryId } } ).catch( function () {} );
+					return poll( entryId, 0 );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( statusEl, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+
+			function poll( id, tries ) {
+				return request( '/content-plan/gen-status?id=' + id, { method: 'GET' } ).then( function ( res ) {
+					var d = res.data || {};
+					if ( d.done && d.edit_url ) {
+						btn.textContent = 'Draft ready';
+						statusEl.innerHTML = 'Draft created — <a href="' + esc( d.edit_url ) + '">edit it</a>.';
+						statusEl.className = 'scc-inline-status is-ok';
+						return;
+					}
+					if ( tries >= 24 ) {
+						btn.disabled = false;
+						setStatus( statusEl, 'Still generating — check the Publishing Queue shortly.', 'is-ok' );
+						return;
+					}
+					return new Promise( function ( r ) { setTimeout( r, 4000 ); } ).then( function () { return poll( id, tries + 1 ); } );
+				} );
+			}
+		}
+
+		function render( res ) {
+			var d = res.data || {};
+			var ideas = d.ideas || [];
+			lastIdeas = ideas;
+			out.innerHTML = '';
+			out.hidden = false;
+			var head = el( 'div', null, 'scc-card' );
+			var grounded = ( d.grounded && d.grounded.gsc ) ? 'grounded in your real pages + Search Console demand' : 'grounded in your real pages';
+			head.appendChild( el( 'p', ideas.length + ' page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			if ( d.notes ) { head.appendChild( el( 'p', d.notes, 'scc-note' ) ); }
+
+			// Refine bar — adjust or extend this set with a follow-up instruction.
+			var refine = el( 'div', null, 'scc-refine' );
+			var chips = [ 'Add 5 more', 'Make them more local', 'Focus on commercial intent', 'Fewer, stronger ideas', 'More informational / blog' ];
+			var chipRow = el( 'div', null, 'scc-refine__chips' );
+			chips.forEach( function ( c ) {
+				var b = el( 'button', c, 'button button-small scc-refine-chip' );
+				b.addEventListener( 'click', function () { rInput.value = c; runRefine(); } );
+				chipRow.appendChild( b );
+			} );
+			var rWrap = el( 'div', null, 'scc-refine__row' );
+			var rInput = document.createElement( 'input' );
+			rInput.type = 'text'; rInput.className = 'regular-text'; rInput.placeholder = 'Refine these ideas… (e.g. more local, add 5, commercial only)';
+			var rBtn = el( 'button', 'Refine', 'button button-small button-primary' );
+			var rStatus = el( 'span', '', 'scc-inline-status' );
+			function runRefine() {
+				var instr = ( rInput.value || '' ).trim();
+				if ( ! instr ) { setStatus( rStatus, 'Type a refinement first.', 'is-error' ); return; }
+				rBtn.disabled = true;
+				setStatus( rStatus, 'Refining…' );
+				run( { question: lastQuestion, count: ( countEl && countEl.value ) || 8, refine: instr, previous: lastIdeas }, rStatus, function () { rBtn.disabled = false; } );
+			}
+			rBtn.addEventListener( 'click', runRefine );
+			rInput.addEventListener( 'keydown', function ( e ) { if ( e.key === 'Enter' ) { runRefine(); } } );
+			rWrap.appendChild( rInput ); rWrap.appendChild( rBtn ); rWrap.appendChild( rStatus );
+			refine.appendChild( el( 'div', 'Refine this set:', 'scc-label' ) );
+			refine.appendChild( chipRow );
+			refine.appendChild( rWrap );
+			head.appendChild( refine );
+
+			out.appendChild( head );
+
+			ideas.forEach( function ( idea ) {
+				var card = el( 'div', null, 'scc-card scc-idea' );
+				card.innerHTML =
+					'<div class="scc-idea__head"><strong>' + esc( idea.title ) + '</strong>' +
+					' <span class="scc-flag">' + esc( idea.page_type ) + '</span>' +
+					' <span class="scc-flag scc-flag--prio-' + esc( idea.priority ) + '">' + esc( idea.priority ) + '</span>' +
+					' <span class="scc-flag">' + esc( idea.intent ) + '</span></div>' +
+					'<div class="scc-idea__meta"><span class="scc-label">Meta title</span> ' + esc( idea.meta_title || '' ) + ' <span class="scc-note">(' + ( idea.meta_title || '' ).length + ')</span></div>' +
+					'<div class="scc-idea__meta"><span class="scc-label">Meta description</span> ' + esc( idea.meta_description || '' ) + '</div>' +
+					'<div class="scc-idea__kw"><span class="scc-label">Keyword</span> <code>' + esc( idea.primary_keyword || '' ) + '</code>' +
+					( ( idea.secondary_keywords || [] ).length ? ' <span class="scc-note">+ ' + esc( ( idea.secondary_keywords || [] ).join( ', ' ) ) + '</span>' : '' ) + '</div>' +
+					( idea.recommended_url ? '<div class="scc-note"><code>' + esc( idea.recommended_url ) + '</code></div>' : '' ) +
+					( idea.why ? '<div class="scc-idea__why">' + esc( idea.why ) + '</div>' : '' );
+
+				var actions = el( 'div', null, 'scc-idea__actions' );
+				var add = el( 'button', 'Add to Content Plan', 'button button-small' );
+				var gen = el( 'button', '✨ Generate draft', 'button button-small button-primary' );
+				var st = el( 'span', '', 'scc-inline-status' );
+				add.addEventListener( 'click', function () {
+					add.disabled = true;
+					setStatus( st, 'Adding…' );
+					request( '/content-plan', { method: 'POST', data: planData( idea ) } )
+						.then( function () { add.textContent = 'Added ✓'; setStatus( st, 'Added to Content Plan.', 'is-ok' ); } )
+						.catch( function ( err ) { add.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} );
+				gen.addEventListener( 'click', function () { generateDraft( idea, st, gen ); } );
+				actions.appendChild( add );
+				actions.appendChild( gen );
+				actions.appendChild( st );
+				card.appendChild( actions );
+				out.appendChild( card );
+			} );
+		}
+
+		// Shared runner for the initial ask and refinements.
+		function run( data, statusEl, done ) {
+			request( '/ideas', { method: 'POST', data: data } )
+				.then( function ( res ) {
+					if ( done ) { done(); }
+					setStatus( statusEl, 'Done.', 'is-ok' );
+					render( res );
+					out.scrollIntoView( { behavior: 'smooth', block: 'start' } );
+				} )
+				.catch( function ( err ) {
+					if ( done ) { done(); }
+					setStatus( statusEl, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		}
+
+		go.addEventListener( 'click', function () {
+			var q = ( qEl.value || '' ).trim();
+			if ( ! q ) { setStatus( msg, 'Type what you want ideas for.', 'is-error' ); return; }
+			lastQuestion = q;
+			go.disabled = true;
+			setStatus( msg, 'Thinking about the best SEO pages for you…' );
+			run( { question: q, count: ( countEl && countEl.value ) || 8 }, msg, function () { go.disabled = false; } );
+		} );
+	}
+
+	// ---- Meta Editor (bulk title/description editing) -----------------
+	function bindMetaEditor() {
+		var list = document.getElementById( 'scc-meta-list' );
+		if ( ! list ) {
+			return;
+		}
+		var msg = document.getElementById( 'scc-meta-msg' );
+		var search = document.getElementById( 'scc-meta-search' );
+		var prev = document.getElementById( 'scc-meta-prev' );
+		var next = document.getElementById( 'scc-meta-next' );
+		var info = document.getElementById( 'scc-meta-pageinfo' );
+		var paged = 1;
+		var pages = 1;
+		var timer = null;
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = s == null ? '' : String( s );
+			return d.innerHTML;
+		}
+		function counterClass( len, min, max ) {
+			if ( len === 0 ) { return 'is-empty'; }
+			if ( len < min ) { return 'is-short'; }
+			if ( len > max ) { return 'is-long'; }
+			return 'is-good';
+		}
+		function bindCounter( inp, out, min, max ) {
+			function upd() {
+				var len = ( inp.value || '' ).length;
+				out.textContent = len;
+				out.className = 'scc-meta-count ' + counterClass( len, min, max );
+			}
+			inp.addEventListener( 'input', upd );
+			upd();
+		}
+
+		function render( res ) {
+			var d = res.data || {};
+			paged = d.paged || 1;
+			pages = d.pages || 1;
+			var items = d.items || [];
+			list.innerHTML = '';
+			if ( ! items.length ) {
+				list.appendChild( el( 'p', 'No pages found.', 'scc-note' ) );
+			}
+			items.forEach( function ( it ) {
+				var row = el( 'div', null, 'scc-meta-row' );
+				row.setAttribute( 'data-post-id', it.post_id );
+				var head = el( 'div', null, 'scc-meta-row__head' );
+				head.innerHTML = '<strong>' + esc( it.title ) + '</strong> <span class="scc-flag">' + esc( it.post_type ) + '</span> <span class="scc-flag">' + esc( it.status ) + '</span>' + ( it.is_template ? ' <span class="scc-badge scc-badge--warn">template</span>' : '' ) + ( it.url ? ' <a class="scc-note" href="' + esc( it.url ) + '" target="_blank" rel="noopener">view</a>' : '' ) + ( it.edit_url ? ' <a class="scc-note" href="' + esc( it.edit_url ) + '">edit page</a>' : '' );
+				row.appendChild( head );
+
+				var tWrap = el( 'label', null, 'scc-meta-field' );
+				tWrap.appendChild( el( 'span', 'Meta title', 'scc-label' ) );
+				var tInput = document.createElement( 'input' );
+				tInput.type = 'text'; tInput.className = 'large-text scc-meta-title'; tInput.value = it.meta_title || '';
+				tWrap.appendChild( tInput );
+				var tCount = el( 'span', '', 'scc-meta-count' );
+				tWrap.appendChild( tCount );
+				row.appendChild( tWrap );
+
+				var dWrap = el( 'label', null, 'scc-meta-field' );
+				dWrap.appendChild( el( 'span', 'Meta description', 'scc-label' ) );
+				var dInput = document.createElement( 'textarea' );
+				dInput.className = 'large-text scc-meta-desc'; dInput.rows = 2; dInput.value = it.meta_description || '';
+				dWrap.appendChild( dInput );
+				var dCount = el( 'span', '', 'scc-meta-count' );
+				dWrap.appendChild( dCount );
+				row.appendChild( dWrap );
+
+				var suggestions = el( 'div', null, 'scc-meta-suggestions' );
+				suggestions.hidden = true;
+				row.appendChild( suggestions );
+
+				var actions = el( 'div', null, 'scc-meta-row__actions' );
+				var suggest = el( 'button', '✨ Suggest with AI', 'button button-small scc-meta-suggest' );
+				var save = el( 'button', 'Save', 'button button-primary button-small' );
+				var st = el( 'span', '', 'scc-inline-status' );
+
+				suggest.addEventListener( 'click', function () {
+					suggest.disabled = true;
+					setStatus( st, 'Asking AI for the strongest SEO + click options…' );
+					request( '/meta/variants', { method: 'POST', data: { post_id: it.post_id } } )
+						.then( function ( res ) {
+							suggest.disabled = false;
+							setStatus( st, '', 'is-ok' );
+							var d = res.data || {};
+							var variants = d.variants || [];
+							suggestions.innerHTML = '';
+							suggestions.hidden = false;
+							if ( ! variants.length ) {
+								suggestions.appendChild( el( 'p', 'No suggestions returned — try again.', 'scc-note' ) );
+								return;
+							}
+							suggestions.appendChild( el( 'div', 'AI suggestions (click one to use it):', 'scc-label' ) );
+							variants.forEach( function ( v ) {
+								var opt = el( 'div', null, 'scc-meta-suggestion' );
+								opt.innerHTML =
+									'<div class="scc-meta-suggestion__head"><span class="scc-flag">' + esc( v.type ) + '</span> ' +
+									'<span class="scc-note">' + esc( v.title || '' ).length + ' / ' + esc( v.description || '' ).length + ' chars</span></div>' +
+									'<div class="scc-meta-suggestion__t"><strong>' + esc( v.title || '' ) + '</strong></div>' +
+									'<div class="scc-meta-suggestion__d">' + esc( v.description || '' ) + '</div>' +
+									( v.reason ? '<div class="scc-note">' + esc( v.reason ) + '</div>' : '' );
+								var use = el( 'button', 'Use this', 'button button-small' );
+								use.addEventListener( 'click', function () {
+									tInput.value = v.title || '';
+									dInput.value = v.description || '';
+									tInput.dispatchEvent( new Event( 'input' ) );
+									dInput.dispatchEvent( new Event( 'input' ) );
+									suggestions.hidden = true;
+									setStatus( st, 'Filled — review, then Save.', 'is-ok' );
+								} );
+								opt.appendChild( use );
+								suggestions.appendChild( opt );
+							} );
+						} )
+						.catch( function ( err ) {
+							suggest.disabled = false;
+							setStatus( st, ( err && err.message ) || i18n.error, 'is-error' );
+						} );
+				} );
+
+				// Save this row (returns a promise; reused by "Save all").
+				row._sccSave = function () {
+					setStatus( st, 'Saving…' );
+					return request( '/metadata/save', { method: 'POST', data: { post_id: it.post_id, meta_title: tInput.value, meta_description: dInput.value } } )
+						.then( function () { setStatus( st, 'Saved ✓', 'is-ok' ); } )
+						.catch( function ( err ) { setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); throw err; } );
+				};
+				save.addEventListener( 'click', function () {
+					save.disabled = true;
+					row._sccSave().then( function () { save.disabled = false; } ).catch( function () { save.disabled = false; } );
+				} );
+				actions.appendChild( suggest );
+				actions.appendChild( save );
+				actions.appendChild( st );
+				row.appendChild( actions );
+
+				// Apply a variant to this row's fields (used by "Suggest for all").
+				row._sccApply = function ( v ) {
+					tInput.value = v.title || '';
+					dInput.value = v.description || '';
+					tInput.dispatchEvent( new Event( 'input' ) );
+					dInput.dispatchEvent( new Event( 'input' ) );
+				};
+				row._sccStatus = st;
+
+				list.appendChild( row );
+				bindCounter( tInput, tCount, 30, 60 );
+				bindCounter( dInput, dCount, 70, 160 );
+			} );
+
+			info.textContent = 'Page ' + paged + ' of ' + pages + ' · ' + ( d.total || 0 ) + ' pages';
+			prev.disabled = paged <= 1;
+			next.disabled = paged >= pages;
+		}
+
+		var filterSel = document.getElementById( 'scc-meta-filter' );
+		var templatesToggle = document.getElementById( 'scc-meta-templates' );
+
+		function load() {
+			setStatus( msg, 'Loading…' );
+			var q = '/metadata?paged=' + paged +
+				'&search=' + encodeURIComponent( search.value || '' ) +
+				'&filter=' + encodeURIComponent( ( filterSel && filterSel.value ) || 'all' ) +
+				'&include_templates=' + ( ( templatesToggle && templatesToggle.checked ) ? '1' : '0' );
+			request( q, { method: 'GET' } )
+				.then( function ( res ) { setStatus( msg, '', 'is-ok' ); render( res ); } )
+				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		}
+
+		search.addEventListener( 'input', function () {
+			clearTimeout( timer );
+			timer = setTimeout( function () { paged = 1; load(); }, 350 );
+		} );
+		if ( filterSel ) { filterSel.addEventListener( 'change', function () { paged = 1; load(); } ); }
+		if ( templatesToggle ) { templatesToggle.addEventListener( 'change', function () { paged = 1; load(); } ); }
+		prev.addEventListener( 'click', function () { if ( paged > 1 ) { paged--; load(); } } );
+		next.addEventListener( 'click', function () { if ( paged < pages ) { paged++; load(); } } );
+
+		// Save every visible row's current values (sequential, with progress).
+		var saveAll = document.getElementById( 'scc-meta-save-all' );
+		if ( saveAll ) {
+			saveAll.addEventListener( 'click', function () {
+				var rows = Array.prototype.slice.call( list.querySelectorAll( '.scc-meta-row' ) );
+				if ( ! rows.length ) { return; }
+				if ( ! window.confirm( 'Save meta title & description for all ' + rows.length + ' visible page(s)?' ) ) {
+					return;
+				}
+				saveAll.disabled = true;
+				var i = 0, saved = 0, failed = 0;
+				function nextRow() {
+					if ( i >= rows.length ) {
+						saveAll.disabled = false;
+						setStatus( msg, 'Saved ' + saved + ' page(s)' + ( failed ? ', ' + failed + ' failed' : '' ) + '.', failed ? 'is-error' : 'is-ok' );
+						return;
+					}
+					var row = rows[ i++ ];
+					setStatus( msg, 'Saving… ' + i + ' / ' + rows.length );
+					var p = row._sccSave ? row._sccSave() : Promise.resolve();
+					p.then( function () { saved++; nextRow(); } ).catch( function () { failed++; nextRow(); } );
+				}
+				nextRow();
+			} );
+		}
+
+		// Suggest for all visible rows — one AI call per page, sequential to stay
+		// gentle on the provider. Fills the top-ranked variant (prefers a
+		// click-through option); the user still reviews and saves each row.
+		var suggestAll = document.getElementById( 'scc-meta-suggest-all' );
+		if ( suggestAll ) {
+			suggestAll.addEventListener( 'click', function () {
+				var rows = Array.prototype.slice.call( list.querySelectorAll( '.scc-meta-row' ) );
+				if ( ! rows.length ) { return; }
+				if ( ! window.confirm( 'Generate AI suggestions for all ' + rows.length + ' visible page(s)? This makes one AI request per page (uses AI credits). Nothing is saved automatically — you review and Save each row.' ) ) {
+					return;
+				}
+				suggestAll.disabled = true;
+				var i = 0, filled = 0, failed = 0;
+
+				function pickBest( variants ) {
+					if ( ! variants || ! variants.length ) { return null; }
+					for ( var k = 0; k < variants.length; k++ ) {
+						if ( variants[ k ].type === 'ctr' ) { return variants[ k ]; }
+					}
+					return variants[ 0 ];
+				}
+
+				function nextRow() {
+					if ( i >= rows.length ) {
+						suggestAll.disabled = false;
+						setStatus( msg, 'Suggested ' + filled + ' page(s)' + ( failed ? ', ' + failed + ' failed' : '' ) + '. Review and Save each row.', filled ? 'is-ok' : 'is-error' );
+						return;
+					}
+					var row = rows[ i++ ];
+					var pid = row.getAttribute( 'data-post-id' );
+					setStatus( msg, 'Suggesting… ' + i + ' / ' + rows.length );
+					if ( row._sccStatus ) { setStatus( row._sccStatus, 'AI…' ); }
+					request( '/meta/variants', { method: 'POST', data: { post_id: pid } } )
+						.then( function ( res ) {
+							var best = pickBest( ( res.data || {} ).variants );
+							if ( best && row._sccApply ) { row._sccApply( best ); filled++; if ( row._sccStatus ) { setStatus( row._sccStatus, 'Suggested — review + Save.', 'is-ok' ); } }
+							else { failed++; }
+							nextRow();
+						} )
+						.catch( function () { failed++; if ( row._sccStatus ) { setStatus( row._sccStatus, 'AI failed', 'is-error' ); } nextRow(); } );
+				}
+				nextRow();
+			} );
+		}
+
+		load();
+	}
+
+	// ---- Insights: snapshot + experiments -----------------------------
+	function bindInsights() {
+		var snap = document.getElementById( 'scc-snapshot' );
+		var msg = document.getElementById( 'scc-insights-msg' );
+		if ( snap ) {
+			snap.addEventListener( 'click', function () {
+				snap.disabled = true;
+				setStatus( msg, 'Capturing…' );
+				request( '/health-timeline/snapshot', { method: 'POST' } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( err ) { snap.disabled = false; setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var startBtn = document.getElementById( 'scc-exp-start' );
+		if ( startBtn ) {
+			var emsg = document.getElementById( 'scc-exp-msg' );
+			startBtn.addEventListener( 'click', function () {
+				var pid = ( document.getElementById( 'scc-exp-post' ) || {} ).value;
+				var type = ( document.getElementById( 'scc-exp-type' ) || {} ).value;
+				var note = ( document.getElementById( 'scc-exp-note' ) || {} ).value;
+				if ( ! pid ) { setStatus( emsg, 'Enter a post ID.', 'is-error' ); return; }
+				startBtn.disabled = true;
+				setStatus( emsg, 'Capturing baseline…' );
+				request( '/experiments', { method: 'POST', data: { post_id: pid, change_type: type, note: note } } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( err ) { startBtn.disabled = false; setStatus( emsg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+			} );
+		}
+
+		var expTable = document.getElementById( 'scc-exp-table' );
+		if ( expTable ) {
+			expTable.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( 'tr' );
+				if ( ! row ) { return; }
+				var id = row.getAttribute( 'data-id' );
+				var emsg2 = document.getElementById( 'scc-exp-msg' );
+				if ( e.target.classList.contains( 'scc-exp-eval' ) ) {
+					e.target.disabled = true;
+					setStatus( emsg2, 'Evaluating…' );
+					request( '/experiments/' + id, { method: 'POST' } )
+						.then( function () { window.location.reload(); } )
+						.catch( function ( err ) { e.target.disabled = false; setStatus( emsg2, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} else if ( e.target.classList.contains( 'scc-exp-del' ) ) {
+					if ( ! window.confirm( 'Delete this experiment?' ) ) { return; }
+					request( '/experiments/' + id, { method: 'DELETE' } )
+						.then( function () { row.parentNode.removeChild( row ); } )
+						.catch( function () {} );
+				}
+			} );
+		}
+	}
+
 	// ---- Batch jobs + publishing queue ---------------------------------
 	function bindJobs() {
 		var msg = document.getElementById( 'scc-jobs-msg' );
@@ -1204,6 +2062,19 @@
 				} ).catch( function ( err ) {
 					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
 				} );
+			} else if ( e.target.classList.contains( 'scc-remove' ) ) {
+				if ( ! window.confirm( 'Remove this draft from the queue? It will be moved to Trash and can be restored from there.' ) ) {
+					return;
+				}
+				e.target.disabled = true;
+				setStatus( msg, 'Removing…' );
+				act( id, 'remove' ).then( function () {
+					row.parentNode.removeChild( row );
+					setStatus( msg, 'Removed. It is in Trash if you need it back.', 'is-ok' );
+				} ).catch( function ( err ) {
+					e.target.disabled = false;
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
 			} else if ( e.target.classList.contains( 'scc-schedule' ) ) {
 				var dt = row.querySelector( '.scc-schedule-dt' );
 				if ( ! dt || ! dt.value ) {
@@ -1254,6 +2125,60 @@
 					} );
 				} )
 				.catch( function () {} );
+		}
+
+		var optimizeBtn = document.getElementById( 'scc-panel-optimize' );
+		if ( optimizeBtn ) {
+			optimizeBtn.addEventListener( 'click', function () {
+				setStatus( status, 'Scoring this page…' );
+				out.innerHTML = '';
+				request( '/page/' + postId + '/optimize', { method: 'GET' } )
+					.then( function ( res ) {
+						setStatus( status, '', 'is-ok' );
+						var sc = ( res.data && res.data.scorecard ) || {};
+						var scoreEl = document.getElementById( 'scc-panel-score' );
+						if ( scoreEl ) { scoreEl.textContent = ( sc.score || 0 ) + '/100'; }
+
+						var wrap = el( 'div', null, 'scc-pageopt' );
+
+						// Component bars.
+						( sc.components || [] ).forEach( function ( c ) {
+							var b = el( 'div', null, 'scc-po-bar' );
+							var head = el( 'div', null, 'scc-po-bar__head' );
+							head.appendChild( el( 'span', c.label + ( c.note ? ' (' + c.note + ')' : '' ) ) );
+							head.appendChild( el( 'strong', c.known ? ( c.pct + '%' ) : 'n/a' ) );
+							b.appendChild( head );
+							var track = el( 'div', null, 'scc-po-track' );
+							var fill = el( 'div', null, 'scc-po-fill' + ( c.known ? '' : ' is-unknown' ) );
+							fill.style.width = ( c.known ? c.pct : 0 ) + '%';
+							track.appendChild( fill );
+							b.appendChild( track );
+							wrap.appendChild( b );
+						} );
+
+						// Prioritized recommendations.
+						var recs = sc.recommendations || [];
+						if ( recs.length ) {
+							wrap.appendChild( el( 'div', 'Prioritized fixes', 'scc-label' ) );
+							recs.forEach( function ( r ) {
+								var row = el( 'div', null, 'scc-po-rec scc-po-rec--' + r.severity );
+								row.appendChild( el( 'span', r.severity.toUpperCase(), 'scc-flag scc-flag--prio-' + r.severity ) );
+								var t = el( 'span', null, 'scc-po-rec__t' );
+								t.innerHTML = '<strong>' + ( r.label || '' ).replace( /</g, '&lt;' ) + '</strong> — ' + ( r.fix || '' ).replace( /</g, '&lt;' );
+								row.appendChild( t );
+								wrap.appendChild( row );
+							} );
+						} else {
+							wrap.appendChild( el( 'p', 'No prioritized fixes — this page looks well optimized.', 'scc-note' ) );
+						}
+
+						if ( sc.disclaimer ) { wrap.appendChild( el( 'p', sc.disclaimer, 'scc-note' ) ); }
+						out.appendChild( wrap );
+					} )
+					.catch( function ( err ) {
+						setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
 		}
 
 		document.getElementById( 'scc-panel-links' ).addEventListener( 'click', function () {
@@ -1454,6 +2379,64 @@
 					.catch( function ( er ) { elImport.disabled = false; setStatus( elmsg, ( er && er.message ) || i18n.error, 'is-error' ); } );
 			} );
 		}
+
+		// Inspect the tokens detected in the selected Elementor template.
+		var elInspect = document.getElementById( 'scc-el-inspect' );
+		if ( elInspect ) {
+			var inspMsg = document.getElementById( 'scc-el-msg' );
+			var inspOut = document.getElementById( 'scc-el-inspect-out' );
+			elInspect.addEventListener( 'click', function () {
+				var source = ( document.getElementById( 'scc-el-source' ) || {} ).value;
+				if ( ! source ) {
+					setStatus( inspMsg, 'Choose a template first.', 'is-error' );
+					return;
+				}
+				elInspect.disabled = true;
+				setStatus( inspMsg, 'Reading template…' );
+				request( '/templates/' + source + '/variables', { method: 'GET' } )
+					.then( function ( res ) {
+						elInspect.disabled = false;
+						setStatus( inspMsg, '', 'is-ok' );
+						var d = res.data || {};
+						var v = d.validation || {};
+						inspOut.innerHTML = '';
+						inspOut.hidden = false;
+						var badge = v.status === 'ready'
+							? '<span class="scc-badge scc-badge--ok">Ready</span>'
+							: '<span class="scc-badge scc-badge--warn">Needs attention</span>';
+						inspOut.appendChild( el( 'p' ) ).innerHTML = 'Template status: ' + badge;
+						( v.errors || [] ).forEach( function ( m ) {
+							inspOut.appendChild( el( 'div', '✕ ' + m, 'scc-flag scc-flag--prio-high' ) );
+						} );
+						( v.warnings || [] ).forEach( function ( m ) {
+							inspOut.appendChild( el( 'div', '! ' + m, 'scc-note' ) );
+						} );
+						var tokens = ( d.detected || [] ).map( function ( t ) { return t.token; } );
+						inspOut.appendChild( el( 'div', tokens.length ? ( 'Detected tokens: ' + tokens.join( ', ' ) ) : 'No {{tokens}} found in this template.', 'scc-note' ) );
+					} )
+					.catch( function ( er ) {
+						elInspect.disabled = false;
+						setStatus( inspMsg, ( er && er.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
+		// Live filter for the token reference table.
+		var varSearch = document.getElementById( 'scc-var-search' );
+		if ( varSearch ) {
+			varSearch.addEventListener( 'input', function () {
+				var q = varSearch.value.toLowerCase();
+				document.querySelectorAll( '#scc-var-reference .scc-var-group' ).forEach( function ( group ) {
+					var any = false;
+					group.querySelectorAll( '.scc-var-row' ).forEach( function ( row ) {
+						var match = row.textContent.toLowerCase().indexOf( q ) !== -1;
+						row.hidden = ! match;
+						if ( match ) { any = true; }
+					} );
+					group.hidden = ! any;
+				} );
+			} );
+		}
 	}
 
 	document.addEventListener( 'DOMContentLoaded', function () {
@@ -1464,6 +2447,7 @@
 		bindConnections();
 		bindKeywordStrategy();
 		bindTopicBriefs();
+		bindGscQuickWins();
 		bindSeedPlan();
 		bindContentPlan();
 		bindGenerate();
@@ -1471,10 +2455,16 @@
 		bindInternalLinks();
 		bindGscQuickWins();
 		bindCompetitor();
+		bindCompetitorGaps();
 		bindJobs();
 		bindPublishing();
 		bindSeoPanel();
 		bindSchemaSettings();
 		bindNativeTemplates();
+		bindOpportunities();
+		bindActionQueue();
+		bindInsights();
+		bindMetaEditor();
+		bindContentIdeas();
 	} );
 } )();

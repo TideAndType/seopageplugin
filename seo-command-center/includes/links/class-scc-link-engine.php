@@ -23,6 +23,30 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SCC_Link_Engine {
 
+	/** @var SCC_AI_Manager|null Optional AI manager for AI-assisted linking. */
+	protected $ai = null;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param SCC_AI_Manager|null $ai AI manager (enables AI-assisted linking).
+	 */
+	public function __construct( $ai = null ) {
+		if ( $ai instanceof SCC_AI_Manager ) {
+			$this->ai = $ai;
+		}
+	}
+
+	/**
+	 * Whether AI-assisted internal linking should run: the toggle is on AND an AI
+	 * manager is available.
+	 *
+	 * @return bool
+	 */
+	public function ai_enabled() {
+		return $this->ai instanceof SCC_AI_Manager && (bool) SCC_Settings::get( 'link_ai_enabled', false );
+	}
+
 	/**
 	 * Confidence thresholds from settings (with sane defaults).
 	 *
@@ -85,6 +109,13 @@ class SCC_Link_Engine {
 			}
 		}
 
+		// AI-assisted refinement of the OUTBOUND links from this page (one AI call):
+		// the model reads the page and picks the most natural anchor and the best
+		// targets from our verified candidate list — it never invents a URL.
+		if ( $this->ai_enabled() && ! empty( $outbound ) ) {
+			$outbound = $this->refine_with_ai( $outbound, $subject_text );
+		}
+
 		// Sort by confidence desc.
 		$sort = function ( $a, $b ) {
 			return $b['confidence'] <=> $a['confidence'];
@@ -144,6 +175,138 @@ class SCC_Link_Engine {
 			'relevance'      => $relevance,
 			'reason'         => $this->reason( $source_id, $target_idx, $relevance ),
 		);
+	}
+
+	/**
+	 * AI-assisted refinement of a page's outbound link candidates.
+	 *
+	 * The model is given the page's own text plus the verified candidate targets
+	 * (id + title + keyword). It returns, per link it endorses, the most natural
+	 * anchor phrase copied verbatim from the page, a confidence, and a short
+	 * reason. We then: (1) accept only ids that were in the candidate list — the
+	 * AI can never introduce a page or URL of its own; (2) accept an AI anchor
+	 * only if it literally appears in the page text; otherwise we keep the
+	 * deterministic anchor. Candidates the AI omits stay at a reduced confidence
+	 * rather than being dropped, so the deterministic safety net is preserved.
+	 *
+	 * @param array  $recs        Deterministic outbound recommendations.
+	 * @param string $source_text The page's plain text.
+	 * @return array Refined recommendations.
+	 */
+	protected function refine_with_ai( array $recs, $source_text ) {
+		$candidates = array();
+		$by_id      = array();
+		foreach ( $recs as $rec ) {
+			$id                = (int) $rec['target_post_id'];
+			$by_id[ $id ]      = $rec;
+			$candidates[]      = array(
+				'id'      => $id,
+				'title'   => (string) $rec['target_title'],
+				'keyword' => (string) ( SCC_Content_Index::get( $id )['primary_keyword'] ?? '' ),
+			);
+		}
+
+		$text = mb_substr( wp_strip_all_tags( (string) $source_text ), 0, 6000 );
+
+		$system = 'You are an internal-linking editor. You are given the FULL TEXT of one web page and a list '
+			. 'of CANDIDATE target pages on the same site (each with an id, title and keyword). Choose which '
+			. 'candidates this page should link to, and for each, pick the most NATURAL anchor phrase that appears '
+			. 'VERBATIM in the page text (copy it exactly, 2-6 words, not a whole sentence, never inside a heading). '
+			. 'Only use ids from the candidate list — never invent a page or URL. Prefer relevance over quantity; '
+			. 'it is fine to endorse only a few. Give each a confidence 0-100 and a one-line reason. '
+			. 'Return JSON: {"links":[{"id":int,"anchor":str,"confidence":int,"reason":str}]}';
+
+		$payload = wp_json_encode( array( 'page_text' => $text, 'candidates' => $candidates ) );
+
+		$response = $this->ai->complete(
+			array(
+				'system'      => $system,
+				'messages'    => array(
+					array( 'role' => 'user', 'content' => "Page + candidates (JSON):\n" . $payload . "\n\nReturn the internal-link JSON now." ),
+				),
+				'json'        => true,
+				'max_tokens'  => 1400,
+				'temperature' => 0.3,
+			),
+			'internal-linking'
+		);
+		if ( $response->is_error() ) {
+			// AI unavailable: fall back to the deterministic recommendations.
+			SCC_Logger::info( 'link-engine', 'AI link refinement failed; using deterministic recs', array( 'error' => $response->error->get_error_message() ) );
+			return $recs;
+		}
+
+		$parsed = $response->json();
+		if ( ! is_array( $parsed ) || empty( $parsed['links'] ) ) {
+			return $recs;
+		}
+
+		return self::merge_ai_links( $recs, (array) $parsed['links'], (string) $source_text );
+	}
+
+	/**
+	 * Merge the AI's endorsed links back onto the deterministic recommendations,
+	 * enforcing the two safety rules that keep AI linking honest:
+	 *
+	 *   1. Only ids already in the candidate set are accepted — the AI can never
+	 *      introduce a page or URL of its own.
+	 *   2. An AI anchor is accepted only if it appears VERBATIM in the page text;
+	 *      otherwise the deterministic anchor is kept.
+	 *
+	 * Candidates the AI does not endorse are retained at a reduced confidence, so
+	 * the deterministic safety net is never silently lost. Pure function (no AI /
+	 * DB), so it is directly unit-tested.
+	 *
+	 * @param array  $recs        Deterministic recommendations.
+	 * @param array  $ai_links    AI links [{id, anchor, confidence, reason}].
+	 * @param string $source_text The page's plain text.
+	 * @return array
+	 */
+	public static function merge_ai_links( array $recs, array $ai_links, $source_text ) {
+		$by_id = array();
+		foreach ( $recs as $rec ) {
+			$by_id[ (int) $rec['target_post_id'] ] = $rec;
+		}
+
+		$endorsed = array();
+		foreach ( $ai_links as $link ) {
+			$id = (int) ( $link['id'] ?? 0 );
+			if ( ! isset( $by_id[ $id ] ) ) {
+				continue; // Never accept a target the AI invented.
+			}
+			$rec    = $by_id[ $id ];
+			$anchor = trim( (string) ( $link['anchor'] ?? '' ) );
+
+			// Accept the AI anchor only if it genuinely appears in the page.
+			if ( '' !== $anchor && false !== stripos( (string) $source_text, $anchor ) ) {
+				$rec['anchor']  = $anchor;
+				$rec['natural'] = true;
+			}
+
+			$conf = isset( $link['confidence'] ) ? (int) $link['confidence'] : $rec['confidence'];
+			$rec['confidence'] = max( 0, min( 100, $conf ) );
+
+			$reason = trim( (string) ( $link['reason'] ?? '' ) );
+			if ( '' !== $reason && class_exists( 'SCC_Security' ) ) {
+				$rec['reason'] = SCC_Security::sanitize_text( $reason );
+			} elseif ( '' !== $reason ) {
+				$rec['reason'] = $reason;
+			}
+			$rec['ai'] = true;
+
+			$endorsed[ $id ] = $rec;
+		}
+
+		// Keep any candidate the AI did not endorse, at a reduced confidence.
+		foreach ( $by_id as $id => $rec ) {
+			if ( isset( $endorsed[ $id ] ) ) {
+				continue;
+			}
+			$rec['confidence'] = max( 0, (int) $rec['confidence'] - 15 );
+			$endorsed[ $id ]   = $rec;
+		}
+
+		return array_values( $endorsed );
 	}
 
 	/**
@@ -347,9 +510,12 @@ class SCC_Link_Engine {
 			return array();
 		}
 		foreach ( $rows as &$row ) {
-			$row['source_title'] = get_the_title( (int) $row['source_post_id'] );
-			$row['target_title'] = get_the_title( (int) $row['target_post_id'] );
-			$row['target_url']   = get_permalink( (int) $row['target_post_id'] );
+			$sid                    = (int) $row['source_post_id'];
+			$row['source_title']    = get_the_title( $sid );
+			$row['source_url']      = get_permalink( $sid );
+			$row['source_edit_url'] = get_edit_post_link( $sid, 'raw' );
+			$row['target_title']    = get_the_title( (int) $row['target_post_id'] );
+			$row['target_url']      = get_permalink( (int) $row['target_post_id'] );
 		}
 		return $rows;
 	}

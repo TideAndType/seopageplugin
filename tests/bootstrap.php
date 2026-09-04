@@ -214,6 +214,8 @@ if ( ! function_exists( 'is_wp_error' ) ) {
 require_once __DIR__ . '/../seo-command-center/includes/analysis/class-scc-seo-meta.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-schema.php';
 require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-quality-score.php';
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-metadata.php';
+require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-content-ideas.php';
 
 // --- Phase 4 stubs + classes under test -----------------------------------
 if ( ! function_exists( 'esc_html' ) ) {
@@ -221,7 +223,25 @@ if ( ! function_exists( 'esc_html' ) ) {
 		return htmlspecialchars( (string) $t, ENT_QUOTES );
 	}
 }
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) {
+		$url = trim( (string) $url );
+		return preg_match( '#^(https?:)?//#i', $url ) || 0 === strpos( $url, '/' ) ? $url : '';
+	}
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+	function esc_attr( $t ) {
+		return htmlspecialchars( (string) $t, ENT_QUOTES );
+	}
+}
+if ( ! function_exists( 'wp_kses_post' ) ) {
+	function wp_kses_post( $html ) {
+		// Minimal test stub: drop script/style/iframe blocks, keep other markup.
+		return preg_replace( '#<\s*(script|style|iframe)[^>]*>.*?<\s*/\s*\1\s*>#is', '', (string) $html );
+	}
+}
 require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-placeholders.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-variables.php';
 // SCC_Elementor_Builder::build_replacements is pure; the file references
 // SCC_Elementor only inside build_tree/apply_to_post, not at load time.
 require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor-builder.php';
@@ -321,3 +341,26 @@ require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-wordpre
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-gutenberg-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-elementor-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-renderer-manager.php';
+
+// --- Intelligence layer (Opportunity Engine) ------------------------------
+if ( ! function_exists( 'get_transient' ) ) {
+	function get_transient( $k ) { return false; }
+}
+if ( ! function_exists( 'set_transient' ) ) {
+	function set_transient( $k, $v, $ttl = 0 ) { return true; }
+}
+if ( ! function_exists( 'delete_transient' ) ) {
+	function delete_transient( $k ) { return true; }
+}
+if ( ! function_exists( 'number_format_i18n' ) ) {
+	function number_format_i18n( $n, $d = 0 ) { return number_format( (float) $n, (int) $d ); }
+}
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-content-decay.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-intent-drift.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-opportunity-engine.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-action-queue.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-page-optimizer.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-health-timeline.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-experiments.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-entity-graph.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-ai-visibility.php';
