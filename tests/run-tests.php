@@ -1253,6 +1253,58 @@ assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, 'bogus' ), 'unknown ta
 assert_eq( 'meta', SCC_Admin::hub_active_tab( $hub_tabs, 'META' ), 'requested tab is normalized (case) before matching' );
 assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, '../evil' ), 'unsafe tab value is rejected, falls back to first' );
 
+echo "\n== SEO Copilot (intent routing, no fabrication) ==\n";
+assert_eq( 'triage', SCC_Copilot::classify( 'What should I work on this week?' ), 'triage intent for "what should I work on"' );
+assert_eq( 'triage', SCC_Copilot::classify( 'find my biggest SEO opportunities' ), 'triage intent for "biggest opportunities"' );
+assert_eq( 'refresh', SCC_Copilot::classify( 'Find pages that are losing traffic' ), 'refresh intent for losing traffic' );
+assert_eq( 'refresh', SCC_Copilot::classify( 'find content I should refresh' ), 'refresh intent for refresh' );
+assert_eq( 'keywords', SCC_Copilot::classify( 'find keywords we are close to ranking for' ), 'keyword-opportunity intent (surfaces striking-distance + untapped)' );
+assert_eq( 'striking', SCC_Copilot::classify( 'show me striking distance pages on page 2' ), 'striking intent for explicit striking-distance phrasing' );
+assert_eq( 'cannibalization', SCC_Copilot::classify( 'find cannibalization' ), 'cannibalization intent' );
+assert_eq( 'links', SCC_Copilot::classify( 'find pages that need internal links' ), 'links intent' );
+assert_eq( 'metadata', SCC_Copilot::classify( 'fix my worst metadata' ), 'metadata intent' );
+assert_eq( 'create', SCC_Copilot::classify( 'give me 5 articles I should create' ), 'create intent' );
+assert_eq( 'triage', SCC_Copilot::classify( '' ), 'empty query falls back to triage' );
+assert_eq( 'triage', SCC_Copilot::classify( 'hello there' ), 'unrecognized query falls back to triage' );
+
+// filter_opportunities is pure: matches types and caps.
+$sample_opps = array(
+	array( 'id' => 'a', 'type' => 'content_decay', 'score' => 80 ),
+	array( 'id' => 'b', 'type' => 'striking_distance', 'score' => 70 ),
+	array( 'id' => 'c', 'type' => 'fix_orphan', 'score' => 60 ),
+	array( 'id' => 'd', 'type' => 'content_decay', 'score' => 50 ),
+);
+$decay_only = SCC_Copilot::filter_opportunities( $sample_opps, array( 'content_decay', 'intent_drift' ), 8 );
+assert_eq( 2, count( $decay_only ), 'filter keeps only matching types' );
+assert_eq( 'a', $decay_only[0]['id'], 'filter preserves order' );
+$all = SCC_Copilot::filter_opportunities( $sample_opps, array(), 8 );
+assert_eq( 4, count( $all ), 'empty types returns all' );
+$capped = SCC_Copilot::filter_opportunities( $sample_opps, array(), 2 );
+assert_eq( 2, count( $capped ), 'limit caps the result count' );
+
+// answer() with injected opportunities: no engine/network, no fabrication.
+$GLOBALS['scc_test_options']['scc_credentials'] = array(); // GSC not connected.
+$copilot = new SCC_Copilot();
+$ans = $copilot->answer( 'find pages losing traffic', $sample_opps );
+assert_eq( 'refresh', $ans['intent'], 'answer classifies the query' );
+assert_eq( 2, count( $ans['opportunities'] ), 'answer returns only decay opportunities' );
+assert_true( ! empty( $ans['missing'] ), 'answer reports GSC missing when not connected' );
+assert_eq( 'gsc', $ans['missing'][0]['key'], 'missing data names the GSC source' );
+
+$ans2 = $copilot->answer( 'find internal link opportunities', $sample_opps );
+assert_eq( 'links', $ans2['intent'], 'links intent routed' );
+assert_eq( 1, count( $ans2['opportunities'] ), 'links returns the orphan opportunity' );
+assert_eq( array(), $ans2['missing'], 'links intent needs no external data (nothing missing)' );
+
+$ans3 = $copilot->answer( 'what should I work on this week?', $sample_opps );
+assert_eq( 4, count( $ans3['opportunities'] ), 'triage returns all opportunities (capped)' );
+assert_true( '' !== $ans3['why'], 'answer includes a why-it-matters line' );
+
+echo "\n== DB schema is strict-mode safe (no zero-date defaults) ==\n";
+$db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database/class-scc-db.php' );
+assert_true( false === strpos( $db_src, "0000-00-00" ), 'no 0000-00-00 date defaults (rejected by MySQL 8 / MariaDB strict mode)' );
+assert_true( false !== strpos( $db_src, 'hide_errors' ), 'install() hides $wpdb errors so activation cannot leak DB output' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

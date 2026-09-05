@@ -44,19 +44,20 @@ class SCC_Admin {
 			58
 		);
 
-		// A small, clear menu. Overlapping screens are consolidated into three
-		// tabbed hubs (Content / SEO / Strategy) instead of a flat wall of links.
-		// Every individual screen still exists — it is registered as a hidden route
-		// (reached through its hub's tabs and from in-app links), so nothing breaks.
+		// The whole plugin revolves around four questions: how is my site doing
+		// (Dashboard), what should I make (Create), what should I fix (Optimize),
+		// and where's the upside (Opportunities). Everything else is a tab inside
+		// one of those, or a config screen. Overlapping screens are consolidated
+		// into tabbed hubs; every individual screen stays registered as a hidden
+		// route (reached via its hub tab and in-app links), so nothing breaks.
 		$pages = array(
-			self::SLUG                   => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
-			self::SLUG . '-content'      => array( __( 'Content', 'seo-command-center' ), 'render_content_hub' ),
-			self::SLUG . '-seo'          => array( __( 'SEO', 'seo-command-center' ), 'render_seo_hub' ),
-			self::SLUG . '-strategy'     => array( __( 'Strategy', 'seo-command-center' ), 'render_strategy_hub' ),
-			self::SLUG . '-action-queue' => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
-			self::SLUG . '-templates'    => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
-			self::SLUG . '-settings'     => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
-			self::SLUG . '-connections'  => array( __( 'Connections', 'seo-command-center' ), 'render_connections' ),
+			self::SLUG                     => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
+			self::SLUG . '-create'         => array( __( 'Create', 'seo-command-center' ), 'render_create_hub' ),
+			self::SLUG . '-optimize'       => array( __( 'Optimize', 'seo-command-center' ), 'render_optimize_hub' ),
+			self::SLUG . '-opportunities'  => array( __( 'Opportunities', 'seo-command-center' ), 'render_opportunities_hub' ),
+			self::SLUG . '-templates'      => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
+			self::SLUG . '-settings'       => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
+			self::SLUG . '-connections'    => array( __( 'Connections', 'seo-command-center' ), 'render_connections' ),
 		);
 
 		foreach ( $pages as $slug => $page ) {
@@ -70,6 +71,7 @@ class SCC_Admin {
 			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
+			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keywords', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
@@ -97,31 +99,35 @@ class SCC_Admin {
 	 */
 	protected function hubs() {
 		return array(
-			self::SLUG . '-content'  => array(
-				'title'   => __( 'Content', 'seo-command-center' ),
+			// CREATE — make something new. Blog Post generation is the simple default.
+			self::SLUG . '-create'        => array(
+				'title'   => __( 'Create', 'seo-command-center' ),
 				'tabs'    => array(
-					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
-					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
 					'generate'   => array( __( 'Generate', 'seo-command-center' ), self::SLUG . '-generate', 'render_generate' ),
+					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
+					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
 					'publishing' => array( __( 'Publishing', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
 				),
 			),
-			self::SLUG . '-seo'      => array(
-				'title'   => __( 'SEO', 'seo-command-center' ),
+			// OPTIMIZE — fix what exists. The Action Queue is the apply/verify centre.
+			self::SLUG . '-optimize'      => array(
+				'title'   => __( 'Optimize', 'seo-command-center' ),
 				'tabs'    => array(
-					'audit'        => array( __( 'Site Audit', 'seo-command-center' ), self::SLUG . '-seo-audit', 'render_seo_audit' ),
-					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
-					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
-					'links'        => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
-					'meta'         => array( __( 'Meta Editor', 'seo-command-center' ), self::SLUG . '-meta-editor', 'render_meta_editor' ),
+					'actions' => array( __( 'Action Queue', 'seo-command-center' ), self::SLUG . '-action-queue', 'render_action_queue' ),
+					'links'   => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
+					'meta'    => array( __( 'Meta Editor', 'seo-command-center' ), self::SLUG . '-meta-editor', 'render_meta_editor' ),
+					'audit'   => array( __( 'Site Audit', 'seo-command-center' ), self::SLUG . '-seo-audit', 'render_seo_audit' ),
 				),
 			),
-			self::SLUG . '-strategy' => array(
-				'title'   => __( 'Strategy', 'seo-command-center' ),
+			// OPPORTUNITIES — where's the upside. The ranked opportunity list leads.
+			self::SLUG . '-opportunities' => array(
+				'title'   => __( 'Opportunities', 'seo-command-center' ),
 				'tabs'    => array(
-					'opportunities' => array( __( 'Opportunities', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
-					'topical'       => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
-					'competitors'   => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
+					'all'          => array( __( 'All Opportunities', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
+					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
+					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
+					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
+					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
 			),
 		);
@@ -184,24 +190,24 @@ class SCC_Admin {
 	}
 
 	/**
-	 * Content hub (Plan / Ideas / Generate / Publishing).
+	 * Create hub (Generate / Ideas / Content Plan / Publishing).
 	 */
-	public function render_content_hub() {
-		$this->render_hub( self::SLUG . '-content' );
+	public function render_create_hub() {
+		$this->render_hub( self::SLUG . '-create' );
 	}
 
 	/**
-	 * SEO hub (Audit / Keywords / Architecture / Internal Links / Meta).
+	 * Optimize hub (Action Queue / Internal Links / Meta / Site Audit).
 	 */
-	public function render_seo_hub() {
-		$this->render_hub( self::SLUG . '-seo' );
+	public function render_optimize_hub() {
+		$this->render_hub( self::SLUG . '-optimize' );
 	}
 
 	/**
-	 * Strategy hub (Opportunities / Topical Authority / Competitors).
+	 * Opportunities hub (All / Keywords / Topical Authority / Competitors / Architecture).
 	 */
-	public function render_strategy_hub() {
-		$this->render_hub( self::SLUG . '-strategy' );
+	public function render_opportunities_hub() {
+		$this->render_hub( self::SLUG . '-opportunities' );
 	}
 
 	/**

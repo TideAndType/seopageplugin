@@ -286,6 +286,12 @@ class SCC_REST {
 			'permission_callback' => $perm,
 		) );
 
+		register_rest_route( self::NS, '/copilot', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'copilot' ),
+			'permission_callback' => $perm,
+		) );
+
 		register_rest_route( self::NS, '/opportunities', array(
 			'methods'             => WP_REST_Server::READABLE,
 			'callback'            => array( $this, 'opportunities' ),
@@ -1417,6 +1423,26 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /copilot — natural-language SEO Copilot. Routes the request to the
+	 * existing opportunity engine and returns real, matching opportunities (never
+	 * fabricated), plus an honest note about any missing data source.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function copilot( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$query  = SCC_Security::sanitize_text( $params['query'] ?? '' );
+
+		$copilot = new SCC_Copilot();
+		return $this->ok( $copilot->answer( $query ) );
 	}
 
 	/**

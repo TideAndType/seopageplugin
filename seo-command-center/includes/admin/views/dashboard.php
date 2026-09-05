@@ -38,6 +38,34 @@ $t = function ( $totals, $key ) {
 		<span class="scc-chip"><?php esc_html_e( 'AI spend this month (est.):', 'seo-command-center' ); ?> <strong>$<?php echo esc_html( number_format( (float) ( $usage['cost'] ?? 0 ), 2 ) ); ?></strong></span>
 	</div>
 
+	<div class="scc-card scc-copilot" id="scc-copilot">
+		<div class="scc-card__head">
+			<h2><?php esc_html_e( 'Ask the SEO Copilot', 'seo-command-center' ); ?></h2>
+		</div>
+		<p class="scc-note"><?php esc_html_e( 'Ask in plain language. The Copilot routes your question to your real data and returns concrete actions — it never invents numbers.', 'seo-command-center' ); ?></p>
+		<div class="scc-copilot__ask">
+			<input type="text" id="scc-copilot-q" class="regular-text" placeholder="<?php esc_attr_e( 'e.g. What should I work on this week?', 'seo-command-center' ); ?>" autocomplete="off">
+			<button class="button button-primary" id="scc-copilot-go"><?php esc_html_e( 'Ask', 'seo-command-center' ); ?></button>
+		</div>
+		<div class="scc-copilot__chips">
+			<?php
+			$suggestions = array(
+				__( 'Find my biggest SEO opportunities', 'seo-command-center' ),
+				__( 'Find pages that are losing traffic', 'seo-command-center' ),
+				__( 'Find keywords we’re close to ranking for', 'seo-command-center' ),
+				__( 'Find pages that need internal links', 'seo-command-center' ),
+				__( 'Find cannibalization', 'seo-command-center' ),
+				__( 'Give me articles I should create', 'seo-command-center' ),
+			);
+			foreach ( $suggestions as $s ) :
+				?>
+				<button type="button" class="scc-chip scc-chip--btn scc-copilot-suggest"><?php echo esc_html( $s ); ?></button>
+			<?php endforeach; ?>
+		</div>
+		<span class="scc-inline-status" id="scc-copilot-msg"></span>
+		<div class="scc-copilot__result" id="scc-copilot-result" hidden></div>
+	</div>
+
 	<?php
 	// "What should I do next?" — the top opportunities from the intelligence layer.
 	$opportunities = isset( $data['opportunities'] ) ? (array) $data['opportunities'] : array();

@@ -386,6 +386,12 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-h
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-experiments.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-entity-graph.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-ai-visibility.php';
+if ( ! function_exists( '_n' ) ) {
+	function _n( $single, $plural, $number, $domain = 'default' ) {
+		return ( 1 === (int) $number ) ? $single : $plural;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-copilot.php';
 
 // --- Generator (native vs template mode: pure static helpers under test) ----
 if ( ! function_exists( 'get_bloginfo' ) ) {

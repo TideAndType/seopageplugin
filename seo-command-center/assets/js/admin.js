@@ -1504,6 +1504,117 @@
 		}
 	}
 
+	// ---- SEO Copilot (Dashboard) --------------------------------------
+	function bindCopilot() {
+		var card = document.getElementById( 'scc-copilot' );
+		if ( ! card ) {
+			return;
+		}
+		var input  = document.getElementById( 'scc-copilot-q' );
+		var go      = document.getElementById( 'scc-copilot-go' );
+		var msg     = document.getElementById( 'scc-copilot-msg' );
+		var result  = document.getElementById( 'scc-copilot-result' );
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = ( s == null ) ? '' : String( s );
+			return d.innerHTML;
+		}
+
+		function oppCard( op ) {
+			var wrap = el( 'div', '' );
+			wrap.className = 'scc-opp';
+			wrap.setAttribute( 'data-opp-id', op.id || '' );
+			var factors = ( op.factors || [] ).map( function ( f ) {
+				return '<span class="scc-opp__factor">+' + ( parseInt( f.points, 10 ) || 0 ) + ' ' + esc( f.label ) + '</span>';
+			} ).join( '' );
+			wrap.innerHTML =
+				'<div class="scc-opp__score"><span class="scc-opp__num">' + ( parseInt( op.score, 10 ) || 0 ) + '</span><span class="scc-opp__den">/100</span></div>' +
+				'<div class="scc-opp__body">' +
+					'<div class="scc-opp__title"><strong>' + esc( op.title ) + '</strong> ' +
+						'<span class="scc-flag scc-flag--prio-' + esc( op.priority ) + '">' + esc( ( op.priority || '' ).charAt( 0 ).toUpperCase() + ( op.priority || '' ).slice( 1 ) ) + '</span></div>' +
+					'<p class="scc-opp__why">' + esc( op.reason ) + '</p>' +
+					'<div class="scc-opp__factors">' + factors + '</div>' +
+					'<div class="scc-opp__do">' + esc( op.recommended_action || '' ) + '</div>' +
+				'</div>' +
+				'<div class="scc-opp__actions">' +
+					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
+					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
+				'</div>';
+			return wrap;
+		}
+
+		function render( data ) {
+			result.hidden = false;
+			result.innerHTML = '';
+			result.appendChild( el( 'p', data.what || '' ) ).className = 'scc-copilot__what';
+			if ( data.why ) {
+				var why = el( 'p', data.why );
+				why.className = 'scc-copilot__why scc-note';
+				result.appendChild( why );
+			}
+			( data.missing || [] ).forEach( function ( m ) {
+				var n = el( 'div', m.message || '' );
+				n.className = 'notice notice-warning inline';
+				result.appendChild( n );
+			} );
+			var opps = data.opportunities || [];
+			if ( opps.length ) {
+				var list = el( 'div', '' );
+				list.className = 'scc-opps';
+				list.id = 'scc-copilot-opps';
+				opps.forEach( function ( op ) { list.appendChild( oppCard( op ) ); } );
+				result.appendChild( list );
+			}
+		}
+
+		function ask( q ) {
+			q = ( q || '' ).trim();
+			if ( ! q ) { input && input.focus(); return; }
+			go.disabled = true;
+			setStatus( msg, 'Thinking…' );
+			request( '/copilot', { method: 'POST', data: { query: q } } )
+				.then( function ( res ) {
+					go.disabled = false;
+					setStatus( msg, '', '' );
+					render( res.data || {} );
+				} )
+				.catch( function ( err ) {
+					go.disabled = false;
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		}
+
+		if ( go ) { go.addEventListener( 'click', function () { ask( input.value ); } ); }
+		if ( input ) {
+			input.addEventListener( 'keydown', function ( e ) { if ( 'Enter' === e.key ) { e.preventDefault(); ask( input.value ); } } );
+		}
+		card.querySelectorAll( '.scc-copilot-suggest' ).forEach( function ( btn ) {
+			btn.addEventListener( 'click', function () { if ( input ) { input.value = btn.textContent; } ask( btn.textContent ); } );
+		} );
+
+		// Reuse the Action Queue for Add-to-queue / Dismiss on Copilot cards.
+		if ( result ) {
+			result.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( '.scc-opp' );
+				if ( ! row ) { return; }
+				var oid = row.getAttribute( 'data-opp-id' );
+				if ( e.target.classList.contains( 'scc-opp-approve' ) ) {
+					e.target.disabled = true;
+					setStatus( msg, 'Adding to the action queue…' );
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'approved' } } )
+						.then( function () { e.target.textContent = 'Added ✓'; setStatus( msg, 'Added to the action queue.', 'is-ok' ); } )
+						.catch( function ( err ) { e.target.disabled = false; setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} else if ( e.target.classList.contains( 'scc-opp-dismiss' ) ) {
+					row.style.opacity = '0.4';
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'dismissed' } } )
+						.then( function () { row.parentNode.removeChild( row ); } )
+						.catch( function () { row.style.opacity = '1'; } );
+				}
+			} );
+		}
+	}
+
 	// ---- Action Queue screen (lifecycle + Fix Everything Safe) --------
 	function bindActionQueue() {
 		var table = document.getElementById( 'scc-queue-table' );
@@ -2570,6 +2681,7 @@
 		bindSchemaSettings();
 		bindNativeTemplates();
 		bindOpportunities();
+		bindCopilot();
 		bindActionQueue();
 		bindInsights();
 		bindMetaEditor();
