@@ -8,7 +8,7 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 
 ---
 
-## Phase 1 — Foundation 🚧
+## Phase 1 — Foundation ✅
 The functional base everything else builds on.
 
 - ✅ Plugin foundation (bootstrap, singleton, loader, activation/deactivation)
@@ -129,6 +129,88 @@ Decouples page generation from Elementor. See `docs/TEMPLATES.md` and
   schema, and internal linking remain renderer-independent. Generated pages are
   **plain WordPress content** that survives plugin removal. Existing Elementor
   mapping retained for backward compatibility.
+
+## v1.3–v1.22 — SEO Intelligence Engine, Template Mapping 2.0, AI linking, Meta Editor & Content Ideas ✅
+Merged into `ttgmbapp` as **v1.22.1**. Turns the toolset into an intelligent SEO
+operating system that decides what to do next, explains why, executes safe
+actions, and measures results. All additive, human-controlled, draft-first, and
+never fabricates metrics. Adds tables `scc_seo_actions`, `scc_seo_snapshots`,
+`scc_seo_experiments` (DB version 1.18.0).
+
+- ✅ **Opportunity Engine** — transparent factor-point scoring, confidence, and
+  data-availability states (`verified/partial/estimated/unavailable`). Signals:
+  GSC striking-distance & untapped demand, topical-authority gaps,
+  cannibalization, orphans, thin content, missing metadata, **Content Decay**,
+  **Intent Drift** (both GSC-only).
+- ✅ **Action Queue** (`scc_seo_actions`) — full lifecycle + logging; safe,
+  reversible deterministic execution only (internal links); "Fix Everything
+  Safe"; a Dashboard "What should I do next?" card and a dedicated screen.
+- ✅ **Page Optimizer** (per-page scorecard + prioritized fixes), **Health
+  Timeline** (`scc_seo_snapshots`), **Experiments** (`scc_seo_experiments`,
+  correlation language only), **Entity Authority Graph**, revenue-aware
+  prioritization, **automation modes** (conservative/assisted/autopilot), and an
+  honest provider-agnostic **AI/GEO Visibility** scaffold.
+- ✅ **Template Mapping 2.0** — `SCC_Template_Variables` central token registry,
+  type-aware resolution/escaping, validation, preview, and a token reference.
+- ✅ **AI-assisted internal linking** — opt-in; the AI picks natural anchors from
+  verified candidates only and never invents URLs.
+- ✅ **Meta Editor** — bulk-edit meta titles/descriptions from the admin with AI
+  suggestions, per-row and "suggest/save all", and missing/present filters.
+- ✅ **Content Ideas** — plain-language page ideas grounded in existing pages +
+  real GSC demand + business + pillars, with a refine follow-up.
+- ✅ **Site-wide template exclusion** (builder/template CPTs no longer leak into
+  pages/posts), multi-page competitor gap analysis, sitemap-aware topical maps,
+  Elementor link-insertion fix, Publishing Queue removal.
+
+## v1.23 — Security & reliability hardening ✅
+Additive; no DB changes. Adds the `includes/net/` layer.
+
+- ✅ **Centralized outbound-URL SSRF guard** (`SCC_URL::is_safe_outbound_url`),
+  enforced immediately before each outbound request. Loopback (`127.0.0.0/8`,
+  `::1`, `localhost`) is allowed so LM Studio keeps working; RFC1918 private,
+  link-local incl. the `169.254.169.254` metadata endpoint, multicast, reserved,
+  IPv6 ULA/link-local, credentialed URLs and non-HTTP(S) schemes are refused;
+  hostnames are resolved and resolved IPs judged (DNS-rebinding mitigation).
+  Applied to the LM Studio provider and the crawler.
+- ✅ **`SCC_Robots`** — a real robots.txt matcher (Allow/Disallow longest-match
+  precedence, `*` wildcards, `$` anchors, multiple user-agent groups).
+- ✅ **Crawler**: RFC 3986 relative-URL resolution; crawl-identity normalization
+  (drops fragments + tracking params); crawl/final/canonical separation;
+  content-type filtering (refuses PDF/image/video/binary); JSON-LD extraction
+  de-duplicates identical blocks and tolerates malformed ones (no double-parse).
+- ✅ **REST object-level authorization** on post-scoped mutations
+  (`current_user_can('edit_post', $id)`), so relaxing `scc_required_capability`
+  never grants blanket per-object access. `/settings` write path validates the
+  LM Studio URL through the same guard.
+- ✅ **Jobs**: stale-`processing` recovery so a dead worker never locks the queue.
+
+## v1.24 — Simpler generation: Normal vs Template ✅
+"Normal WordPress, with an SEO layer." Additive; no DB changes.
+
+- ✅ Two explicit, deterministic generation modes (`SCC_Generator::is_native_mode`).
+  **NORMAL** (`article`/`blog`/`post`) → a plain WordPress post: the sanitized AI
+  body (H2 sections, lists, FAQ, CTA, **no in-body `<h1>`**) becomes
+  `post_content` verbatim — no template, no tokens, no page builder, never pulled
+  into Elementor. **TEMPLATE** (`service`/`location`/`landing`/`custom`) keeps the
+  existing template + renderer + token path.
+- ✅ Native excerpt + taxonomy via core WordPress: excerpt from the meta
+  description, tags from the keywords, existing-only category matching (never
+  creates duplicate categories).
+- ✅ `POST /generate/quick` (topic → draft, reuses the existing generator) and a
+  rewritten Generate screen: a Content-type selector (Blog Post default) with a
+  topic + a few optional fields, everything else behind **Advanced**.
+- ✅ Tokens and the whole template system remain fully supported for TEMPLATE mode
+  and existing mappings — simply no longer required for an ordinary blog post.
+
+## v1.25 — Simpler navigation: tabbed hubs ✅
+- ✅ The ~15-item flat admin menu is consolidated into 8 items via three tabbed
+  hubs — **Content** (Plan/Ideas/Generate/Publishing), **SEO** (Audit/Keywords/
+  Architecture/Internal Links/Meta), **Strategy** (Opportunities/Topical
+  Authority/Competitors). Each hub delegates to the existing, unchanged screens;
+  every screen stays registered as a hidden route so deep links keep working. No
+  screen or feature removed.
+
+---
 
 ## Cross-cutting (every phase)
 - Follow WPCS; sanitize input, escape output, prepared queries.
