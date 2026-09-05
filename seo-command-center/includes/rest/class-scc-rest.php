@@ -453,6 +453,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/generate/quick',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'generate_quick' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/regenerate-section',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1823,6 +1833,81 @@ class SCC_REST {
 	}
 
 	/**
+	 * POST /generate/quick — the simple path: enter a topic, get a draft.
+	 *
+	 * Builds an ad-hoc entry from a handful of fields and runs the existing
+	 * generator directly (synchronously). A Blog Post generates as a normal
+	 * native WordPress post; a structured type (service/location/landing/custom)
+	 * uses the template + renderer layer. No content-plan row is created.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function generate_quick( WP_REST_Request $request ) {
+		// Generation runs one long AI call; never punt it to a background worker.
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+
+		$topic = SCC_Security::sanitize_text( $params['topic'] ?? '' );
+		if ( '' === $topic ) {
+			return $this->fail( 'no_topic', __( 'Enter a topic to generate.', 'seo-command-center' ), 400 );
+		}
+
+		$types = class_exists( 'SCC_Template' ) ? SCC_Template::TYPES : array( 'article', 'service', 'location', 'landing', 'custom' );
+		$type  = sanitize_key( (string) ( $params['content_type'] ?? 'article' ) );
+		if ( ! in_array( $type, $types, true ) ) {
+			$type = 'article';
+		}
+
+		$secondary = array();
+		$raw_sec   = $params['secondary'] ?? array();
+		if ( is_string( $raw_sec ) ) {
+			$raw_sec = preg_split( '/[\r\n,]+/', $raw_sec );
+		}
+		foreach ( (array) $raw_sec as $s ) {
+			$s = SCC_Security::sanitize_text( $s );
+			if ( '' !== $s ) {
+				$secondary[] = $s;
+			}
+		}
+
+		$word_count = isset( $params['word_count'] ) ? SCC_Security::sanitize_int( $params['word_count'], 0, 8000 ) : 0;
+
+		$entry = array(
+			'title'           => $topic,
+			'primary_keyword' => SCC_Security::sanitize_text( $params['primary_keyword'] ?? $topic ),
+			'secondary'       => array_slice( $secondary, 0, 8 ),
+			'intent'          => SCC_Security::sanitize_text( $params['intent'] ?? '' ),
+			'page_type'       => $type,
+			'location'        => SCC_Security::sanitize_text( $params['location'] ?? '' ),
+			'category'        => SCC_Security::sanitize_text( $params['category'] ?? '' ),
+			'tone'            => SCC_Security::sanitize_text( $params['tone'] ?? '' ),
+			'template_family' => SCC_Security::sanitize_text( $params['template_family'] ?? '' ),
+			'word_count'      => $word_count,
+			'url'             => '',
+		);
+
+		try {
+			$generator = new SCC_Generator( $this->ai );
+			$result    = $generator->generate( $entry );
+		} catch ( \Throwable $e ) {
+			SCC_Logger::error( 'generate', 'Fatal during quick generation: ' . $e->getMessage() );
+			return $this->fail( 'generate_exception', $e->getMessage(), 500 );
+		}
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
 	 * POST /regenerate-section.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -2184,6 +2269,12 @@ class SCC_REST {
 	 */
 	public function publishing_action( WP_REST_Request $request ) {
 		$post_id = (int) $request->get_param( 'post_id' );
+		// Publishing/scheduling/removing a post is a content mutation: require the
+		// user to be able to edit (and, for publish, publish) this specific post.
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) {
+			return $guard;
+		}
 		$action  = $request->get_param( 'action' );
 		$params  = $request->get_json_params();
 		$params  = is_array( $params ) ? $params : array();
@@ -2243,6 +2334,10 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function links_analyze( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		// AI-assisted linking crawls the page + one AI call — allow it to finish.
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
@@ -2328,6 +2423,10 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function meta_variants( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$optimizer = new SCC_Meta_Optimizer( $this->ai );
 		$result    = $optimizer->generate_variants( (int) $request->get_param( 'post_id' ) );
 		if ( is_wp_error( $result ) ) {
@@ -2359,6 +2458,10 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function metadata_save( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
 		$result = SCC_Metadata::save_manual(
@@ -2379,6 +2482,10 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function meta_apply( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
 		$optimizer = new SCC_Meta_Optimizer( $this->ai );
@@ -2428,6 +2535,10 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function schema_recommend( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$post_id = (int) $request->get_param( 'post_id' );
 		$rec     = SCC_Schema_Engine::recommend( $post_id );
 		$rec['conflicts'] = SCC_Schema_Engine::detect_conflicts( $post_id, $rec['recommended'] );
@@ -2441,6 +2552,10 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function schema_generate( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$params  = $request->get_json_params();
 		$params  = is_array( $params ) ? $params : array();
 		$types   = isset( $params['types'] ) ? array_map( 'sanitize_text_field', (array) $params['types'] ) : array();
@@ -2457,6 +2572,10 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function schema_save( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$params  = $request->get_json_params();
 		$params  = is_array( $params ) ? $params : array();
 		$post_id = (int) $request->get_param( 'post_id' );
@@ -2483,6 +2602,10 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function schema_disable( WP_REST_Request $request ) {
+		$guard = $this->require_post_access( $request->get_param( 'post_id' ) );
+		if ( $guard ) {
+			return $guard;
+		}
 		$result = SCC_Schema_Engine::disable( (int) $request->get_param( 'post_id' ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -2731,6 +2854,30 @@ class SCC_REST {
 			'source'   => $selection['source'],
 			'html'     => is_wp_error( $rendered ) ? '' : $rendered['post_content'],
 		) );
+	}
+
+	/**
+	 * Object-level authorization for a WordPress post/page id.
+	 *
+	 * The plugin capability (manage_options by default) already gates every
+	 * route, but that can be relaxed via the `scc_required_capability` filter, and
+	 * defense-in-depth is cheap: verify the current user may actually edit THIS
+	 * object before we read or change it. Returns a WP_Error to return early, or
+	 * null when access is allowed.
+	 *
+	 * @param int    $post_id Post id.
+	 * @param string $cap     Capability meta-cap to test (default edit_post).
+	 * @return WP_Error|null
+	 */
+	protected function require_post_access( $post_id, $cap = 'edit_post' ) {
+		$post_id = (int) $post_id;
+		if ( $post_id <= 0 || ! get_post( $post_id ) ) {
+			return $this->fail( 'no_post', __( 'That post does not exist.', 'seo-command-center' ), 404 );
+		}
+		if ( ! current_user_can( $cap, $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You are not allowed to modify this content.', 'seo-command-center' ), 403 );
+		}
+		return null;
 	}
 
 	/**

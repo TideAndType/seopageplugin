@@ -875,6 +875,114 @@
 		// for convenience, directly on the Content Plan table.
 		bindGenerateTable( document.getElementById( 'scc-generate-table' ), document.getElementById( 'scc-generate-msg' ) );
 		bindGenerateTable( document.getElementById( 'scc-plan-table' ), document.getElementById( 'scc-plan-status-msg' ) );
+		bindQuickGenerate();
+	}
+
+	// ---- Simple path: topic -> draft ------------------------------------
+	function bindQuickGenerate() {
+		var card = document.querySelector( '.scc-quickgen' );
+		if ( ! card ) {
+			return;
+		}
+		var typeGroup = card.querySelector( '#scc-qg-type' );
+		var modeNote  = card.querySelector( '#scc-qg-mode-note' );
+		var tplField  = card.querySelector( '.scc-tpl-only' );
+		var advToggle = card.querySelector( '#scc-qg-advanced-toggle' );
+		var advBox    = card.querySelector( '#scc-qg-advanced' );
+		var genBtn    = card.querySelector( '#scc-qg-generate' );
+		var statusEl  = card.querySelector( '#scc-qg-status' );
+		var resultEl  = card.querySelector( '#scc-qg-result' );
+
+		function selectedType() {
+			var checked = card.querySelector( 'input[name="scc_qg_type"]:checked' );
+			return checked ? checked.value : 'article';
+		}
+		function isNative( t ) {
+			return t === 'article' || t === 'blog' || t === 'blog_post' || t === 'post';
+		}
+		function refreshMode() {
+			var t = selectedType();
+			// Toggle the active pill styling.
+			card.querySelectorAll( '.scc-seg' ).forEach( function ( seg ) {
+				var inp = seg.querySelector( 'input' );
+				seg.classList.toggle( 'is-active', !!( inp && inp.checked ) );
+			} );
+			if ( isNative( t ) ) {
+				modeNote.textContent = 'Blog Post generates as a normal WordPress post (title, intro, H2 sections, FAQ, conclusion). No template needed.';
+				if ( tplField ) { tplField.hidden = true; }
+			} else {
+				modeNote.textContent = 'A structured page. It renders through your template + renderer (Elementor / Gutenberg / native), using the mapped or default template unless you name one under Advanced.';
+				if ( tplField ) { tplField.hidden = false; }
+			}
+		}
+		if ( typeGroup ) {
+			typeGroup.addEventListener( 'change', refreshMode );
+		}
+		refreshMode();
+
+		if ( advToggle && advBox ) {
+			advToggle.addEventListener( 'click', function () {
+				var open = ! advBox.hidden;
+				advBox.hidden = open;
+				advToggle.setAttribute( 'aria-expanded', String( ! open ) );
+				advToggle.textContent = open ? 'Advanced ▾' : 'Advanced ▴';
+			} );
+		}
+
+		if ( ! genBtn ) {
+			return;
+		}
+		genBtn.addEventListener( 'click', function () {
+			var topic = ( card.querySelector( '#scc-qg-topic' ) || {} ).value || '';
+			topic = topic.trim();
+			if ( ! topic ) {
+				setStatus( statusEl, 'Enter a topic first.', 'is-error' );
+				return;
+			}
+			var val = function ( sel ) { var n = card.querySelector( sel ); return n ? n.value.trim() : ''; };
+			var payload = {
+				content_type: selectedType(),
+				topic: topic,
+				primary_keyword: val( '#scc-qg-keyword' ),
+				location: val( '#scc-qg-location' ),
+				category: val( '#scc-qg-category' ),
+				tone: val( '#scc-qg-tone' ),
+				secondary: val( '#scc-qg-secondary' ),
+				word_count: val( '#scc-qg-words' ),
+				template_family: val( '#scc-qg-template' )
+			};
+			genBtn.disabled = true;
+			if ( resultEl ) { resultEl.hidden = true; resultEl.innerHTML = ''; }
+			setStatus( statusEl, 'Generating draft… this runs on the server and can take a minute or two with a local model. You can leave this page open.' );
+
+			request( '/generate/quick', { method: 'POST', data: payload } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					genBtn.disabled = false;
+					setStatus( statusEl, 'Draft created.', 'is-ok' );
+					if ( resultEl ) {
+						resultEl.hidden = false;
+						resultEl.innerHTML = '';
+						var score = ( d.score && d.score.score ) || 0;
+						resultEl.appendChild( el( 'p', score
+							? ( 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' )
+							: 'Draft created and saved as a WordPress draft.' ) );
+						if ( d.edit_url ) {
+							var a = el( 'a', 'Edit draft in WordPress' );
+							a.href = d.edit_url; a.className = 'button button-primary';
+							resultEl.appendChild( a );
+						}
+						if ( d.renderer ) {
+							resultEl.appendChild( el( 'span', ' ' ) );
+							resultEl.appendChild( el( 'span', d.elementor ? 'Rendered with Elementor.' : ( 'wordpress' === d.renderer ? 'Native WordPress post.' : ( 'Rendered with ' + d.renderer + '.' ) ) ) );
+						}
+					}
+				} )
+				.catch( function ( err ) {
+					genBtn.disabled = false;
+					setStatus( statusEl, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		} );
 	}
 
 	function bindGenerateTable( table, msg ) {

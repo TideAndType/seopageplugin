@@ -20,6 +20,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SCC_Generator {
 
+	/**
+	 * Content types that generate as a NORMAL, native WordPress post/page:
+	 * plain post_content, no template, no tokens, no page builder. This is the
+	 * default path — "normal WordPress, with an SEO layer" — and it is never
+	 * pulled into Elementor even if a builder is the site default renderer.
+	 *
+	 * @var string[]
+	 */
+	const NATIVE_TYPES = array( 'article', 'blog', 'blog_post', 'post', '' );
+
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
@@ -88,6 +98,8 @@ class SCC_Generator {
 			'recommended_words'       => $words,
 			'primary_keyword'         => (string) ( $entry['primary_keyword'] ?? '' ),
 			'secondary'               => array_values( array_filter( array_map( 'strval', $secondary ) ) ),
+			'tone'                    => (string) ( $entry['tone'] ?? '' ),
+			'location'                => (string) ( $entry['location'] ?? ( $entry['city'] ?? '' ) ),
 			'outline'                 => array(),
 			'entities'                => array(),
 			'questions'               => array(),
@@ -118,24 +130,36 @@ class SCC_Generator {
 		// Internal links operate on the content object BEFORE rendering.
 		$content->internal_links = $this->weave_internal_links( $content );
 
-		// Deterministic template + renderer selection (the AI never picks).
-		$selection = SCC_Template_Selector::select(
-			$content->content_type,
-			isset( $entry['template_family'] ) ? (string) $entry['template_family'] : ''
-		);
-		$template  = $selection['template'];
-		$preferred = SCC_Template_Selector::renderer_for( $content->content_type, $template );
-		$renderer  = $this->renderers->pick( $preferred, $content->content_type );
+		$manual_family = isset( $entry['template_family'] ) ? (string) $entry['template_family'] : '';
 
-		$rendered = $renderer->render( $content, $template );
-		if ( is_wp_error( $rendered ) ) {
-			// Safety net: never fail the whole run because a builder errored.
-			SCC_Logger::error( 'generator', 'Renderer failed, using native WP: ' . $rendered->get_error_message() );
-			$renderer = new SCC_WordPress_Renderer();
+		if ( self::is_native_mode( $content->content_type, $manual_family ) ) {
+			// NORMAL mode: a normal WordPress post. The AI body (already sanitized
+			// with FAQs appended, and with NO in-body <h1> — the theme renders the
+			// title as H1) becomes the post_content verbatim. No template, no
+			// tokens, no page builder.
+			$template = SCC_Template::fallback( $content->content_type );
+			$rendered = $this->render_native( $content );
+			$renderer_id   = 'wordpress';
+			$used_elementor = false;
+		} else {
+			// TEMPLATE mode: structured page through the template + renderer layer.
+			$selection = SCC_Template_Selector::select( $content->content_type, $manual_family );
+			$template  = $selection['template'];
+			$preferred = SCC_Template_Selector::renderer_for( $content->content_type, $template );
+			$renderer  = $this->renderers->pick( $preferred, $content->content_type );
+
 			$rendered = $renderer->render( $content, $template );
-		}
-		if ( is_wp_error( $rendered ) ) {
-			return $rendered;
+			if ( is_wp_error( $rendered ) ) {
+				// Safety net: never fail the whole run because a builder errored.
+				SCC_Logger::error( 'generator', 'Renderer failed, using native WP: ' . $rendered->get_error_message() );
+				$renderer = new SCC_WordPress_Renderer();
+				$rendered = $renderer->render( $content, $template );
+			}
+			if ( is_wp_error( $rendered ) ) {
+				return $rendered;
+			}
+			$renderer_id   = $renderer->get_id();
+			$used_elementor = ( 'elementor' === $renderer_id );
 		}
 
 		$post_type = self::post_type_for( $content->content_type );
@@ -163,10 +187,14 @@ class SCC_Generator {
 		foreach ( (array) $rendered['post_meta'] as $meta_key => $meta_value ) {
 			update_post_meta( $post_id, $meta_key, $meta_value );
 		}
-		update_post_meta( $post_id, '_scc_renderer', $renderer->get_id() );
+		update_post_meta( $post_id, '_scc_renderer', $renderer_id );
 		update_post_meta( $post_id, '_scc_template', $template->family );
-		$used_renderer  = $renderer->get_id();
-		$used_elementor = ( 'elementor' === $used_renderer );
+		$used_renderer = $renderer_id;
+
+		// Native WordPress taxonomy + excerpt (uses core taxonomies, never a new
+		// storage system). Categories are matched to EXISTING terms only, so we
+		// never spawn duplicate categories; tags come from the keywords.
+		$this->apply_taxonomy_and_excerpt( $post_id, $post_type, $entry, $body, $content );
 
 		// Metadata (non-destructive).
 		SCC_Metadata::apply(
@@ -220,7 +248,7 @@ class SCC_Generator {
 			);
 		}
 
-		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'renderer' => $used_renderer, 'template' => $template->family ) );
+		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'renderer' => $used_renderer, 'template' => $template->family, 'mode' => ( 'native' === $template->family || self::is_native_mode( $content->content_type, $manual_family ) ) ? 'native' : 'template' ) );
 
 		return array(
 			'post_id'   => $post_id,
@@ -246,7 +274,9 @@ class SCC_Generator {
 	protected function generate_body( array $entry, array $brief ) {
 		$page_type   = $entry['page_type'] ?? 'article';
 		$intent      = strtolower( (string) ( $entry['intent'] ?? ( $brief['search_intent'] ?? '' ) ) );
-		$is_local    = ( 'location' === $page_type ) || ( false !== strpos( $intent, 'local' ) );
+		$tone        = trim( (string) ( $brief['tone'] ?? '' ) );
+		$location    = trim( (string) ( $brief['location'] ?? '' ) );
+		$is_local    = ( 'location' === $page_type ) || ( false !== strpos( $intent, 'local' ) ) || ( '' !== $location );
 		$commercial  = in_array( $intent, array( 'commercial', 'transactional', 'local' ), true )
 			|| in_array( $page_type, array( 'pillar', 'service', 'location' ), true );
 		$site_name   = get_bloginfo( 'name' );
@@ -290,6 +320,9 @@ class SCC_Generator {
 				  . '(5) finish with ONE specific call to action tied to the offer in the brief (for example a free audit) telling '
 				  . 'the reader exactly what to do next, never a weak "let\'s talk". '
 				: 'Write a genuinely useful, well-structured article with clear <h2>/<h3> sections and a natural, helpful next step at the end. ' )
+			// Optional caller-supplied tone + location focus (from the quick form).
+			. ( '' !== $tone ? 'TONE: write in a ' . $tone . ' tone while staying credible and specific. ' : '' )
+			. ( '' !== $location ? 'LOCATION FOCUS: make the content genuinely relevant to ' . $location . ' where natural, without keyword-stuffing place names. ' : '' )
 			// FAQs.
 			. ( $commercial
 				? 'FAQs: include 4 to 7 buyer questions with honest answers, such as how long it takes, what it costs (explain what '
@@ -527,13 +560,139 @@ class SCC_Generator {
 	}
 
 	/**
+	 * Whether a content type generates as a normal, native WordPress post.
+	 *
+	 * Native when the type is a blog/article type AND the user has not explicitly
+	 * chosen a template family for it (choosing a template opts even a post into
+	 * TEMPLATE mode — an advanced escape hatch).
+	 *
+	 * @param string $content_type  Content type.
+	 * @param string $manual_family Explicitly chosen template family, if any.
+	 * @return bool
+	 */
+	public static function is_native_mode( $content_type, $manual_family = '' ) {
+		if ( '' !== trim( (string) $manual_family ) ) {
+			return false;
+		}
+		return in_array( (string) $content_type, self::NATIVE_TYPES, true );
+	}
+
+	/**
+	 * Render the content object as normal WordPress post content: the sanitized
+	 * AI body (with FAQs already appended and NO in-body H1) becomes post_content
+	 * as-is. No template, no tokens, no page builder.
+	 *
+	 * @param SCC_Content_Object $content Content object.
+	 * @return array {post_content, post_meta, post_name}
+	 */
+	protected function render_native( SCC_Content_Object $content ) {
+		$html = trim( (string) $content->content );
+		return array(
+			'post_content' => $html,
+			'post_meta'    => array(),
+			'post_name'    => $content->slug ? sanitize_title( $this->last_slug_segment( $content->slug ) ) : sanitize_title( $content->title ),
+		);
+	}
+
+	/**
+	 * Last path segment of a slug/URL.
+	 *
+	 * @param string $slug Slug or URL/path.
+	 * @return string
+	 */
+	protected function last_slug_segment( $slug ) {
+		$path = wp_parse_url( $slug, PHP_URL_PATH );
+		$segs = array_filter( explode( '/', (string) ( $path ? $path : $slug ) ) );
+		return $segs ? (string) end( $segs ) : (string) $slug;
+	}
+
+	/**
+	 * Apply native WordPress excerpt + taxonomy to a generated post.
+	 *
+	 * - Excerpt: derived from the meta description when the post has none.
+	 * - Categories (posts only): matched to an EXISTING category by name/slug so
+	 *   we never create duplicate categories; a hint that matches nothing is left
+	 *   alone (the site's default category applies).
+	 * - Tags (posts only): the primary + secondary keywords, capped, via the core
+	 *   tag taxonomy (WordPress de-duplicates by slug).
+	 *
+	 * Uses native WordPress taxonomies only — no parallel storage.
+	 *
+	 * @param int                $post_id   Post id.
+	 * @param string             $post_type Resolved post type.
+	 * @param array              $entry     Content-plan entry.
+	 * @param array              $body      Generated body.
+	 * @param SCC_Content_Object $content   Content object.
+	 * @return void
+	 */
+	protected function apply_taxonomy_and_excerpt( $post_id, $post_type, array $entry, array $body, SCC_Content_Object $content ) {
+		// Excerpt from the meta description (only if the post has none yet).
+		$excerpt = trim( wp_strip_all_tags( (string) ( $body['meta_description'] ?? '' ) ) );
+		if ( '' !== $excerpt ) {
+			$existing = get_post_field( 'post_excerpt', $post_id );
+			if ( '' === trim( (string) $existing ) ) {
+				wp_update_post( array( 'ID' => $post_id, 'post_excerpt' => $excerpt ) );
+			}
+		}
+
+		if ( 'post' !== $post_type ) {
+			return; // Pages have no categories/tags by default.
+		}
+
+		// Category: existing terms only. Accept a hint from the entry.
+		$hint = SCC_Security::sanitize_text( $entry['category'] ?? ( $entry['parent'] ?? '' ) );
+		$term_id = self::resolve_existing_category( $hint );
+		if ( $term_id > 0 ) {
+			wp_set_post_categories( $post_id, array( $term_id ), false );
+		}
+
+		// Tags from the primary + secondary keywords (capped).
+		$tags = array();
+		if ( '' !== (string) $content->primary_keyword ) {
+			$tags[] = (string) $content->primary_keyword;
+		}
+		foreach ( (array) $content->secondary_keywords as $kw ) {
+			$kw = SCC_Security::sanitize_text( $kw );
+			if ( '' !== $kw ) {
+				$tags[] = $kw;
+			}
+		}
+		$tags = array_slice( array_values( array_unique( $tags ) ), 0, 8 );
+		if ( ! empty( $tags ) ) {
+			wp_set_post_tags( $post_id, $tags, true );
+		}
+	}
+
+	/**
+	 * Resolve a category hint to an EXISTING category term id, or 0 if none match.
+	 * Never creates a category.
+	 *
+	 * @param string $hint Category name or slug.
+	 * @return int
+	 */
+	public static function resolve_existing_category( $hint ) {
+		$hint = trim( (string) $hint );
+		if ( '' === $hint || ! function_exists( 'get_term_by' ) ) {
+			return 0;
+		}
+		foreach ( array( 'name', 'slug' ) as $by ) {
+			$needle = ( 'slug' === $by ) ? sanitize_title( $hint ) : $hint;
+			$term   = get_term_by( $by, $needle, 'category' );
+			if ( $term && ! is_wp_error( $term ) ) {
+				return (int) $term->term_id;
+			}
+		}
+		return 0;
+	}
+
+	/**
 	 * Map a page type to a WordPress post type.
 	 *
 	 * @param string $page_type Page type.
 	 * @return string
 	 */
 	public static function post_type_for( $page_type ) {
-		return ( 'article' === $page_type ) ? 'post' : 'page';
+		return in_array( (string) $page_type, self::NATIVE_TYPES, true ) ? 'post' : 'page';
 	}
 
 	/**

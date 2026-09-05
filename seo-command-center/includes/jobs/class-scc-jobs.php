@@ -22,6 +22,7 @@ class SCC_Jobs {
 	const PER_TICK       = 3;   // Max jobs processed per cron tick.
 	const PAUSED_OPTION  = 'scc_jobs_paused';
 	const SECRET_OPTION  = 'scc_worker_secret';
+	const STALE_SECONDS  = 900; // A 'processing' job older than this is presumed dead.
 
 	/** @var SCC_AI_Manager */
 	protected $ai;
@@ -194,6 +195,8 @@ class SCC_Jobs {
 			return;
 		}
 
+		self::recover_stale_jobs();
+
 		global $wpdb;
 		$table = SCC_DB::table( 'jobs' );
 		$rows  = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} WHERE status = 'queued' ORDER BY id ASC LIMIT %d", self::PER_TICK ), ARRAY_A ); // phpcs:ignore WordPress.DB
@@ -207,6 +210,47 @@ class SCC_Jobs {
 		if ( $remaining > 0 && ! self::is_paused() ) {
 			wp_schedule_single_event( time() + 60, self::CRON_HOOK );
 		}
+	}
+
+	/**
+	 * Recover jobs that got stuck in 'processing' (e.g. a worker died mid-run on a
+	 * host that dropped the request). A stale job with retries left is requeued;
+	 * one that has exhausted its attempts is failed with a clear reason, so it
+	 * never stays locked forever.
+	 *
+	 * @return int Number of jobs recovered.
+	 */
+	public static function recover_stale_jobs() {
+		global $wpdb;
+		$table  = SCC_DB::table( 'jobs' );
+		$cutoff = gmdate( 'Y-m-d H:i:s', time() - self::STALE_SECONDS );
+
+		$rows = $wpdb->get_results( // phpcs:ignore WordPress.DB
+			$wpdb->prepare( "SELECT id, attempts, max_attempts FROM {$table} WHERE status = 'processing' AND started_at IS NOT NULL AND started_at < %s", $cutoff ),
+			ARRAY_A
+		);
+		$recovered = 0;
+		foreach ( (array) $rows as $job ) {
+			$attempts = (int) $job['attempts'] + 1;
+			if ( $attempts >= (int) $job['max_attempts'] ) {
+				SCC_DB::update(
+					'jobs',
+					array( 'status' => 'failed', 'attempts' => $attempts, 'last_error' => 'Recovered stale job: worker did not finish', 'finished_at' => current_time( 'mysql' ) ),
+					array( 'id' => (int) $job['id'] )
+				);
+			} else {
+				SCC_DB::update(
+					'jobs',
+					array( 'status' => 'queued', 'attempts' => $attempts, 'last_error' => 'Requeued after a stalled run' ),
+					array( 'id' => (int) $job['id'] )
+				);
+			}
+			$recovered++;
+		}
+		if ( $recovered > 0 ) {
+			SCC_Logger::info( 'jobs', 'Recovered stale jobs', array( 'count' => $recovered ) );
+		}
+		return $recovered;
 	}
 
 	/**

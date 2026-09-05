@@ -373,3 +373,86 @@ existing systems (no parallel SEO system, no fabricated data):
 Surfaced in admin via the **Action Queue** and **Insights** screens, the
 Dashboard "What should I do next?" card, the editor's "Optimize this page", and
 Settings (automation mode + business value).
+
+## Outbound network safety (`includes/net/`)
+
+A small, dependency-free layer centralizes every outbound-URL decision so the
+crawler, the AI providers, and the integrations behave consistently.
+
+- **`SCC_URL`**
+  - `is_safe_outbound_url()` — the SSRF guard. It is called **immediately before**
+    an outbound request (not only when a setting is saved). Loopback
+    (`127.0.0.0/8`, `::1`, and the literal host `localhost`) is allowed so local
+    model servers such as **LM Studio** keep working; RFC1918 private ranges,
+    link-local (incl. the cloud metadata endpoint `169.254.169.254`), multicast,
+    reserved, unspecified, and IPv6 ULA/link-local targets are refused, as are
+    URLs with embedded credentials or a non-HTTP(S) scheme. Hostnames are resolved
+    and the resolved IPs are judged too (a basic DNS-rebinding mitigation).
+    Overridable via the `scc_allow_outbound_url` filter.
+  - `resolve()` — RFC 3986 relative-reference resolution for the crawler.
+  - `normalize_for_crawl()` / `strip_tracking_params()` — a stable crawl identity
+    (lowercased scheme/host, no default port, no fragment, tracking-only query
+    params such as `utm_*`/`fbclid`/`gclid` dropped) so one page is not crawled
+    many times.
+- **`SCC_Robots`** — a proper robots.txt matcher: multiple user-agent groups,
+  `Allow`/`Disallow` with longest-match precedence (Allow wins ties), `*`
+  wildcards and `$` end-anchors, comments and blank lines. The crawler evaluates
+  it under its product token `SEO-Command-Center`.
+
+The guard is applied where the target is user-configurable or user-supplied (the
+LM Studio provider and the crawler). Fixed vendor endpoints (Anthropic, OpenAI,
+Google) are not attacker-controllable, so they are intentionally not subjected to
+a per-request DNS lookup.
+
+REST routes additionally enforce **object-level authorization**: post-scoped
+mutations (metadata, schema, publishing, link analysis, page optimize) verify
+`current_user_can( 'edit_post', $id )` on the specific object, so relaxing the
+plugin capability via `scc_required_capability` never grants blanket per-object
+access.
+
+## Generation modes: Normal vs Template
+
+SEO Command Center is "normal WordPress, with an SEO intelligence layer." The
+generator (`SCC_Generator`) has two explicit paths, chosen deterministically by
+content type — the AI never decides:
+
+- **NORMAL (native)** — the default. Content types in `SCC_Generator::NATIVE_TYPES`
+  (`article`/`blog`/`blog_post`/`post`) become a plain WordPress **post**: the
+  sanitized AI body (H2 sections, lists, an FAQ, a closing CTA — and **no in-body
+  `<h1>`**, because the theme renders the post title as the page H1) is saved as
+  `post_content` verbatim. No template, no tokens, no page builder — never pulled
+  into Elementor even if a builder is the site's default renderer. Native excerpt,
+  tags (from the keywords) and an existing-only category are applied through core
+  taxonomies (`resolve_existing_category()` never creates duplicate categories).
+- **TEMPLATE (advanced)** — structured pages (`service`/`location`/`landing`/
+  `custom`, …) go through the existing template + renderer layer
+  (`SCC_Template_Selector` → Elementor / Gutenberg / native renderer). Tokens
+  (`{{TITLE}}`, `{{SERVICE}}`, `{{CITY}}`, …) apply here only. Choosing a template
+  family for any type (even an article) opts it into TEMPLATE mode — the escape
+  hatch — so nothing existing breaks.
+
+`is_native_mode( $content_type, $manual_family )` decides; `post_type_for()` maps
+native types to `post` and structured types to `page`. Tokens and the whole
+template system remain fully supported for TEMPLATE mode and existing mappings —
+they are simply no longer required to generate an ordinary blog post.
+
+The Generate screen mirrors this: a **Content type** selector (Blog Post default)
+with a topic and a few optional fields up front, and everything else behind
+**Advanced**.
+
+## Admin navigation: tabbed hubs
+
+Overlapping screens are consolidated into three tabbed hubs instead of a long
+flat menu — the top-level menu is Dashboard, **Content**, **SEO**, **Strategy**,
+Action Queue, Templates, Settings, Connections:
+
+- **Content** — Content Plan · Ideas · Generate · Publishing
+- **SEO** — Site Audit · Keywords · Site Architecture · Internal Links · Meta Editor
+- **Strategy** — Opportunities · Topical Authority · Competitors
+
+A hub (`render_hub()`) prints a `nav-tab-wrapper` bar and then delegates to the
+selected screen's existing render method — the individual views are unchanged.
+`hub_active_tab()` resolves `?tab=` (whitelisted, sanitized) to a valid tab and
+otherwise falls back to the first. Every individual screen is still registered as
+a hidden route, so deep links and in-app links keep working; no screen or feature
+was removed.

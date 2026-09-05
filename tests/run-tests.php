@@ -1116,6 +1116,143 @@ assert_eq( false, SCC_Action_Queue::is_safe( 'create_page' ), 'create_page is NO
 assert_eq( false, SCC_Action_Queue::is_safe( 'fix_cannibalization' ), 'cannibalization fix is NOT auto-executable' );
 assert_eq( false, SCC_Action_Queue::is_safe( 'improve_meta' ), 'meta change is NOT auto-executable (AI + review)' );
 
+echo "\n== Outbound URL security (SSRF guard) ==\n";
+// Loopback is allowed (LM Studio runs locally); private/reserved/metadata is not.
+assert_true( true === SCC_URL::is_safe_outbound_url( 'http://localhost:1234/v1' ), 'localhost allowed' );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'http://127.0.0.1:1234/v1' ), '127.0.0.1 allowed' );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'http://[::1]:1234/v1' ), '::1 allowed' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://10.0.0.5/x' ) ), 'RFC1918 10.x blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://172.16.9.9/x' ) ), 'RFC1918 172.16 blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://192.168.1.1/x' ) ), 'RFC1918 192.168 blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://169.254.169.254/latest/meta-data/' ) ), 'cloud metadata endpoint blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://[fd00::1]/x' ) ), 'IPv6 ULA blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://[fe80::1]/x' ) ), 'IPv6 link-local blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://0.0.0.0/x' ) ), 'unspecified address blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://user:pass@8.8.8.8/x' ) ), 'embedded credentials rejected' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'file:///etc/passwd' ) ), 'file:// scheme rejected' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'ftp://8.8.8.8/x' ) ), 'ftp:// scheme rejected' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'gopher://8.8.8.8/x' ) ), 'gopher:// scheme rejected' );
+// A hostname that resolves to a private address is blocked (DNS-rebinding style).
+add_filter( 'scc_resolve_host_ips', function ( $ips, $host ) {
+	return ( 'rebind.evil.test' === $host ) ? array( '169.254.169.254' ) : ( ( 'good.public.test' === $host ) ? array( '93.184.216.34' ) : $ips );
+}, 10, 2 );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://rebind.evil.test/x' ) ), 'hostname resolving to metadata IP blocked' );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'https://good.public.test/api' ), 'hostname resolving to public IP allowed' );
+remove_all_filters( 'scc_resolve_host_ips' );
+
+echo "\n== IP classification ==\n";
+assert_eq( 'loopback', SCC_URL::ip_category( '127.10.20.30' ), '127/8 is loopback' );
+assert_eq( 'private', SCC_URL::ip_category( '10.255.255.255' ), '10/8 is private' );
+assert_eq( 'public', SCC_URL::ip_category( '172.32.0.1' ), '172.32 is public (outside 172.16/12)' );
+assert_eq( 'reserved', SCC_URL::ip_category( '100.64.0.1' ), 'CGNAT 100.64/10 is reserved' );
+assert_eq( 'multicast', SCC_URL::ip_category( '224.0.0.1' ), '224/4 is multicast' );
+assert_eq( 'public', SCC_URL::ip_category( '8.8.4.4' ), 'public v4' );
+assert_eq( 'private', SCC_URL::ip_category( '::ffff:192.168.0.1' ), 'IPv4-mapped private v6' );
+
+echo "\n== URL resolution (RFC 3986) ==\n";
+$b = 'https://example.com/services/seo/local/';
+assert_eq( 'https://example.com/services/seo/web-design/', SCC_URL::resolve( $b, '../web-design/' ), '../ resolves up one dir' );
+assert_eq( 'https://example.com/services/about', SCC_URL::resolve( $b, '../../about' ), '../../ resolves up two dirs' );
+assert_eq( 'https://example.com/services/seo/local/page', SCC_URL::resolve( $b, './page' ), './ stays in current dir' );
+assert_eq( 'https://example.com/services/seo/local/page', SCC_URL::resolve( $b, 'page' ), 'bare relative path' );
+assert_eq( 'https://example.com/contact', SCC_URL::resolve( $b, '/contact' ), 'root-relative path' );
+assert_eq( 'https://example.com/services/seo/local/?foo=bar', SCC_URL::resolve( $b, '?foo=bar' ), 'query-only reference' );
+assert_eq( 'https://example.com/services/seo/local/#section', SCC_URL::resolve( $b, '#section' ), 'fragment-only reference' );
+assert_eq( 'https://other.com/x', SCC_URL::resolve( $b, 'https://other.com/x' ), 'absolute reference kept' );
+assert_eq( 'https://cdn.com/a.js', SCC_URL::resolve( $b, '//cdn.com/a.js' ), 'protocol-relative reference' );
+assert_eq( 'https://example.com/a/b/d/e', SCC_URL::resolve( 'https://example.com/a/b/c', 'd/e' ), 'nested relative path' );
+
+echo "\n== Crawl URL normalization ==\n";
+assert_eq( 'https://e.com/Path/?id=5', SCC_URL::normalize_for_crawl( 'https://E.com:443/Path/?utm_source=x&id=5#frag' ), 'lowercase host, drop default port + utm + fragment' );
+assert_eq( 'http://e.com/p', SCC_URL::normalize_for_crawl( 'http://e.com/p?fbclid=abc&gclid=z' ), 'all tracking params stripped' );
+assert_eq( 'https://e.com/p?a=1&b=2', SCC_URL::normalize_for_crawl( 'https://e.com/p?a=1&utm_medium=cpc&b=2' ), 'meaningful params preserved in order' );
+assert_eq( 'id=5', SCC_URL::strip_tracking_params( 'utm_source=x&id=5&gclid=1' ), 'strip_tracking_params keeps content params' );
+
+echo "\n== robots.txt parsing ==\n";
+$rb = "User-agent: *\nDisallow: /private/\nAllow: /private/ok\n";
+assert_eq( false, SCC_Robots::is_allowed( $rb, '/private/secret', 'SEO-Command-Center' ), 'Disallow blocks matching path' );
+assert_eq( true, SCC_Robots::is_allowed( $rb, '/private/ok', 'SEO-Command-Center' ), 'more specific Allow overrides Disallow' );
+assert_eq( true, SCC_Robots::is_allowed( $rb, '/public', 'SEO-Command-Center' ), 'unlisted path allowed' );
+$rb2 = "User-agent: SEO-Command-Center\nDisallow: /\n\nUser-agent: *\nAllow: /\n";
+assert_eq( false, SCC_Robots::is_allowed( $rb2, '/anything', 'SEO-Command-Center' ), 'our specific agent group wins over *' );
+assert_eq( true, SCC_Robots::is_allowed( $rb2, '/anything', 'Googlebot' ), 'other agent uses the * group' );
+$rb3 = "User-agent: *\nDisallow: /*.pdf$\n";
+assert_eq( false, SCC_Robots::is_allowed( $rb3, '/docs/a.pdf', 'Bot' ), 'wildcard + $ anchor blocks .pdf' );
+assert_eq( true, SCC_Robots::is_allowed( $rb3, '/docs/a.pdf.html', 'Bot' ), '$ anchor does not block .pdf.html' );
+$rb4 = "# comment\nUser-agent: *\nDisallow:\n"; // Empty Disallow == allow all.
+assert_eq( true, SCC_Robots::is_allowed( $rb4, '/anything', 'Bot' ), 'empty Disallow allows everything' );
+assert_eq( true, SCC_Robots::is_allowed( '', '/x', 'Bot' ), 'missing robots.txt allows everything' );
+$rb5 = "User-agent: A\nUser-agent: B\nDisallow: /x\n"; // Shared group across two agents.
+assert_eq( false, SCC_Robots::is_allowed( $rb5, '/x', 'B' ), 'grouped user-agents share rules' );
+
+echo "\n== JSON-LD extraction robustness ==\n";
+$crawler2 = new SCC_Crawler();
+// Malformed JSON-LD must not abort the crawl; a valid sibling block still parses.
+$mixed = '<html><head>'
+	. '<script type="application/ld+json">{ this is : not json }</script>'
+	. '<script type="application/ld+json">{"@type":"Organization"}</script>'
+	. '</head><body></body></html>';
+$mp = $crawler2->parse( $mixed, 'https://example.com/m' );
+assert_true( in_array( 'Organization', $mp['schema_types'], true ), 'valid JSON-LD parsed despite a malformed sibling block' );
+// Identical duplicate blocks are de-duplicated (type appears once).
+$dup = '<html><head>'
+	. '<script type="application/ld+json">{"@type":"Article"}</script>'
+	. '<script type="application/ld+json">{"@type":"Article"}</script>'
+	. '</head><body></body></html>';
+$dp = $crawler2->parse( $dup, 'https://example.com/d' );
+assert_eq( 1, count( array_keys( $dp['schema_types'], 'Article', true ) ), 'duplicate JSON-LD blocks counted once' );
+// Canonical is resolved to an absolute URL distinct from the crawl URL.
+$canon = '<html><head><link rel="canonical" href="/canonical-home"></head><body></body></html>';
+$cp = $crawler2->parse( $canon, 'https://example.com/some/deep/page' );
+assert_eq( 'https://example.com/canonical-home', $cp['canonical_resolved'], 'relative canonical resolved to absolute' );
+
+echo "\n== Generation mode (native vs template) ==\n";
+// Blog posts generate as normal native WordPress — no template required.
+assert_true( SCC_Generator::is_native_mode( 'article' ), 'article is native mode' );
+assert_true( SCC_Generator::is_native_mode( 'blog_post' ), 'blog_post is native mode' );
+assert_true( SCC_Generator::is_native_mode( '' ), 'empty type defaults to native' );
+assert_eq( false, SCC_Generator::is_native_mode( 'service' ), 'service page is TEMPLATE mode' );
+assert_eq( false, SCC_Generator::is_native_mode( 'location' ), 'location page is TEMPLATE mode' );
+assert_eq( false, SCC_Generator::is_native_mode( 'landing' ), 'landing page is TEMPLATE mode' );
+assert_eq( false, SCC_Generator::is_native_mode( 'custom' ), 'custom page is TEMPLATE mode' );
+// Choosing a template explicitly opts even an article into TEMPLATE mode (escape hatch).
+assert_eq( false, SCC_Generator::is_native_mode( 'article', 'my-family' ), 'article + template family => template mode' );
+
+echo "\n== Post type mapping ==\n";
+assert_eq( 'post', SCC_Generator::post_type_for( 'article' ), 'article => post' );
+assert_eq( 'page', SCC_Generator::post_type_for( 'service' ), 'service => page' );
+assert_eq( 'page', SCC_Generator::post_type_for( 'location' ), 'location => page' );
+assert_eq( 'page', SCC_Generator::post_type_for( 'landing' ), 'landing => page' );
+
+echo "\n== Category resolution (existing terms only) ==\n";
+assert_eq( 11, SCC_Generator::resolve_existing_category( 'SEO' ), 'matches existing category by name (case-insensitive)' );
+assert_eq( 12, SCC_Generator::resolve_existing_category( 'Local SEO' ), 'matches multi-word existing category' );
+assert_eq( 12, SCC_Generator::resolve_existing_category( 'local-seo' ), 'matches existing category by slug' );
+assert_eq( 0, SCC_Generator::resolve_existing_category( 'Totally New Topic' ), 'unknown category is NOT created (returns 0)' );
+assert_eq( 0, SCC_Generator::resolve_existing_category( '' ), 'blank category hint returns 0' );
+
+echo "\n== Native render: no in-body H1, uses content verbatim ==\n";
+$co = new SCC_Content_Object();
+$co->title   = 'How To Choose A Local SEO Agency';
+$co->slug    = '/guides/choose-local-seo-agency/';
+$co->content = "<p>Intro paragraph.</p>\n<h2>What to look for</h2>\n<p>Body.</p>";
+$ref = new ReflectionMethod( 'SCC_Generator', 'render_native' );
+$ref->setAccessible( true );
+$gen_stub = ( new ReflectionClass( 'SCC_Generator' ) )->newInstanceWithoutConstructor();
+$native = $ref->invoke( $gen_stub, $co );
+assert_true( false === strpos( $native['post_content'], '<h1' ), 'native post_content contains no <h1> (theme renders the title)' );
+assert_true( false !== strpos( $native['post_content'], '<h2>What to look for</h2>' ), 'native post_content preserves H2 sections verbatim' );
+assert_eq( 'choose-local-seo-agency', $native['post_name'], 'slug derived from last URL segment' );
+assert_eq( array(), $native['post_meta'], 'native render adds no builder post_meta' );
+
+echo "\n== Admin hubs (tab resolution) ==\n";
+$hub_tabs = array( 'audit', 'keywords', 'architecture', 'links', 'meta' );
+assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, '' ), 'no tab requested falls back to first tab' );
+assert_eq( 'keywords', SCC_Admin::hub_active_tab( $hub_tabs, 'keywords' ), 'valid requested tab is honored' );
+assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, 'bogus' ), 'unknown tab falls back to first tab' );
+assert_eq( 'meta', SCC_Admin::hub_active_tab( $hub_tabs, 'META' ), 'requested tab is normalized (case) before matching' );
+assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, '../evil' ), 'unsafe tab value is rejected, falls back to first' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

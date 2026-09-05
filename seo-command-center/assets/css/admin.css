@@ -468,3 +468,39 @@
 .scc-refine__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .scc-refine__row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .scc-refine__row input { min-width: 320px; flex: 1 1 320px; }
+
+/* ---------------------------------------------------------------------------
+ * Simplification pass: grouped admin menu + simple Generate form.
+ * ------------------------------------------------------------------------- */
+
+/* Tabbed hubs (Content / SEO / Strategy) consolidate the old flat menu. */
+.scc-hub { margin-bottom: 0; padding-bottom: 0; }
+.scc-hub-tabs { margin-bottom: 0; }
+.scc-hub + .wrap { margin-top: 0; }
+.scc-hub + .wrap > h1:first-child { margin-top: 12px; }
+
+/* Simple Generate form. */
+.scc-quickgen .scc-field { margin: 0 0 14px; }
+.scc-field__label { display: block; font-weight: 600; margin-bottom: 4px; }
+.scc-field__label .scc-opt { font-weight: 400; opacity: .6; font-size: 12px; }
+.scc-field-row { display: flex; flex-wrap: wrap; gap: 18px; }
+.scc-field-row .scc-field { flex: 1 1 240px; }
+.scc-quickgen input[type="text"],
+.scc-quickgen input[type="number"],
+.scc-quickgen select { width: 100%; max-width: 100%; }
+
+/* Segmented content-type control. */
+.scc-segmented { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.scc-seg {
+	display: inline-flex; align-items: center; gap: 6px;
+	padding: 7px 14px; border: 1px solid var(--scc-border, #dcdcde);
+	border-radius: 999px; cursor: pointer; background: #fff; font-weight: 500;
+}
+.scc-seg input { margin: 0; }
+.scc-seg.is-active { border-color: #2271b1; background: #f0f6fc; box-shadow: inset 0 0 0 1px #2271b1; }
+
+/* Progressive disclosure. */
+.scc-disclose { text-decoration: none; font-weight: 600; }
+.scc-advanced { border-left: 3px solid var(--scc-border, #e2e8f0); padding: 10px 0 2px 16px; margin: 6px 0 14px; }
+.scc-qg-result { margin-top: 12px; padding: 12px 14px; background: #f6f7f7; border-radius: 6px; }
+.scc-qg-result .button { margin-top: 8px; }

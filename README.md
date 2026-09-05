@@ -11,38 +11,65 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**All seven phases are implemented.** See [`docs/ROADMAP.md`](docs/ROADMAP.md)
-for the detailed breakdown.
+**Current version: 1.25.0.** All seven foundational phases plus the intelligence
+engine, CMS-agnostic template system, and the recent hardening + simplification
+passes are implemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the detailed
+breakdown.
 
-- **Phase 1 — Foundation:** bootstrap/loader/lifecycle, versioned custom tables,
-  security helpers, secret-redacting logger, provider-independent AI layer
-  (Claude + OpenAI, primary/fallback, budget guard), usage/cost tracking,
-  WordPress content analyzer, robots-aware crawler, SEO-plugin detection, admin
-  dashboard/analysis/settings/connections, internal REST API.
-- **Phase 2 — Strategy:** AI topical-map builder, site architecture engine
-  (Pillar → Service → Location → Supporting), content plan, cannibalization
-  detection.
-- **Phase 3 — Content Generation:** multi-step generator (brief → body →
-  metadata → schema → draft → quality score), non-destructive metadata,
-  validated schema, regenerate-section.
-- **Phase 4 — Elementor:** detection, template mapping, `{{PLACEHOLDER}}`
-  system, design-preserving page population.
-- **Phase 5 — Internal Linking:** content graph, recommendations, natural
-  insertion with anti-spam guards, dashboard.
-- **Phase 6 — Data Integrations:** Google Search Console, DataForSEO, and
-  robots-respecting competitor analysis (all optional).
-- **Phase 7 — Scale & Operations:** background job queue (WP-Cron, resumable,
-  retry, auto-pause on budget), batch generation, usage tiles, publishing queue
-  + workflow (approve / publish / schedule).
+**Foundation (phases 1–7)**
+- **Foundation:** bootstrap/loader/lifecycle, versioned custom tables, security
+  helpers, secret-redacting logger, provider-independent AI layer (Claude,
+  OpenAI, Gemini, **LM Studio** — primary/fallback, per-task routing, budget
+  guard), usage/cost tracking, content analyzer, robots-aware crawler,
+  SEO-plugin detection, admin UI, internal REST API.
+- **Strategy:** AI topical-map builder, site architecture, content plan,
+  cannibalization detection.
+- **Content Generation:** multi-step generator (brief → body → metadata → schema
+  → draft → quality score), non-destructive metadata, validated schema.
+- **Elementor / renderers:** detection + template mapping; a CMS-agnostic
+  template engine and renderer abstraction (Gutenberg, native WordPress, and
+  optional Elementor Free).
+- **Internal Linking, Data Integrations, Scale & Ops:** content graph +
+  recommendations; Google Search Console, DataForSEO, competitor analysis (all
+  optional, no fabricated data); background jobs, batch generation, publishing
+  queue.
 
-Internal REST API at `/wp-json/seo-command/v1/*`; **87** passing unit tests.
+**SEO Intelligence Engine & editing (merged, v1.22.1)**
+- **Opportunity Engine + Action Queue** (scored, explainable, safe reversible
+  execution), **Page Optimizer**, **Health Timeline**, **Experiments**, **Entity
+  Authority Graph**, revenue-aware prioritization, automation modes, and an
+  honest **AI/GEO Visibility** scaffold — one intelligence layer orchestrating
+  the existing systems, never fabricating metrics.
+- **Template Mapping 2.0** (central variable registry, typed resolution/
+  escaping, validation), **AI-assisted internal linking**, **Meta Editor** (bulk
+  edit titles/descriptions with AI suggestions), **Content Ideas**, richer
+  competitor gap analysis.
+
+**Recent passes (this branch)**
+- **v1.23.0 — Hardening:** centralized outbound-URL SSRF guard (`SCC_URL`) enforced
+  before every request (loopback allowed for LM Studio; private/reserved/metadata
+  blocked), a proper `robots.txt` matcher (`SCC_Robots`), RFC 3986 crawler URL
+  resolution + crawl-identity normalization, crawl/final/canonical separation,
+  content-type filtering, JSON-LD de-duplication, REST object-level authorization,
+  and stale-job recovery.
+- **v1.24.0 — Simpler generation:** two explicit modes — **Normal** (a blog post
+  is a plain native WordPress post: no template, no tokens, no page builder, no
+  duplicate H1) and **Template** (structured service/location/landing/custom pages
+  through the renderer layer). A one-topic quick-generate flow and a decluttered
+  Generate screen (progressive disclosure).
+- **v1.25.0 — Simpler navigation:** the admin menu is consolidated into three
+  tabbed hubs (Content / SEO / Strategy); no screen or feature removed.
+
+Internal REST API at `/wp-json/seo-command/v1/*`; **398** passing unit tests.
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, AI abstraction, security model
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased plan (1–7)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, AI abstraction, security model, outbound-network safety, generation modes, admin hubs
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — phased plan through v1.25
 - [`docs/DATABASE.md`](docs/DATABASE.md) — options + custom tables
 - [`docs/API.md`](docs/API.md) — REST routes
+- [`docs/TEMPLATES.md`](docs/TEMPLATES.md) — template engine + tokens
+- [`docs/RENDERERS.md`](docs/RENDERERS.md) — renderer abstraction
 
 ## Install (dev)
 
