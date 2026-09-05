@@ -504,3 +504,15 @@
 .scc-advanced { border-left: 3px solid var(--scc-border, #e2e8f0); padding: 10px 0 2px 16px; margin: 6px 0 14px; }
 .scc-qg-result { margin-top: 12px; padding: 12px 14px; background: #f6f7f7; border-radius: 6px; }
 .scc-qg-result .button { margin-top: 8px; }
+
+/* ---------------------------------------------------------------------------
+ * SEO Copilot (Dashboard).
+ * ------------------------------------------------------------------------- */
+.scc-copilot__ask { display: flex; gap: 8px; margin: 6px 0 10px; }
+.scc-copilot__ask input { flex: 1 1 auto; max-width: 640px; }
+.scc-copilot__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.scc-chip--btn { cursor: pointer; border: 1px solid var(--scc-border, #dcdcde); background: #fff; border-radius: 999px; padding: 5px 12px; font-size: 12px; }
+.scc-chip--btn:hover { border-color: #2271b1; background: #f0f6fc; }
+.scc-copilot__result { margin-top: 10px; }
+.scc-copilot__what { font-weight: 600; margin: 4px 0; }
+.scc-copilot__result .scc-opps { margin-top: 10px; }
