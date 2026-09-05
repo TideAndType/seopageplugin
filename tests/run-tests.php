@@ -1300,6 +1300,11 @@ $ans3 = $copilot->answer( 'what should I work on this week?', $sample_opps );
 assert_eq( 4, count( $ans3['opportunities'] ), 'triage returns all opportunities (capped)' );
 assert_true( '' !== $ans3['why'], 'answer includes a why-it-matters line' );
 
+echo "\n== DB schema is strict-mode safe (no zero-date defaults) ==\n";
+$db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database/class-scc-db.php' );
+assert_true( false === strpos( $db_src, "0000-00-00" ), 'no 0000-00-00 date defaults (rejected by MySQL 8 / MariaDB strict mode)' );
+assert_true( false !== strpos( $db_src, 'hide_errors' ), 'install() hides $wpdb errors so activation cannot leak DB output' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

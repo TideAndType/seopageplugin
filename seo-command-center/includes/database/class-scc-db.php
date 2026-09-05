@@ -56,7 +56,7 @@ class SCC_DB {
 
 		$sql[] = "CREATE TABLE {$analyses} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'complete',
 			type VARCHAR(40) NOT NULL DEFAULT 'site',
 			summary LONGTEXT NULL,
@@ -90,7 +90,7 @@ class SCC_DB {
 
 		$sql[] = "CREATE TABLE {$strategies} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			name VARCHAR(200) NULL,
 			inputs LONGTEXT NULL,
 			topical_map LONGTEXT NULL,
@@ -100,7 +100,7 @@ class SCC_DB {
 
 		$sql[] = "CREATE TABLE {$plan} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			title TEXT NULL,
 			url TEXT NULL,
 			primary_keyword VARCHAR(200) NULL,
@@ -131,7 +131,7 @@ class SCC_DB {
 			reason TEXT NULL,
 			sentence TEXT NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'recommended',
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY source_post_id (source_post_id),
 			KEY target_post_id (target_post_id),
@@ -160,14 +160,14 @@ class SCC_DB {
 			started_at DATETIME NULL,
 			finished_at DATETIME NULL,
 			last_error TEXT NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY status (status)
 		) {$charset_collate};";
 
 		$sql[] = "CREATE TABLE {$usage} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			provider VARCHAR(40) NULL,
 			model VARCHAR(80) NULL,
 			operation VARCHAR(80) NULL,
@@ -190,7 +190,7 @@ class SCC_DB {
 			headings LONGTEXT NULL,
 			anchors LONGTEXT NULL,
 			outbound LONGTEXT NULL,
-			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			updated_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (post_id),
 			KEY post_type (post_type)
 		) {$charset_collate};";
@@ -205,7 +205,7 @@ class SCC_DB {
 			confidence INT NOT NULL DEFAULT 0,
 			trigger_source VARCHAR(40) NULL,
 			reverted TINYINT(1) NOT NULL DEFAULT 0,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY post_id (post_id),
 			KEY change_type (change_type)
@@ -221,7 +221,7 @@ class SCC_DB {
 			reason TEXT NULL,
 			perf_before LONGTEXT NULL,
 			perf_after LONGTEXT NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY post_id (post_id)
 		) {$charset_collate};";
@@ -238,8 +238,8 @@ class SCC_DB {
 			elementor_source_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			status VARCHAR(20) NOT NULL DEFAULT 'active',
 			version INT NOT NULL DEFAULT 1,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
-			modified_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
+			modified_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY family (family),
 			KEY content_type (content_type),
@@ -248,7 +248,7 @@ class SCC_DB {
 
 		$sql[] = "CREATE TABLE {$logs} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
 			level VARCHAR(20) NOT NULL DEFAULT 'info',
 			source VARCHAR(60) NULL,
 			message TEXT NULL,
@@ -276,8 +276,8 @@ class SCC_DB {
 			payload LONGTEXT NULL,
 			result LONGTEXT NULL,
 			snoozed_until DATETIME NULL,
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
-			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			created_at DATETIME NULL DEFAULT NULL,
+			updated_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY opportunity_id (opportunity_id),
 			KEY status (status),
@@ -287,8 +287,8 @@ class SCC_DB {
 		$snapshots = self::table( 'seo_snapshots' );
 		$sql[] = "CREATE TABLE {$snapshots} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-			captured_on DATE NOT NULL DEFAULT '0000-00-00',
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			captured_on DATE NULL DEFAULT NULL,
+			created_at DATETIME NULL DEFAULT NULL,
 			health_score INT NOT NULL DEFAULT 0,
 			clicks INT NOT NULL DEFAULT 0,
 			impressions BIGINT NOT NULL DEFAULT 0,
@@ -313,16 +313,26 @@ class SCC_DB {
 			baseline LONGTEXT NULL,
 			result LONGTEXT NULL,
 			measure_days INT NOT NULL DEFAULT 28,
-			start_date DATE NOT NULL DEFAULT '0000-00-00',
-			created_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
-			updated_at DATETIME NOT NULL DEFAULT '0000-00-00 00:00:00',
+			start_date DATE NULL DEFAULT NULL,
+			created_at DATETIME NULL DEFAULT NULL,
+			updated_at DATETIME NULL DEFAULT NULL,
 			PRIMARY KEY  (id),
 			KEY post_id (post_id),
 			KEY status (status)
 		) {$charset_collate};";
 
+		// Never let a DB notice/error leak as output during activation (WordPress
+		// reports any bytes emitted here as "unexpected output"). We suppress
+		// display, capture any error, and log it instead.
+		$prev_hide = $wpdb->hide_errors();
 		foreach ( $sql as $statement ) {
 			dbDelta( $statement );
+			if ( ! empty( $wpdb->last_error ) && class_exists( 'SCC_Logger' ) ) {
+				SCC_Logger::error( 'db', 'dbDelta error: ' . $wpdb->last_error );
+			}
+		}
+		if ( $prev_hide ) {
+			$wpdb->show_errors();
 		}
 	}
 
