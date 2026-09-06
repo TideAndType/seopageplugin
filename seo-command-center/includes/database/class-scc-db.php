@@ -29,6 +29,35 @@ class SCC_DB {
 	}
 
 	/**
+	 * Whether a custom table physically exists.
+	 *
+	 * @param string $name Short table key.
+	 * @return bool
+	 */
+	public static function table_exists( $name ) {
+		global $wpdb;
+		$table = self::table( $name );
+		$found = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ); // phpcs:ignore WordPress.DB
+		return (string) $found === (string) $table;
+	}
+
+	/**
+	 * Whether the core custom tables are all present. Used to self-heal an install
+	 * whose tables failed to create (e.g. a strict-mode DB rejected an older
+	 * schema), independent of the stored DB version.
+	 *
+	 * @return bool
+	 */
+	public static function core_tables_present() {
+		foreach ( array( 'analyses', 'content_plan', 'templates', 'jobs' ) as $t ) {
+			if ( ! self::table_exists( $t ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Create or upgrade all custom tables.
 	 *
 	 * Uses dbDelta which is safe to call repeatedly.

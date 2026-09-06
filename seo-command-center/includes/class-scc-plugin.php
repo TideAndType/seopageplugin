@@ -186,7 +186,10 @@ class SCC_Plugin {
 	 * Run the DB installer if the stored version is behind.
 	 */
 	public function maybe_upgrade_db() {
-		if ( get_option( 'scc_db_version' ) !== SCC_DB_VERSION ) {
+		// Re-run the installer when the version changed OR when a core table is
+		// missing (self-heals an install whose tables failed to create — e.g. an
+		// older schema a strict-mode MySQL rejected).
+		if ( get_option( 'scc_db_version' ) !== SCC_DB_VERSION || ! SCC_DB::core_tables_present() ) {
 			SCC_DB::install();
 			$this->migrate_settings();
 			update_option( 'scc_db_version', SCC_DB_VERSION );

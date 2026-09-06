@@ -42,6 +42,13 @@ class SCC_REST {
 	public function register_routes() {
 		$perm = array( 'SCC_Security', 'rest_permission' );
 
+		// Safety net: never let a $wpdb error (e.g. a missing table before the DB
+		// upgrade runs) print HTML into one of our JSON responses — that surfaces
+		// in the admin as the opaque "The response is not a valid JSON response."
+		// For our namespace we suppress DB error DISPLAY (still logged) so the
+		// handler always returns clean JSON, including a proper error envelope.
+		add_filter( 'rest_pre_dispatch', array( $this, 'guard_json_output' ), 10, 3 );
+
 		register_rest_route(
 			self::NS,
 			'/status',
@@ -2880,6 +2887,24 @@ class SCC_REST {
 			'source'   => $selection['source'],
 			'html'     => is_wp_error( $rendered ) ? '' : $rendered['post_content'],
 		) );
+	}
+
+	/**
+	 * Suppress $wpdb error output for requests to our namespace so a DB notice can
+	 * never corrupt a JSON response. Errors are still recorded in $wpdb->last_error
+	 * (and our own logger where callers check it). Returns $result unchanged.
+	 *
+	 * @param mixed           $result  Short-circuit result (null to continue).
+	 * @param WP_REST_Server  $server  Server.
+	 * @param WP_REST_Request $request Request.
+	 * @return mixed
+	 */
+	public function guard_json_output( $result, $server, $request ) {
+		$route = is_object( $request ) && method_exists( $request, 'get_route' ) ? (string) $request->get_route() : '';
+		if ( 0 === strpos( ltrim( $route, '/' ), self::NS ) && isset( $GLOBALS['wpdb'] ) && is_object( $GLOBALS['wpdb'] ) ) {
+			$GLOBALS['wpdb']->hide_errors();
+		}
+		return $result;
 	}
 
 	/**
