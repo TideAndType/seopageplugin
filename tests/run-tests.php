@@ -1305,6 +1305,19 @@ $db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database
 assert_true( false === strpos( $db_src, "0000-00-00" ), 'no 0000-00-00 date defaults (rejected by MySQL 8 / MariaDB strict mode)' );
 assert_true( false !== strpos( $db_src, 'hide_errors' ), 'install() hides $wpdb errors so activation cannot leak DB output' );
 
+// No column is a MySQL reserved word (unquoted reserved-word columns are a hard
+// syntax error and the whole table fails to create — e.g. `cursor`).
+$mysql_reserved = array( 'cursor', 'groups', 'rank', 'system', 'interval', 'range', 'order', 'key', 'lead', 'window', 'over', 'recursive', 'usage', 'condition', 'option' );
+$reserved_cols = array();
+if ( preg_match_all( '/^\s+([a-z_]+)\s+(?:BIGINT|INT|VARCHAR|TEXT|LONGTEXT|DATETIME|DATE|TINYINT|DECIMAL|FLOAT)\b/mi', $db_src, $m ) ) {
+	foreach ( array_unique( array_map( 'strtolower', $m[1] ) ) as $col ) {
+		if ( in_array( $col, $mysql_reserved, true ) ) {
+			$reserved_cols[] = $col;
+		}
+	}
+}
+assert_eq( array(), $reserved_cols, 'no schema column uses a MySQL reserved word (would break CREATE TABLE)' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

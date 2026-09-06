@@ -177,12 +177,14 @@ class SCC_DB {
 			PRIMARY KEY  (id)
 		) {$charset_collate};";
 
+		// NOTE: no `cursor` column — CURSOR is a reserved word in MySQL, so an
+		// unquoted `cursor` column is a syntax error and the whole table fails to
+		// create. It was never referenced by any code; the queue does not paginate.
 		$sql[] = "CREATE TABLE {$jobs} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			type VARCHAR(60) NULL,
 			status VARCHAR(20) NOT NULL DEFAULT 'queued',
 			payload LONGTEXT NULL,
-			cursor VARCHAR(200) NULL,
 			attempts INT NOT NULL DEFAULT 0,
 			max_attempts INT NOT NULL DEFAULT 3,
 			scheduled_at DATETIME NULL,
