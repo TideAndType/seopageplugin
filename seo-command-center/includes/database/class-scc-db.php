@@ -405,10 +405,21 @@ class SCC_DB {
 	 * @param array  $formats Optional printf-style formats.
 	 * @return int|false Insert id or false.
 	 */
+	/** @var string Last DB error from an insert/update helper (for diagnostics). */
+	public static $last_error = '';
+
 	public static function insert( $table, array $data, array $formats = array() ) {
 		global $wpdb;
 		$ok = $wpdb->insert( self::table( $table ), $data, $formats ? $formats : null ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		return $ok ? (int) $wpdb->insert_id : false;
+		if ( false === $ok ) {
+			self::$last_error = (string) $wpdb->last_error;
+			if ( '' !== self::$last_error && class_exists( 'SCC_Logger' ) ) {
+				SCC_Logger::error( 'db', 'Insert into ' . $table . ' failed: ' . self::$last_error );
+			}
+			return false;
+		}
+		self::$last_error = '';
+		return (int) $wpdb->insert_id;
 	}
 
 	/**

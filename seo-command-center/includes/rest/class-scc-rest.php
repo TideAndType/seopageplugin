@@ -2743,7 +2743,7 @@ class SCC_REST {
 		$params = is_array( $params ) ? $params : $request->get_params();
 		$id     = SCC_Template_Store::create( is_array( $params ) ? $params : array() );
 		if ( ! $id ) {
-			return $this->fail( 'create_failed', __( 'Could not create the template.', 'seo-command-center' ), 500 );
+			return $this->fail( 'create_failed', $this->db_reason( __( 'Could not create the template.', 'seo-command-center' ) ), 500 );
 		}
 		return $this->ok( array( 'id' => $id ) );
 	}
@@ -2839,7 +2839,7 @@ class SCC_REST {
 			'elementor_source_id' => $source,
 		) );
 		if ( ! $id ) {
-			return $this->fail( 'import_failed', __( 'Could not import the template.', 'seo-command-center' ), 500 );
+			return $this->fail( 'import_failed', $this->db_reason( __( 'Could not import the template.', 'seo-command-center' ) ), 500 );
 		}
 		return $this->ok( array( 'id' => $id ) );
 	}
@@ -2905,6 +2905,19 @@ class SCC_REST {
 			$GLOBALS['wpdb']->hide_errors();
 		}
 		return $result;
+	}
+
+	/**
+	 * Append the last DB error to a failure message when there is one. The screens
+	 * that use this require manage_options, so surfacing the real cause (e.g. a
+	 * missing table or a column error) is safe and saves a blind debugging round.
+	 *
+	 * @param string $base Base message.
+	 * @return string
+	 */
+	protected function db_reason( $base ) {
+		$err = class_exists( 'SCC_DB' ) ? (string) SCC_DB::$last_error : '';
+		return '' !== $err ? ( $base . ' (' . $err . ')' ) : $base;
 	}
 
 	/**

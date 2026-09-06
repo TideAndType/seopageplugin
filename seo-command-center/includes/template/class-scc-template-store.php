@@ -90,7 +90,16 @@ class SCC_Template_Store {
 		$data['version'] = 1;
 		$data['created_at']  = current_time( 'mysql' );
 		$data['modified_at'] = current_time( 'mysql' );
-		return SCC_DB::insert( 'templates', $data );
+		$id = SCC_DB::insert( 'templates', $data );
+
+		// Self-heal: if the insert failed because the table is missing (e.g. a
+		// prior install was blocked before this table was created), build the
+		// schema once and retry rather than failing the user's action.
+		if ( ! $id && ! SCC_DB::table_exists( 'templates' ) ) {
+			SCC_DB::install();
+			$id = SCC_DB::insert( 'templates', $data );
+		}
+		return $id;
 	}
 
 	/**
