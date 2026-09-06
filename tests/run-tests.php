@@ -1318,6 +1318,17 @@ if ( preg_match_all( '/^\s+([a-z_]+)\s+(?:BIGINT|INT|VARCHAR|TEXT|LONGTEXT|DATET
 }
 assert_eq( array(), $reserved_cols, 'no schema column uses a MySQL reserved word (would break CREATE TABLE)' );
 
+echo "\n== Template store sanitize: status is never null ==\n";
+$scc_sanitize = new ReflectionMethod( 'SCC_Template_Store', 'sanitize' );
+$scc_sanitize->setAccessible( true );
+// No status supplied (the import/create path) must default to 'active', not null.
+$row_default = $scc_sanitize->invoke( null, array( 'name' => 'X', 'content_type' => 'article', 'renderer' => 'elementor' ) );
+assert_eq( 'active', $row_default['status'], 'missing status defaults to active (not null — was a DB NOT NULL failure)' );
+$row_draft = $scc_sanitize->invoke( null, array( 'name' => 'X', 'status' => 'draft' ) );
+assert_eq( 'draft', $row_draft['status'], 'valid status is kept' );
+$row_bad = $scc_sanitize->invoke( null, array( 'name' => 'X', 'status' => 'bogus' ) );
+assert_eq( 'active', $row_bad['status'], 'invalid status falls back to active' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -26,6 +26,8 @@ class SCC_Template_Store {
 			$type = 'custom';
 		}
 		$renderer = sanitize_key( $raw['renderer'] ?? '' );
+		$status   = (string) ( $raw['status'] ?? 'active' );
+		$status   = in_array( $status, array( 'active', 'draft', 'archived' ), true ) ? $status : 'active';
 
 		// Structure: accept array or JSON string; default to the type default.
 		$structure = isset( $raw['structure'] ) ? $raw['structure'] : null;
@@ -45,7 +47,7 @@ class SCC_Template_Store {
 			'structure'           => wp_json_encode( $structure ),
 			'renderer'            => $renderer,
 			'elementor_source_id' => SCC_Security::sanitize_int( $raw['elementor_source_id'] ?? 0, 0, PHP_INT_MAX ),
-			'status'              => in_array( ( $raw['status'] ?? 'active' ), array( 'active', 'draft', 'archived' ), true ) ? $raw['status'] : 'active',
+			'status'              => $status,
 		);
 	}
 

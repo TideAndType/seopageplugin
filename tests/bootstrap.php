@@ -356,6 +356,7 @@ if ( ! class_exists( 'SCC_Elementor' ) ) {
 }
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-content-object.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-store.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-map.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-selector.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/interface-scc-renderer.php';
