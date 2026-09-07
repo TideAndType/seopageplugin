@@ -181,6 +181,11 @@ class SCC_Generator {
 		// Build the standardized, renderer-independent content object.
 		$content = SCC_Content_Object::from_generation( $entry, $body, $brief );
 
+		// Ensure the CTA the model produced is available to the {{CTA}} token.
+		if ( empty( $content->cta ) && ! empty( $body['cta'] ) ) {
+			$content->cta = (string) $body['cta'];
+		}
+
 		// Internal links operate on the content object BEFORE rendering.
 		$content->internal_links = $this->weave_internal_links( $content );
 
@@ -507,10 +512,14 @@ class SCC_Generator {
 				  . '(answer honestly that no ethical provider guarantees rankings), how this differs from the alternative, serving '
 				  . 'multiple locations or service-area businesses, and review management. '
 				: 'FAQs: include 3 to 6 real questions searchers ask, with substantive answers. ' )
-			. 'Put FAQs only in the "faqs" array, not in content_html. '
+			. 'Put FAQs ONLY as objects in the "faqs" array (each {"question":...,"answer":...}). NEVER write FAQs inside '
+			. 'content_html and NEVER invent tags like <faq>. '
 			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul>. Do not include an <h1> (the theme renders the title). '
-			. 'Return JSON: {"title":str,"content_html":str,"faqs":[{"question":str,"answer":str}],'
-			. '"meta_title":str(<=60 chars),"meta_description":str(140-160 chars),'
+			. 'LENGTH: content_html must be a complete, in-depth article of AT LEAST ' . $words . ' words of real body copy '
+			. '(multiple <h2> sections, each with several full paragraphs). Do not stop early or return a short stub. '
+			. 'CTA: also return a "cta" — one or two sentences telling the reader exactly what to do next. '
+			. 'Return ONLY valid JSON, nothing else: {"title":str,"content_html":str,"faqs":[{"question":str,"answer":str}],'
+			. '"cta":str,"meta_title":str(<=60 chars),"meta_description":str(140-160 chars),'
 			. '"og_title":str,"og_description":str,'
 			. '"image":{"concept":str,"prompt":str,"alt":str,"filename":str,"placement":str}}';
 
@@ -622,10 +631,14 @@ class SCC_Generator {
 			);
 		}
 
+		// CTA: prefer the model's, else the brief's; keep it as a short HTML snippet.
+		$cta = SCC_Security::sanitize_textarea( $data['cta'] ?? ( $brief['cta'] ?? '' ) );
+
 		return array(
 			'title'            => self::strip_dashes( SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ) ),
 			'content_html'     => $this->sanitize_content_html( $data['content_html'], $faqs ),
 			'faqs'             => $faqs,
+			'cta'              => self::strip_dashes( $cta ),
 			'meta_title'       => self::strip_dashes( SCC_Security::sanitize_text( $data['meta_title'] ?? '' ) ),
 			'meta_description' => self::strip_dashes( SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ) ),
 			'og_title'         => self::strip_dashes( SCC_Security::sanitize_text( $data['og_title'] ?? '' ) ),
@@ -646,6 +659,12 @@ class SCC_Generator {
 		// Allow the native accordion elements for the FAQ section.
 		$allowed['details'] = array( 'class' => true, 'open' => true );
 		$allowed['summary'] = array( 'class' => true );
+
+		// Small models sometimes invent FAQ markup like <faq question="…"> inside
+		// the body. Those are not real HTML tags; strip them (and any orphaned
+		// "<faq question=" fragment) so they never show as literal text.
+		$html = preg_replace( '#</?faq\b[^>]*>#i', '', (string) $html );
+		$html = preg_replace( '/&lt;\/?faq\b[^&]*?&gt;/i', '', (string) $html );
 
 		$clean = wp_kses( self::strip_dashes( (string) $html ), $allowed );
 

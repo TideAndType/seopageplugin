@@ -117,6 +117,18 @@ class SCC_Elementor_Renderer implements SCC_Renderer_Interface {
 			$meta['_elementor_page_settings'] = $src_page_settings;
 		}
 
+		if ( class_exists( 'SCC_Generator' ) ) {
+			$src_post = get_post( $source );
+			SCC_Generator::dbg( 'elementor page settings copy', array(
+				'source_id'           => (int) $source,
+				'source_post_type'    => $src_post ? $src_post->post_type : '',
+				'src_wp_page_template'=> is_string( $src_page_template ) ? $src_page_template : '',
+				'has_page_settings'   => empty( $src_page_settings ) ? 'no' : 'yes',
+				'page_settings'       => is_array( $src_page_settings ) ? $src_page_settings : (string) $src_page_settings,
+				'template_type_set'   => $template_type,
+			) );
+		}
+
 		return array(
 			'post_content' => $post_content,
 			'post_meta'    => $meta,
