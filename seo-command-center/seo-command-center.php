@@ -3,7 +3,7 @@
  * Plugin Name:       SEO Command Center
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       AI-powered SEO Command Center for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.27.3
+ * Version:           1.27.4
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -21,58 +21,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// Duplicate-FOLDER guard (fatal-proofing) — and safe against a harmless
-// re-include of THIS SAME file.
-//
-// Two DIFFERENT plugin folders both defining this plugin would fatal the site
-// with "Cannot redeclare scc_bootstrap()" / class redeclaration. If we detect
-// that scc_bootstrap already exists but was declared in a DIFFERENT file, we
-// bail with an admin notice naming both folders so the extra one can be deleted.
-//
-// Crucially, some hosts/security scanners re-include a plugin's own main file
-// in the same request (e.g. plugin_sandbox_scrape). That is NOT a duplicate and
-// must NOT bail — everything below is guarded so a re-include of this same file
-// is a harmless no-op (require_once dedupes classes; constants and the function
-// are guarded; the boot hook is added once). Only a different path bails.
+// Idempotent load. Earlier versions bailed out entirely when scc_bootstrap()
+// already existed, to fatal-proof against a second plugin folder — but some
+// hosts/scanners re-include a plugin's own main file in the same request, and
+// that bail wrongly hid the whole plugin (menu included). We no longer bail.
+// Instead every top-level declaration below is written to be safe if this same
+// file is included more than once: constants are guarded with defined(), class
+// files use require_once (which dedupes by path), and the boot function + hook
+// are guarded with function_exists()/has_action(). A single install therefore
+// always loads fully; a same-file re-include is a harmless no-op.
 // ---------------------------------------------------------------------------
-if ( function_exists( 'scc_bootstrap' ) ) {
-	$scc_other = '';
-	try {
-		$scc_ref   = new ReflectionFunction( 'scc_bootstrap' );
-		$scc_other = (string) $scc_ref->getFileName();
-	} catch ( \Throwable $scc_e ) {
-		$scc_other = '';
-	}
-
-	// Same physical file re-included: already loaded — stop quietly, no notice.
-	if ( '' === $scc_other || $scc_other === __FILE__ ) {
-		return;
-	}
-
-	// A genuinely different folder is running this plugin: warn and bail so the
-	// site stays alive instead of fataling on class/function redeclaration.
-	$GLOBALS['scc_dup_paths'] = array( 'running' => $scc_other, 'blocked' => __FILE__ );
-	if ( is_admin() && ! function_exists( 'scc_duplicate_copy_notice' ) ) {
-		/**
-		 * Warn admins that a duplicate copy of the plugin is installed in a second
-		 * folder, naming both so they can delete the correct one.
-		 */
-		function scc_duplicate_copy_notice() {
-			$paths = isset( $GLOBALS['scc_dup_paths'] ) ? $GLOBALS['scc_dup_paths'] : array();
-			echo '<div class="notice notice-error"><p><strong>SEO Command Center:</strong> ';
-			echo esc_html__( 'This plugin is installed in two different folders and both are active. Only one can run. Delete the extra plugin folder (via Plugins, or your host File Manager / FTP under wp-content/plugins), then reload.', 'seo-command-center' );
-			echo '</p><p><code>' . esc_html__( 'Running:', 'seo-command-center' ) . ' ' . esc_html( (string) ( $paths['running'] ?? '?' ) ) . '</code><br><code>' . esc_html__( 'Blocked duplicate:', 'seo-command-center' ) . ' ' . esc_html( (string) ( $paths['blocked'] ?? '?' ) ) . '</code></p></div>';
-		}
-		add_action( 'admin_notices', 'scc_duplicate_copy_notice' );
-	}
-	return;
-}
 
 // ---------------------------------------------------------------------------
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.27.3' );
+	define( 'SCC_VERSION', '1.27.4' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -185,9 +149,13 @@ register_deactivation_hook( __FILE__, array( 'SCC_Deactivator', 'deactivate' ) )
 
 /**
  * Boot the plugin once all plugins are loaded (so we can detect SEO plugins,
- * Elementor, etc.).
+ * Elementor, etc.). Guarded so a re-include of this file never redeclares it.
  */
-function scc_bootstrap() {
-	SCC_Plugin::instance()->run();
+if ( ! function_exists( 'scc_bootstrap' ) ) {
+	function scc_bootstrap() {
+		SCC_Plugin::instance()->run();
+	}
 }
-add_action( 'plugins_loaded', 'scc_bootstrap' );
+if ( ! has_action( 'plugins_loaded', 'scc_bootstrap' ) ) {
+	add_action( 'plugins_loaded', 'scc_bootstrap' );
+}
