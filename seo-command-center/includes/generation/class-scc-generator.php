@@ -63,14 +63,28 @@ class SCC_Generator {
 			SCC_Content_Index::reindex_all( 500 );
 		}
 
-		$max = (int) SCC_Settings::get( 'max_internal_links', 8 );
-		$engine = new SCC_Link_Engine();
-		$links  = $engine->opportunities_for_content( $content, $max );
+		$indexed = SCC_Content_Index::count();
+		$max     = (int) SCC_Settings::get( 'max_internal_links', 8 );
+		$engine  = new SCC_Link_Engine();
+		$links   = $engine->opportunities_for_content( $content, $max );
+
+		self::dbg( 'internal links', array(
+			'indexed_pages' => $indexed,
+			'found'         => count( $links ),
+			'anchors'       => array_slice( array_map(
+				function ( $l ) {
+					return $l['anchor'] . ' -> ' . $l['target_url'];
+				},
+				$links
+			), 0, 8 ),
+			'note'          => $indexed < 2 ? 'Few/zero indexed pages: run Optimize > Internal Links > Scan, or publish more pages to link to.' : '',
+		) );
+
 		if ( empty( $links ) ) {
 			SCC_Logger::info(
 				'generator',
 				'No internal-link opportunities for this draft',
-				array( 'indexed_pages' => SCC_Content_Index::count() )
+				array( 'indexed_pages' => $indexed )
 			);
 			return array();
 		}
@@ -372,6 +386,20 @@ class SCC_Generator {
 		// Store the brief for reference / regeneration.
 		update_post_meta( $post_id, '_scc_brief', wp_json_encode( $brief ) );
 		update_post_meta( $post_id, '_scc_generated', current_time( 'mysql' ) );
+
+		// Index the new draft and compute internal-link recommendations (both
+		// directions) so they appear under Optimize > Internal Links even when the
+		// draft-time weave found no natural in-body anchor. Never fatal generation.
+		try {
+			SCC_Content_Index::index_post( $post_id );
+			$link_recs = ( new SCC_Link_Engine() )->analyze( $post_id, true );
+			self::dbg( 'internal-link recommendations stored', array(
+				'outbound' => isset( $link_recs['outbound'] ) ? count( $link_recs['outbound'] ) : 0,
+				'inbound'  => isset( $link_recs['inbound'] ) ? count( $link_recs['inbound'] ) : 0,
+			) );
+		} catch ( \Throwable $e ) {
+			SCC_Logger::info( 'generator', 'Link recommendation pass failed', array( 'error' => $e->getMessage() ) );
+		}
 
 		// Quality score (scored on the actual rendered content).
 		$score = SCC_Quality_Score::score(
