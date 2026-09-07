@@ -59,11 +59,14 @@ class SCC_Elementor_Renderer implements SCC_Renderer_Interface {
 	/**
 	 * @inheritDoc
 	 */
-	public function is_available( $content_type = '' ) {
+	public function is_available( $content_type = '', $template = null ) {
 		if ( ! class_exists( 'SCC_Elementor' ) || ! SCC_Elementor::is_active() ) {
 			return false;
 		}
-		return $this->source_id( $content_type ) > 0;
+		// Pass the selected template so a template that pins its own Elementor
+		// source (the new template store) counts as available — not only the
+		// legacy content-type → Elementor mapping.
+		return $this->source_id( $content_type, $template ) > 0;
 	}
 
 	/**

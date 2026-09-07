@@ -222,7 +222,7 @@ class SCC_Generator {
 			$selection = SCC_Template_Selector::select( $content->content_type, $manual_family );
 			$template  = $selection['template'];
 			$preferred = SCC_Template_Selector::renderer_for( $content->content_type, $template );
-			$renderer  = $this->renderers->pick( $preferred, $content->content_type );
+			$renderer  = $this->renderers->pick( $preferred, $content->content_type, $template );
 
 			self::dbg( 'template mode: renderer chosen', array(
 				'template_family'    => $template ? $template->family : '',

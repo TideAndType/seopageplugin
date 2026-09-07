@@ -31,10 +31,11 @@ interface SCC_Renderer_Interface {
 	/**
 	 * Whether this renderer can run for the given content type right now.
 	 *
-	 * @param string $content_type Content type.
+	 * @param string       $content_type Content type.
+	 * @param SCC_Template $template     The selected template (may pin a source).
 	 * @return bool
 	 */
-	public function is_available( $content_type = '' );
+	public function is_available( $content_type = '', $template = null );
 
 	/**
 	 * Render a content object + template into WordPress post data.
