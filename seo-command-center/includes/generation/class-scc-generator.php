@@ -542,7 +542,9 @@ class SCC_Generator {
 				'messages'    => array(
 					array(
 						'role'    => 'user',
-						'content' => "Approved brief (JSON):\n" . wp_json_encode( $brief ) . "\n\nWrite the page now and return the JSON.",
+						'content' => "Approved brief (JSON):\n" . wp_json_encode( $brief )
+							. "\n\nWrite the FULL page now and return ONLY the JSON. content_html must be a complete, in-depth article of at least "
+							. $words . ' words with multiple <h2> sections, each with several full paragraphs. Include a "cta" and put every FAQ as an object in the "faqs" array (never inside content_html).',
 					),
 				),
 				'json'        => true,

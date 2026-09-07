@@ -109,8 +109,18 @@ class SCC_Elementor_Renderer implements SCC_Renderer_Interface {
 		// the WordPress page template (Elementor Canvas / Full Width / theme) and
 		// Elementor's page-level settings (content width, background, etc.).
 		$src_page_template = get_post_meta( $source, '_wp_page_template', true );
-		if ( is_string( $src_page_template ) && '' !== $src_page_template && 'default' !== $src_page_template ) {
-			$meta['_wp_page_template'] = $src_page_template;
+		$page_tpl          = ( is_string( $src_page_template ) && '' !== $src_page_template && 'default' !== $src_page_template ) ? $src_page_template : '';
+		if ( '' === $page_tpl ) {
+			// Elementor Library templates carry no WordPress page template, so an
+			// applied post would fall into the theme's normal (often narrow, with
+			// sidebar) layout instead of the full-width design the template shows in
+			// the editor. Default to Elementor Full Width (keeps the site header and
+			// footer, content spans the page). Filterable, and can be turned off by
+			// returning '' or 'default'.
+			$page_tpl = (string) apply_filters( 'scc_elementor_page_template', 'elementor_header_footer', $content->content_type, $target_type );
+		}
+		if ( '' !== $page_tpl && 'default' !== $page_tpl ) {
+			$meta['_wp_page_template'] = $page_tpl;
 		}
 		$src_page_settings = get_post_meta( $source, '_elementor_page_settings', true );
 		if ( ! empty( $src_page_settings ) ) {
