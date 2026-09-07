@@ -94,6 +94,13 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 					<p class="description"><?php esc_html_e( 'Click “Detect models” to pull the loaded model IDs from your LM Studio server (this also confirms the URL is reachable). “local-model” uses whatever model is currently loaded.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
+			<tr>
+				<th scope="row"><label for="scc-lmstudio-timeout"><?php esc_html_e( 'LM Studio timeout (seconds)', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="number" class="small-text" id="scc-lmstudio-timeout" name="lmstudio_timeout" min="60" max="1800" step="30" value="<?php echo esc_attr( isset( $s['lmstudio_timeout'] ) && (int) $s['lmstudio_timeout'] > 0 ? (int) $s['lmstudio_timeout'] : 600 ); ?>">
+					<p class="description"><?php esc_html_e( 'How long to wait for the local model to finish one generation. Large models (for example a 27B) writing a long article can take several minutes — raise this if you see a timeout (cURL error 28). Max 1800 (30 min). Generation keeps running on the server even if your browser disconnects; the draft appears when it finishes.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
 		</table>
 
 		<h2><?php esc_html_e( 'AI model per task', 'seo-command-center' ); ?></h2>

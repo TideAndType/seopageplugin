@@ -65,6 +65,7 @@ class SCC_Activator {
 			'gemini_model'          => 'gemini-flash-latest',
 			'lmstudio_model'        => 'local-model',
 			'lmstudio_base_url'     => 'http://localhost:1234/v1',
+			'lmstudio_timeout'      => 600,
 			// Per-operation AI routing (empty = use the primary provider/model).
 			'route_keyword_strategy_provider'   => '',
 			'route_keyword_strategy_model'      => '',

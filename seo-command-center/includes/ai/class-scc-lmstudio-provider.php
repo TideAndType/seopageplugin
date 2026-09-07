@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 
 	const DEFAULT_BASE    = 'http://localhost:1234/v1';
-	const DEFAULT_TIMEOUT = 300; // Local models can be slow; allow long generations.
+	const DEFAULT_TIMEOUT = 600; // Local models can be slow; allow long generations (10 min).
 
 	/**
 	 * @inheritDoc
@@ -263,13 +263,28 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		return wp_remote_post(
 			$url,
 			array(
-				'timeout'   => self::DEFAULT_TIMEOUT,
+				'timeout'   => self::request_timeout(),
 				'headers'   => $headers,
 				'body'      => wp_json_encode( $body ),
 				// Local endpoints are typically plain HTTP; only verify for HTTPS.
 				'sslverify' => ( 0 === strpos( $url, 'https://' ) ),
 			)
 		);
+	}
+
+	/**
+	 * How long to wait for a local model to respond, in seconds. Large local
+	 * models (e.g. a 27B) can take several minutes to write a long article, so
+	 * this is generous and configurable via the lmstudio_timeout setting.
+	 *
+	 * @return int
+	 */
+	protected static function request_timeout() {
+		$t = class_exists( 'SCC_Settings' ) ? (int) SCC_Settings::get( 'lmstudio_timeout', self::DEFAULT_TIMEOUT ) : self::DEFAULT_TIMEOUT;
+		if ( $t < 60 ) {
+			$t = self::DEFAULT_TIMEOUT;
+		}
+		return min( 1800, max( 60, $t ) );
 	}
 
 	/**

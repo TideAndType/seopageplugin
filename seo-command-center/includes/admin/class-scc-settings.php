@@ -54,6 +54,7 @@ class SCC_Settings {
 			'gemini_model'             => 'text',
 			'lmstudio_model'           => 'text',
 			'lmstudio_base_url'        => 'url',
+			'lmstudio_timeout'         => 'int',
 			'route_keyword_strategy_provider'   => 'provider_or_empty',
 			'route_keyword_strategy_model'      => 'text',
 			'route_content_generation_provider' => 'provider_or_empty',
