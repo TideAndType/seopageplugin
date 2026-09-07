@@ -1362,6 +1362,24 @@ assert_eq( 'Hello "World"', $scc_ejf->invoke( null, $ejf_src, 'title' ), 'extrac
 assert_true( false !== strpos( $scc_ejf->invoke( null, $ejf_src, 'content_html' ), '<b>bold</b>' ), 'extract_json_field decodes \\u escapes' );
 assert_eq( '', $scc_ejf->invoke( null, $ejf_src, 'missing_key' ), 'extract_json_field returns empty for a missing key' );
 
+echo "\n== Generator: relocate FAQs from body ==\n";
+$scc_relo = new ReflectionMethod( 'SCC_Generator', 'relocate_faqs_from_html' );
+$scc_relo->setAccessible( true );
+$scc_faq_html = '<p>Intro paragraph.</p><h2>How long does it take?</h2><p>About six months.</p><h2>What does it cost?</h2><p>It depends on scope.</p><p>Closing.</p>';
+$scc_relo_faqs = $scc_relo->invokeArgs( null, array( &$scc_faq_html ) );
+assert_eq( 2, count( $scc_relo_faqs ), 'two Q&A pairs relocated out of the body' );
+assert_eq( 'How long does it take?', $scc_relo_faqs[0]['question'], 'first question captured' );
+assert_true( false === strpos( $scc_faq_html, 'How long does it take?' ), 'relocated FAQ removed from body' );
+assert_true( false !== strpos( $scc_faq_html, 'Intro paragraph.' ), 'non-FAQ body kept' );
+// A single rhetorical question heading is NOT treated as an FAQ.
+$scc_one = '<h2>Why bother?</h2><p>Because it works.</p><p>More text.</p>';
+assert_eq( 0, count( $scc_relo->invokeArgs( null, array( &$scc_one ) ) ), 'a single question heading is not relocated' );
+
+echo "\n== Generator: FAQ section HTML ==\n";
+$scc_faq_block = SCC_Generator::faq_section_html( array( array( 'question' => 'Q1?', 'answer' => 'A1.' ) ) );
+assert_true( false !== strpos( $scc_faq_block, '<summary class="scc-faq__q">Q1?</summary>' ), 'FAQ block renders question' );
+assert_eq( '', SCC_Generator::faq_section_html( array() ), 'empty FAQ list => empty block' );
+
 echo "\n== Generator: writing personas ==\n";
 $scc_personas = SCC_Generator::personas();
 assert_true( isset( $scc_personas['seo_guru']['prompt'] ), 'SEO Guru persona exists with a prompt' );

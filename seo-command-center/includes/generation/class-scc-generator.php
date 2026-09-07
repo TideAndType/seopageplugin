@@ -692,6 +692,19 @@ class SCC_Generator {
 			}
 		}
 
+		// Fallback: some models ignore the "faqs" array and instead write FAQs as
+		// question headings inside content_html. When we got no structured FAQs,
+		// lift any "<h2/3>…?</h> + <p>…</p>" pairs out of the body into the FAQ
+		// array (and remove them from the body) so a template's {{FAQ}} widget
+		// fills and the questions are not duplicated in the main content.
+		if ( empty( $faqs ) && ! empty( $data['content_html'] ) ) {
+			$extracted = self::relocate_faqs_from_html( $data['content_html'] );
+			if ( ! empty( $extracted ) ) {
+				$faqs = $extracted;
+				SCC_Generator::dbg( 'extracted FAQs from content_html', array( 'count' => count( $faqs ) ) );
+			}
+		}
+
 		$image = array();
 		if ( ! empty( $data['image'] ) && is_array( $data['image'] ) ) {
 			$image = array(
@@ -703,12 +716,22 @@ class SCC_Generator {
 			);
 		}
 
-		// CTA: prefer the model's, else the brief's; keep it as a short HTML snippet.
+		// CTA: prefer the model's, else the brief's. If neither produced one, fall
+		// back to a generic (clearly non-fabricated) prompt so a template's CTA
+		// widget/button is not left blank.
 		$cta = SCC_Security::sanitize_textarea( $data['cta'] ?? ( $brief['cta'] ?? '' ) );
+		if ( '' === trim( $cta ) ) {
+			$bn  = trim( (string) get_bloginfo( 'name' ) );
+			$cta = $bn
+				? sprintf( /* translators: %s: business name */ __( 'Ready to get started? Contact %s today.', 'seo-command-center' ), $bn )
+				: __( 'Ready to get started? Contact us today.', 'seo-command-center' );
+		}
 
 		return array(
 			'title'            => self::strip_dashes( SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ) ),
-			'content_html'     => $this->sanitize_content_html( $data['content_html'], $faqs ),
+			// No FAQ appended here — native rendering appends it; template mode uses
+			// the {{FAQ}} widget. This prevents FAQs appearing twice in a template.
+			'content_html'     => $this->sanitize_content_html( $data['content_html'] ),
 			'faqs'             => $faqs,
 			'cta'              => self::strip_dashes( $cta ),
 			'meta_title'       => self::strip_dashes( SCC_Security::sanitize_text( $data['meta_title'] ?? '' ) ),
@@ -726,7 +749,7 @@ class SCC_Generator {
 	 * @param array  $faqs FAQ list.
 	 * @return string
 	 */
-	protected function sanitize_content_html( $html, array $faqs ) {
+	protected function sanitize_content_html( $html, array $faqs = array() ) {
 		$allowed = wp_kses_allowed_html( 'post' );
 		// Allow the native accordion elements for the FAQ section.
 		$allowed['details'] = array( 'class' => true, 'open' => true );
@@ -740,20 +763,38 @@ class SCC_Generator {
 
 		$clean = wp_kses( self::strip_dashes( (string) $html ), $allowed );
 
+		// Append the FAQ accordion only when asked (native posts). In template mode
+		// the FAQs fill a dedicated {{FAQ}} widget, so the caller passes no FAQs
+		// here to avoid showing them twice.
 		if ( ! empty( $faqs ) ) {
-			$clean .= "\n<h2 class=\"scc-faq-title\">" . esc_html__( 'Frequently asked questions', 'seo-command-center' ) . "</h2>\n";
-			$clean .= "<div class=\"scc-faq\">\n";
-			foreach ( $faqs as $faq ) {
-				$q = esc_html( self::strip_dashes( $faq['question'] ) );
-				$a = wp_kses_post( wpautop( self::strip_dashes( $faq['answer'] ) ) );
-				$clean .= "<details class=\"scc-faq__item\">\n";
-				$clean .= '<summary class="scc-faq__q">' . $q . "</summary>\n";
-				$clean .= '<div class="scc-faq__a">' . $a . "</div>\n";
-				$clean .= "</details>\n";
-			}
-			$clean .= "</div>\n";
+			$clean .= self::faq_section_html( $faqs );
 		}
 		return $clean;
+	}
+
+	/**
+	 * The FAQ accordion HTML block (used by native posts, and by the {{FAQ}}
+	 * template token via the variable map).
+	 *
+	 * @param array $faqs FAQ list.
+	 * @return string
+	 */
+	public static function faq_section_html( array $faqs ) {
+		if ( empty( $faqs ) ) {
+			return '';
+		}
+		$out  = "\n<h2 class=\"scc-faq-title\">" . esc_html__( 'Frequently asked questions', 'seo-command-center' ) . "</h2>\n";
+		$out .= "<div class=\"scc-faq\">\n";
+		foreach ( $faqs as $faq ) {
+			$q = esc_html( self::strip_dashes( $faq['question'] ?? '' ) );
+			$a = wp_kses_post( wpautop( self::strip_dashes( $faq['answer'] ?? '' ) ) );
+			$out .= "<details class=\"scc-faq__item\">\n";
+			$out .= '<summary class="scc-faq__q">' . $q . "</summary>\n";
+			$out .= '<div class="scc-faq__a">' . $a . "</div>\n";
+			$out .= "</details>\n";
+		}
+		$out .= "</div>\n";
+		return $out;
 	}
 
 	/**
@@ -853,6 +894,42 @@ class SCC_Generator {
 	 * @param string $key Field name (e.g. "content_html").
 	 * @return string The unescaped value, or '' if not found.
 	 */
+	/**
+	 * Pull FAQ-style "<h2/3>question?</h> followed by <p>answer</p>" pairs out of
+	 * an HTML body and remove them from it, so they can fill a dedicated {{FAQ}}
+	 * widget instead of being buried in the main content. Only acts when at least
+	 * two genuine question/answer pairs are found (avoids false positives on a
+	 * single rhetorical heading). Mutates $html by reference.
+	 *
+	 * @param string $html Content HTML (modified in place).
+	 * @return array List of {question, answer}.
+	 */
+	protected static function relocate_faqs_from_html( &$html ) {
+		$html = (string) $html;
+		$re   = '#<h[2-4][^>]*>\s*([^<]*\?)\s*</h[2-4]>\s*(<p[^>]*>.*?</p>)#is';
+		if ( ! preg_match_all( $re, $html, $m, PREG_SET_ORDER ) ) {
+			return array();
+		}
+		if ( count( $m ) < 2 ) {
+			return array();
+		}
+		$faqs = array();
+		foreach ( $m as $match ) {
+			$q = trim( wp_strip_all_tags( $match[1] ) );
+			$a = trim( wp_strip_all_tags( $match[2] ) );
+			if ( '' !== $q && '' !== $a ) {
+				$faqs[] = array(
+					'question' => SCC_Security::sanitize_text( $q ),
+					'answer'   => SCC_Security::sanitize_textarea( $a ),
+				);
+				// Remove this Q&A block from the body.
+				$html = str_replace( $match[0], '', $html );
+			}
+		}
+		$html = trim( $html );
+		return $faqs;
+	}
+
 	protected static function extract_json_field( $raw, $key ) {
 		$raw = (string) $raw;
 		// Match "key": "....." capturing an escaped-JSON string body.
@@ -1024,6 +1101,11 @@ class SCC_Generator {
 	 */
 	protected function render_native( SCC_Content_Object $content ) {
 		$html = trim( (string) $content->content );
+		// Native posts have no {{FAQ}} widget, so append the FAQ accordion to the
+		// body (template mode instead fills the {{FAQ}} token).
+		if ( ! empty( $content->faq ) ) {
+			$html .= self::faq_section_html( (array) $content->faq );
+		}
 		return array(
 			'post_content' => $html,
 			'post_meta'    => array(),

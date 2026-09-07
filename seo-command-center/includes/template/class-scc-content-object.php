@@ -63,6 +63,12 @@ class SCC_Content_Object {
 	/** @var string CTA (HTML/text). */
 	public $cta = '';
 
+	/** @var string Short CTA button label. */
+	public $cta_text = '';
+
+	/** @var string CTA button URL. */
+	public $cta_url = '';
+
 	/** @var string City (location pages). */
 	public $city = '';
 
