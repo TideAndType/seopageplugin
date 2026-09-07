@@ -96,6 +96,66 @@ class SCC_Generator {
 	}
 
 	/**
+	 * Deterministic internal linking from the offered candidates: for each
+	 * candidate (already ranked by relevance), link the FIRST unlinked occurrence
+	 * of its keyword — or a distinctive phrase from its title — where it genuinely
+	 * appears in the article body. The DOM inserter never links inside headings or
+	 * existing links, so this stays safe and honest (real phrase, real page).
+	 *
+	 * @param SCC_Content_Object $content    Content object (content modified in place).
+	 * @param array              $candidates [{title,url,keyword}] ranked.
+	 * @param int                $max        Max links to insert.
+	 * @return array Inserted links [{anchor, target_url}].
+	 */
+	protected function insert_candidate_links( SCC_Content_Object $content, array $candidates, $max ) {
+		if ( empty( $candidates ) ) {
+			return array();
+		}
+		$inserter = new SCC_Link_Inserter();
+		$inserted = array();
+		$plain    = strtolower( wp_strip_all_tags( (string) $content->content ) );
+
+		foreach ( $candidates as $c ) {
+			if ( count( $inserted ) >= (int) $max ) {
+				break;
+			}
+			$url = (string) ( $c['url'] ?? '' );
+			if ( '' === $url ) {
+				continue;
+			}
+			// Try the keyword first, then meaningful phrases from the title.
+			$phrases = array();
+			if ( ! empty( $c['keyword'] ) ) {
+				$phrases[] = (string) $c['keyword'];
+			}
+			$title = trim( wp_strip_all_tags( (string) ( $c['title'] ?? '' ) ) );
+			if ( '' !== $title ) {
+				$phrases[] = $title;
+				// The title minus a leading/trailing generic word, to catch a core phrase.
+				$phrases[] = preg_replace( '/^\W*\w+\s+|\s+\w+\W*$/u', '', $title );
+			}
+
+			foreach ( $phrases as $phrase ) {
+				$phrase = trim( (string) $phrase );
+				if ( strlen( $phrase ) < 6 ) {
+					continue;
+				}
+				if ( false === strpos( $plain, strtolower( $phrase ) ) ) {
+					continue;
+				}
+				$before               = $content->content;
+				$content->content     = $inserter->insert_link_in_html( $content->content, $phrase, $url );
+				if ( $content->content !== $before ) {
+					$inserted[] = array( 'anchor' => $phrase, 'target_url' => $url );
+					$plain      = strtolower( wp_strip_all_tags( (string) $content->content ) );
+					break; // one link per candidate page.
+				}
+			}
+		}
+		return $inserted;
+	}
+
+	/**
 	 * Generate a draft for a content-plan entry.
 	 *
 	 * @param array      $entry Decoded content-plan row.
@@ -205,9 +265,25 @@ class SCC_Generator {
 		// Only fall back to the deterministic in-body weaver when the model added
 		// none, so we never double-link.
 		$ai_links = (array) ( $body['internal_links'] ?? array() );
+		if ( empty( $ai_links ) ) {
+			// The model wrote no usable links — deterministically link the most
+			// relevant candidates wherever their keyword/title genuinely appears in
+			// the article text (never in headings or existing links). Honest: real
+			// phrase already in the copy, real page URL.
+			$ai_links = $this->insert_candidate_links(
+				$content,
+				(array) ( $body['link_candidates'] ?? array() ),
+				(int) SCC_Settings::get( 'max_internal_links', 8 )
+			);
+			if ( ! empty( $ai_links ) ) {
+				self::dbg( 'internal links: deterministic keyword match', array( 'count' => count( $ai_links ) ) );
+			}
+		} else {
+			self::dbg( 'internal links: using AI-woven', array( 'count' => count( $ai_links ) ) );
+		}
+
 		if ( ! empty( $ai_links ) ) {
 			$content->internal_links = $ai_links;
-			self::dbg( 'internal links: using AI-woven', array( 'count' => count( $ai_links ) ) );
 		} else {
 			$content->internal_links = $this->weave_internal_links( $content );
 		}
@@ -596,6 +672,24 @@ class SCC_Generator {
 	}
 
 	/**
+	 * Convert Markdown links [text](url) that a model may have written instead of
+	 * HTML anchors into real <a> tags, so internal linking recognises them. Only
+	 * absolute http(s) or root-relative URLs are converted.
+	 *
+	 * @param string $html HTML/Markdown-ish content.
+	 * @return string
+	 */
+	protected static function linkify_markdown( $html ) {
+		return (string) preg_replace_callback(
+			'/\[([^\]\n]{1,160})\]\(\s*(https?:\/\/[^\s)]+|\/[^\s)]+)\s*\)/u',
+			function ( $m ) {
+				return '<a href="' . esc_url( trim( $m[2] ) ) . '">' . trim( $m[1] ) . '</a>';
+			},
+			(string) $html
+		);
+	}
+
+	/**
 	 * Normalise a URL for comparison (scheme-insensitive host, no trailing slash,
 	 * no fragment/query).
 	 *
@@ -908,9 +1002,20 @@ class SCC_Generator {
 				: __( 'Ready to get started? Contact us today.', 'seo-command-center' );
 		}
 
+		// Some models emit links as Markdown [text](url) instead of <a> tags, or use
+		// the exact-match link syntax; convert those to real anchors first so they
+		// are recognised.
+		$body_html  = self::linkify_markdown( (string) $data['content_html'] );
 		// Sanitize the body, then keep only internal links that point at real pages
 		// we offered (the model can reference our pages but never invent a URL).
-		$clean_html = $this->sanitize_content_html( $data['content_html'] );
+		$clean_html = $this->sanitize_content_html( $body_html );
+
+		// Capture what the model actually produced so a "kept:0" is diagnosable.
+		$model_hrefs = array();
+		if ( preg_match_all( '#<a\b[^>]*href=("|\')(.*?)\1#is', $clean_html, $hh ) ) {
+			$model_hrefs = array_slice( array_values( array_unique( $hh[2] ) ), 0, 10 );
+		}
+
 		$kept_links = array();
 		if ( ! empty( $link_targets ) ) {
 			$allowed = array();
@@ -919,7 +1024,9 @@ class SCC_Generator {
 			}
 			$clean_html = self::enforce_internal_links( $clean_html, $allowed, $kept_links );
 			self::dbg( 'internal links from AI (whitelisted)', array(
-				'kept'    => count( $kept_links ),
+				'kept'         => count( $kept_links ),
+				'model_hrefs'  => $model_hrefs,
+				'allowed_urls' => array_slice( $allowed, 0, 5 ),
 				'anchors' => array_slice( array_map(
 					function ( $l ) {
 						return $l['anchor'] . ' -> ' . $l['target_url'];
@@ -936,6 +1043,7 @@ class SCC_Generator {
 			'content_html'     => $clean_html,
 			'faqs'             => $faqs,
 			'internal_links'   => $kept_links,
+			'link_candidates'  => $link_targets,
 			'cta'              => self::strip_dashes( $cta ),
 			'meta_title'       => self::strip_dashes( SCC_Security::sanitize_text( $data['meta_title'] ?? '' ) ),
 			'meta_description' => self::strip_dashes( SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ) ),

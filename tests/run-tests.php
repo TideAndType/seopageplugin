@@ -1379,6 +1379,16 @@ assert_true( false !== strpos( $outh, 'href="https://other.com/x"' ), 'external 
 assert_true( false !== strpos( $outh, 'a fake page' ), 'unwrapped link keeps its anchor text' );
 assert_true( count( $kept ) >= 2, 'kept list records the real internal links' );
 
+echo "\n== Generator: linkify markdown ==\n";
+$scc_lm = new ReflectionMethod( 'SCC_Generator', 'linkify_markdown' );
+$scc_lm->setAccessible( true );
+$md = 'See [our SEO services](https://example.com/services/seo/) and [about](/about/).';
+$lmout = $scc_lm->invoke( null, $md );
+assert_true( false !== strpos( $lmout, '<a href="https://example.com/services/seo/">our SEO services</a>' ), 'markdown absolute link converted to anchor' );
+assert_true( false !== strpos( $lmout, '<a href="/about/">about</a>' ), 'markdown root-relative link converted' );
+$md2 = 'Array access like items[0](not a link) stays literal.';
+assert_true( false === strpos( $scc_lm->invoke( null, $md2 ), '<a ' ), 'non-URL bracket/paren is not linkified' );
+
 echo "\n== Content presenter: visual components ==\n";
 // Callout from a labelled paragraph.
 $pz = SCC_Content_Presenter::enhance( '<p>Tip: Keep your title under 60 characters.</p>' );
