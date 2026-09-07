@@ -447,6 +447,58 @@ class SCC_Generator {
 	}
 
 	/**
+	 * Built-in writing personas the user can pick in Settings.
+	 *
+	 * @return array key => array{label, prompt}
+	 */
+	public static function personas() {
+		return array(
+			'seo_guru'          => array(
+				'label'  => __( 'SEO Guru', 'seo-command-center' ),
+				'prompt' => 'PERSONA: Act as a world-class SEO strategist with 15+ years ranking pages in competitive niches. Nail search intent, cover the topic with real semantic depth and strong E-E-A-T signals, structure for featured snippets, and write for humans first while satisfying on-page SEO best practices. ',
+			),
+			'friendly_expert'   => array(
+				'label'  => __( 'Friendly expert', 'seo-command-center' ),
+				'prompt' => 'PERSONA: Act as a friendly, approachable expert who explains things clearly and warmly to a non-technical reader, using plain language and helpful examples. ',
+			),
+			'conversion'        => array(
+				'label'  => __( 'Conversion copywriter', 'seo-command-center' ),
+				'prompt' => 'PERSONA: Act as a direct-response conversion copywriter. Lead with the reader\'s desired outcome, address objections, build trust with specifics, and drive one clear action, while staying honest and never over-promising. ',
+			),
+			'local_expert'      => array(
+				'label'  => __( 'Local business expert', 'seo-command-center' ),
+				'prompt' => 'PERSONA: Act as a seasoned local-marketing expert who understands local search, Google Business Profile, service-area targeting and genuine community relevance. ',
+			),
+			'technical'         => array(
+				'label'  => __( 'Technical / authoritative', 'seo-command-center' ),
+				'prompt' => 'PERSONA: Act as an authoritative technical subject-matter expert: precise, well-structured, correct terminology, concrete detail, no fluff. ',
+			),
+		);
+	}
+
+	/**
+	 * Persona instruction prepended to the generation system prompt, from the
+	 * chosen preset plus any custom instructions the user entered in Settings.
+	 *
+	 * @return string
+	 */
+	protected static function persona_prefix() {
+		$out = '';
+		$key = (string) SCC_Settings::get( 'content_persona', '' );
+		if ( '' !== $key && 'custom' !== $key ) {
+			$personas = self::personas();
+			if ( isset( $personas[ $key ]['prompt'] ) ) {
+				$out .= $personas[ $key ]['prompt'];
+			}
+		}
+		$custom = trim( (string) SCC_Settings::get( 'content_persona_custom', '' ) );
+		if ( '' !== $custom ) {
+			$out .= 'ADDITIONAL STYLE INSTRUCTIONS: ' . $custom . ' ';
+		}
+		return $out;
+	}
+
+	/**
 	 * Generate the article body + metadata via the AI layer (one JSON call).
 	 *
 	 * @param array $entry Plan entry.
@@ -463,7 +515,8 @@ class SCC_Generator {
 			|| in_array( $page_type, array( 'pillar', 'service', 'location' ), true );
 		$site_name   = get_bloginfo( 'name' );
 
-		$system    = 'You are a senior SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
+		$system    = self::persona_prefix()
+			. 'You are a senior SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
 			. 'Produce genuinely useful, specific, original content a knowledgeable buyer would trust. '
 			// Accuracy & E-E-A-T.
 			. 'ACCURACY & E-E-A-T: write from real, practical expertise; use concrete specifics, numbers, steps and trade-offs; '
@@ -532,6 +585,13 @@ class SCC_Generator {
 		if ( $commercial && $words < 1500 ) {
 			$words = 1500;
 		}
+
+		// A global target word count (Settings → Content style) overrides everything
+		// so every generation aims for exactly the length the user set.
+		$target_words = (int) SCC_Settings::get( 'content_target_words', 0 );
+		if ( $target_words > 0 ) {
+			$words = $target_words;
+		}
 		$budget = (int) min( 5200, max( 1200, round( $words * 1.7 ) + 800 ) );
 
 		// Optional override: a fixed token budget, or "unlimited" (-1). Unlimited
@@ -544,7 +604,7 @@ class SCC_Generator {
 			$budget = $max_override;
 		}
 
-		self::dbg( 'about to call AI (content-generation)', array( 'budget' => $budget, 'words' => $words, 'page_type' => $page_type ) );
+		self::dbg( 'about to call AI (content-generation)', array( 'budget' => $budget, 'words' => $words, 'page_type' => $page_type, 'persona' => (string) SCC_Settings::get( 'content_persona', '' ) ) );
 
 		$response = $this->ai->complete(
 			array(

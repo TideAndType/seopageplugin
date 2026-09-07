@@ -1362,6 +1362,12 @@ assert_eq( 'Hello "World"', $scc_ejf->invoke( null, $ejf_src, 'title' ), 'extrac
 assert_true( false !== strpos( $scc_ejf->invoke( null, $ejf_src, 'content_html' ), '<b>bold</b>' ), 'extract_json_field decodes \\u escapes' );
 assert_eq( '', $scc_ejf->invoke( null, $ejf_src, 'missing_key' ), 'extract_json_field returns empty for a missing key' );
 
+echo "\n== Generator: writing personas ==\n";
+$scc_personas = SCC_Generator::personas();
+assert_true( isset( $scc_personas['seo_guru']['prompt'] ), 'SEO Guru persona exists with a prompt' );
+assert_true( false !== stripos( $scc_personas['seo_guru']['prompt'], 'SEO' ), 'SEO Guru persona mentions SEO' );
+assert_true( isset( $scc_personas['conversion']['label'] ), 'conversion persona has a label' );
+
 echo "\n== Generator: mapped template forces template mode ==\n";
 // With no mapping present, native types stay native (existing behaviour).
 assert_eq( false, SCC_Generator::has_mapped_template( 'blog_post' ), 'no mapping => not mapped' );

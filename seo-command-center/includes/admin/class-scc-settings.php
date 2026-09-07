@@ -57,6 +57,9 @@ class SCC_Settings {
 			'lmstudio_timeout'         => 'int',
 			'generation_unlimited_tokens' => 'bool',
 			'generation_max_tokens'    => 'int',
+			'content_target_words'     => 'int',
+			'content_persona'          => 'text',
+			'content_persona_custom'   => 'textarea',
 			'route_keyword_strategy_provider'   => 'provider_or_empty',
 			'route_keyword_strategy_model'      => 'text',
 			'route_content_generation_provider' => 'provider_or_empty',
@@ -121,6 +124,9 @@ class SCC_Settings {
 					break;
 				case 'bool':
 					$value = SCC_Security::sanitize_bool( $value );
+					break;
+				case 'textarea':
+					$value = SCC_Security::sanitize_textarea( $value );
 					break;
 				default:
 					$value = SCC_Security::sanitize_text( $value );

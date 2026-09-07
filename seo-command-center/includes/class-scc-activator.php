@@ -68,6 +68,9 @@ class SCC_Activator {
 			'lmstudio_timeout'      => 600,
 			'generation_unlimited_tokens' => false,
 			'generation_max_tokens' => 0,
+			'content_target_words'  => 0,
+			'content_persona'       => '',
+			'content_persona_custom'=> '',
 			// Per-operation AI routing (empty = use the primary provider/model).
 			'route_keyword_strategy_provider'   => '',
 			'route_keyword_strategy_model'      => '',

@@ -142,6 +142,37 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 			<?php endforeach; ?>
 		</table>
 
+		<h2><?php esc_html_e( 'Content style', 'seo-command-center' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="scc-content-target-words"><?php esc_html_e( 'Target word count', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="number" class="small-text" id="scc-content-target-words" name="content_target_words" min="0" max="20000" step="50" value="<?php echo esc_attr( isset( $s['content_target_words'] ) ? (int) $s['content_target_words'] : 0 ); ?>">
+					<p class="description"><?php esc_html_e( 'The length every generated article should aim for. Set a number (for example 1500) and generation targets it; leave 0 to size automatically from each plan entry. The model is told to write at least this many words — a capable model will hit it; very small local models may still fall short.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-content-persona"><?php esc_html_e( 'Writing persona', 'seo-command-center' ); ?></label></th>
+				<td>
+					<select id="scc-content-persona" name="content_persona">
+						<option value="" <?php selected( ( $s['content_persona'] ?? '' ), '' ); ?>><?php esc_html_e( 'Default (senior SEO copywriter)', 'seo-command-center' ); ?></option>
+						<?php foreach ( SCC_Generator::personas() as $pkey => $p ) : ?>
+							<option value="<?php echo esc_attr( $pkey ); ?>" <?php selected( ( $s['content_persona'] ?? '' ), $pkey ); ?>><?php echo esc_html( $p['label'] ); ?></option>
+						<?php endforeach; ?>
+						<option value="custom" <?php selected( ( $s['content_persona'] ?? '' ), 'custom' ); ?>><?php esc_html_e( 'Custom (use only the instructions below)', 'seo-command-center' ); ?></option>
+					</select>
+					<p class="description"><?php esc_html_e( 'The voice/expertise the AI writes with. Applies to every generated draft.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-content-persona-custom"><?php esc_html_e( 'Custom style instructions', 'seo-command-center' ); ?></label></th>
+				<td>
+					<textarea id="scc-content-persona-custom" name="content_persona_custom" class="large-text" rows="3" placeholder="<?php esc_attr_e( 'e.g. Write in a confident, no-nonsense tone. Use short sentences. Always include a comparison table where relevant.', 'seo-command-center' ); ?>"><?php echo esc_textarea( isset( $s['content_persona_custom'] ) ? (string) $s['content_persona_custom'] : '' ); ?></textarea>
+					<p class="description"><?php esc_html_e( 'Extra instructions added on top of the persona (or used on their own if the persona is set to “Custom”). These are appended to the AI system prompt for content generation.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+		</table>
+
 		<h2><?php esc_html_e( 'SEO defaults', 'seo-command-center' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<tr>
