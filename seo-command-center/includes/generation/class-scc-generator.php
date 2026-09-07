@@ -132,7 +132,13 @@ class SCC_Generator {
 
 		$manual_family = isset( $entry['template_family'] ) ? (string) $entry['template_family'] : '';
 
-		if ( self::is_native_mode( $content->content_type, $manual_family ) ) {
+		// A content type the user has explicitly mapped to a real, active template
+		// (via Templates → mapping table, or a manually chosen family) ALWAYS uses
+		// TEMPLATE mode — even for native types like "blog". Otherwise the mapping
+		// the user set up is silently ignored and they get a plain native draft.
+		$has_mapped_template = self::has_mapped_template( $content->content_type, $manual_family );
+
+		if ( ! $has_mapped_template && self::is_native_mode( $content->content_type, $manual_family ) ) {
 			// NORMAL mode: a normal WordPress post. The AI body (already sanitized
 			// with FAQs appended, and with NO in-body <h1> — the theme renders the
 			// title as H1) becomes the post_content verbatim. No template, no
@@ -375,7 +381,30 @@ class SCC_Generator {
 			// Rather than failing with no draft, turn that raw text into a usable
 			// body so a draft is always produced when the model wrote something.
 			$raw = trim( (string) $response->content );
-			if ( strlen( wp_strip_all_tags( $raw ) ) >= 200 ) {
+
+			// First: the model may have returned JSON the tolerant parser couldn't
+			// fully decode (a truncated tail, an unescaped quote inside a value). We
+			// must NEVER dump that raw JSON into the post body. Pull content_html
+			// (and title/meta) straight out of the JSON text instead.
+			if ( false !== strpos( $raw, '"content_html"' ) ) {
+				$salvaged_html = self::extract_json_field( $raw, 'content_html' );
+				if ( strlen( wp_strip_all_tags( $salvaged_html ) ) >= 100 ) {
+					SCC_Logger::info( 'generator', 'AI returned malformed JSON; extracted content_html from it' );
+					$data = array(
+						'title'            => self::extract_json_field( $raw, 'title' ),
+						'content_html'     => $salvaged_html,
+						'faqs'             => array(),
+						'meta_title'       => self::extract_json_field( $raw, 'meta_title' ),
+						'meta_description' => self::extract_json_field( $raw, 'meta_description' ),
+					);
+					if ( '' === $data['title'] ) {
+						$data['title'] = (string) ( $entry['title'] ?? '' );
+					}
+				}
+			}
+
+			$recovered = is_array( $data ) && ! empty( $data['content_html'] );
+			if ( ! $recovered && strlen( wp_strip_all_tags( $raw ) ) >= 200 ) {
 				SCC_Logger::info( 'generator', 'AI returned non-JSON; salvaging raw content into a draft' );
 				$data = array(
 					'title'            => (string) ( $entry['title'] ?? '' ),
@@ -384,7 +413,7 @@ class SCC_Generator {
 					'meta_title'       => '',
 					'meta_description' => '',
 				);
-			} else {
+			} elseif ( ! $recovered ) {
 				SCC_Logger::error( 'generator', 'AI body output unparseable and too short to salvage' );
 				return new WP_Error( 'scc_bad_ai_output', __( 'The model did not return usable content. Try again, or use a larger/faster model.', 'seo-command-center' ), array( 'status' => 502 ) );
 			}
@@ -489,6 +518,16 @@ class SCC_Generator {
 		$raw = str_replace( '```', '', $raw );
 		$raw = trim( $raw );
 
+		// Defense in depth: never emit literal JSON into the post. If this text is
+		// really a JSON object carrying content_html, extract that value and use it
+		// (recurse once) rather than wrapping raw braces in <p>.
+		if ( '{' === substr( $raw, 0, 1 ) && false !== strpos( $raw, '"content_html"' ) ) {
+			$inner = self::extract_json_field( $raw, 'content_html' );
+			if ( '' !== trim( $inner ) ) {
+				return self::text_to_html( $inner );
+			}
+		}
+
 		// Already HTML? Use as-is (an <h1> is downgraded so the theme title stays
 		// the only H1).
 		if ( preg_match( '/<(p|h[1-6]|ul|ol|div|section|article)\b/i', $raw ) ) {
@@ -529,6 +568,29 @@ class SCC_Generator {
 		}
 		$flush();
 		return implode( "\n", $out );
+	}
+
+	/**
+	 * Extract a single string field's value out of JSON-shaped text, even when the
+	 * JSON as a whole is malformed and won't decode. Used only to salvage a draft
+	 * from a model that returned broken JSON, so raw braces never reach the post.
+	 *
+	 * @param string $raw JSON-ish text.
+	 * @param string $key Field name (e.g. "content_html").
+	 * @return string The unescaped value, or '' if not found.
+	 */
+	protected static function extract_json_field( $raw, $key ) {
+		$raw = (string) $raw;
+		// Match "key": "....." capturing an escaped-JSON string body.
+		if ( preg_match( '/"' . preg_quote( $key, '/' ) . '"\s*:\s*"((?:\\\\.|[^"\\\\])*)"/s', $raw, $m ) ) {
+			$decoded = json_decode( '"' . $m[1] . '"' );
+			if ( is_string( $decoded ) ) {
+				return $decoded;
+			}
+			// Fall back to a manual unescape of the common sequences.
+			return strtr( $m[1], array( '\\"' => '"', '\\n' => "\n", '\\t' => "\t", '\\/' => '/', '\\\\' => '\\' ) );
+		}
+		return '';
 	}
 
 	/**
@@ -649,6 +711,33 @@ class SCC_Generator {
 			return false;
 		}
 		return in_array( (string) $content_type, self::NATIVE_TYPES, true );
+	}
+
+	/**
+	 * Whether the user has explicitly mapped this content type to a real, active
+	 * template — either by choosing a family manually, by a content-type → family
+	 * rule in the template map, or by flagging a template for the content type.
+	 *
+	 * Only returns true when the mapped template actually EXISTS and is active, so
+	 * a stale mapping pointing at a deleted family does not force template mode
+	 * (which would just fall back to the built-in structure anyway).
+	 *
+	 * @param string $content_type  Content type.
+	 * @param string $manual_family Explicitly chosen family (highest priority).
+	 * @return bool
+	 */
+	public static function has_mapped_template( $content_type, $manual_family = '' ) {
+		if ( '' !== trim( (string) $manual_family ) && SCC_Template_Store::active_for_family( $manual_family ) ) {
+			return true;
+		}
+		$mapped = SCC_Template_Map::for_content_type( $content_type );
+		if ( ! empty( $mapped['family'] ) && SCC_Template_Store::active_for_family( $mapped['family'] ) ) {
+			return true;
+		}
+		if ( SCC_Template_Store::active_for_content_type( $content_type ) ) {
+			return true;
+		}
+		return false;
 	}
 
 	/**

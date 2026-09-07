@@ -1346,6 +1346,26 @@ assert_true( false !== strpos( $salv2, '<p>Body copy here.</p>' ), 'existing HTM
 // A code-fenced block has the fence stripped.
 $salv3 = $scc_t2h->invoke( null, "```html\n<p>Fenced.</p>\n```" );
 assert_true( false === strpos( $salv3, '`' ), 'code fences stripped' );
+// Regression: JSON-shaped output must NEVER be dumped into the post — the
+// content_html value is extracted, and braces/keys never survive.
+$json_body = '{"title":"T","content_html":"<h2>Real Heading</h2><p>Body sentence that is definitely long enough to keep.</p>","meta_title":"M"}';
+$salv4 = $scc_t2h->invoke( null, $json_body );
+assert_true( false !== strpos( $salv4, '<p>Body sentence that is definitely long enough to keep.</p>' ), 'content_html extracted from JSON' );
+assert_true( false === strpos( $salv4, '"content_html"' ), 'JSON key never dumped into body' );
+assert_true( false === strpos( $salv4, '{' ), 'JSON braces never dumped into body' );
+
+echo "\n== Generator salvage: extract_json_field ==\n";
+$scc_ejf = new ReflectionMethod( 'SCC_Generator', 'extract_json_field' );
+$scc_ejf->setAccessible( true );
+$ejf_src = '{"title":"Hello \"World\"","content_html":"<p>A <b>bold</b> line.</p>"}';
+assert_eq( 'Hello "World"', $scc_ejf->invoke( null, $ejf_src, 'title' ), 'extract_json_field unescapes embedded quotes' );
+assert_true( false !== strpos( $scc_ejf->invoke( null, $ejf_src, 'content_html' ), '<b>bold</b>' ), 'extract_json_field decodes \\u escapes' );
+assert_eq( '', $scc_ejf->invoke( null, $ejf_src, 'missing_key' ), 'extract_json_field returns empty for a missing key' );
+
+echo "\n== Generator: mapped template forces template mode ==\n";
+// With no mapping present, native types stay native (existing behaviour).
+assert_eq( false, SCC_Generator::has_mapped_template( 'blog_post' ), 'no mapping => not mapped' );
+assert_true( SCC_Generator::is_native_mode( 'blog_post' ), 'blog_post still native when unmapped' );
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
