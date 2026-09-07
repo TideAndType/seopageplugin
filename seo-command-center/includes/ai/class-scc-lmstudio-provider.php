@@ -283,6 +283,21 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * @return string
 	 */
 	protected function extract_error( $data, $raw, $code ) {
+		// Cloudflare tunnel timeouts (520-524, most often 524) mean the model took
+		// longer than the tunnel allows for one request — trycloudflare.com "Quick
+		// Tunnels" cut off any request after ~100 seconds. This is by far the most
+		// common LM Studio failure for long generations, so give a specific, useful
+		// message instead of dumping Cloudflare's HTML error page.
+		$is_cf_tunnel = ( '' !== (string) $raw && false !== stripos( (string) $raw, 'cloudflare' ) )
+			|| ( '' !== (string) $raw && false !== stripos( (string) $raw, 'trycloudflare' ) );
+		if ( in_array( (int) $code, array( 520, 522, 523, 524 ), true ) && $is_cf_tunnel ) {
+			return sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'HTTP %d — the request timed out in your Cloudflare tunnel (trycloudflare.com Quick Tunnels drop any request that takes longer than ~100 seconds). Your model did not finish generating in time. Fixes: use a smaller/faster model, lower the target word count, or connect LM Studio directly (or via a tunnel without the 100s limit) instead of a free Cloudflare Quick Tunnel.', 'seo-command-center' ),
+				(int) $code
+			);
+		}
+
 		if ( is_array( $data ) ) {
 			if ( isset( $data['error']['message'] ) && '' !== (string) $data['error']['message'] ) {
 				return sprintf( 'HTTP %d — %s', $code, (string) $data['error']['message'] );
