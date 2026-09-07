@@ -3,7 +3,7 @@
  * Plugin Name:       SEO Command Center
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       AI-powered SEO Command Center for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.27.1
+ * Version:           1.27.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -28,25 +28,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Delete the old copy to remove the duplicate — this only keeps the site alive.
 // ---------------------------------------------------------------------------
 if ( defined( 'SCC_LOADED' ) || function_exists( 'scc_bootstrap' ) ) {
+	// Work out where the OTHER copy actually lives so the admin can delete the
+	// right folder — the whole reason this keeps recurring is not knowing which
+	// duplicate to remove.
+	$scc_other = defined( 'SCC_LOADED' ) ? ( is_string( SCC_LOADED ) ? SCC_LOADED : '' ) : '';
+	if ( '' === $scc_other && function_exists( 'scc_bootstrap' ) ) {
+		try {
+			$scc_ref   = new ReflectionFunction( 'scc_bootstrap' );
+			$scc_other = (string) $scc_ref->getFileName();
+		} catch ( \Throwable $scc_e ) {
+			$scc_other = '';
+		}
+	}
+	$GLOBALS['scc_dup_paths'] = array( 'running' => $scc_other, 'blocked' => __FILE__ );
+
 	if ( is_admin() && ! function_exists( 'scc_duplicate_copy_notice' ) ) {
 		/**
-		 * Warn admins that a duplicate copy of the plugin is installed.
+		 * Warn admins that a duplicate copy of the plugin is installed, naming
+		 * both folders so they can delete the correct one from the file manager.
 		 */
 		function scc_duplicate_copy_notice() {
+			$paths = isset( $GLOBALS['scc_dup_paths'] ) ? $GLOBALS['scc_dup_paths'] : array();
 			echo '<div class="notice notice-error"><p><strong>SEO Command Center:</strong> ';
-			echo esc_html__( 'Two copies of this plugin are installed. Only one is running. Deactivate and delete the older copy under Plugins to remove this warning.', 'seo-command-center' );
+			echo esc_html__( 'Two copies of this plugin are installed and both are active. Only one can run. Delete the extra plugin folder (via Plugins, or your host File Manager / FTP under wp-content/plugins), then reload.', 'seo-command-center' );
+			if ( ! empty( $paths['running'] ) || ! empty( $paths['blocked'] ) ) {
+				echo '</p><p><code>' . esc_html__( 'Running:', 'seo-command-center' ) . ' ' . esc_html( (string) ( $paths['running'] ?? '?' ) ) . '</code><br><code>' . esc_html__( 'Blocked duplicate:', 'seo-command-center' ) . ' ' . esc_html( (string) ( $paths['blocked'] ?? '?' ) ) . '</code>';
+			}
 			echo '</p></div>';
 		}
 		add_action( 'admin_notices', 'scc_duplicate_copy_notice' );
 	}
 	return;
 }
-define( 'SCC_LOADED', true );
+define( 'SCC_LOADED', __FILE__ );
 
 // ---------------------------------------------------------------------------
 // Constants.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.27.1' );
+define( 'SCC_VERSION', '1.27.2' );
 define( 'SCC_DB_VERSION', '1.20.0' );
 define( 'SCC_PLUGIN_FILE', __FILE__ );
 define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
