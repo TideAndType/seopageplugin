@@ -123,7 +123,9 @@ class SCC_OpenAI_Provider implements SCC_AI_Provider_Interface {
 		$body = array(
 			'model'      => $model,
 			'messages'   => $messages,
-			'max_tokens' => isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024,
+			// A non-positive budget means "unlimited"; hosted APIs still need a
+			// positive cap, so use a high ceiling.
+			'max_tokens' => ( isset( $request['max_tokens'] ) && (int) $request['max_tokens'] > 0 ) ? (int) $request['max_tokens'] : 8192,
 		);
 		if ( isset( $request['temperature'] ) ) {
 			$body['temperature'] = (float) $request['temperature'];

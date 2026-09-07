@@ -534,6 +534,16 @@ class SCC_Generator {
 		}
 		$budget = (int) min( 5200, max( 1200, round( $words * 1.7 ) + 800 ) );
 
+		// Optional override: a fixed token budget, or "unlimited" (-1). Unlimited
+		// lets a local model run until the response is genuinely complete (no early
+		// truncation), while hosted providers still apply their own high ceiling.
+		$max_override = (int) SCC_Settings::get( 'generation_max_tokens', 0 );
+		if ( SCC_Settings::get( 'generation_unlimited_tokens', false ) ) {
+			$budget = -1;
+		} elseif ( $max_override > 0 ) {
+			$budget = $max_override;
+		}
+
 		self::dbg( 'about to call AI (content-generation)', array( 'budget' => $budget, 'words' => $words, 'page_type' => $page_type ) );
 
 		$response = $this->ai->complete(

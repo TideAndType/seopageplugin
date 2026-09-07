@@ -55,6 +55,8 @@ class SCC_Settings {
 			'lmstudio_model'           => 'text',
 			'lmstudio_base_url'        => 'url',
 			'lmstudio_timeout'         => 'int',
+			'generation_unlimited_tokens' => 'bool',
+			'generation_max_tokens'    => 'int',
 			'route_keyword_strategy_provider'   => 'provider_or_empty',
 			'route_keyword_strategy_model'      => 'text',
 			'route_content_generation_provider' => 'provider_or_empty',

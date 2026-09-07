@@ -185,7 +185,7 @@ class SCC_Gemini_Provider implements SCC_AI_Provider_Interface {
 		}
 
 		$gen = array();
-		if ( isset( $request['max_tokens'] ) ) {
+		if ( isset( $request['max_tokens'] ) && (int) $request['max_tokens'] > 0 ) {
 			$gen['maxOutputTokens'] = (int) $request['max_tokens'];
 		}
 		if ( isset( $request['temperature'] ) ) {

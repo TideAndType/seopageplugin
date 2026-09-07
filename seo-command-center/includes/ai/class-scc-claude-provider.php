@@ -103,7 +103,9 @@ class SCC_Claude_Provider implements SCC_AI_Provider_Interface {
 
 		$body = array(
 			'model'      => $model,
-			'max_tokens' => isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024,
+			// A non-positive budget means "unlimited"; hosted APIs still need a
+			// positive cap, so use a high ceiling.
+			'max_tokens' => ( isset( $request['max_tokens'] ) && (int) $request['max_tokens'] > 0 ) ? (int) $request['max_tokens'] : 8192,
 			'messages'   => $this->normalize_messages( $request ),
 		);
 		if ( '' !== $system ) {

@@ -66,6 +66,8 @@ class SCC_Activator {
 			'lmstudio_model'        => 'local-model',
 			'lmstudio_base_url'     => 'http://localhost:1234/v1',
 			'lmstudio_timeout'      => 600,
+			'generation_unlimited_tokens' => false,
+			'generation_max_tokens' => 0,
 			// Per-operation AI routing (empty = use the primary provider/model).
 			'route_keyword_strategy_provider'   => '',
 			'route_keyword_strategy_model'      => '',

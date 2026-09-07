@@ -101,6 +101,20 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 					<p class="description"><?php esc_html_e( 'How long to wait for the local model to finish one generation. Large models (for example a 27B) writing a long article can take several minutes — raise this if you see a timeout (cURL error 28). Max 1800 (30 min). Generation keeps running on the server even if your browser disconnects; the draft appears when it finishes.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Generation length', 'seo-command-center' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="generation_unlimited_tokens" value="1" <?php checked( ! empty( $s['generation_unlimited_tokens'] ) ); ?>>
+						<?php esc_html_e( 'Unlimited output tokens (let the model write until it finishes)', 'seo-command-center' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'Removes the token budget for content generation. On LM Studio this sends max_tokens = -1, so the local model runs until the article is complete (no early truncation) — combined with a high timeout above. Hosted providers (Claude/OpenAI/Gemini) still apply their own high ceiling. Leave off to size the budget automatically from the target word count.', 'seo-command-center' ); ?></p>
+					<p class="description">
+						<label for="scc-gen-max-tokens"><?php esc_html_e( 'Or a fixed max tokens (0 = auto, ignored when Unlimited is on):', 'seo-command-center' ); ?></label>
+						<input type="number" class="small-text" id="scc-gen-max-tokens" name="generation_max_tokens" min="0" max="200000" step="256" value="<?php echo esc_attr( isset( $s['generation_max_tokens'] ) ? (int) $s['generation_max_tokens'] : 0 ); ?>">
+					</p>
+				</td>
+			</tr>
 		</table>
 
 		<h2><?php esc_html_e( 'AI model per task', 'seo-command-center' ); ?></h2>

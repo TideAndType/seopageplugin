@@ -170,10 +170,18 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			$messages[] = array( 'role' => 'user', 'content' => (string) ( $request['prompt'] ?? 'Hello' ) );
 		}
 
+		// max_tokens <= 0 means "unlimited": LM Studio accepts -1 to generate until
+		// the model stops on its own (end of the JSON) or the context window fills,
+		// which prevents long articles from being truncated mid-JSON.
+		$mt = isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024;
+		if ( $mt <= 0 ) {
+			$mt = -1;
+		}
+
 		$body = array(
 			'model'      => $model,
 			'messages'   => $messages,
-			'max_tokens' => isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024,
+			'max_tokens' => $mt,
 			'stream'     => false,
 		);
 		if ( isset( $request['temperature'] ) ) {
