@@ -876,6 +876,54 @@
 		bindGenerateTable( document.getElementById( 'scc-generate-table' ), document.getElementById( 'scc-generate-msg' ) );
 		bindGenerateTable( document.getElementById( 'scc-plan-table' ), document.getElementById( 'scc-plan-status-msg' ) );
 		bindQuickGenerate();
+		loadRecentGenerated();
+	}
+
+	// ---- Recently generated (from the DB, any type/status) --------------
+	function loadRecentGenerated() {
+		var box = document.getElementById( 'scc-recent-generated' );
+		if ( ! box ) { return; }
+		request( '/generated/recent', { method: 'GET' } )
+			.then( function ( res ) {
+				var items = ( res.data && res.data.items ) || [];
+				box.innerHTML = '';
+				if ( ! items.length ) {
+					box.appendChild( el( 'p', 'Nothing generated yet. When you create a draft it will appear here with a direct Edit link.', 'scc-note' ) );
+					return;
+				}
+				var table = el( 'table', null, 'widefat striped scc-table' );
+				var thead = el( 'thead' );
+				thead.innerHTML = '<tr><th>Title</th><th>Type</th><th>Status</th><th>ID</th><th></th></tr>';
+				table.appendChild( thead );
+				var tbody = el( 'tbody' );
+				items.forEach( function ( it ) {
+					var tr = el( 'tr' );
+					tr.appendChild( el( 'td', it.title ) );
+					tr.appendChild( el( 'td', ( it.type_label || it.post_type ) + ( it.post_type === 'page' ? ' (Pages)' : ( it.post_type === 'post' ? ' (Posts)' : '' ) ) ) );
+					tr.appendChild( el( 'td', it.status ) );
+					tr.appendChild( el( 'td', String( it.post_id ) ) );
+					var actions = el( 'td' );
+					if ( it.edit_url ) {
+						var a = el( 'a', 'Edit', 'button button-small button-primary' );
+						a.href = it.edit_url;
+						actions.appendChild( a );
+					}
+					if ( it.view_url && it.status === 'publish' ) {
+						var v = el( 'a', 'View', 'button button-small' );
+						v.href = it.view_url; v.target = '_blank'; v.rel = 'noopener';
+						actions.appendChild( document.createTextNode( ' ' ) );
+						actions.appendChild( v );
+					}
+					tr.appendChild( actions );
+					tbody.appendChild( tr );
+				} );
+				table.appendChild( tbody );
+				box.appendChild( table );
+			} )
+			.catch( function ( err ) {
+				box.innerHTML = '';
+				box.appendChild( el( 'p', ( err && err.message ) || 'Could not load recent drafts.', 'scc-note' ) );
+			} );
 	}
 
 	// ---- Simple path: topic -> draft ------------------------------------
@@ -966,7 +1014,8 @@
 						var score = ( d.score && d.score.score ) || 0;
 						var where = ( d.post_type === 'page' ) ? 'Pages' : 'Posts';
 						var kind  = ( d.post_type === 'page' ) ? 'Page' : 'Post';
-						var st    = d.status || 'draft';
+						var known = { draft: 1, publish: 1, pending: 1, future: 1, private: 1 };
+						var st    = ( known[ d.status ] ) ? d.status : 'draft';
 						var how   = ( d.mode === 'template' )
 							? ( 'a ' + ( d.elementor ? 'Elementor' : 'templated' ) + ' ' + kind )
 							: ( 'a native WordPress ' + kind );
@@ -978,6 +1027,7 @@
 							resultEl.appendChild( a );
 						}
 					}
+					loadRecentGenerated();
 				} )
 				.catch( function ( err ) {
 					genBtn.disabled = false;
@@ -1033,7 +1083,8 @@
 						var score = ( d.score && d.score.score ) || 0;
 						var where = ( d.post_type === 'page' ) ? 'Pages' : 'Posts';
 						var kind  = ( d.post_type === 'page' ) ? 'Page' : 'Post';
-						var st    = d.status || 'draft';
+						var known = { draft: 1, publish: 1, pending: 1, future: 1, private: 1 };
+						var st    = ( known[ d.status ] ) ? d.status : 'draft';
 						var how   = ( d.mode === 'template' )
 							? ( 'a ' + ( d.elementor ? 'Elementor' : 'templated' ) + ' ' + kind )
 							: ( 'a native WordPress ' + kind );
@@ -1048,6 +1099,7 @@
 					}
 					setStatus( msg, 'Draft created.', 'is-ok' );
 					e.target.disabled = false;
+					loadRecentGenerated();
 				}
 
 				// Fire the generation. It runs server-side with ignore_user_abort,

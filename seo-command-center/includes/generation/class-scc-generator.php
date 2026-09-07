@@ -185,6 +185,16 @@ class SCC_Generator {
 		$status    = SCC_Settings::get( 'auto_publish', false ) ? 'publish' : 'draft';
 		$slug      = ! empty( $rendered['post_name'] ) ? $rendered['post_name'] : $this->slug_from_url( $entry['url'] ?? '', $content->title );
 
+		// Explicitly set the author to the current user. In a REST context a post
+		// created with no author (author 0) still exists but is hidden from the
+		// "Mine" tab of the Posts/Pages screen — a common "it says it saved but I
+		// can't find it" cause. Fall back to the first admin if there is no user.
+		$author = get_current_user_id();
+		if ( ! $author ) {
+			$admins = get_users( array( 'role' => 'administrator', 'number' => 1, 'fields' => 'ID' ) );
+			$author = ! empty( $admins ) ? (int) $admins[0] : 0;
+		}
+
 		$post_id = wp_insert_post(
 			array(
 				'post_title'   => $content->title,
@@ -192,6 +202,7 @@ class SCC_Generator {
 				'post_status'  => $status,
 				'post_type'    => $post_type,
 				'post_name'    => $slug,
+				'post_author'  => $author,
 			),
 			true
 		);
@@ -200,6 +211,16 @@ class SCC_Generator {
 			SCC_Logger::error( 'generator', 'wp_insert_post failed: ' . $post_id->get_error_message() );
 			return $post_id;
 		}
+
+		// Verify the row is really persisted (some hosts with aggressive object
+		// caches or a conflicting save_post hook can drop it) and log the concrete
+		// facts so "the draft is not under Posts" is diagnosable from the log.
+		$saved = get_post( $post_id );
+		if ( ! $saved ) {
+			SCC_Logger::error( 'generator', 'Post vanished immediately after insert', array( 'post_id' => $post_id, 'post_type' => $post_type, 'status' => $status ) );
+			return new WP_Error( 'scc_post_not_persisted', __( 'The draft was created but could not be found immediately after saving. A caching or security plugin may be interfering. Check Posts/Pages → Drafts, and try again.', 'seo-command-center' ), array( 'status' => 500 ) );
+		}
+		SCC_Logger::info( 'generator', 'Post inserted', array( 'post_id' => $post_id, 'post_type' => $saved->post_type, 'status' => $saved->post_status, 'author' => (int) $saved->post_author ) );
 
 		// Apply renderer-provided post meta (e.g. duplicated _elementor_data).
 		// The source template is never modified.

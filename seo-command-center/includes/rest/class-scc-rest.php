@@ -476,6 +476,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/generated/recent',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'generated_recent' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/regenerate-section',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1940,6 +1950,46 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /generated/recent — every post this plugin generated, from the DB
+	 * directly (any post type, any status). Lets the user find a draft even when
+	 * it is a Page rather than a Post, or filtered out of the list screens.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function generated_recent( WP_REST_Request $request ) {
+		$query = new WP_Query(
+			array(
+				'post_type'        => 'any',
+				'post_status'      => array( 'draft', 'pending', 'future', 'private', 'publish' ),
+				'posts_per_page'   => 25,
+				'orderby'          => 'date',
+				'order'            => 'DESC',
+				'no_found_rows'    => true,
+				'meta_key'         => '_scc_generated', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'suppress_filters' => false,
+			)
+		);
+
+		$items = array();
+		foreach ( $query->posts as $post ) {
+			$type_obj = get_post_type_object( $post->post_type );
+			$items[]  = array(
+				'post_id'    => (int) $post->ID,
+				'title'      => get_the_title( $post ) ? get_the_title( $post ) : __( '(no title)', 'seo-command-center' ),
+				'post_type'  => $post->post_type,
+				'type_label' => $type_obj ? $type_obj->labels->singular_name : $post->post_type,
+				'status'     => $post->post_status,
+				'edit_url'   => get_edit_post_link( $post->ID, 'raw' ),
+				'view_url'   => get_permalink( $post->ID ),
+				'generated'  => (string) get_post_meta( $post->ID, '_scc_generated', true ),
+			);
+		}
+
+		return $this->ok( array( 'items' => $items ) );
 	}
 
 	/**

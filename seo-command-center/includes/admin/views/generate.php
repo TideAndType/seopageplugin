@@ -147,4 +147,10 @@ $categories   = isset( $data['categories'] ) ? $data['categories'] : array();
 			<span class="scc-inline-status" id="scc-generate-msg"></span>
 		<?php endif; ?>
 	</div>
+
+	<div class="scc-card">
+		<h2><?php esc_html_e( 'Recently generated', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Every draft this plugin created, straight from the database — so you can find it even if it is a Page (not a Post) or filtered out of the list screens. Click Edit to open it.', 'seo-command-center' ); ?></p>
+		<div id="scc-recent-generated"><p class="scc-note"><?php esc_html_e( 'Loading…', 'seo-command-center' ); ?></p></div>
+	</div>
 </div>
