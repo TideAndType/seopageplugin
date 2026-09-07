@@ -55,10 +55,23 @@ class SCC_Generator {
 	 * @return array The link opportunities used.
 	 */
 	protected function weave_internal_links( SCC_Content_Object $content ) {
+		// Existing pages must be indexed for there to be any link TARGETS. On a
+		// site that has never run a link scan the index is empty, which is the most
+		// common reason a fresh draft comes out with no internal links at all —
+		// build it on demand (bounded) before looking for opportunities.
+		if ( 0 === SCC_Content_Index::count() ) {
+			SCC_Content_Index::reindex_all( 500 );
+		}
+
 		$max = (int) SCC_Settings::get( 'max_internal_links', 8 );
 		$engine = new SCC_Link_Engine();
 		$links  = $engine->opportunities_for_content( $content, $max );
 		if ( empty( $links ) ) {
+			SCC_Logger::info(
+				'generator',
+				'No internal-link opportunities for this draft',
+				array( 'indexed_pages' => SCC_Content_Index::count() )
+			);
 			return array();
 		}
 		$inserter = new SCC_Link_Inserter();
