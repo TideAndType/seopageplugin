@@ -1329,6 +1329,24 @@ assert_eq( 'draft', $row_draft['status'], 'valid status is kept' );
 $row_bad = $scc_sanitize->invoke( null, array( 'name' => 'X', 'status' => 'bogus' ) );
 assert_eq( 'active', $row_bad['status'], 'invalid status falls back to active' );
 
+echo "\n== Generator salvage: raw model output -> HTML ==\n";
+$scc_t2h = new ReflectionMethod( 'SCC_Generator', 'text_to_html' );
+$scc_t2h->setAccessible( true );
+// Plain prose (no JSON) becomes paragraphs + headings + a list.
+$salv = $scc_t2h->invoke( null, "# Intro\n\nFirst paragraph.\n\n## Details\n\n- one\n- two" );
+assert_true( false !== strpos( $salv, '<h2>Intro</h2>' ), 'markdown # heading -> h2 (not h1)' );
+assert_true( false !== strpos( $salv, '<h3>Details</h3>' ), 'markdown ## heading -> h3' );
+assert_true( false !== strpos( $salv, '<p>First paragraph.</p>' ), 'prose block wrapped in <p>' );
+assert_true( false !== strpos( $salv, '<li>one</li>' ), 'bullet list converted to <li>' );
+assert_true( false === strpos( $salv, '<h1' ), 'salvage never emits an in-body h1' );
+// Already-HTML input is kept, but an in-body <h1> is downgraded to <h2>.
+$salv2 = $scc_t2h->invoke( null, '<h1>Title</h1><p>Body copy here.</p>' );
+assert_true( false === strpos( $salv2, '<h1' ), 'existing <h1> downgraded' );
+assert_true( false !== strpos( $salv2, '<p>Body copy here.</p>' ), 'existing HTML preserved' );
+// A code-fenced block has the fence stripped.
+$salv3 = $scc_t2h->invoke( null, "```html\n<p>Fenced.</p>\n```" );
+assert_true( false === strpos( $salv3, '`' ), 'code fences stripped' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

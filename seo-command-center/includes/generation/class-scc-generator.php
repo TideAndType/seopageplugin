@@ -370,8 +370,24 @@ class SCC_Generator {
 
 		$data = $response->json();
 		if ( ! is_array( $data ) || empty( $data['content_html'] ) ) {
-			SCC_Logger::error( 'generator', 'AI body output unparseable' );
-			return new WP_Error( 'scc_bad_ai_output', __( 'The generated content could not be parsed. Try again.', 'seo-command-center' ), array( 'status' => 502 ) );
+			// Salvage: smaller local models (LM Studio) often ignore the "return
+			// JSON" instruction and answer with the article as prose/markdown/HTML.
+			// Rather than failing with no draft, turn that raw text into a usable
+			// body so a draft is always produced when the model wrote something.
+			$raw = trim( (string) $response->content );
+			if ( strlen( wp_strip_all_tags( $raw ) ) >= 200 ) {
+				SCC_Logger::info( 'generator', 'AI returned non-JSON; salvaging raw content into a draft' );
+				$data = array(
+					'title'            => (string) ( $entry['title'] ?? '' ),
+					'content_html'     => self::text_to_html( $raw ),
+					'faqs'             => array(),
+					'meta_title'       => '',
+					'meta_description' => '',
+				);
+			} else {
+				SCC_Logger::error( 'generator', 'AI body output unparseable and too short to salvage' );
+				return new WP_Error( 'scc_bad_ai_output', __( 'The model did not return usable content. Try again, or use a larger/faster model.', 'seo-command-center' ), array( 'status' => 502 ) );
+			}
 		}
 
 		$faqs = array();
@@ -455,6 +471,64 @@ class SCC_Generator {
 		$text = preg_replace( '/,\s*,/', ',', $text );  // doubled commas
 		$text = preg_replace( '/\s{2,}/', ' ', $text );  // doubled spaces
 		return $text;
+	}
+
+	/**
+	 * Turn raw model output (already-HTML, or plain/markdown prose) into usable
+	 * article HTML. Used only to salvage a draft when a local model ignored the
+	 * "return JSON" instruction. Kept deliberately simple; the result still goes
+	 * through wp_kses in sanitize_content_html().
+	 *
+	 * @param string $raw Raw text from the model.
+	 * @return string
+	 */
+	protected static function text_to_html( $raw ) {
+		$raw = (string) $raw;
+		// Drop a leading ```/```json fence and any wrapping code fences.
+		$raw = preg_replace( '/```[a-z]*\s*/i', '', $raw );
+		$raw = str_replace( '```', '', $raw );
+		$raw = trim( $raw );
+
+		// Already HTML? Use as-is (an <h1> is downgraded so the theme title stays
+		// the only H1).
+		if ( preg_match( '/<(p|h[1-6]|ul|ol|div|section|article)\b/i', $raw ) ) {
+			return preg_replace( array( '/<h1\b/i', '/<\/h1>/i' ), array( '<h2', '</h2>' ), $raw );
+		}
+
+		// Plain/markdown prose: convert headings + bullets, wrap the rest in <p>.
+		$out    = array();
+		$list   = array();
+		$flush  = function () use ( &$list, &$out ) {
+			if ( ! empty( $list ) ) {
+				$out[] = '<ul>' . implode( '', $list ) . '</ul>';
+				$list  = array();
+			}
+		};
+		foreach ( preg_split( '/\n\s*\n/', $raw ) as $block ) {
+			$block = trim( $block );
+			if ( '' === $block ) {
+				continue;
+			}
+			if ( preg_match( '/^#{2,}\s+(.*)$/', $block, $m ) ) {
+				$flush();
+				$out[] = '<h3>' . esc_html( trim( $m[1] ) ) . '</h3>';
+			} elseif ( preg_match( '/^#\s+(.*)$/', $block, $m ) ) {
+				$flush();
+				$out[] = '<h2>' . esc_html( trim( $m[1] ) ) . '</h2>';
+			} elseif ( preg_match( '/^\s*[-*]\s+/', $block ) ) {
+				foreach ( preg_split( '/\n/', $block ) as $li ) {
+					$li = preg_replace( '/^\s*[-*]\s+/', '', trim( $li ) );
+					if ( '' !== $li ) {
+						$list[] = '<li>' . esc_html( $li ) . '</li>';
+					}
+				}
+			} else {
+				$flush();
+				$out[] = '<p>' . esc_html( $block ) . '</p>';
+			}
+		}
+		$flush();
+		return implode( "\n", $out );
 	}
 
 	/**

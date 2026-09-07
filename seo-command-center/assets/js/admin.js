@@ -1048,17 +1048,27 @@
 
 				// Fire the generation. It runs server-side with ignore_user_abort,
 				// so the draft finishes and saves even if this connection is cut.
+				// A returned error (bad AI output, transport error, etc.) is captured
+				// and surfaced instead of being hidden behind a generic timeout.
+				var genError = null;
 				request( '/generate', { method: 'POST', data: { entry_id: id } } )
 					.then( function ( res ) { showDone( res.data || {} ); } )
-					.catch( function () { /* rely on polling — the draft may still be saving */ } );
+					.catch( function ( err ) { genError = err && err.message ? err.message : null; } );
 
 				// Poll until the plan entry gets its post_id (generation complete).
+				// A real failure returns a message quickly, so we don't wait long for
+				// one; only a dropped connection (no message) gets the long window,
+				// because the server may still be finishing the draft.
 				var started = Date.now();
 				( function poll() {
-					if ( settled || Date.now() - started > 12 * 60 * 1000 ) {
+					var deadline = genError ? 90 * 1000 : 12 * 60 * 1000;
+					if ( settled || Date.now() - started > deadline ) {
 						if ( ! settled ) {
-							if ( statusCell ) { statusCell.textContent = 'unknown'; }
-							setStatus( msg, 'Still working (or the model stalled). Check Posts/Pages → Drafts; if nothing appears, try a shorter word count or a faster model.', 'is-error' );
+							settled = true;
+							if ( statusCell ) { statusCell.textContent = genError ? 'error' : 'unknown'; }
+							setStatus( msg, genError
+								? ( 'Generation failed: ' + genError )
+								: 'Still working (or the model stalled). Check Posts/Pages → Drafts; if nothing appears, try a shorter word count or a faster model.', 'is-error' );
 							e.target.disabled = false;
 						}
 						return;
