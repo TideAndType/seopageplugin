@@ -207,20 +207,47 @@ class SCC_Generator {
 			true
 		);
 
+		// Diagnostics for "the draft is not under Posts": capture every fact about
+		// the insert and echo it to the SEO Command log, the PHP error log
+		// (debug.log), and the API response so it is visible without any log access.
+		$debug = array(
+			'content_type' => $content->content_type,
+			'mode'         => $has_mapped_template ? 'template' : 'native',
+			'post_type'    => $post_type,
+			'want_status'  => $status,
+			'author'       => (int) $author,
+			'insert'       => is_wp_error( $post_id ) ? ( 'WP_Error: ' . $post_id->get_error_message() ) : (int) $post_id,
+		);
+
 		if ( is_wp_error( $post_id ) ) {
-			SCC_Logger::error( 'generator', 'wp_insert_post failed: ' . $post_id->get_error_message() );
+			SCC_Logger::error( 'generator', 'wp_insert_post failed: ' . $post_id->get_error_message(), $debug );
+			self::debug_log( 'wp_insert_post FAILED', $debug );
 			return $post_id;
 		}
 
-		// Verify the row is really persisted (some hosts with aggressive object
-		// caches or a conflicting save_post hook can drop it) and log the concrete
-		// facts so "the draft is not under Posts" is diagnosable from the log.
-		$saved = get_post( $post_id );
-		if ( ! $saved ) {
-			SCC_Logger::error( 'generator', 'Post vanished immediately after insert', array( 'post_id' => $post_id, 'post_type' => $post_type, 'status' => $status ) );
-			return new WP_Error( 'scc_post_not_persisted', __( 'The draft was created but could not be found immediately after saving. A caching or security plugin may be interfering. Check Posts/Pages → Drafts, and try again.', 'seo-command-center' ), array( 'status' => 500 ) );
+		// Read the row three ways: the WP cache (get_post), a direct DB read
+		// (bypasses object cache), and whether the post type is registered/visible.
+		$saved      = get_post( $post_id );
+		$type_obj   = get_post_type_object( $post_type );
+		global $wpdb;
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT ID, post_type, post_status, post_author FROM {$wpdb->posts} WHERE ID = %d", (int) $post_id ), ARRAY_A ); // phpcs:ignore WordPress.DB
+
+		$debug['get_post']        = $saved ? 'found' : 'MISSING';
+		$debug['db_row']          = $row ? $row : 'MISSING';
+		$debug['saved_status']    = $saved ? $saved->post_status : '';
+		$debug['saved_post_type'] = $saved ? $saved->post_type : '';
+		$debug['type_registered'] = $type_obj ? 'yes' : 'NO';
+		$debug['type_public']     = ( $type_obj && $type_obj->public ) ? 'yes' : 'no';
+		$debug['type_show_ui']    = ( $type_obj && $type_obj->show_ui ) ? 'yes' : 'no';
+
+		SCC_Logger::info( 'generator', 'Post insert diagnostics', $debug );
+		self::debug_log( 'Post insert diagnostics', $debug );
+
+		if ( ! $saved && ! $row ) {
+			// Genuinely never persisted — a caching/security plugin dropped it.
+			SCC_Logger::error( 'generator', 'Post vanished immediately after insert', $debug );
+			return new WP_Error( 'scc_post_not_persisted', __( 'The draft was created but is not in the database immediately after saving — a caching or security plugin is likely blocking wp_insert_post. See the SEO Command log for the diagnostics.', 'seo-command-center' ), array( 'status' => 500 ) );
 		}
-		SCC_Logger::info( 'generator', 'Post inserted', array( 'post_id' => $post_id, 'post_type' => $saved->post_type, 'status' => $saved->post_status, 'author' => (int) $saved->post_author ) );
 
 		// Apply renderer-provided post meta (e.g. duplicated _elementor_data).
 		// The source template is never modified.
@@ -305,7 +332,25 @@ class SCC_Generator {
 			'template'  => $template->name,
 			'elementor' => $used_elementor,
 			'links'     => count( (array) $content->internal_links ),
+			'debug'     => $debug,
 		);
+	}
+
+	/**
+	 * Write a diagnostic line to the PHP error log (debug.log) when WP_DEBUG_LOG
+	 * is on. Complements the in-plugin SEO Command log so problems are visible
+	 * both places without exposing anything sensitive.
+	 *
+	 * @param string $label Message label.
+	 * @param array  $data  Context.
+	 * @return void
+	 */
+	protected static function debug_log( $label, array $data ) {
+		if ( ! ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ) {
+			return;
+		}
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		error_log( '[SEO Command Center] ' . $label . ' ' . wp_json_encode( $data ) );
 	}
 
 	/**

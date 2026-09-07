@@ -834,6 +834,27 @@
 		return e;
 	}
 
+	// Build a collapsible diagnostics block from a generation result's debug data.
+	function debugBlock( d ) {
+		if ( ! d || ! d.debug ) { return null; }
+		var det = el( 'details' );
+		det.style.marginTop = '8px';
+		var sum = el( 'summary', 'Diagnostics (copy this if the draft is missing)' );
+		sum.style.cursor = 'pointer';
+		det.appendChild( sum );
+		var pre = el( 'pre' );
+		pre.style.whiteSpace = 'pre-wrap';
+		pre.style.fontSize = '11px';
+		pre.style.background = '#f6f7f7';
+		pre.style.padding = '8px';
+		pre.style.border = '1px solid #dcdcde';
+		pre.style.userSelect = 'all';
+		try { pre.textContent = JSON.stringify( d.debug, null, 2 ); }
+		catch ( e ) { pre.textContent = String( d.debug ); }
+		det.appendChild( pre );
+		return det;
+	}
+
 	function renderBrief( panel, brief ) {
 		panel.innerHTML = '';
 		panel.appendChild( el( 'h3', 'Content brief' ) );
@@ -1026,6 +1047,8 @@
 							a.href = d.edit_url; a.className = 'button button-primary';
 							resultEl.appendChild( a );
 						}
+						var dbg = debugBlock( d );
+						if ( dbg ) { resultEl.appendChild( dbg ); }
 					}
 					loadRecentGenerated();
 				} )
@@ -1096,6 +1119,8 @@
 							a.className = 'button button-primary';
 							panel.appendChild( a );
 						}
+						var dbg = debugBlock( d );
+						if ( dbg ) { panel.appendChild( dbg ); }
 					}
 					setStatus( msg, 'Draft created.', 'is-ok' );
 					e.target.disabled = false;
