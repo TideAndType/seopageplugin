@@ -365,6 +365,7 @@ require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-templ
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-store.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-map.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-selector.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-content-presenter.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/interface-scc-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-wordpress-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-gutenberg-renderer.php';

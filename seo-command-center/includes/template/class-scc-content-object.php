@@ -113,9 +113,23 @@ class SCC_Content_Object {
 		$obj->cta             = (string) ( $brief['cta'] ?? '' );
 		$obj->image           = (array) ( $body['image'] ?? array() );
 
-		// Derive intro (first paragraph) if not otherwise present.
+		// Derive intro (first paragraph) if not otherwise present. Do this on the
+		// RAW body, before the presentation layer may wrap paragraphs.
 		if ( preg_match( '/<p[^>]*>(.*?)<\/p>/is', $obj->content, $m ) ) {
 			$obj->intro = trim( $m[1] );
+		}
+
+		// Visual presentation layer: transform the plain article HTML into a
+		// scannable, component-based layout (callouts, takeaway cards, process
+		// steps, timelines, stat cards, responsive tables). Semantic, CSS-only,
+		// SEO-preserving. Enabled by default; can be turned off in Settings.
+		if ( class_exists( 'SCC_Content_Presenter' )
+			&& ( ! class_exists( 'SCC_Settings' ) || SCC_Settings::get( 'visual_presentation', true ) )
+		) {
+			$obj->content = SCC_Content_Presenter::enhance(
+				$obj->content,
+				array( 'content_type' => $obj->content_type )
+			);
 		}
 
 		// Service / city / state from the entry/title where discernible.

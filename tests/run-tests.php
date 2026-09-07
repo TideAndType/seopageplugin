@@ -1362,6 +1362,39 @@ assert_eq( 'Hello "World"', $scc_ejf->invoke( null, $ejf_src, 'title' ), 'extrac
 assert_true( false !== strpos( $scc_ejf->invoke( null, $ejf_src, 'content_html' ), '<b>bold</b>' ), 'extract_json_field decodes \\u escapes' );
 assert_eq( '', $scc_ejf->invoke( null, $ejf_src, 'missing_key' ), 'extract_json_field returns empty for a missing key' );
 
+echo "\n== Content presenter: visual components ==\n";
+// Callout from a labelled paragraph.
+$pz = SCC_Content_Presenter::enhance( '<p>Tip: Keep your title under 60 characters.</p>' );
+assert_true( false !== strpos( $pz, 'scc-callout--tip' ), 'Tip paragraph becomes a tip callout' );
+assert_true( false === strpos( $pz, 'Tip: Keep' ), 'callout strips the leading label from the body' );
+assert_true( false !== strpos( $pz, 'Keep your title under 60 characters.' ), 'callout keeps the body text' );
+// Normal paragraph is left alone (still a plain <p>, just wrapped).
+$pz2 = SCC_Content_Presenter::enhance( '<p>This is a normal explanatory paragraph.</p>' );
+assert_true( false === strpos( $pz2, 'scc-callout' ), 'a normal paragraph is not turned into a callout' );
+assert_true( false !== strpos( $pz2, '<div class="scc-content">' ), 'content is wrapped in scc-content' );
+// Key takeaways card.
+$tk = SCC_Content_Presenter::enhance( '<h2>Key takeaways</h2><ul><li>One</li><li>Two</li></ul>' );
+assert_true( false !== strpos( $tk, 'scc-takeaways' ), 'Key takeaways heading + list becomes a takeaways card' );
+// Process steps.
+$ps = SCC_Content_Presenter::enhance( '<h2>Our process</h2><ol><li>Audit</li><li>Strategy</li><li>Create</li></ol>' );
+assert_true( false !== strpos( $ps, '<ol class="scc-steps">' ), 'process heading + ordered list becomes steps' );
+// Timeline.
+$tl = SCC_Content_Presenter::enhance( '<ul><li>Month 1-3: Setup</li><li>Month 4-6: Growth</li><li>Month 7-12: Scale</li></ul>' );
+assert_true( false !== strpos( $tl, 'scc-timeline' ), 'a month-range list becomes a timeline' );
+// A plain unordered list is NOT a timeline.
+$ul = SCC_Content_Presenter::enhance( '<ul><li>Apples</li><li>Oranges</li><li>Pears</li></ul>' );
+assert_true( false === strpos( $ul, 'scc-timeline' ), 'a plain list is not turned into a timeline' );
+// Stat cards.
+$sc = SCC_Content_Presenter::enhance( '<h2>By the numbers</h2><ul><li>Traffic: 3x growth</li><li>Leads: 120 per month</li></ul>' );
+assert_true( false !== strpos( $sc, 'scc-stats' ) && false !== strpos( $sc, 'scc-stat__value' ), 'stat heading + list becomes stat cards' );
+// Responsive table wrap.
+$tb = SCC_Content_Presenter::enhance( '<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>' );
+assert_true( false !== strpos( $tb, 'scc-table__scroll' ), 'tables get a responsive scroll wrapper' );
+// Idempotent.
+$once  = SCC_Content_Presenter::enhance( '<p>Hello world paragraph.</p>' );
+$twice = SCC_Content_Presenter::enhance( $once );
+assert_eq( $once, $twice, 'enhance is idempotent (never double-wraps)' );
+
 echo "\n== Generator: relocate FAQs from body ==\n";
 $scc_relo = new ReflectionMethod( 'SCC_Generator', 'relocate_faqs_from_html' );
 $scc_relo->setAccessible( true );

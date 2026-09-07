@@ -152,6 +152,16 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 				</td>
 			</tr>
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Visual presentation', 'seo-command-center' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="visual_presentation" value="1" <?php checked( ! isset( $s['visual_presentation'] ) || ! empty( $s['visual_presentation'] ) ); ?>>
+						<?php esc_html_e( 'Transform generated articles into a scannable, component layout (callouts, takeaway cards, process steps, timelines, stat cards, responsive tables)', 'seo-command-center' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'Semantic, CSS-only enhancement applied to newly generated drafts. Keeps all headings, links, lists, tables and SEO copy intact — it only improves the layout. Inherits your theme’s fonts and colours. Turn off to output plain article HTML.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="scc-content-persona"><?php esc_html_e( 'Writing persona', 'seo-command-center' ); ?></label></th>
 				<td>
 					<select id="scc-content-persona" name="content_persona">

@@ -1106,6 +1106,18 @@ class SCC_Generator {
 		if ( ! empty( $content->faq ) ) {
 			$html .= self::faq_section_html( (array) $content->faq );
 		}
+		// Native posts also have no {{CTA}} widget — append a visually distinct CTA
+		// block so the call to action does not read as just another paragraph.
+		$cta = trim( wp_strip_all_tags( (string) $content->cta ) );
+		if ( '' !== $cta ) {
+			$url = trim( (string) $content->cta_url );
+			$btn = '' !== trim( (string) $content->cta_text ) ? $content->cta_text : __( 'Get in touch', 'seo-command-center' );
+			$html .= "\n<div class=\"scc-cta\"><p class=\"scc-cta__text\">" . esc_html( $cta ) . '</p>';
+			if ( '' !== $url ) {
+				$html .= '<a class="scc-cta__btn" href="' . esc_url( $url ) . '">' . esc_html( $btn ) . '</a>';
+			}
+			$html .= "</div>\n";
+		}
 		return array(
 			'post_content' => $html,
 			'post_meta'    => array(),

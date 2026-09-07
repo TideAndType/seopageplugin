@@ -152,20 +152,109 @@ class SCC_Plugin {
 			return;
 		}
 		$post = get_post( get_queried_object_id() );
-		if ( ! $post || false === strpos( (string) $post->post_content, 'scc-faq' ) ) {
+		if ( ! $post ) {
 			return;
 		}
-		echo '<style id="scc-faq-style">'
-			. '.scc-faq{margin:1.25rem 0;display:flex;flex-direction:column;gap:.6rem}'
-			. '.scc-faq__item{border:1px solid #e2e4ea;border-radius:10px;background:#fff;overflow:hidden}'
-			. '.scc-faq__q{cursor:pointer;list-style:none;padding:.9rem 1.1rem;font-weight:600;position:relative;padding-right:2.4rem}'
-			. '.scc-faq__q::-webkit-details-marker{display:none}'
-			. '.scc-faq__q::after{content:"+";position:absolute;right:1.1rem;top:50%;transform:translateY(-50%);font-size:1.2rem;line-height:1;color:#6b7280}'
-			. '.scc-faq__item[open] .scc-faq__q::after{content:"–"}'
-			. '.scc-faq__item[open] .scc-faq__q{border-bottom:1px solid #eef0f4}'
-			. '.scc-faq__a{padding:.85rem 1.1rem 1rem}'
-			. '.scc-faq__a>*:first-child{margin-top:0}.scc-faq__a>*:last-child{margin-bottom:0}'
-			. '</style>' . "\n";
+		$content = (string) $post->post_content;
+		$needed  = ( false !== strpos( $content, 'scc-content' ) )
+			|| ( false !== strpos( $content, 'scc-faq' ) )
+			|| ( '' !== (string) get_post_meta( $post->ID, '_scc_generated', true ) );
+		if ( ! $needed ) {
+			return;
+		}
+
+		echo '<style id="scc-content-style">' . self::front_css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+
+	/**
+	 * The front-end presentation CSS for generated content. Scoped to
+	 * .scc-content (plus the standalone .scc-faq widget), inherits the theme's
+	 * fonts/colours via CSS custom properties, fully responsive, accessible and
+	 * CSS-only (no JavaScript). Filterable via scc_front_css.
+	 *
+	 * @return string
+	 */
+	protected static function front_css() {
+		$css = <<<'CSS'
+.scc-content{--scc-accent:var(--wp--preset--color--primary,#2563eb);--scc-border:rgba(2,6,23,.12);--scc-soft:rgba(2,6,23,.04);--scc-muted:rgba(2,6,23,.62);--scc-card:#fff;--scc-radius:14px}
+.scc-content{max-width:100%;}
+.scc-content>*:first-child{margin-top:0}
+.scc-content h2{margin-top:2.4em;margin-bottom:.6em;padding-top:1.1em;border-top:1px solid var(--scc-border);line-height:1.25}
+.scc-content h2:first-of-type{border-top:0;padding-top:0;margin-top:1.4em}
+.scc-content h3{margin-top:1.6em;margin-bottom:.5em;line-height:1.3}
+.scc-content p{line-height:1.75;margin:0 0 1.05em}
+.scc-content ul,.scc-content ol{line-height:1.7;margin:0 0 1.15em;padding-left:1.3em}
+.scc-content li{margin:.35em 0}
+.scc-content a{text-decoration:underline;text-underline-offset:2px}
+.scc-content :where(a,summary,[tabindex]):focus-visible{outline:2px solid var(--scc-accent);outline-offset:2px;border-radius:4px}
+/* Callouts */
+.scc-callout{margin:1.5em 0;padding:1em 1.15em 1.05em;border:1px solid var(--scc-border);border-left:4px solid var(--scc-accent);border-radius:var(--scc-radius);background:var(--scc-soft)}
+.scc-callout__label{margin:0 0 .25em;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--scc-accent)}
+.scc-callout__body{margin:0}
+.scc-callout--tip{border-left-color:#16a34a}.scc-callout--tip .scc-callout__label{color:#16a34a}
+.scc-callout--important{border-left-color:#d97706}.scc-callout--important .scc-callout__label{color:#b45309}
+.scc-callout--warning{border-left-color:#dc2626}.scc-callout--warning .scc-callout__label{color:#dc2626}
+.scc-callout--key{border-left-color:var(--scc-accent)}
+.scc-callout--info{border-left-color:#0ea5e9}.scc-callout--info .scc-callout__label{color:#0284c7}
+.scc-callout--note{border-left-color:#64748b}.scc-callout--note .scc-callout__label{color:#475569}
+/* Key takeaways card */
+.scc-takeaways{margin:1.6em 0;padding:1.15em 1.3em;border:1px solid var(--scc-border);border-radius:var(--scc-radius);background:var(--scc-card);box-shadow:0 1px 2px rgba(2,6,23,.04)}
+.scc-takeaways__title{margin:0 0 .6em;font-size:.8rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--scc-muted)}
+.scc-takeaways ul{margin:0;padding:0;list-style:none;display:grid;gap:.55em}
+.scc-takeaways li{position:relative;padding-left:1.7em;margin:0}
+.scc-takeaways li::before{content:"";position:absolute;left:0;top:.36em;width:1.05em;height:1.05em;border-radius:50%;background:var(--scc-accent);
+ -webkit-mask:no-repeat center/.7em url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='white' d='M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z'/%3E%3C/svg%3E");mask:no-repeat center/.7em url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 16.2l-3.5-3.5L4 14.2l5 5 11-11-1.5-1.5z'/%3E%3C/svg%3E")}
+/* Process steps */
+.scc-steps{list-style:none;counter-reset:scc-step;margin:1.6em 0;padding:0;display:grid;gap:.9em}
+.scc-steps>li{counter-increment:scc-step;position:relative;padding:1em 1.1em 1em 3.6em;border:1px solid var(--scc-border);border-radius:var(--scc-radius);background:var(--scc-card)}
+.scc-steps>li::before{content:counter(scc-step,decimal-leading-zero);position:absolute;left:1.05em;top:.9em;font-weight:700;font-size:.95rem;color:#fff;background:var(--scc-accent);width:1.9em;height:1.9em;display:flex;align-items:center;justify-content:center;border-radius:9px;font-variant-numeric:tabular-nums}
+/* Timeline */
+.scc-timeline{list-style:none;margin:1.6em 0;padding:0 0 0 1.4em;border-left:2px solid var(--scc-border)}
+.scc-timeline>li{position:relative;margin:0 0 1.1em;padding:0 0 0 1.1em}
+.scc-timeline>li::before{content:"";position:absolute;left:calc(-1.4em - 1px);top:.45em;width:.8em;height:.8em;border-radius:50%;background:var(--scc-accent);box-shadow:0 0 0 4px var(--scc-soft);transform:translateX(-50%)}
+/* Stat cards */
+.scc-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9em;margin:1.4em 0}
+.scc-stat{display:flex;flex-direction:column;gap:.15em;padding:1.1em;border:1px solid var(--scc-border);border-radius:var(--scc-radius);background:var(--scc-card);text-align:center}
+.scc-stat__value{font-size:1.6rem;font-weight:800;line-height:1.1;color:var(--scc-accent)}
+.scc-stat__label{font-size:.86rem;color:var(--scc-muted)}
+/* Responsive tables */
+.scc-table{margin:1.6em 0}
+.scc-table__scroll{overflow-x:auto;border:1px solid var(--scc-border);border-radius:var(--scc-radius)}
+.scc-table table{width:100%;border-collapse:collapse;margin:0;min-width:32rem}
+.scc-table th,.scc-table td{padding:.7em .9em;text-align:left;border-bottom:1px solid var(--scc-border);vertical-align:top}
+.scc-table thead th{background:var(--scc-soft);font-weight:700}
+.scc-table tbody tr:last-child td{border-bottom:0}
+.scc-table tbody tr:nth-child(even) td{background:rgba(2,6,23,.015)}
+/* CTA block (native posts) */
+.scc-cta{margin:2em 0 .5em;padding:1.4em 1.5em;border-radius:14px;background:var(--scc-soft,rgba(2,6,23,.04));border:1px solid var(--scc-border,rgba(2,6,23,.12));display:flex;flex-wrap:wrap;align-items:center;gap:1em;justify-content:space-between}
+.scc-cta__text{margin:0;font-weight:600;font-size:1.05rem}
+.scc-cta__btn{display:inline-block;padding:.7em 1.3em;border-radius:10px;background:var(--scc-accent,#2563eb);color:#fff;text-decoration:none;font-weight:600}
+.scc-section-title{margin-top:2em}
+/* FAQ accordion (also used standalone by the {{FAQ}} widget) */
+.scc-faq{margin:1.5em 0;display:flex;flex-direction:column;gap:.6rem}
+.scc-faq__item{border:1px solid var(--scc-border,#e2e4ea);border-radius:10px;background:var(--scc-card,#fff);overflow:hidden}
+.scc-faq__q{cursor:pointer;list-style:none;padding:.9rem 1.1rem;font-weight:600;position:relative;padding-right:2.4rem}
+.scc-faq__q::-webkit-details-marker{display:none}
+.scc-faq__q::after{content:"+";position:absolute;right:1.1rem;top:50%;transform:translateY(-50%);font-size:1.2rem;line-height:1;color:#6b7280}
+.scc-faq__item[open] .scc-faq__q::after{content:"\2013"}
+.scc-faq__item[open] .scc-faq__q{border-bottom:1px solid var(--scc-border,#eef0f4)}
+.scc-faq__a{padding:.85rem 1.1rem 1rem}
+.scc-faq__a>*:first-child{margin-top:0}.scc-faq__a>*:last-child{margin-bottom:0}
+.scc-faq__q:focus-visible{outline:2px solid var(--scc-accent,#2563eb);outline-offset:-2px}
+@media(max-width:600px){
+.scc-content h2{margin-top:2em}
+.scc-stats{grid-template-columns:1fr 1fr}
+.scc-cta{flex-direction:column;align-items:flex-start}
+}
+@media(prefers-reduced-motion:reduce){.scc-content *{transition:none!important;animation:none!important}}
+CSS;
+
+		/**
+		 * Filter the front-end presentation CSS.
+		 *
+		 * @param string $css The CSS.
+		 */
+		return (string) apply_filters( 'scc_front_css', $css );
 	}
 
 	/**
