@@ -192,6 +192,22 @@ class SCC_Generator {
 		// the user set up is silently ignored and they get a plain native draft.
 		$has_mapped_template = self::has_mapped_template( $content->content_type, $manual_family );
 
+		// Trace exactly why we chose native vs template, so a mapping that does not
+		// take effect is diagnosable from the debug panel.
+		$scc_map = class_exists( 'SCC_Template_Map' ) ? SCC_Template_Map::for_content_type( $content->content_type ) : array( 'family' => '', 'renderer' => '' );
+		self::dbg( 'template decision', array(
+			'content_type'         => $content->content_type,
+			'manual_family'        => $manual_family,
+			'mapped_family'        => (string) ( $scc_map['family'] ?? '' ),
+			'mapped_renderer'      => (string) ( $scc_map['renderer'] ?? '' ),
+			'active_for_family'    => ( ! empty( $scc_map['family'] ) && SCC_Template_Store::active_for_family( $scc_map['family'] ) ) ? 'yes' : 'no',
+			'active_for_type'      => SCC_Template_Store::active_for_content_type( $content->content_type ) ? 'yes' : 'no',
+			'has_mapped_template'  => $has_mapped_template ? 'yes' : 'no',
+			'is_native_type'       => self::is_native_mode( $content->content_type, $manual_family ) ? 'yes' : 'no',
+			'default_renderer'     => (string) SCC_Settings::get( 'default_renderer', 'gutenberg' ),
+			'elementor_active'     => ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) ? 'yes' : 'no',
+		) );
+
 		if ( ! $has_mapped_template && self::is_native_mode( $content->content_type, $manual_family ) ) {
 			// NORMAL mode: a normal WordPress post. The AI body (already sanitized
 			// with FAQs appended, and with NO in-body <h1> — the theme renders the
@@ -208,10 +224,22 @@ class SCC_Generator {
 			$preferred = SCC_Template_Selector::renderer_for( $content->content_type, $template );
 			$renderer  = $this->renderers->pick( $preferred, $content->content_type );
 
+			self::dbg( 'template mode: renderer chosen', array(
+				'template_family'    => $template ? $template->family : '',
+				'template_source'    => (string) ( $selection['source'] ?? '' ),
+				'elementor_source_id' => $template ? (int) $template->elementor_source_id : 0,
+				'preferred_renderer' => $preferred,
+				'picked_renderer'    => $renderer->get_id(),
+			) );
+
 			$rendered = $renderer->render( $content, $template );
 			if ( is_wp_error( $rendered ) ) {
 				// Safety net: never fail the whole run because a builder errored.
 				SCC_Logger::error( 'generator', 'Renderer failed, using native WP: ' . $rendered->get_error_message() );
+				self::dbg( 'renderer FAILED, falling back to WordPress', array(
+					'renderer' => $renderer->get_id(),
+					'error'    => $rendered->get_error_message(),
+				) );
 				$renderer = new SCC_WordPress_Renderer();
 				$rendered = $renderer->render( $content, $template );
 			}
