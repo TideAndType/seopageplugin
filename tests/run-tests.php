@@ -1362,6 +1362,23 @@ assert_eq( 'Hello "World"', $scc_ejf->invoke( null, $ejf_src, 'title' ), 'extrac
 assert_true( false !== strpos( $scc_ejf->invoke( null, $ejf_src, 'content_html' ), '<b>bold</b>' ), 'extract_json_field decodes \\u escapes' );
 assert_eq( '', $scc_ejf->invoke( null, $ejf_src, 'missing_key' ), 'extract_json_field returns empty for a missing key' );
 
+echo "\n== Generator: internal-link whitelist ==\n";
+$scc_eil = new ReflectionMethod( 'SCC_Generator', 'enforce_internal_links' );
+$scc_eil->setAccessible( true );
+$allowed = array( 'https://example.com/services/seo/', 'https://example.com/about/' );
+$kept = array();
+$in  = '<p>See our <a href="https://example.com/services/seo/">SEO services</a> and '
+	. '<a href="https://example.com/made-up-page/">a fake page</a> plus '
+	. '<a href="/about/">about us</a> and an <a href="https://other.com/x">external</a> link.</p>';
+$args = array( $in, $allowed, &$kept );
+$outh = $scc_eil->invokeArgs( null, $args );
+assert_true( false !== strpos( $outh, 'href="https://example.com/services/seo/"' ), 'allowed internal link kept' );
+assert_true( false !== strpos( $outh, 'href="/about/"' ), 'root-relative allowed link kept' );
+assert_true( false === strpos( $outh, 'href="https://example.com/made-up-page/"' ), 'invented internal URL is unwrapped' );
+assert_true( false !== strpos( $outh, 'href="https://other.com/x"' ), 'external link is left untouched' );
+assert_true( false !== strpos( $outh, 'a fake page' ), 'unwrapped link keeps its anchor text' );
+assert_true( count( $kept ) >= 2, 'kept list records the real internal links' );
+
 echo "\n== Content presenter: visual components ==\n";
 // Callout from a labelled paragraph.
 $pz = SCC_Content_Presenter::enhance( '<p>Tip: Keep your title under 60 characters.</p>' );

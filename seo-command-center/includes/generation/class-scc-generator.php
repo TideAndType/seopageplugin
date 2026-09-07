@@ -200,8 +200,17 @@ class SCC_Generator {
 			$content->cta = (string) $body['cta'];
 		}
 
-		// Internal links operate on the content object BEFORE rendering.
-		$content->internal_links = $this->weave_internal_links( $content );
+		// Internal links: prefer the ones the model wove into the article from the
+		// real link_targets (already in the body, validated against our whitelist).
+		// Only fall back to the deterministic in-body weaver when the model added
+		// none, so we never double-link.
+		$ai_links = (array) ( $body['internal_links'] ?? array() );
+		if ( ! empty( $ai_links ) ) {
+			$content->internal_links = $ai_links;
+			self::dbg( 'internal links: using AI-woven', array( 'count' => count( $ai_links ) ) );
+		} else {
+			$content->internal_links = $this->weave_internal_links( $content );
+		}
 
 		$manual_family = isset( $entry['template_family'] ) ? (string) $entry['template_family'] : '';
 
@@ -475,6 +484,135 @@ class SCC_Generator {
 	}
 
 	/**
+	 * Gather relevant, already-published pages the AI may link to while writing —
+	 * so internal links are woven into the article naturally (not bolted on after).
+	 * Only real permalinks from the content index are offered; the model is told to
+	 * use these URLs verbatim and never invent one.
+	 *
+	 * @param array $entry Content-plan entry.
+	 * @param int   $limit Max candidates.
+	 * @return array List of {title, url, keyword}.
+	 */
+	protected function link_candidates( array $entry, $limit = 10 ) {
+		if ( ! class_exists( 'SCC_Content_Index' ) ) {
+			return array();
+		}
+		if ( 0 === SCC_Content_Index::count() ) {
+			SCC_Content_Index::reindex_all( 500 );
+		}
+		$rows = SCC_Content_Index::all( 3000 );
+		if ( empty( $rows ) ) {
+			return array();
+		}
+
+		$self_id  = (int) ( $entry['post_id'] ?? 0 );
+		$subject  = array(
+			'title'           => (string) ( $entry['title'] ?? '' ),
+			'primary_keyword' => (string) ( $entry['primary_keyword'] ?? '' ),
+			'intent'          => (string) ( $entry['intent'] ?? '' ),
+			'url'             => '',
+			'tokens'          => SCC_Content_Index::tokenize(
+				(string) ( $entry['title'] ?? '' ) . ' '
+				. (string) ( $entry['primary_keyword'] ?? '' ) . ' '
+				. implode( ' ', array_map( 'strval', (array) ( $entry['secondary'] ?? array() ) ) )
+			),
+		);
+
+		$scored = array();
+		foreach ( $rows as $r ) {
+			if ( $self_id > 0 && (int) $r['post_id'] === $self_id ) {
+				continue;
+			}
+			if ( empty( $r['url'] ) ) {
+				continue;
+			}
+			$scored[] = array(
+				'rel'     => SCC_Content_Index::relevance( $subject, $r ),
+				'title'   => (string) $r['title'],
+				'url'     => (string) $r['url'],
+				'keyword' => (string) ( $r['primary_keyword'] ?? '' ),
+			);
+		}
+		usort(
+			$scored,
+			function ( $a, $b ) {
+				return $b['rel'] <=> $a['rel'];
+			}
+		);
+
+		$out = array();
+		foreach ( $scored as $s ) {
+			// A low relevance floor keeps the list on-topic; if nothing clears it we
+			// still offer the strongest few so the page is not orphaned.
+			$out[] = array( 'title' => $s['title'], 'url' => $s['url'], 'keyword' => $s['keyword'] );
+			if ( count( $out ) >= (int) $limit ) {
+				break;
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Remove any INTERNAL link the model added whose URL is not in the allowed set
+	 * (the real permalinks we offered) — the AI can reference our pages but can
+	 * never invent an internal URL. External links are left untouched. Returns the
+	 * cleaned HTML and, by reference, the list of kept internal links.
+	 *
+	 * @param string $html         Content HTML.
+	 * @param array  $allowed_urls Real permalinks the AI was allowed to use.
+	 * @param array  $kept         Filled with kept {anchor, target_url}.
+	 * @return string
+	 */
+	protected static function enforce_internal_links( $html, array $allowed_urls, array &$kept = array() ) {
+		$set = array();
+		foreach ( $allowed_urls as $u ) {
+			$set[ self::norm_url( $u ) ] = true;
+		}
+		$home_host = function_exists( 'home_url' ) ? wp_parse_url( home_url(), PHP_URL_HOST ) : '';
+		$kept      = array();
+
+		return (string) preg_replace_callback(
+			'#<a\b([^>]*?)href=("|\')(.*?)\2([^>]*)>(.*?)</a>#is',
+			function ( $m ) use ( $set, $home_host, &$kept ) {
+				$href = trim( html_entity_decode( $m[3] ) );
+				if ( '' === $href || 0 === strpos( $href, '#' ) ) {
+					return $m[5]; // empty / bare anchor -> unwrap.
+				}
+				$host        = wp_parse_url( $href, PHP_URL_HOST );
+				$is_internal = ( 0 === strpos( $href, '/' ) ) || ( ! $host ) || ( $host === $home_host );
+				if ( ! $is_internal ) {
+					return $m[0]; // external link: leave as the model wrote it.
+				}
+				$abs  = ( 0 === strpos( $href, '/' ) && function_exists( 'home_url' ) ) ? home_url( $href ) : $href;
+				$norm = self::norm_url( $abs );
+				if ( isset( $set[ $norm ] ) ) {
+					$kept[] = array( 'anchor' => trim( wp_strip_all_tags( $m[5] ) ), 'target_url' => $abs );
+					return $m[0]; // real internal page: keep.
+				}
+				return $m[5]; // invented internal URL: unwrap, keep the words.
+			},
+			$html
+		);
+	}
+
+	/**
+	 * Normalise a URL for comparison (scheme-insensitive host, no trailing slash,
+	 * no fragment/query).
+	 *
+	 * @param string $url URL.
+	 * @return string
+	 */
+	protected static function norm_url( $url ) {
+		$p = wp_parse_url( (string) $url );
+		if ( ! is_array( $p ) ) {
+			return rtrim( strtolower( (string) $url ), '/' );
+		}
+		$host = isset( $p['host'] ) ? strtolower( $p['host'] ) : '';
+		$path = isset( $p['path'] ) ? rtrim( $p['path'], '/' ) : '';
+		return $host . $path;
+	}
+
+	/**
 	 * Built-in writing personas the user can pick in Settings.
 	 *
 	 * @return array key => array{label, prompt}
@@ -535,6 +673,7 @@ class SCC_Generator {
 	 */
 	protected function generate_body( array $entry, array $brief ) {
 		$page_type   = $entry['page_type'] ?? 'article';
+		$link_targets = $this->link_candidates( $entry, 10 );
 		$intent      = strtolower( (string) ( $entry['intent'] ?? ( $brief['search_intent'] ?? '' ) ) );
 		$tone        = trim( (string) ( $brief['tone'] ?? '' ) );
 		$location    = trim( (string) ( $brief['location'] ?? '' ) );
@@ -598,6 +737,13 @@ class SCC_Generator {
 			. 'Use semantic HTML: <h2>/<h3> headings, <p>, <ul>. Do not include an <h1> (the theme renders the title). '
 			. 'LENGTH: content_html must be a complete, in-depth article of AT LEAST ' . $words . ' words of real body copy '
 			. '(multiple <h2> sections, each with several full paragraphs). Do not stop early or return a short stub. '
+			. ( ! empty( $link_targets )
+				? 'INTERNAL LINKS: A list of EXISTING pages on this same website is provided in the user message as "link_targets" '
+				  . '(each with a title, url and keyword). Where it genuinely helps the reader, weave 2 to 5 of these topics into the '
+				  . 'article naturally and link to them inside content_html using <a href="EXACT_URL">natural anchor text</a>, copying '
+				  . 'the url VERBATIM from the list. Link each page at most once, use descriptive anchor text (not "click here"), and '
+				  . 'never invent a URL or link to a page that is not in the list. Only add a link where it is truly relevant. '
+				: '' )
 			. 'CTA: also return a "cta" — one or two sentences telling the reader exactly what to do next. '
 			. 'Return ONLY valid JSON, nothing else: {"title":str,"content_html":str,"faqs":[{"question":str,"answer":str}],'
 			. '"cta":str,"meta_title":str(<=60 chars),"meta_description":str(140-160 chars),'
@@ -632,7 +778,13 @@ class SCC_Generator {
 			$budget = $max_override;
 		}
 
-		self::dbg( 'about to call AI (content-generation)', array( 'budget' => $budget, 'words' => $words, 'page_type' => $page_type, 'persona' => (string) SCC_Settings::get( 'content_persona', '' ) ) );
+		self::dbg( 'about to call AI (content-generation)', array( 'budget' => $budget, 'words' => $words, 'page_type' => $page_type, 'persona' => (string) SCC_Settings::get( 'content_persona', '' ), 'link_targets' => count( $link_targets ) ) );
+
+		$user_payload = "Approved brief (JSON):\n" . wp_json_encode( $brief );
+		if ( ! empty( $link_targets ) ) {
+			$user_payload .= "\n\nlink_targets (existing pages on this site you may link to; use the url verbatim, never invent one):\n"
+				. wp_json_encode( $link_targets );
+		}
 
 		$response = $this->ai->complete(
 			array(
@@ -640,9 +792,10 @@ class SCC_Generator {
 				'messages'    => array(
 					array(
 						'role'    => 'user',
-						'content' => "Approved brief (JSON):\n" . wp_json_encode( $brief )
+						'content' => $user_payload
 							. "\n\nWrite the FULL page now and return ONLY the JSON. content_html must be a complete, in-depth article of at least "
-							. $words . ' words with multiple <h2> sections, each with several full paragraphs. Include a "cta" and put every FAQ as an object in the "faqs" array (never inside content_html).',
+							. $words . ' words with multiple <h2> sections, each with several full paragraphs. Include a "cta", put every FAQ as an object in the "faqs" array (never inside content_html)'
+							. ( ! empty( $link_targets ) ? ', and add 2 to 5 natural internal links to the provided link_targets using their exact urls.' : '.' ),
 					),
 				),
 				'json'        => true,
@@ -755,12 +908,34 @@ class SCC_Generator {
 				: __( 'Ready to get started? Contact us today.', 'seo-command-center' );
 		}
 
+		// Sanitize the body, then keep only internal links that point at real pages
+		// we offered (the model can reference our pages but never invent a URL).
+		$clean_html = $this->sanitize_content_html( $data['content_html'] );
+		$kept_links = array();
+		if ( ! empty( $link_targets ) ) {
+			$allowed = array();
+			foreach ( $link_targets as $t ) {
+				$allowed[] = (string) $t['url'];
+			}
+			$clean_html = self::enforce_internal_links( $clean_html, $allowed, $kept_links );
+			self::dbg( 'internal links from AI (whitelisted)', array(
+				'kept'    => count( $kept_links ),
+				'anchors' => array_slice( array_map(
+					function ( $l ) {
+						return $l['anchor'] . ' -> ' . $l['target_url'];
+					},
+					$kept_links
+				), 0, 8 ),
+			) );
+		}
+
 		return array(
 			'title'            => self::strip_dashes( SCC_Security::sanitize_text( $data['title'] ?? ( $entry['title'] ?? '' ) ) ),
 			// No FAQ appended here — native rendering appends it; template mode uses
 			// the {{FAQ}} widget. This prevents FAQs appearing twice in a template.
-			'content_html'     => $this->sanitize_content_html( $data['content_html'] ),
+			'content_html'     => $clean_html,
 			'faqs'             => $faqs,
+			'internal_links'   => $kept_links,
 			'cta'              => self::strip_dashes( $cta ),
 			'meta_title'       => self::strip_dashes( SCC_Security::sanitize_text( $data['meta_title'] ?? '' ) ),
 			'meta_description' => self::strip_dashes( SCC_Security::sanitize_textarea( $data['meta_description'] ?? '' ) ),
