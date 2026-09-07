@@ -486,6 +486,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/debug/last',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'debug_last' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/regenerate-section',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1846,8 +1856,13 @@ class SCC_REST {
 	}
 
 	public function generate( WP_REST_Request $request ) {
+		// Start a fresh debug trace for this run (always-on, no WP_DEBUG needed).
+		update_option( 'scc_gen_debug', array(), false );
+		SCC_Generator::dbg( 'REST /generate called', array( 'entry_id' => (int) $request->get_param( 'entry_id' ) ) );
+
 		$entry = SCC_Content_Plan::find( (int) $request->get_param( 'entry_id' ) );
 		if ( ! $entry ) {
+			SCC_Generator::dbg( 'entry NOT FOUND', array( 'entry_id' => (int) $request->get_param( 'entry_id' ) ) );
 			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
 		}
 
@@ -1868,13 +1883,35 @@ class SCC_REST {
 			$result    = $generator->generate( $entry, $brief );
 		} catch ( \Throwable $e ) {
 			SCC_Logger::error( 'generate', 'Fatal during generation: ' . $e->getMessage() );
-			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'The draft was written but saving it failed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
+			SCC_Generator::dbg( 'PHP EXCEPTION during generation', array(
+				'message' => $e->getMessage(),
+				'file'    => $e->getFile(),
+				'line'    => $e->getLine(),
+			) );
+			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'Generation crashed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
 		}
 
 		if ( is_wp_error( $result ) ) {
+			SCC_Generator::dbg( 'generate() returned WP_Error to REST', array(
+				'code'    => $result->get_error_code(),
+				'message' => $result->get_error_message(),
+			) );
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /debug/last — the always-on trace of the most recent generation attempt
+	 * (stored in the scc_gen_debug option, independent of WP_DEBUG). Lets the user
+	 * copy the full step-by-step trace even when nothing reaches debug.log.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function debug_last( WP_REST_Request $request ) {
+		$log = get_option( 'scc_gen_debug', array() );
+		return $this->ok( array( 'trace' => is_array( $log ) ? $log : array() ) );
 	}
 
 	/**

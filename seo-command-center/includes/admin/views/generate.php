@@ -153,4 +153,11 @@ $categories   = isset( $data['categories'] ) ? $data['categories'] : array();
 		<p class="scc-note"><?php esc_html_e( 'Every draft this plugin created, straight from the database — so you can find it even if it is a Page (not a Post) or filtered out of the list screens. Click Edit to open it.', 'seo-command-center' ); ?></p>
 		<div id="scc-recent-generated"><p class="scc-note"><?php esc_html_e( 'Loading…', 'seo-command-center' ); ?></p></div>
 	</div>
+
+	<div class="scc-card">
+		<h2><?php esc_html_e( 'Generation debug', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'A step-by-step trace of the most recent draft generation, captured inside the plugin (no WordPress debug log needed). If a draft did not appear, click Refresh right after generating and copy everything below.', 'seo-command-center' ); ?></p>
+		<p><button type="button" class="button" id="scc-debug-refresh"><?php esc_html_e( 'Refresh debug', 'seo-command-center' ); ?></button></p>
+		<div id="scc-gen-debug"><p class="scc-note"><?php esc_html_e( 'No generation traced yet.', 'seo-command-center' ); ?></p></div>
+	</div>
 </div>

@@ -122,7 +122,39 @@ class SCC_Generator {
 		);
 	}
 
+	/**
+	 * Always-on debug tracer. Writes to the option scc_gen_debug (independent of
+	 * WP_DEBUG or the log table), so the last generation attempt is always visible
+	 * in the plugin's Debug panel — even if the request dies mid-way.
+	 *
+	 * @param string $step Step label.
+	 * @param array  $data Small context payload.
+	 * @return void
+	 */
+	public static function dbg( $step, array $data = array() ) {
+		$log = get_option( 'scc_gen_debug', array() );
+		if ( ! is_array( $log ) ) {
+			$log = array();
+		}
+		$log[] = array(
+			't'    => current_time( 'mysql' ),
+			'step' => (string) $step,
+			'data' => $data,
+		);
+		if ( count( $log ) > 80 ) {
+			$log = array_slice( $log, -80 );
+		}
+		update_option( 'scc_gen_debug', $log, false );
+	}
+
 	public function generate( array $entry, $brief = null ) {
+		self::dbg( '--- generate() start ---', array(
+			'entry_id'     => (int) ( $entry['id'] ?? 0 ),
+			'title'        => (string) ( $entry['title'] ?? '' ),
+			'page_type'    => (string) ( $entry['page_type'] ?? '' ),
+			'has_brief'    => null !== $brief,
+			'current_user' => get_current_user_id(),
+		) );
 		if ( null === $brief ) {
 			// Build the draft directly from the plan entry (one AI call). We do
 			// NOT make a separate brief AI call here — that doubled the time and
@@ -133,8 +165,17 @@ class SCC_Generator {
 
 		$body = $this->generate_body( $entry, $brief );
 		if ( is_wp_error( $body ) ) {
+			self::dbg( 'generate_body returned WP_Error', array(
+				'code'    => $body->get_error_code(),
+				'message' => $body->get_error_message(),
+			) );
 			return $body;
 		}
+		self::dbg( 'body ready', array(
+			'title_len'   => strlen( (string) ( $body['title'] ?? '' ) ),
+			'content_len' => strlen( (string) ( $body['content_html'] ?? '' ) ),
+			'faqs'        => count( (array) ( $body['faqs'] ?? array() ) ),
+		) );
 
 		// --- Content + Template + Renderer layers (CMS-agnostic) -----------
 		// Build the standardized, renderer-independent content object.
@@ -195,6 +236,15 @@ class SCC_Generator {
 			$author = ! empty( $admins ) ? (int) $admins[0] : 0;
 		}
 
+		self::dbg( 'about to wp_insert_post', array(
+			'post_type'    => $post_type,
+			'status'       => $status,
+			'author'       => (int) $author,
+			'title_len'    => strlen( (string) $content->title ),
+			'content_len'  => strlen( (string) $rendered['post_content'] ),
+			'renderer'     => $renderer_id,
+		) );
+
 		$post_id = wp_insert_post(
 			array(
 				'post_title'   => $content->title,
@@ -242,10 +292,12 @@ class SCC_Generator {
 
 		SCC_Logger::info( 'generator', 'Post insert diagnostics', $debug );
 		self::debug_log( 'Post insert diagnostics', $debug );
+		self::dbg( 'post insert diagnostics', $debug );
 
 		if ( ! $saved && ! $row ) {
 			// Genuinely never persisted — a caching/security plugin dropped it.
 			SCC_Logger::error( 'generator', 'Post vanished immediately after insert', $debug );
+			self::dbg( 'POST VANISHED after insert', $debug );
 			return new WP_Error( 'scc_post_not_persisted', __( 'The draft was created but is not in the database immediately after saving — a caching or security plugin is likely blocking wp_insert_post. See the SEO Command log for the diagnostics.', 'seo-command-center' ), array( 'status' => 500 ) );
 		}
 
@@ -318,6 +370,14 @@ class SCC_Generator {
 		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'renderer' => $used_renderer, 'template' => $template->family, 'mode' => ( 'native' === $template->family || self::is_native_mode( $content->content_type, $manual_family ) ) ? 'native' : 'template' ) );
 
 		$mode = $has_mapped_template ? 'template' : ( self::is_native_mode( $content->content_type, $manual_family ) ? 'native' : 'template' );
+
+		self::dbg( '=== generate() SUCCESS ===', array(
+			'post_id'   => (int) $post_id,
+			'post_type' => $post_type,
+			'status'    => $status,
+			'mode'      => $mode,
+			'edit_url'  => get_edit_post_link( $post_id, 'raw' ),
+		) );
 
 		return array(
 			'post_id'   => $post_id,
@@ -437,6 +497,8 @@ class SCC_Generator {
 		}
 		$budget = (int) min( 5200, max( 1200, round( $words * 1.7 ) + 800 ) );
 
+		self::dbg( 'about to call AI (content-generation)', array( 'budget' => $budget, 'words' => $words, 'page_type' => $page_type ) );
+
 		$response = $this->ai->complete(
 			array(
 				'system'      => $system,
@@ -454,8 +516,18 @@ class SCC_Generator {
 		);
 
 		if ( $response->is_error() ) {
+			self::dbg( 'AI call ERROR', array(
+				'provider' => $response->provider,
+				'model'    => $response->model,
+				'message'  => $response->error->get_error_message(),
+			) );
 			return $response->error;
 		}
+		self::dbg( 'AI call OK', array(
+			'provider'    => $response->provider,
+			'model'       => $response->model,
+			'content_len' => strlen( (string) $response->content ),
+		) );
 
 		$data = $response->json();
 		if ( ! is_array( $data ) || empty( $data['content_html'] ) ) {

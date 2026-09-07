@@ -898,6 +898,49 @@
 		bindGenerateTable( document.getElementById( 'scc-plan-table' ), document.getElementById( 'scc-plan-status-msg' ) );
 		bindQuickGenerate();
 		loadRecentGenerated();
+		bindGenDebug();
+	}
+
+	// ---- Always-on generation debug trace -------------------------------
+	function bindGenDebug() {
+		var btn = document.getElementById( 'scc-debug-refresh' );
+		if ( btn ) { btn.addEventListener( 'click', loadGenDebug ); }
+		loadGenDebug();
+	}
+
+	function loadGenDebug() {
+		var box = document.getElementById( 'scc-gen-debug' );
+		if ( ! box ) { return; }
+		request( '/debug/last', { method: 'GET' } )
+			.then( function ( res ) {
+				var trace = ( res.data && res.data.trace ) || [];
+				box.innerHTML = '';
+				if ( ! trace.length ) {
+					box.appendChild( el( 'p', 'No generation traced yet. Generate a draft, then click Refresh debug.', 'scc-note' ) );
+					return;
+				}
+				var lines = trace.map( function ( r ) {
+					var data = '';
+					try { data = r.data && Object.keys( r.data ).length ? ( '  ' + JSON.stringify( r.data ) ) : ''; }
+					catch ( e ) { data = ''; }
+					return ( r.t || '' ) + '  ' + ( r.step || '' ) + data;
+				} ).join( '\n' );
+				var pre = el( 'pre' );
+				pre.style.whiteSpace = 'pre-wrap';
+				pre.style.fontSize = '11px';
+				pre.style.background = '#f6f7f7';
+				pre.style.padding = '8px';
+				pre.style.border = '1px solid #dcdcde';
+				pre.style.maxHeight = '360px';
+				pre.style.overflow = 'auto';
+				pre.style.userSelect = 'all';
+				pre.textContent = lines;
+				box.appendChild( pre );
+			} )
+			.catch( function ( err ) {
+				box.innerHTML = '';
+				box.appendChild( el( 'p', ( err && err.message ) || 'Could not load debug trace.', 'scc-note' ) );
+			} );
 	}
 
 	// ---- Recently generated (from the DB, any type/status) --------------
@@ -1125,6 +1168,7 @@
 					setStatus( msg, 'Draft created.', 'is-ok' );
 					e.target.disabled = false;
 					loadRecentGenerated();
+					loadGenDebug();
 				}
 
 				// Fire the generation. It runs server-side with ignore_user_abort,
@@ -1134,7 +1178,7 @@
 				var genError = null;
 				request( '/generate', { method: 'POST', data: { entry_id: id } } )
 					.then( function ( res ) { showDone( res.data || {} ); } )
-					.catch( function ( err ) { genError = err && err.message ? err.message : null; } );
+					.catch( function ( err ) { genError = err && err.message ? err.message : null; loadGenDebug(); } );
 
 				// Poll until the plan entry gets its post_id (generation complete).
 				// A real failure returns a message quickly, so we don't wait long for
