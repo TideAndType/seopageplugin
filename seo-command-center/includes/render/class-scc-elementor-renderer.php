@@ -90,13 +90,31 @@ class SCC_Elementor_Renderer implements SCC_Renderer_Interface {
 		$post_content = is_wp_error( $base ) ? '' : $base['post_content'];
 		$post_name    = is_wp_error( $base ) ? sanitize_title( $content->title ) : $base['post_name'];
 
+		// Match Elementor's template type to the destination post type so Elementor
+		// fully takes over the front end (otherwise the theme can render the native
+		// post_content too, which looks like the content is posted twice).
+		$target_type   = class_exists( 'SCC_Generator' ) ? SCC_Generator::post_type_for( $content->content_type ) : 'page';
+		$template_type = ( 'page' === $target_type ) ? 'wp-page' : 'wp-post';
+
 		$meta = array(
 			'_elementor_data'          => wp_slash( wp_json_encode( $tree ) ),
 			'_elementor_edit_mode'     => 'builder',
-			'_elementor_template_type' => 'wp-page',
+			'_elementor_template_type' => $template_type,
 		);
 		if ( defined( 'ELEMENTOR_VERSION' ) ) {
 			$meta['_elementor_version'] = ELEMENTOR_VERSION;
+		}
+
+		// Carry the template's PAGE settings/layout so the new post matches it:
+		// the WordPress page template (Elementor Canvas / Full Width / theme) and
+		// Elementor's page-level settings (content width, background, etc.).
+		$src_page_template = get_post_meta( $source, '_wp_page_template', true );
+		if ( is_string( $src_page_template ) && '' !== $src_page_template && 'default' !== $src_page_template ) {
+			$meta['_wp_page_template'] = $src_page_template;
+		}
+		$src_page_settings = get_post_meta( $source, '_elementor_page_settings', true );
+		if ( ! empty( $src_page_settings ) ) {
+			$meta['_elementor_page_settings'] = $src_page_settings;
 		}
 
 		return array(
