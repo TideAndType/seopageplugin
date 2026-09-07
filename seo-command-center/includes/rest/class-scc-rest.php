@@ -1823,11 +1823,13 @@ class SCC_REST {
 		}
 		$post_id = (int) ( $entry['post_id'] ?? 0 );
 		if ( $post_id > 0 && get_post( $post_id ) ) {
+			$post = get_post( $post_id );
 			return $this->ok( array(
-				'done'     => true,
-				'post_id'  => $post_id,
-				'edit_url' => get_edit_post_link( $post_id, 'raw' ),
-				'status'   => (string) ( $entry['status'] ?? 'draft' ),
+				'done'      => true,
+				'post_id'   => $post_id,
+				'edit_url'  => get_edit_post_link( $post_id, 'raw' ),
+				'status'    => $post ? (string) $post->post_status : (string) ( $entry['status'] ?? 'draft' ),
+				'post_type' => $post ? (string) $post->post_type : '',
 			) );
 		}
 		return $this->ok( array( 'done' => false ) );

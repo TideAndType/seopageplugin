@@ -96,6 +96,7 @@ foreach ( $templates as $t ) {
 	<div class="scc-card">
 		<h2><?php esc_html_e( 'Template mapping', 'seo-command-center' ); ?></h2>
 		<p class="scc-note"><?php esc_html_e( 'Deterministically assign a template and renderer to each content type. The AI never chooses the template.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( 'Standard blog posts and articles use the “Article” row — there is no separate “Post” row. A mapping only takes effect when the template you pick actually exists and is set to Active above; otherwise generation falls back to a normal WordPress draft. A mapped “Article” is saved as a Post; the structured types (Service, Location, Landing, etc.) are saved as Pages — so look under Posts → Drafts or Pages → Drafts accordingly.', 'seo-command-center' ); ?></p>
 		<table class="widefat striped scc-table" id="scc-tpl-map-table">
 			<thead>
 				<tr>

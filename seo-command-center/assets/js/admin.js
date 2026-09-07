@@ -964,17 +964,18 @@
 						resultEl.hidden = false;
 						resultEl.innerHTML = '';
 						var score = ( d.score && d.score.score ) || 0;
-						resultEl.appendChild( el( 'p', score
-							? ( 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' )
-							: 'Draft created and saved as a WordPress draft.' ) );
+						var where = ( d.post_type === 'page' ) ? 'Pages' : 'Posts';
+						var kind  = ( d.post_type === 'page' ) ? 'Page' : 'Post';
+						var st    = d.status || 'draft';
+						var how   = ( d.mode === 'template' )
+							? ( 'a ' + ( d.elementor ? 'Elementor' : 'templated' ) + ' ' + kind )
+							: ( 'a native WordPress ' + kind );
+						resultEl.appendChild( el( 'p', 'Saved as ' + st + ' — ' + how + '. Find it under ' + where + ' → Drafts.'
+							+ ( score ? ( ' Optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) : '' ) ) );
 						if ( d.edit_url ) {
-							var a = el( 'a', 'Edit draft in WordPress' );
+							var a = el( 'a', 'Edit ' + st + ' in WordPress' );
 							a.href = d.edit_url; a.className = 'button button-primary';
 							resultEl.appendChild( a );
-						}
-						if ( d.renderer ) {
-							resultEl.appendChild( el( 'span', ' ' ) );
-							resultEl.appendChild( el( 'span', d.elementor ? 'Rendered with Elementor.' : ( 'wordpress' === d.renderer ? 'Native WordPress post.' : ( 'Rendered with ' + d.renderer + '.' ) ) ) );
 						}
 					}
 				} )
@@ -1030,13 +1031,16 @@
 						briefRow.hidden = false;
 						panel.innerHTML = '';
 						var score = ( d.score && d.score.score ) || 0;
-						if ( score ) {
-							panel.appendChild( el( 'p', 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) );
-						} else {
-							panel.appendChild( el( 'p', 'Draft created and saved as a WordPress draft.' ) );
-						}
+						var where = ( d.post_type === 'page' ) ? 'Pages' : 'Posts';
+						var kind  = ( d.post_type === 'page' ) ? 'Page' : 'Post';
+						var st    = d.status || 'draft';
+						var how   = ( d.mode === 'template' )
+							? ( 'a ' + ( d.elementor ? 'Elementor' : 'templated' ) + ' ' + kind )
+							: ( 'a native WordPress ' + kind );
+						panel.appendChild( el( 'p', 'Saved as ' + st + ' — ' + how + '. Find it under ' + where + ' → Drafts.'
+							+ ( score ? ( ' Optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) : '' ) ) );
 						if ( d.edit_url ) {
-							var a = el( 'a', 'Edit draft in WordPress' );
+							var a = el( 'a', 'Edit ' + st + ' in WordPress' );
 							a.href = d.edit_url;
 							a.className = 'button button-primary';
 							panel.appendChild( a );

@@ -269,11 +269,15 @@ class SCC_Generator {
 
 		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'renderer' => $used_renderer, 'template' => $template->family, 'mode' => ( 'native' === $template->family || self::is_native_mode( $content->content_type, $manual_family ) ) ? 'native' : 'template' ) );
 
+		$mode = $has_mapped_template ? 'template' : ( self::is_native_mode( $content->content_type, $manual_family ) ? 'native' : 'template' );
+
 		return array(
 			'post_id'   => $post_id,
 			'edit_url'  => get_edit_post_link( $post_id, 'raw' ),
 			'view_url'  => get_permalink( $post_id ),
 			'status'    => $status,
+			'post_type' => $post_type,
+			'mode'      => $mode,
 			'score'     => $score,
 			'title'     => $content->title,
 			'renderer'  => $used_renderer,
