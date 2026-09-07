@@ -3,7 +3,7 @@
  * Plugin Name:       SEO Command Center
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       AI-powered SEO Command Center for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.27.0
+ * Version:           1.27.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -21,9 +21,32 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ---------------------------------------------------------------------------
+// Single-load guard. If a second copy of this plugin is present (e.g. an older
+// folder like "seocommandcenter-15" was left installed next to the current
+// one), the second file to load bails out here instead of fataling the whole
+// site with "Cannot redeclare scc_bootstrap()" / class redeclaration errors.
+// Delete the old copy to remove the duplicate — this only keeps the site alive.
+// ---------------------------------------------------------------------------
+if ( defined( 'SCC_LOADED' ) || function_exists( 'scc_bootstrap' ) ) {
+	if ( is_admin() && ! function_exists( 'scc_duplicate_copy_notice' ) ) {
+		/**
+		 * Warn admins that a duplicate copy of the plugin is installed.
+		 */
+		function scc_duplicate_copy_notice() {
+			echo '<div class="notice notice-error"><p><strong>SEO Command Center:</strong> ';
+			echo esc_html__( 'Two copies of this plugin are installed. Only one is running. Deactivate and delete the older copy under Plugins to remove this warning.', 'seo-command-center' );
+			echo '</p></div>';
+		}
+		add_action( 'admin_notices', 'scc_duplicate_copy_notice' );
+	}
+	return;
+}
+define( 'SCC_LOADED', true );
+
+// ---------------------------------------------------------------------------
 // Constants.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.27.0' );
+define( 'SCC_VERSION', '1.27.1' );
 define( 'SCC_DB_VERSION', '1.20.0' );
 define( 'SCC_PLUGIN_FILE', __FILE__ );
 define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
