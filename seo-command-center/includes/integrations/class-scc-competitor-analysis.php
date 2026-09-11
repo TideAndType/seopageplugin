@@ -264,10 +264,28 @@ class SCC_Competitor_Analysis {
 			'our_pages'   => $our_pages,
 		) );
 
+		// Token budget for the answer. A hard cap of 3000 was starving "reasoning"
+		// local models (e.g. Qwen3): they spend the whole budget on their internal
+		// <think> phase and hit the ceiling before emitting the JSON, so LM Studio
+		// returns an empty completion. Give the answer real room — unlimited (-1)
+		// when the user enabled it for generation, otherwise a generous default —
+		// and honour a fixed override. On LM Studio <=0 becomes -1 (run to
+		// completion); hosted providers apply their own high ceiling.
+		$budget = 8000;
+		if ( SCC_Settings::get( 'generation_unlimited_tokens', false ) ) {
+			$budget = -1;
+		} else {
+			$override = (int) SCC_Settings::get( 'generation_max_tokens', 0 );
+			if ( $override > 0 ) {
+				$budget = max( $budget, $override );
+			}
+		}
+
 		self::dbg( 'AI request', array(
 			'competitors'   => count( $competitors ),
 			'our_pages'     => count( (array) $our_pages ),
 			'payload_bytes' => strlen( (string) $payload ),
+			'max_tokens'    => $budget,
 		) );
 
 		$response = $this->ai->complete(
@@ -277,7 +295,7 @@ class SCC_Competitor_Analysis {
 					array( 'role' => 'user', 'content' => "Data (JSON):\n" . $payload . "\n\nProduce the content-gap map JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 3000,
+				'max_tokens'  => $budget,
 				'temperature' => 0.4,
 			),
 			'competitor-analysis'
