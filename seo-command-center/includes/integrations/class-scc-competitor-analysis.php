@@ -61,11 +61,24 @@ class SCC_Competitor_Analysis {
 		$max_crawls  = 15;             // Hard ceiling across all competitors.
 		$per_site    = count( $urls ) === 1 ? 6 : 3; // Extra pages to sample per site.
 
+		// Wall-clock budget for the ENTIRE crawl phase. Up to 15 sequential fetches
+		// at the crawler's full timeout could otherwise burn several minutes before
+		// the AI call even starts, which trips browser/gateway timeouts even though
+		// the server keeps running. We keep the whole operation synchronous ("run
+		// directly") but bound the crawl so it always yields to the AI step quickly:
+		// once the budget is spent we stop sampling and analyse whatever we reached.
+		// Configurable via the same settings surface as the LM Studio timeout.
+		$crawl_budget   = (int) SCC_Settings::get( 'competitor_crawl_budget', 45 );
+		$crawl_budget   = ( $crawl_budget >= 10 && $crawl_budget <= 300 ) ? $crawl_budget : 45;
+		$primary_wait   = 12; // Per-competitor fetch: the pages we most need.
+		$secondary_wait = 8;  // Sampled internal pages: skip fast if slow.
+		$deadline       = microtime( true ) + $crawl_budget;
+
 		foreach ( $urls as $url ) {
-			if ( $crawled >= $max_crawls ) {
+			if ( $crawled >= $max_crawls || microtime( true ) >= $deadline ) {
 				break;
 			}
-			$data = $crawler->fetch( $url, true );
+			$data = $crawler->fetch( $url, true, $primary_wait );
 			$crawled++;
 			if ( is_wp_error( $data ) ) {
 				$competitors[] = array( 'url' => $url, 'error' => $data->get_error_message(), 'headings' => array() );
@@ -75,13 +88,14 @@ class SCC_Competitor_Analysis {
 
 			// Look at MORE than the entered page: sample a few of this site's own
 			// key pages (services/about/etc.) so the comparison reflects the whole
-			// site, not just one URL.
+			// site, not just one URL. These are the first thing we drop when the
+			// crawl budget runs low — the entered competitor pages matter more.
 			$extra = $this->pick_internal_pages( (array) ( $data['internal_link_urls'] ?? array() ), $url, $per_site );
 			foreach ( $extra as $sub_url ) {
-				if ( $crawled >= $max_crawls ) {
+				if ( $crawled >= $max_crawls || microtime( true ) >= $deadline ) {
 					break;
 				}
-				$sub = $crawler->fetch( $sub_url, true );
+				$sub = $crawler->fetch( $sub_url, true, $secondary_wait );
 				$crawled++;
 				if ( is_wp_error( $sub ) ) {
 					continue;

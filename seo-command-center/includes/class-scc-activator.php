@@ -66,6 +66,7 @@ class SCC_Activator {
 			'lmstudio_model'        => 'local-model',
 			'lmstudio_base_url'     => 'http://localhost:1234/v1',
 			'lmstudio_timeout'      => 600,
+			'competitor_crawl_budget' => 45,
 			'generation_unlimited_tokens' => false,
 			'generation_max_tokens' => 0,
 			'content_target_words'  => 0,

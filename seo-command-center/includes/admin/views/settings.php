@@ -102,6 +102,13 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 				</td>
 			</tr>
 			<tr>
+				<th scope="row"><label for="scc-competitor-crawl-budget"><?php esc_html_e( 'Competitor crawl budget (seconds)', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="number" class="small-text" id="scc-competitor-crawl-budget" name="competitor_crawl_budget" min="10" max="300" step="5" value="<?php echo esc_attr( isset( $s['competitor_crawl_budget'] ) && (int) $s['competitor_crawl_budget'] > 0 ? (int) $s['competitor_crawl_budget'] : 45 ); ?>">
+					<p class="description"><?php esc_html_e( 'Total time the Competitor Gaps tool spends reading competitor pages before it hands off to the AI. It keeps whatever it has read when this budget is spent, so a slow or unresponsive competitor site can no longer stall the whole analysis into a timeout. The AI step that follows uses the LM Studio timeout above. Lower this if gap analysis still times out; raise it to sample more competitor pages.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><?php esc_html_e( 'Generation length', 'seo-command-center' ); ?></th>
 				<td>
 					<label>

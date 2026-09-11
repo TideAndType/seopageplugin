@@ -55,6 +55,7 @@ class SCC_Settings {
 			'lmstudio_model'           => 'text',
 			'lmstudio_base_url'        => 'url',
 			'lmstudio_timeout'         => 'int',
+			'competitor_crawl_budget'  => 'int',
 			'generation_unlimited_tokens' => 'bool',
 			'generation_max_tokens'    => 'int',
 			'content_target_words'     => 'int',
