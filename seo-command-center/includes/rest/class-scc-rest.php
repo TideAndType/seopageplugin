@@ -432,6 +432,17 @@ class SCC_REST {
 			)
 		);
 
+		// Always-on debug trace for the most recent competitor gap-map run.
+		register_rest_route(
+			self::NS,
+			'/competitors/debug/last',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'competitors_debug_last' ),
+				'permission_callback' => $perm,
+			)
+		);
+
 		register_rest_route(
 			self::NS,
 			'/cannibalization',
@@ -1785,6 +1796,10 @@ class SCC_REST {
 			ignore_user_abort( true );
 		}
 
+		// Fresh debug trace for this run, so the Competitor Gaps debug panel shows
+		// exactly what happened this time (mirrors the generation debug reset).
+		update_option( 'scc_comp_debug', array(), false );
+
 		// Mark the run as RUNNING before the long work starts, so the recovery
 		// poll can tell "still working" apart from "never started". Updated to
 		// done/error below. Written even if the browser has already disconnected.
@@ -1861,6 +1876,19 @@ class SCC_REST {
 			'message' => (string) ( $saved['message'] ?? '' ),
 			'result'  => isset( $saved['result'] ) ? $saved['result'] : null,
 		) );
+	}
+
+	/**
+	 * GET /competitors/debug/last — the always-on step-by-step trace of the most
+	 * recent competitor gap-map run (option scc_comp_debug). Lets the user copy
+	 * the full trace when the analysis returns nothing or errors.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function competitors_debug_last( WP_REST_Request $request ) {
+		$log = get_option( 'scc_comp_debug', array() );
+		return $this->ok( array( 'trace' => is_array( $log ) ? $log : array() ) );
 	}
 
 	/**

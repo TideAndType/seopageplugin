@@ -1458,6 +1458,42 @@
 		} );
 	}
 
+	// ---- Competitor gap-map debug trace --------------------------------
+	function loadCompDebug() {
+		var box = document.getElementById( 'scc-comp-debug' );
+		if ( ! box ) { return; }
+		request( '/competitors/debug/last', { method: 'GET' } )
+			.then( function ( res ) {
+				var trace = ( res.data && res.data.trace ) || [];
+				box.innerHTML = '';
+				if ( ! trace.length ) {
+					box.appendChild( el( 'p', 'No gap analysis traced yet. Run one, then click Refresh debug.', 'scc-note' ) );
+					return;
+				}
+				var lines = trace.map( function ( r ) {
+					var data = '';
+					try { data = r.data && Object.keys( r.data ).length ? ( '  ' + JSON.stringify( r.data ) ) : ''; }
+					catch ( e ) { data = ''; }
+					return ( r.t || '' ) + '  ' + ( r.step || '' ) + data;
+				} ).join( '\n' );
+				var pre = el( 'pre' );
+				pre.style.whiteSpace = 'pre-wrap';
+				pre.style.fontSize = '11px';
+				pre.style.background = '#f6f7f7';
+				pre.style.padding = '8px';
+				pre.style.border = '1px solid #dcdcde';
+				pre.style.maxHeight = '360px';
+				pre.style.overflow = 'auto';
+				pre.style.userSelect = 'all';
+				pre.textContent = lines;
+				box.appendChild( pre );
+			} )
+			.catch( function ( err ) {
+				box.innerHTML = '';
+				box.appendChild( el( 'p', ( err && err.message ) || 'Could not load debug trace.', 'scc-note' ) );
+			} );
+	}
+
 	// ---- Competitor content-gap map ------------------------------------
 	function bindCompetitorGaps() {
 		var btn = document.getElementById( 'scc-comp-go' );
@@ -1466,6 +1502,11 @@
 		}
 		var status = document.getElementById( 'scc-comp-status' );
 		var out = document.getElementById( 'scc-comp-results' );
+
+		// Always-on debug trace for the last gap-map run (mirrors gen debug).
+		var dbgBtn = document.getElementById( 'scc-comp-debug-refresh' );
+		if ( dbgBtn ) { dbgBtn.addEventListener( 'click', loadCompDebug ); }
+		loadCompDebug();
 
 		function esc( s ) {
 			var d = document.createElement( 'div' );
@@ -1582,12 +1623,14 @@
 				btn.disabled = false;
 				setStatus( status, 'Done.', 'is-ok' );
 				render( res );
+				loadCompDebug();
 			}
 			function failed( msg ) {
 				if ( finished ) { return; }
 				finished = true;
 				btn.disabled = false;
 				setStatus( status, msg || i18n.error, 'is-error' );
+				loadCompDebug();
 			}
 
 			// If the direct response is lost (a gateway/tunnel drops the long
