@@ -1570,54 +1570,68 @@
 			btn.disabled = true;
 			setStatus( status, 'Reading competitors and mapping gaps… this can take up to a minute.' );
 
-			// Mark when we started so recovery only accepts a result computed AFTER
-			// this click (never a stale earlier run). Server clock ~= now; allow a
-			// small skew so a result saved moments before the response is accepted.
-			var startedAt = Math.floor( Date.now() / 1000 ) - 5;
+			// A per-click id ties this run to the server-side record the recovery
+			// poll reads — so a dropped connection can never lose the finished
+			// result, and there is no clock comparison to get wrong.
+			var runId = 'ui_' + Date.now().toString( 36 ) + Math.random().toString( 36 ).slice( 2, 8 );
+			var finished = false;
+
+			function done( res ) {
+				if ( finished ) { return; }
+				finished = true;
+				btn.disabled = false;
+				setStatus( status, 'Done.', 'is-ok' );
+				render( res );
+			}
+			function failed( msg ) {
+				if ( finished ) { return; }
+				finished = true;
+				btn.disabled = false;
+				setStatus( status, msg || i18n.error, 'is-error' );
+			}
 
 			// If the direct response is lost (a gateway/tunnel drops the long
-			// request after the AI finished), the finished result was still saved
-			// server-side — poll for it a few times before giving up.
+			// request), the run still finishes on the server. Poll its status
+			// record — matched by our run id — until it reports done or error.
+			// The model can take a few minutes locally, so poll patiently.
 			function recover( tries ) {
-				return request( '/competitors/gap-map/last', { method: 'GET' } )
+				if ( finished ) { return; }
+				request( '/competitors/gap-map/last', { method: 'GET' } )
 					.then( function ( last ) {
-						if ( last && last.found && ( last.epoch || 0 ) >= startedAt && last.result ) {
-							return last.result;
+						if ( last && last.found && last.run_id === runId ) {
+							if ( last.status === 'done' && last.result ) {
+								done( last.result );
+								return;
+							}
+							if ( last.status === 'error' ) {
+								failed( last.message );
+								return;
+							}
+							// status 'running' — keep waiting.
 						}
 						if ( tries <= 0 ) {
-							return null;
+							failed( 'The analysis is taking longer than expected. It may still be running on the server — reload this page in a minute to see the results, or try fewer competitor URLs.' );
+							return;
 						}
-						return new Promise( function ( r ) { window.setTimeout( r, 5000 ); } )
-							.then( function () { return recover( tries - 1 ); } );
+						window.setTimeout( function () { recover( tries - 1 ); }, 5000 );
 					} )
 					.catch( function () {
 						if ( tries <= 0 ) {
-							return null;
+							failed( i18n.error );
+							return;
 						}
-						return new Promise( function ( r ) { window.setTimeout( r, 5000 ); } )
-							.then( function () { return recover( tries - 1 ); } );
+						window.setTimeout( function () { recover( tries - 1 ); }, 5000 );
 					} );
 			}
 
-			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls } } )
-				.then( function ( res ) {
-					btn.disabled = false;
-					setStatus( status, 'Done.', 'is-ok' );
-					render( res );
-				} )
-				.catch( function ( err ) {
-					// The connection may have dropped after the AI finished. Try to
-					// recover the saved result before reporting an error.
+			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls, run_id: runId } } )
+				.then( function ( res ) { done( res ); } )
+				.catch( function () {
+					// The connection may have dropped while the server keeps working.
+					// Switch to polling the run's status instead of erroring out.
+					if ( finished ) { return; }
 					setStatus( status, 'Still finishing on the server — recovering your results…' );
-					recover( 12 ).then( function ( recovered ) {
-						btn.disabled = false;
-						if ( recovered ) {
-							setStatus( status, 'Done.', 'is-ok' );
-							render( recovered );
-						} else {
-							setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
-						}
-					} );
+					recover( 60 ); // ~5 min at 5s between polls.
 				} );
 		} );
 	}

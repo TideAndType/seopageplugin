@@ -1767,6 +1767,14 @@ class SCC_REST {
 		if ( is_string( $urls ) ) {
 			$urls = preg_split( '/[\r\n,]+/', $urls );
 		}
+		// A per-click id from the UI ties this run to the record the browser polls
+		// for recovery, so a dropped connection never loses the finished result and
+		// no clock comparison is involved. Fall back to a server-made id.
+		$run_id = SCC_Security::sanitize_text( $params['run_id'] ?? '' );
+		if ( '' === $run_id ) {
+			$run_id = 'srv_' . (string) wp_generate_password( 12, false, false );
+		}
+		$urls_norm = array_values( array_map( 'strval', is_array( $urls ) ? $urls : array() ) );
 
 		// This crawls remote sites and calls the AI — give it room to finish
 		// directly (never punt to a background worker on this host).
@@ -1777,9 +1785,28 @@ class SCC_REST {
 			ignore_user_abort( true );
 		}
 
+		// Mark the run as RUNNING before the long work starts, so the recovery
+		// poll can tell "still working" apart from "never started". Updated to
+		// done/error below. Written even if the browser has already disconnected.
+		$this->save_gap_map_run( array(
+			'run_id' => $run_id,
+			'status' => 'running',
+			'urls'   => $urls_norm,
+		) );
+
 		$service = new SCC_Competitor_Analysis( $this->ai );
 		$result  = $service->gap_map( is_array( $urls ) ? $urls : array() );
+
 		if ( is_wp_error( $result ) ) {
+			// Record the failure so the UI shows the real reason instead of hanging
+			// on "recovering…" — the request may already be disconnected.
+			$this->save_gap_map_run( array(
+				'run_id'  => $run_id,
+				'status'  => 'error',
+				'urls'    => $urls_norm,
+				'code'    => (string) $result->get_error_code(),
+				'message' => (string) $result->get_error_message(),
+			) );
 			return $result;
 		}
 
@@ -1787,39 +1814,52 @@ class SCC_REST {
 		// already dropped by a gateway/tunnel while the AI ran, the response below
 		// never reaches the browser — but the UI can then recover this saved copy
 		// via /competitors/gap-map/last instead of showing "something went wrong".
-		update_option(
-			'scc_gap_map_last',
-			array(
-				'epoch'  => time(),
-				't'      => current_time( 'mysql' ),
-				'urls'   => array_values( array_map( 'strval', is_array( $urls ) ? $urls : array() ) ),
-				'result' => $result,
-			),
-			false
-		);
+		$this->save_gap_map_run( array(
+			'run_id' => $run_id,
+			'status' => 'done',
+			'urls'   => $urls_norm,
+			'result' => $result,
+		) );
 
-		return $this->ok( $result );
+		return $this->ok( array_merge( $result, array( 'run_id' => $run_id ) ) );
 	}
 
 	/**
-	 * GET /competitors/gap-map/last — the most recent completed gap-map, so the
-	 * UI can recover a result whose inline response was lost to a dropped
-	 * connection. Returns {found:false} when nothing has been computed yet.
+	 * Persist the state of the latest competitor gap-map run (running/done/error)
+	 * so the UI can recover it after a dropped connection.
+	 *
+	 * @param array $record Run record.
+	 * @return void
+	 */
+	protected function save_gap_map_run( array $record ) {
+		$record['epoch'] = time();
+		$record['t']     = current_time( 'mysql' );
+		update_option( 'scc_gap_map_last', $record, false );
+	}
+
+	/**
+	 * GET /competitors/gap-map/last — the latest gap-map run's state, so the UI
+	 * can recover a result (or surface the real error) whose inline response was
+	 * lost to a dropped connection. Returns {found:false} when nothing has run.
 	 *
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response
 	 */
 	public function competitors_gap_map_last( WP_REST_Request $request ) {
 		$saved = get_option( 'scc_gap_map_last', array() );
-		if ( ! is_array( $saved ) || empty( $saved['result'] ) ) {
+		if ( ! is_array( $saved ) || empty( $saved['run_id'] ) ) {
 			return $this->ok( array( 'found' => false ) );
 		}
 		return $this->ok( array(
-			'found'  => true,
-			'epoch'  => (int) ( $saved['epoch'] ?? 0 ),
-			't'      => (string) ( $saved['t'] ?? '' ),
-			'urls'   => array_values( (array) ( $saved['urls'] ?? array() ) ),
-			'result' => $saved['result'],
+			'found'   => true,
+			'run_id'  => (string) $saved['run_id'],
+			'status'  => (string) ( $saved['status'] ?? 'done' ),
+			'epoch'   => (int) ( $saved['epoch'] ?? 0 ),
+			't'       => (string) ( $saved['t'] ?? '' ),
+			'urls'    => array_values( (array) ( $saved['urls'] ?? array() ) ),
+			'code'    => (string) ( $saved['code'] ?? '' ),
+			'message' => (string) ( $saved['message'] ?? '' ),
+			'result'  => isset( $saved['result'] ) ? $saved['result'] : null,
 		) );
 	}
 
