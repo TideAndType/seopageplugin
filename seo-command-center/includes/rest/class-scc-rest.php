@@ -417,6 +417,21 @@ class SCC_REST {
 			)
 		);
 
+		// Recover the most recent completed gap-map. The gap-map request runs long
+		// (crawl + AI) and its result is returned inline, so if a gateway/tunnel
+		// drops the connection after the AI finished the browser sees an error and
+		// the finished result is lost. gap-map persists its result, and the UI
+		// falls back to this endpoint to recover it instead of showing an error.
+		register_rest_route(
+			self::NS,
+			'/competitors/gap-map/last',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'competitors_gap_map_last' ),
+				'permission_callback' => $perm,
+			)
+		);
+
 		register_rest_route(
 			self::NS,
 			'/cannibalization',
@@ -1767,7 +1782,45 @@ class SCC_REST {
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
+
+		// Persist the completed result BEFORE returning it. If the connection was
+		// already dropped by a gateway/tunnel while the AI ran, the response below
+		// never reaches the browser — but the UI can then recover this saved copy
+		// via /competitors/gap-map/last instead of showing "something went wrong".
+		update_option(
+			'scc_gap_map_last',
+			array(
+				'epoch'  => time(),
+				't'      => current_time( 'mysql' ),
+				'urls'   => array_values( array_map( 'strval', is_array( $urls ) ? $urls : array() ) ),
+				'result' => $result,
+			),
+			false
+		);
+
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /competitors/gap-map/last — the most recent completed gap-map, so the
+	 * UI can recover a result whose inline response was lost to a dropped
+	 * connection. Returns {found:false} when nothing has been computed yet.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function competitors_gap_map_last( WP_REST_Request $request ) {
+		$saved = get_option( 'scc_gap_map_last', array() );
+		if ( ! is_array( $saved ) || empty( $saved['result'] ) ) {
+			return $this->ok( array( 'found' => false ) );
+		}
+		return $this->ok( array(
+			'found'  => true,
+			'epoch'  => (int) ( $saved['epoch'] ?? 0 ),
+			't'      => (string) ( $saved['t'] ?? '' ),
+			'urls'   => array_values( (array) ( $saved['urls'] ?? array() ) ),
+			'result' => $saved['result'],
+		) );
 	}
 
 	/**

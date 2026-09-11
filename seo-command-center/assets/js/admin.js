@@ -1569,6 +1569,36 @@
 			}
 			btn.disabled = true;
 			setStatus( status, 'Reading competitors and mapping gaps… this can take up to a minute.' );
+
+			// Mark when we started so recovery only accepts a result computed AFTER
+			// this click (never a stale earlier run). Server clock ~= now; allow a
+			// small skew so a result saved moments before the response is accepted.
+			var startedAt = Math.floor( Date.now() / 1000 ) - 5;
+
+			// If the direct response is lost (a gateway/tunnel drops the long
+			// request after the AI finished), the finished result was still saved
+			// server-side — poll for it a few times before giving up.
+			function recover( tries ) {
+				return request( '/competitors/gap-map/last', { method: 'GET' } )
+					.then( function ( last ) {
+						if ( last && last.found && ( last.epoch || 0 ) >= startedAt && last.result ) {
+							return last.result;
+						}
+						if ( tries <= 0 ) {
+							return null;
+						}
+						return new Promise( function ( r ) { window.setTimeout( r, 5000 ); } )
+							.then( function () { return recover( tries - 1 ); } );
+					} )
+					.catch( function () {
+						if ( tries <= 0 ) {
+							return null;
+						}
+						return new Promise( function ( r ) { window.setTimeout( r, 5000 ); } )
+							.then( function () { return recover( tries - 1 ); } );
+					} );
+			}
+
 			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls } } )
 				.then( function ( res ) {
 					btn.disabled = false;
@@ -1576,8 +1606,18 @@
 					render( res );
 				} )
 				.catch( function ( err ) {
-					btn.disabled = false;
-					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+					// The connection may have dropped after the AI finished. Try to
+					// recover the saved result before reporting an error.
+					setStatus( status, 'Still finishing on the server — recovering your results…' );
+					recover( 12 ).then( function ( recovered ) {
+						btn.disabled = false;
+						if ( recovered ) {
+							setStatus( status, 'Done.', 'is-ok' );
+							render( recovered );
+						} else {
+							setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+						}
+					} );
 				} );
 		} );
 	}
