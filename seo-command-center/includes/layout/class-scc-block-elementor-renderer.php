@@ -426,6 +426,7 @@ class SCC_Block_Elementor_Renderer {
 
 			case 'grid': // service / feature cards
 				$cards = '';
+				$n     = 0;
 				foreach ( (array) ( $vars['CARDS'] ?? array() ) as $c ) {
 					$title = esc_html( (string) ( $c['SERVICE_TITLE'] ?? '' ) );
 					if ( '' === $title ) {
@@ -434,8 +435,22 @@ class SCC_Block_Elementor_Renderer {
 					$desc = '' !== (string) ( $c['SERVICE_DESCRIPTION'] ?? '' ) ? '<p>' . esc_html( (string) $c['SERVICE_DESCRIPTION'] ) . '</p>' : '';
 					$link = '' !== (string) ( $c['SERVICE_URL'] ?? '' ) ? '<a class="scc-card__link" href="' . esc_url( (string) $c['SERVICE_URL'] ) . '">' . esc_html__( 'Learn more', 'seo-command-center' ) . '</a>' : '';
 					$cards .= '<div class="scc-card-item"><h3>' . $title . '</h3>' . $desc . $link . '</div>';
+					$n++;
 				}
-				return '' !== $cards ? self::heading( $vars['SECTION_TITLE'] ?? '' ) . '<div class="scc-cards">' . $cards . '</div>' : '';
+				if ( '' === $cards ) {
+					return '';
+				}
+				// 2 cards → two columns, 3 → three columns, 4+ → a swipeable
+				// carousel (CSS scroll-snap, no JS, no Elementor Pro).
+				if ( $n >= 4 ) {
+					$mod  = 'scc-cards--carousel';
+					$wrap = '<div class="scc-cards ' . $mod . '" role="list">' . $cards . '</div>'
+						. '<p class="scc-carousel__hint">' . esc_html__( 'Swipe or scroll to see more →', 'seo-command-center' ) . '</p>';
+				} else {
+					$mod  = 'scc-cards--' . max( 1, min( 3, $n ) );
+					$wrap = '<div class="scc-cards ' . $mod . '">' . $cards . '</div>';
+				}
+				return self::heading( $vars['SECTION_TITLE'] ?? '' ) . $wrap;
 
 			case 'stats':
 				$cells = '';

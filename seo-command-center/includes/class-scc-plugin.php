@@ -231,14 +231,16 @@ class SCC_Plugin {
 .scc-cta__btn{display:inline-block;padding:.7em 1.3em;border-radius:10px;background:var(--scc-accent,#2563eb);color:#fff;text-decoration:none;font-weight:600}
 .scc-section-title{margin-top:2em}
 /* FAQ accordion (also used standalone by the {{FAQ}} widget) */
-.scc-faq{margin:1.5em 0;display:flex;flex-direction:column;gap:.6rem}
-.scc-faq__item{border:1px solid var(--scc-border,#e2e4ea);border-radius:10px;background:var(--scc-card,#fff);overflow:hidden}
-.scc-faq__q{cursor:pointer;list-style:none;padding:.9rem 1.1rem;font-weight:600;position:relative;padding-right:2.4rem}
+.scc-faq{margin:1.5em 0;display:flex;flex-direction:column;gap:.7rem}
+.scc-faq__item{border:1px solid var(--scc-border,#e2e4ea);border-radius:12px;background:var(--scc-card,#fff);overflow:hidden;transition:border-color .15s ease,box-shadow .15s ease}
+.scc-faq__item[open]{border-color:var(--scc-accent,#2563eb);box-shadow:0 16px 34px -26px rgba(16,19,28,.4)}
+.scc-faq__q{cursor:pointer;list-style:none;padding:1.05rem 1.2rem;font-weight:600;font-size:1.05rem;position:relative;padding-right:2.8rem}
+.scc-faq__q:hover{color:var(--scc-accent,#2563eb)}
 .scc-faq__q::-webkit-details-marker{display:none}
-.scc-faq__q::after{content:"+";position:absolute;right:1.1rem;top:50%;transform:translateY(-50%);font-size:1.2rem;line-height:1;color:#6b7280}
-.scc-faq__item[open] .scc-faq__q::after{content:"\2013"}
+.scc-faq__q::after{content:"";position:absolute;right:1.2rem;top:50%;width:.62em;height:.62em;margin-top:-.42em;border-right:2px solid var(--scc-accent,#2563eb);border-bottom:2px solid var(--scc-accent,#2563eb);transform:rotate(45deg);transition:transform .2s ease}
+.scc-faq__item[open] .scc-faq__q::after{transform:rotate(225deg);margin-top:-.18em}
 .scc-faq__item[open] .scc-faq__q{border-bottom:1px solid var(--scc-border,#eef0f4)}
-.scc-faq__a{padding:.85rem 1.1rem 1rem}
+.scc-faq__a{padding:.95rem 1.2rem 1.1rem;color:#33404f;line-height:1.7}
 .scc-faq__a>*:first-child{margin-top:0}.scc-faq__a>*:last-child{margin-bottom:0}
 .scc-faq__q:focus-visible{outline:2px solid var(--scc-accent,#2563eb);outline-offset:-2px}
 /* ============================================================
@@ -284,7 +286,16 @@ class SCC_Plugin {
 .scc-hero__cta .scc-btn{padding:1.05em 2.1em;font-size:1.05rem}
 /* Service / feature cards */
 .scc-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.4em}
-.scc-cards.scc-cards--2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.scc-cards.scc-cards--1{grid-template-columns:minmax(0,560px);justify-content:center}
+.scc-cards.scc-cards--2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.scc-cards.scc-cards--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* Carousel — swipeable, CSS scroll-snap, no JS, no Elementor Pro */
+.scc-cards.scc-cards--carousel{display:flex;grid-template-columns:none;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;gap:1.2em;padding:.4em 0 1.1em;scroll-padding-left:2px;scrollbar-width:thin;scrollbar-color:var(--scc-accent) transparent}
+.scc-cards.scc-cards--carousel>.scc-card-item{flex:0 0 clamp(258px,72%,332px);scroll-snap-align:start}
+.scc-cards.scc-cards--carousel::-webkit-scrollbar{height:8px}
+.scc-cards.scc-cards--carousel::-webkit-scrollbar-track{background:var(--scc-border);border-radius:999px}
+.scc-cards.scc-cards--carousel::-webkit-scrollbar-thumb{background:var(--scc-accent);border-radius:999px}
+.scc-carousel__hint{margin:.2em 0 0;font-size:.85rem;color:var(--scc-muted);text-align:center;letter-spacing:.01em}
 .scc-card-item{position:relative;border:1px solid var(--scc-border);border-radius:var(--scc-radius);padding:1.7em 1.6em;background:#fff;box-shadow:0 1px 2px rgba(16,19,28,.04),0 16px 34px -22px rgba(16,19,28,.28);transition:transform .15s ease,box-shadow .15s ease}
 .scc-card-item::before{content:"";position:absolute;left:0;top:1.6em;width:4px;height:1.6em;border-radius:0 4px 4px 0;background:var(--scc-accent)}
 .scc-card-item:hover{transform:translateY(-4px);box-shadow:0 1px 2px rgba(16,19,28,.05),0 26px 48px -24px rgba(16,19,28,.34)}
@@ -339,6 +350,7 @@ class SCC_Plugin {
 .scc-block--cta .scc-btn{background:#fff;color:var(--scc-accent)!important;padding:1.05em 2.1em;font-size:1.05rem;box-shadow:0 14px 30px -14px rgba(0,0,0,.5)}
 /* Responsive */
 @media(max-width:900px){
+.scc-cards.scc-cards--3{grid-template-columns:repeat(2,minmax(0,1fr))}
 .scc-steps--row{grid-auto-flow:row;grid-auto-columns:auto;gap:1.2em}
 .scc-steps--row li{text-align:left;padding:1.2em 1.4em 1.2em 4em;background:#fff;border:1px solid var(--scc-border);border-radius:var(--scc-radius)}
 .scc-steps--row li::before{left:1em;top:1.05em;transform:none;width:2.1em;height:2.1em}
@@ -348,11 +360,12 @@ class SCC_Plugin {
 .scc-sec{--scc-space:48px}
 .scc-toc ul{columns:1}
 .scc-split{grid-template-columns:1fr;gap:1.6em}
+.scc-cards.scc-cards--2,.scc-cards.scc-cards--3{grid-template-columns:minmax(0,1fr)}
 }
 @media(max-width:600px){
 .scc-stats{grid-template-columns:1fr 1fr}
 }
-@media(prefers-reduced-motion:reduce){.scc-btn,.scc-card-item,.scc-related li a{transition:none!important}}
+@media(prefers-reduced-motion:reduce){.scc-btn,.scc-card-item,.scc-related li a,.scc-faq__item,.scc-faq__q::after{transition:none!important}}
 CSS;
 
 		/**
