@@ -515,22 +515,40 @@ class SCC_Admin {
 		$post_id = isset( $_GET['post'] ) ? (int) $_GET['post'] : 0;
 		$post    = $post_id ? get_post( $post_id ) : null;
 
-		// When no post is chosen, offer a picker of recent generated drafts.
-		$recent = array();
+		// When no post is chosen, offer a picker. Prefer TideOrbit-generated
+		// drafts; if none are found, fall back to recent pages/posts so there is
+		// always something to select. Covers custom post types too.
+		$recent    = array();
+		$is_scc    = false;
 		if ( ! $post_id ) {
-			$q = new WP_Query( array(
-				'post_type'      => array( 'post', 'page' ),
-				'post_status'    => array( 'draft', 'pending', 'publish', 'private', 'future' ),
-				'posts_per_page' => 25,
+			$statuses = array( 'draft', 'pending', 'publish', 'private', 'future' );
+			$gen = new WP_Query( array(
+				'post_type'      => 'any',
+				'post_status'    => $statuses,
+				'posts_per_page' => 30,
 				'no_found_rows'  => true,
 				'meta_key'       => '_scc_generated', // phpcs:ignore WordPress.DB.SlowDBQuery
 				'orderby'        => 'date',
 				'order'          => 'DESC',
 			) );
-			foreach ( $q->posts as $p ) {
+			$posts = $gen->posts;
+			$is_scc = ! empty( $posts );
+			if ( empty( $posts ) ) {
+				// Fallback: any recent editable pages/posts.
+				$any = new WP_Query( array(
+					'post_type'      => array( 'page', 'post' ),
+					'post_status'    => $statuses,
+					'posts_per_page' => 30,
+					'no_found_rows'  => true,
+					'orderby'        => 'modified',
+					'order'          => 'DESC',
+				) );
+				$posts = $any->posts;
+			}
+			foreach ( $posts as $p ) {
 				$recent[] = array(
 					'id'     => (int) $p->ID,
-					'title'  => get_the_title( $p ),
+					'title'  => get_the_title( $p ) ? get_the_title( $p ) : ( '#' . $p->ID ),
 					'type'   => $p->post_type,
 					'status' => $p->post_status,
 				);
@@ -546,6 +564,7 @@ class SCC_Admin {
 					'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
 					'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
 					'recent'           => $recent,
+					'recent_generated' => $is_scc,
 				),
 			)
 		);

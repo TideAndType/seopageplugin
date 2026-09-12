@@ -42,7 +42,13 @@ $el_ok    = ! empty( $data['elementor_active'] );
 					<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-generate' ) ); ?>"><?php esc_html_e( 'Create content', 'seo-command-center' ); ?></a>
 				</div>
 			<?php else : ?>
-				<p class="scc-note"><?php esc_html_e( 'Pick a generated draft to preview and build its Elementor layout.', 'seo-command-center' ); ?></p>
+				<p class="scc-note">
+					<?php
+					echo empty( $data['recent_generated'] )
+						? esc_html__( 'No TideOrbit-generated drafts found — showing your recent pages and posts. Pick one to build its Elementor layout.', 'seo-command-center' )
+						: esc_html__( 'Pick a generated draft to preview and build its Elementor layout.', 'seo-command-center' );
+					?>
+				</p>
 				<table class="widefat striped scc-table">
 					<thead><tr><th><?php esc_html_e( 'Title', 'seo-command-center' ); ?></th><th><?php esc_html_e( 'Type', 'seo-command-center' ); ?></th><th><?php esc_html_e( 'Status', 'seo-command-center' ); ?></th><th></th></tr></thead>
 					<tbody>
