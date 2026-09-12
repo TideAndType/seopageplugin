@@ -28,6 +28,16 @@ $el_ok    = ! empty( $data['elementor_active'] );
 				: esc_html__( 'Turn a generated draft into a structured Elementor page.', 'seo-command-center' );
 			?>
 		</p>
+		<p class="scc-note" style="margin-top:6px;">
+			<?php
+			echo esc_html( sprintf(
+				/* translators: 1: running version, 2: candidate count */
+				__( 'Engine %1$s · %2$d page(s) available to design.', 'seo-command-center' ),
+				defined( 'SCC_VERSION' ) ? SCC_VERSION : '?',
+				isset( $data['recent'] ) ? count( (array) $data['recent'] ) : 0
+			) );
+			?>
+		</p>
 	</div>
 
 	<?php if ( $post_id <= 0 ) : ?>
