@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.38.0
+ * Version:           1.38.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.38.0' );
+	define( 'SCC_VERSION', '1.38.1' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -172,4 +172,23 @@ if ( ! function_exists( 'scc_bootstrap' ) ) {
 }
 if ( ! has_action( 'plugins_loaded', 'scc_bootstrap' ) ) {
 	add_action( 'plugins_loaded', 'scc_bootstrap' );
+}
+
+/**
+ * Flush PHP OPcache when this plugin is updated, so the new files are executed
+ * immediately instead of stale cached bytecode (managed hosts often run
+ * opcache.validate_timestamps=0). Safe no-op when OPcache is unavailable.
+ */
+if ( ! function_exists( 'scc_reset_opcache_on_update' ) ) {
+	function scc_reset_opcache_on_update( $upgrader, $data ) {
+		if ( ! function_exists( 'opcache_reset' ) ) {
+			return;
+		}
+		if ( is_array( $data ) && isset( $data['type'] ) && 'plugin' === $data['type'] ) {
+			@opcache_reset(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+	}
+}
+if ( ! has_action( 'upgrader_process_complete', 'scc_reset_opcache_on_update' ) ) {
+	add_action( 'upgrader_process_complete', 'scc_reset_opcache_on_update', 10, 2 );
 }

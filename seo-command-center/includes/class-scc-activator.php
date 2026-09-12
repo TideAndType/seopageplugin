@@ -18,6 +18,13 @@ class SCC_Activator {
 	 * Run on activation.
 	 */
 	public static function activate() {
+		// Reset PHP OPcache so freshly-installed plugin files are executed instead
+		// of stale cached bytecode (common on managed hosts with
+		// opcache.validate_timestamps=0). Guarded + silenced; harmless if absent.
+		if ( function_exists( 'opcache_reset' ) ) {
+			@opcache_reset(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
 		SCC_DB::install();
 
 		// Default settings (non-secret) if none exist.
