@@ -120,7 +120,7 @@ class SCC_Content_Ideas {
 					array( 'role' => 'user', 'content' => "Context (JSON):\n" . wp_json_encode( $context ) . "\n\nReturn the ideas JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 2600,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 2600 ),
 				'temperature' => 0.6,
 			),
 			'content-ideas'

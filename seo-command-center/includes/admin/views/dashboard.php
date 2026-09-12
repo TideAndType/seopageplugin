@@ -28,7 +28,7 @@ $t = function ( $totals, $key ) {
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
-		<h1><?php esc_html_e( 'SEO Command Center', 'seo-command-center' ); ?></h1>
+		<h1><?php esc_html_e( 'TideOrbit', 'seo-command-center' ); ?></h1>
 		<p class="scc-sub"><?php esc_html_e( 'Understand what this site should rank for, plan the pages it needs, and generate them — as drafts you approve.', 'seo-command-center' ); ?></p>
 	</div>
 

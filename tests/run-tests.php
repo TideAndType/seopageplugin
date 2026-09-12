@@ -1451,6 +1451,14 @@ echo "\n== Generator: mapped template forces template mode ==\n";
 assert_eq( false, SCC_Generator::has_mapped_template( 'blog_post' ), 'no mapping => not mapped' );
 assert_true( SCC_Generator::is_native_mode( 'blog_post' ), 'blog_post still native when unmapped' );
 
+echo "\n== AI manager: token budget floor ==\n";
+// With the test SCC_Settings stub, generation_unlimited_tokens reads false, so
+// token_budget() returns the caller's default raised to the reasoning floor.
+assert_eq( 4000, SCC_AI_Manager::token_budget( 1200 ), 'small default raised to 4000 floor' );
+assert_eq( 4000, SCC_AI_Manager::token_budget( 1800 ), '1800 raised to 4000 floor' );
+assert_eq( 8000, SCC_AI_Manager::token_budget( 8000 ), 'large default kept as-is' );
+assert_eq( 4000, SCC_AI_Manager::token_budget( 0 ), 'zero/unset default => floor' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

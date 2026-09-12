@@ -36,6 +36,31 @@ class SCC_AI_Manager {
 	}
 
 	/**
+	 * Resolve the max_tokens budget for an AI call, giving every feature enough
+	 * headroom that a "reasoning" local model (e.g. Qwen3, which spends tokens on
+	 * an internal <think> phase before it answers) does not exhaust the budget
+	 * before it writes anything and return an empty completion.
+	 *
+	 * - When the user turns on "Unlimited output tokens", returns -1 (LM Studio
+	 *   runs to completion; hosted providers apply their own high ceiling).
+	 * - Otherwise returns the caller's default raised to a sane floor so thinking
+	 *   tokens never crowd out the answer.
+	 *
+	 * Raising a ceiling is always safe: models still stop when the answer is
+	 * complete, and hosted providers bill only for tokens actually produced.
+	 *
+	 * @param int $default The task's natural output size.
+	 * @return int max_tokens to pass to complete() (-1 = unlimited).
+	 */
+	public static function token_budget( $default ) {
+		if ( class_exists( 'SCC_Settings' ) && SCC_Settings::get( 'generation_unlimited_tokens', false ) ) {
+			return -1;
+		}
+		$default = (int) $default;
+		return $default > 0 ? max( $default, 4000 ) : 4000;
+	}
+
+	/**
 	 * Register a provider.
 	 *
 	 * @param SCC_AI_Provider_Interface $provider Provider.

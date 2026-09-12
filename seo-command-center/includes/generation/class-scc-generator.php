@@ -390,7 +390,7 @@ class SCC_Generator {
 		);
 
 		// Diagnostics for "the draft is not under Posts": capture every fact about
-		// the insert and echo it to the SEO Command log, the PHP error log
+		// the insert and echo it to the TideOrbit log, the PHP error log
 		// (debug.log), and the API response so it is visible without any log access.
 		$debug = array(
 			'content_type' => $content->content_type,
@@ -430,7 +430,7 @@ class SCC_Generator {
 			// Genuinely never persisted — a caching/security plugin dropped it.
 			SCC_Logger::error( 'generator', 'Post vanished immediately after insert', $debug );
 			self::dbg( 'POST VANISHED after insert', $debug );
-			return new WP_Error( 'scc_post_not_persisted', __( 'The draft was created but is not in the database immediately after saving — a caching or security plugin is likely blocking wp_insert_post. See the SEO Command log for the diagnostics.', 'seo-command-center' ), array( 'status' => 500 ) );
+			return new WP_Error( 'scc_post_not_persisted', __( 'The draft was created but is not in the database immediately after saving — a caching or security plugin is likely blocking wp_insert_post. See the TideOrbit log for the diagnostics.', 'seo-command-center' ), array( 'status' => 500 ) );
 		}
 
 		// Apply renderer-provided post meta (e.g. duplicated _elementor_data).
@@ -544,7 +544,7 @@ class SCC_Generator {
 
 	/**
 	 * Write a diagnostic line to the PHP error log (debug.log) when WP_DEBUG_LOG
-	 * is on. Complements the in-plugin SEO Command log so problems are visible
+	 * is on. Complements the in-plugin TideOrbit log so problems are visible
 	 * both places without exposing anything sensitive.
 	 *
 	 * @param string $label Message label.
@@ -556,7 +556,7 @@ class SCC_Generator {
 			return;
 		}
 		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-		error_log( '[SEO Command Center] ' . $label . ' ' . wp_json_encode( $data ) );
+		error_log( '[TideOrbit] ' . $label . ' ' . wp_json_encode( $data ) );
 	}
 
 	/**
@@ -1343,7 +1343,7 @@ class SCC_Generator {
 					),
 				),
 				'json'        => $json,
-				'max_tokens'  => 1200,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 1200 ),
 				'temperature' => 0.7,
 			),
 			'regenerate-section'

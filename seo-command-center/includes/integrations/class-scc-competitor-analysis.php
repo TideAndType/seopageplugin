@@ -267,19 +267,10 @@ class SCC_Competitor_Analysis {
 		// Token budget for the answer. A hard cap of 3000 was starving "reasoning"
 		// local models (e.g. Qwen3): they spend the whole budget on their internal
 		// <think> phase and hit the ceiling before emitting the JSON, so LM Studio
-		// returns an empty completion. Give the answer real room — unlimited (-1)
-		// when the user enabled it for generation, otherwise a generous default —
-		// and honour a fixed override. On LM Studio <=0 becomes -1 (run to
-		// completion); hosted providers apply their own high ceiling.
-		$budget = 8000;
-		if ( SCC_Settings::get( 'generation_unlimited_tokens', false ) ) {
-			$budget = -1;
-		} else {
-			$override = (int) SCC_Settings::get( 'generation_max_tokens', 0 );
-			if ( $override > 0 ) {
-				$budget = max( $budget, $override );
-			}
-		}
+		// returns an empty completion. Give the answer real room (unlimited when
+		// the user enabled it, otherwise a generous floor). This payload is large,
+		// so ask for more than the shared default.
+		$budget = SCC_AI_Manager::token_budget( 8000 );
 
 		self::dbg( 'AI request', array(
 			'competitors'   => count( $competitors ),

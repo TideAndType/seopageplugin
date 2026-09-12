@@ -36,7 +36,7 @@ foreach ( $mappings as $m ) {
 		<div class="scc-card">
 			<h2><?php esc_html_e( 'Template mappings', 'seo-command-center' ); ?></h2>
 			<?php if ( empty( $templates ) ) : ?>
-				<p class="scc-note"><?php esc_html_e( 'No Elementor templates or designated SEO template pages found. Create a template in Elementor, or open an Elementor page and mark it as an SEO template (via the SEO Command meta box).', 'seo-command-center' ); ?></p>
+				<p class="scc-note"><?php esc_html_e( 'No Elementor templates or designated SEO template pages found. Create a template in Elementor, or open an Elementor page and mark it as an SEO template (via the TideOrbit meta box).', 'seo-command-center' ); ?></p>
 			<?php else : ?>
 				<table class="widefat striped scc-table" id="scc-template-table">
 					<thead>

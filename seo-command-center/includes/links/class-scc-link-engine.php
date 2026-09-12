@@ -225,7 +225,7 @@ class SCC_Link_Engine {
 					array( 'role' => 'user', 'content' => "Page + candidates (JSON):\n" . $payload . "\n\nReturn the internal-link JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 1400,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 1400 ),
 				'temperature' => 0.3,
 			),
 			'internal-linking'

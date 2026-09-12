@@ -1,5 +1,5 @@
 /**
- * SEO Command Center — admin JS.
+ * TideOrbit — admin JS.
  * Talks to the internal REST API using wp.apiFetch with the wp_rest nonce.
  * No API keys are ever present in this file or the page.
  */

@@ -1021,9 +1021,11 @@ class SCC_REST {
 			array(
 				'system'     => 'You are a connectivity test. Reply with the single word: OK',
 				'messages'   => array( array( 'role' => 'user', 'content' => 'Say OK' ) ),
-				// Generous budget so "thinking" models (Gemini 3.x, etc.) still
-				// produce visible output after their internal reasoning tokens.
-				'max_tokens' => 256,
+				// Generous budget so "thinking" models (Gemini 3.x, Qwen3, etc.)
+				// still produce visible output after their internal reasoning
+				// tokens — 256 was too small and made the test fail for them. A
+				// fixed value (never unlimited) keeps this diagnostic quick.
+				'max_tokens' => 2048,
 				'model'      => isset( $models[ $provider_id ] ) ? $models[ $provider_id ] : '',
 			)
 		);
