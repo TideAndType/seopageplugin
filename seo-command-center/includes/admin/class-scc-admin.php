@@ -558,14 +558,12 @@ class SCC_Admin {
 		$this->view(
 			'layout',
 			array(
-				'data' => array(
-					'post_id'          => $post_id,
-					'post_title'       => $post ? get_the_title( $post ) : '',
-					'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
-					'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
-					'recent'           => $recent,
-					'recent_generated' => $is_scc,
-				),
+				'post_id'          => $post_id,
+				'post_title'       => $post ? get_the_title( $post ) : '',
+				'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
+				'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
+				'recent'           => $recent,
+				'recent_generated' => $is_scc,
 			)
 		);
 	}
