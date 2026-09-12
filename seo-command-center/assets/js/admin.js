@@ -21,10 +21,16 @@
 		if ( ! el ) {
 			return;
 		}
-		el.textContent = message || '';
-		el.classList.remove( 'is-error', 'is-ok' );
+		message = message || '';
+		el.textContent = message;
+		el.classList.remove( 'is-error', 'is-ok', 'scc-loading' );
 		if ( state ) {
 			el.classList.add( state );
+		}
+		// Any in-progress message (ends with an ellipsis, no ok/error state) gets a
+		// calm spinner automatically — consistent async feedback everywhere.
+		if ( message && ! state && ( /[…]\s*$/.test( message ) || /\.\.\.\s*$/.test( message ) ) ) {
+			el.classList.add( 'scc-loading' );
 		}
 	}
 
@@ -1760,14 +1766,25 @@
 			var factors = ( op.factors || [] ).map( function ( f ) {
 				return '<span class="scc-opp__factor">+' + ( parseInt( f.points, 10 ) || 0 ) + ' ' + esc( f.label ) + '</span>';
 			} ).join( '' );
+			var cap = function ( s ) { s = String( s || ''); return s.charAt( 0 ).toUpperCase() + s.slice( 1 ); };
+			var meta =
+				'<div class="scc-opp__meta">' +
+					'<span>Impact: <strong>' + esc( cap( op.expected_impact ) ) + '</strong></span>' +
+					'<span>Effort: <strong>' + esc( op.effort || '' ) + '</strong></span>' +
+					'<span>Confidence: <strong>' + ( parseInt( op.confidence, 10 ) || 0 ) + '%</strong></span>' +
+				'</div>';
+			var details = ( op.recommended_action || factors )
+				? '<details class="scc-opp__more"><summary>Details</summary>' +
+					'<div class="scc-opp__do">' + esc( op.recommended_action || '' ) + '</div>' +
+					'<div class="scc-opp__factors">' + factors + '</div></details>'
+				: '';
 			wrap.innerHTML =
 				'<div class="scc-opp__score"><span class="scc-opp__num">' + ( parseInt( op.score, 10 ) || 0 ) + '</span><span class="scc-opp__den">/100</span></div>' +
 				'<div class="scc-opp__body">' +
 					'<div class="scc-opp__title"><strong>' + esc( op.title ) + '</strong> ' +
-						'<span class="scc-flag scc-flag--prio-' + esc( op.priority ) + '">' + esc( ( op.priority || '' ).charAt( 0 ).toUpperCase() + ( op.priority || '' ).slice( 1 ) ) + '</span></div>' +
+						'<span class="scc-flag scc-flag--prio-' + esc( op.priority ) + '">' + esc( cap( op.priority ) ) + '</span></div>' +
 					'<p class="scc-opp__why">' + esc( op.reason ) + '</p>' +
-					'<div class="scc-opp__factors">' + factors + '</div>' +
-					'<div class="scc-opp__do">' + esc( op.recommended_action || '' ) + '</div>' +
+					meta + details +
 				'</div>' +
 				'<div class="scc-opp__actions">' +
 					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +

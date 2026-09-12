@@ -33,9 +33,9 @@ $status_label = array(
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
-		<span class="scc-phase-badge">✦ <?php esc_html_e( 'SEO Intelligence', 'seo-command-center' ); ?></span>
+		<span class="scc-phase-badge"><?php esc_html_e( 'SEO Intelligence', 'seo-command-center' ); ?></span>
 		<h1><?php esc_html_e( 'Action Queue', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'The highest-impact SEO actions for this site, scored and explained from your real data. Add the ones you want to the queue, then approve, snooze, or run the safe ones. Nothing changes your site until you act.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Your highest-impact actions, scored from real data. Nothing changes your site until you act.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<!-- Opportunities -->
@@ -46,7 +46,11 @@ $status_label = array(
 		</div>
 		<span class="scc-inline-status" id="scc-opps-msg"></span>
 		<?php if ( empty( $opps ) ) : ?>
-			<p class="scc-note"><?php esc_html_e( 'No opportunities yet. Run a site analysis and connect Google Search Console for the sharpest recommendations, then Refresh.', 'seo-command-center' ); ?></p>
+			<div class="scc-empty">
+				<div class="scc-empty__icon" aria-hidden="true">✨</div>
+				<h2><?php esc_html_e( 'No opportunities yet', 'seo-command-center' ); ?></h2>
+				<p><?php esc_html_e( 'Run a site analysis and connect Search Console, then Refresh.', 'seo-command-center' ); ?></p>
+			</div>
 		<?php else : ?>
 			<div class="scc-opps" id="scc-opps-list">
 				<?php foreach ( $opps as $op ) : ?>
@@ -58,17 +62,20 @@ $status_label = array(
 								<span class="scc-flag"><?php echo esc_html( $dc_label[ $op['data_confidence'] ] ?? $op['data_confidence'] ); ?></span>
 							</div>
 							<p class="scc-opp__why"><?php echo esc_html( $op['reason'] ); ?></p>
-							<div class="scc-opp__factors">
-								<?php foreach ( (array) $op['factors'] as $f ) : ?>
-									<span class="scc-opp__factor">+<?php echo esc_html( (int) $f['points'] ); ?> <?php echo esc_html( $f['label'] ); ?></span>
-								<?php endforeach; ?>
-							</div>
 							<div class="scc-opp__meta">
 								<span><?php esc_html_e( 'Impact:', 'seo-command-center' ); ?> <strong><?php echo esc_html( ucfirst( (string) $op['expected_impact'] ) ); ?></strong></span>
 								<span><?php esc_html_e( 'Effort:', 'seo-command-center' ); ?> <strong><?php echo esc_html( (string) $op['effort'] ); ?></strong></span>
-								<span><?php esc_html_e( 'Risk:', 'seo-command-center' ); ?> <strong><?php echo esc_html( ucfirst( (string) $op['risk'] ) ); ?></strong></span>
 								<span><?php esc_html_e( 'Confidence:', 'seo-command-center' ); ?> <strong><?php echo esc_html( (int) $op['confidence'] ); ?>%</strong></span>
 							</div>
+							<details class="scc-opp__more">
+								<summary><?php esc_html_e( 'Details', 'seo-command-center' ); ?></summary>
+								<div class="scc-opp__factors">
+									<?php foreach ( (array) $op['factors'] as $f ) : ?>
+										<span class="scc-opp__factor">+<?php echo esc_html( (int) $f['points'] ); ?> <?php echo esc_html( $f['label'] ); ?></span>
+									<?php endforeach; ?>
+								</div>
+								<div class="scc-opp__meta"><span><?php esc_html_e( 'Risk:', 'seo-command-center' ); ?> <strong><?php echo esc_html( ucfirst( (string) $op['risk'] ) ); ?></strong></span></div>
+							</details>
 						</div>
 						<div class="scc-opp__actions">
 							<button class="button button-primary button-small scc-opp-approve"><?php esc_html_e( 'Add to queue', 'seo-command-center' ); ?></button>
@@ -89,9 +96,13 @@ $status_label = array(
 			</button>
 		</div>
 		<span class="scc-inline-status" id="scc-queue-msg"></span>
-		<p class="scc-note"><?php esc_html_e( '“Fix Everything Safe” only runs deterministic, reversible actions (internal links). It never edits content, publishes, deletes, or redirects.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( '“Fix Everything Safe” runs only reversible internal-link actions — never edits, publishes, deletes, or redirects.', 'seo-command-center' ); ?></p>
 		<?php if ( empty( $actions ) ) : ?>
-			<p class="scc-note"><?php esc_html_e( 'The queue is empty. Add opportunities above to start.', 'seo-command-center' ); ?></p>
+			<div class="scc-empty">
+				<div class="scc-empty__icon" aria-hidden="true">✅</div>
+				<h2><?php esc_html_e( 'Your queue is empty', 'seo-command-center' ); ?></h2>
+				<p><?php esc_html_e( 'Add an opportunity above to line up your next task.', 'seo-command-center' ); ?></p>
+			</div>
 		<?php else : ?>
 			<table class="widefat striped scc-table" id="scc-queue-table">
 				<thead><tr>
@@ -110,7 +121,7 @@ $status_label = array(
 								<div class="scc-note"><?php echo esc_html( $a['reason'] ); ?></div>
 							</td>
 							<td><span class="scc-flag"><?php echo esc_html( str_replace( '_', ' ', (string) $a['type'] ) ); ?></span><?php echo ! empty( $a['safe'] ) ? ' <span class="scc-badge scc-badge--ok">' . esc_html__( 'safe', 'seo-command-center' ) . '</span>' : ''; ?></td>
-							<td class="scc-q-status"><span class="scc-flag scc-flag--prio-<?php echo esc_attr( $a['priority'] ); ?>"><?php echo esc_html( $status_label[ $a['status'] ] ?? $a['status'] ); ?></span></td>
+							<td class="scc-q-status"><span class="scc-status scc-status--<?php echo esc_attr( $a['status'] ); ?>"><?php echo esc_html( $status_label[ $a['status'] ] ?? $a['status'] ); ?></span></td>
 							<td>
 								<?php if ( in_array( $a['status'], array( 'new', 'reviewing' ), true ) ) : ?>
 									<button class="button button-small scc-q-approve"><?php esc_html_e( 'Approve', 'seo-command-center' ); ?></button>

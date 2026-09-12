@@ -21,21 +21,17 @@ $categories   = isset( $data['categories'] ) ? $data['categories'] : array();
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
-		<h1><?php esc_html_e( 'Generate Content', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Enter a topic and generate a draft. A Blog Post becomes a normal WordPress post, no template needed. Everything is saved as a draft for your review.', 'seo-command-center' ); ?></p>
+		<h1><?php esc_html_e( 'Create', 'seo-command-center' ); ?></h1>
+		<p class="scc-sub"><?php esc_html_e( 'Enter a topic and generate a draft.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<?php if ( $auto_publish ) : ?>
-		<div class="notice notice-warning inline"><p><?php esc_html_e( 'Automatic publishing is ON. Generated content will be published immediately. Turn it off in Settings to keep drafts for review.', 'seo-command-center' ); ?></p></div>
-	<?php else : ?>
-		<div class="notice notice-info inline"><p><?php esc_html_e( 'Generated content is saved as a draft. You review and publish it yourself.', 'seo-command-center' ); ?></p></div>
+		<div class="notice notice-warning inline"><p><?php esc_html_e( 'Auto-publish is ON — drafts are published immediately. Change this in Settings.', 'seo-command-center' ); ?></p></div>
 	<?php endif; ?>
 
 	<div class="scc-card scc-quickgen">
-		<h2><?php esc_html_e( 'Create a draft', 'seo-command-center' ); ?></h2>
-
 		<div class="scc-field">
-			<label class="scc-field__label"><?php esc_html_e( 'Content type', 'seo-command-center' ); ?></label>
+			<label class="scc-field__label"><?php esc_html_e( 'What do you want to create?', 'seo-command-center' ); ?></label>
 			<div class="scc-segmented" id="scc-qg-type" role="radiogroup">
 				<label class="scc-seg is-active"><input type="radio" name="scc_qg_type" value="article" checked> <?php esc_html_e( 'Blog Post', 'seo-command-center' ); ?></label>
 				<label class="scc-seg"><input type="radio" name="scc_qg_type" value="service"> <?php esc_html_e( 'Service Page', 'seo-command-center' ); ?></label>
@@ -43,7 +39,7 @@ $categories   = isset( $data['categories'] ) ? $data['categories'] : array();
 				<label class="scc-seg"><input type="radio" name="scc_qg_type" value="landing"> <?php esc_html_e( 'Landing Page', 'seo-command-center' ); ?></label>
 				<label class="scc-seg"><input type="radio" name="scc_qg_type" value="custom"> <?php esc_html_e( 'Custom', 'seo-command-center' ); ?></label>
 			</div>
-			<p class="scc-note" id="scc-qg-mode-note"><?php esc_html_e( 'Blog Post generates as a normal WordPress post (title, intro, H2 sections, FAQ, conclusion).', 'seo-command-center' ); ?></p>
+			<p class="scc-note" id="scc-qg-mode-note"><?php esc_html_e( 'Generates as a normal WordPress post — title, intro, H2 sections, FAQ, conclusion.', 'seo-command-center' ); ?></p>
 		</div>
 
 		<div class="scc-field">

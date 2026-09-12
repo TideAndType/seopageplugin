@@ -18,6 +18,7 @@
 	--scc-muted:     #6b7280;
 	--scc-brand:     #4f46e5;
 	--scc-brand-2:   #7c3aed;
+	--scc-brand-soft:#eef0fe;
 	--scc-accent:    #06b6d4;
 	--scc-ok:        #0f9d58;
 	--scc-ok-bg:     #e9f9ef;
@@ -49,30 +50,29 @@
  * ------------------------------------------------------------------------- */
 .scc-header {
 	position: relative;
-	margin: 10px 0 24px;
-	padding: 22px 24px 22px 26px;
+	margin: 8px 0 22px;
+	padding: 20px 24px 20px 26px;
 	background: var(--scc-surface);
 	border: 1px solid var(--scc-border);
 	border-radius: var(--scc-radius);
-	box-shadow: var(--scc-shadow);
+	box-shadow: var(--scc-shadow-sm);
 	overflow: hidden;
 }
+/* A single quiet brand rail — calm, not decorative. */
 .scc-header::before {
 	content: "";
-	position: absolute; inset: 0 auto 0 0; width: 5px;
-	background: var(--scc-grad);
-}
-.scc-header::after {
-	content: "";
-	position: absolute; top: -60px; right: -40px; width: 220px; height: 220px;
-	background: radial-gradient(closest-side, rgba(124,58,237,.16), transparent 70%);
-	pointer-events: none;
+	position: absolute; inset: 0 auto 0 0; width: 3px;
+	background: var(--scc-brand);
 }
 .scc-header h1 {
-	font-size: 28px; font-weight: 800; letter-spacing: -.02em;
-	margin: 0 0 6px; color: var(--scc-ink); line-height: 1.15;
+	font-size: 24px; font-weight: 750; letter-spacing: -.02em;
+	margin: 0 0 4px; color: var(--scc-ink); line-height: 1.2;
 }
-.scc-sub { color: var(--scc-muted); font-size: 14px; margin: 0; max-width: 760px; line-height: 1.5; }
+.scc-sub { color: var(--scc-muted); font-size: 13.5px; margin: 0; max-width: 720px; line-height: 1.5; }
+@media (max-width: 600px) {
+	.scc-header { padding: 16px 16px 16px 18px; }
+	.scc-header h1 { font-size: 21px; }
+}
 
 /* Context chips */
 .scc-context-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
@@ -87,9 +87,11 @@
  * ------------------------------------------------------------------------- */
 .scc-card {
 	background: var(--scc-surface); border: 1px solid var(--scc-border); border-radius: var(--scc-radius);
-	padding: 22px 24px; margin-bottom: 20px; box-shadow: var(--scc-shadow);
+	padding: 20px 22px; margin-bottom: 18px; box-shadow: var(--scc-shadow-sm);
 }
-.scc-card h2 { margin-top: 0; font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--scc-ink); }
+.scc-card h2 { margin-top: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; color: var(--scc-ink); }
+/* Section label above a group — quieter than an h2, for scannable hierarchy. */
+.scc-section-label { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; font-weight: 700; color: var(--scc-muted); margin: 0 0 10px; }
 .scc-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .scc-card__head h2 { margin: 0; }
 
@@ -103,20 +105,16 @@
 .scc-stats { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin-bottom: 24px; }
 .scc-stat {
 	position: relative; background: var(--scc-surface); border: 1px solid var(--scc-border);
-	border-radius: var(--scc-radius); padding: 20px 22px; box-shadow: var(--scc-shadow-sm);
+	border-radius: var(--scc-radius); padding: 18px 20px; box-shadow: var(--scc-shadow-sm);
 	overflow: hidden;
 }
-.scc-stat::before {
-	content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--scc-grad); opacity: .9;
-}
 .scc-stat__num {
-	font-size: 34px; font-weight: 800; line-height: 1; letter-spacing: -.02em;
-	background: var(--scc-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+	font-size: 30px; font-weight: 750; line-height: 1; letter-spacing: -.02em; color: var(--scc-ink);
 }
-.scc-stat__label { color: var(--scc-muted); font-size: 13px; margin-top: 9px; }
-.scc-stat--warn { border-color: #f3d18b; }
-.scc-stat--warn::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
-.scc-stat--warn .scc-stat__num { background: none; -webkit-text-fill-color: initial; color: var(--scc-warn); }
+.scc-stat__label { color: var(--scc-muted); font-size: 12.5px; margin-top: 8px; }
+/* Only tiles that represent a problem carry colour — so the eye lands on them. */
+.scc-stat--warn { border-color: #f3d18b; background: linear-gradient(0deg, var(--scc-warn-bg), var(--scc-surface) 60%); }
+.scc-stat--warn .scc-stat__num { color: var(--scc-warn); }
 
 .scc-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 @media (max-width: 960px) { .scc-columns { grid-template-columns: 1fr; } }
@@ -142,14 +140,14 @@
 .scc-wrap .button:hover { box-shadow: var(--scc-shadow-sm); }
 .scc-wrap .button:active { transform: translateY(1px); }
 .scc-wrap .button-primary {
-	background-image: var(--scc-grad) !important;
+	background-image: none !important;
 	background-color: var(--scc-brand) !important;
 	border: 0 !important; color: #fff !important;
-	border-radius: 9px !important; padding: 3px 16px !important;
-	box-shadow: 0 6px 16px -8px rgba(79,70,229,.7) !important;
+	border-radius: 8px !important; padding: 3px 16px !important;
+	box-shadow: none !important;
 	text-shadow: none !important;
 }
-.scc-wrap .button-primary:hover { filter: brightness(1.05); }
+.scc-wrap .button-primary:hover { background-color: #4338ca !important; }
 .scc-wrap .button-primary:focus { box-shadow: var(--scc-ring) !important; }
 .scc-wrap .button-hero { padding: 8px 22px !important; font-size: 14px !important; height: auto !important; }
 
@@ -186,6 +184,22 @@
 	border: 1px solid var(--scc-border-2);
 }
 .scc-badge--ok { background: var(--scc-ok-bg); color: var(--scc-ok); border-color: transparent; }
+
+/* Task-lifecycle status badges — distinct per state (never priority colours). */
+.scc-status {
+	display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+	padding: 3px 10px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent;
+	background: var(--scc-surface-2); color: var(--scc-ink-2);
+}
+.scc-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .9; }
+.scc-status--new,
+.scc-status--reviewing { background: #eef0fe; color: #4338ca; }
+.scc-status--approved { background: #e6f0ff; color: #1d4ed8; }
+.scc-status--in_progress { background: var(--scc-warn-bg); color: var(--scc-warn); }
+.scc-status--completed { background: var(--scc-ok-bg); color: var(--scc-ok); }
+.scc-status--snoozed { background: var(--scc-surface-2); color: var(--scc-muted); }
+.scc-status--dismissed { background: var(--scc-surface-2); color: var(--scc-muted); }
+.scc-status--failed { background: var(--scc-danger-bg); color: var(--scc-danger); }
 .scc-clear { margin-left: 12px; font-size: 12px; color: var(--scc-muted); }
 
 .scc-inline-status { margin-left: 12px; font-size: 13px; color: var(--scc-muted); }
@@ -193,9 +207,9 @@
 .scc-inline-status.is-ok { color: var(--scc-ok); }
 
 .scc-phase-badge {
-	display: inline-flex; align-items: center; gap: 6px; background: var(--scc-grad); color: #fff;
-	font-size: 12px; font-weight: 600; padding: 5px 14px; border-radius: 999px; margin-bottom: 14px;
-	box-shadow: 0 6px 16px -8px rgba(79,70,229,.7);
+	display: inline-flex; align-items: center; gap: 6px; background: var(--scc-brand-soft); color: var(--scc-brand);
+	font-size: 11px; font-weight: 700; letter-spacing: .02em; padding: 4px 12px; border-radius: 999px; margin-bottom: 12px;
+	border: 1px solid transparent;
 }
 
 /* ---------------------------------------------------------------------------
@@ -318,8 +332,7 @@
  * ------------------------------------------------------------------------- */
 .scc-panel__score { display: flex; align-items: baseline; gap: 8px; }
 .scc-panel__num {
-	font-size: 30px; font-weight: 800; letter-spacing: -.02em;
-	background: var(--scc-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+	font-size: 28px; font-weight: 750; letter-spacing: -.02em; color: var(--scc-brand);
 }
 .scc-panel__label { color: var(--scc-muted); font-size: 12px; }
 .scc-panel__rows { margin: 10px 0; }
@@ -396,8 +409,9 @@
 /* Intelligence layer — "What should I do next?" opportunity cards. */
 .scc-next .scc-card__head { align-items: center; }
 .scc-opps { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
-.scc-opp { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--scc-border, #e2e8f0); border-radius: 12px; background: var(--scc-surface, #fff); }
-.scc-opp__score { flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(160deg, var(--scc-accent, #4f46e5), #7c3aed); color: #fff; border-radius: 10px; padding: 8px 0; }
+.scc-opp { display: flex; gap: 14px; padding: 14px 16px; border: 1px solid var(--scc-border, #e2e8f0); border-radius: 12px; background: var(--scc-surface, #fff); transition: border-color .12s ease, box-shadow .12s ease; }
+.scc-opp:hover { border-color: #d7dae6; box-shadow: var(--scc-shadow-sm); }
+.scc-opp__score { flex: 0 0 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--scc-brand-soft, #eef0fe); color: var(--scc-brand, #4f46e5); border-radius: 10px; padding: 8px 0; }
 .scc-opp__num { font-size: 26px; font-weight: 800; line-height: 1; }
 .scc-opp__den { font-size: 11px; opacity: .85; }
 .scc-opp__body { flex: 1 1 auto; min-width: 0; }
@@ -406,7 +420,13 @@
 .scc-opp__factors { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .scc-opp__factor { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(79,70,229,.08); color: var(--scc-accent, #4f46e5); }
 .scc-opp__meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--scc-muted, #64748b); margin-bottom: 6px; }
-.scc-opp__do { font-size: 13px; color: var(--scc-text, #1e293b); }
+.scc-opp__do { font-size: 13px; color: var(--scc-text, #1e293b); margin-top: 6px; }
+.scc-opp__more { margin-top: 2px; }
+.scc-opp__more > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--scc-brand, #4f46e5); list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+.scc-opp__more > summary::-webkit-details-marker { display: none; }
+.scc-opp__more > summary::before { content: "▸"; font-size: 10px; transition: transform .12s ease; }
+.scc-opp__more[open] > summary::before { transform: rotate(90deg); }
+.scc-opp__more[open] > summary { margin-bottom: 6px; }
 .scc-opp__actions { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 @media (max-width: 782px) { .scc-opp { flex-direction: column; } .scc-opp__actions { flex-direction: row; } }
 
@@ -473,11 +493,66 @@
  * Simplification pass: grouped admin menu + simple Generate form.
  * ------------------------------------------------------------------------- */
 
-/* Tabbed hubs (Content / SEO / Strategy) consolidate the old flat menu. */
+/* Tabbed hubs consolidate the old flat menu. Restyled from WP's default grey
+ * tabs into quiet product tabs (underline for the active tab). */
 .scc-hub { margin-bottom: 0; padding-bottom: 0; }
-.scc-hub-tabs { margin-bottom: 0; }
+.scc-hub-tabs.nav-tab-wrapper {
+	border-bottom: 1px solid var(--scc-border); margin: 6px 0 18px; padding: 0; display: flex; flex-wrap: wrap; gap: 2px;
+}
+.scc-hub-tabs .nav-tab {
+	background: transparent; border: 0; border-bottom: 2px solid transparent; margin: 0; padding: 9px 14px;
+	font-size: 13.5px; font-weight: 600; color: var(--scc-muted); border-radius: 8px 8px 0 0;
+	transition: color .12s ease, border-color .12s ease, background .12s ease;
+}
+.scc-hub-tabs .nav-tab:hover { color: var(--scc-ink); background: var(--scc-surface-2); }
+.scc-hub-tabs .nav-tab-active,
+.scc-hub-tabs .nav-tab-active:focus,
+.scc-hub-tabs .nav-tab-active:hover {
+	color: var(--scc-brand); border-bottom-color: var(--scc-brand); background: transparent;
+}
+.scc-hub-tabs .nav-tab:focus-visible { outline: none; box-shadow: var(--scc-ring); }
 .scc-hub + .wrap { margin-top: 0; }
 .scc-hub + .wrap > h1:first-child { margin-top: 12px; }
+
+/* ---------------------------------------------------------------------------
+ * Shared UX patterns: loading, empty states, focus, a11y helpers
+ * ------------------------------------------------------------------------- */
+/* Inline processing indicator (three calm dots). Pair with a short status line. */
+.scc-loading { display: inline-flex; align-items: center; gap: 8px; color: var(--scc-muted); font-size: 13px; }
+.scc-loading::before {
+	content: ""; width: 14px; height: 14px; border-radius: 50%;
+	border: 2px solid var(--scc-border); border-top-color: var(--scc-brand); animation: scc-spin .7s linear infinite;
+}
+@keyframes scc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+	.scc-loading::before { animation-duration: 2.4s; }
+}
+/* Skeleton shimmer for content that is loading in. */
+.scc-skeleton { position: relative; overflow: hidden; background: var(--scc-surface-2); border-radius: var(--scc-radius-sm); min-height: 14px; }
+.scc-skeleton::after {
+	content: ""; position: absolute; inset: 0;
+	background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
+	transform: translateX(-100%); animation: scc-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes scc-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .scc-skeleton::after { animation: none; } }
+
+/* Empty states — a clear title, one short line, and one prominent CTA. */
+.scc-empty h2 { font-size: 16px; margin: 0 0 6px; }
+.scc-empty p { color: var(--scc-muted); font-size: 13.5px; margin: 0 auto 14px; max-width: 440px; line-height: 1.5; }
+.scc-empty__icon { font-size: 30px; line-height: 1; margin-bottom: 10px; opacity: .55; }
+
+/* Consistent, visible keyboard focus across our controls. */
+.scc-wrap a:focus-visible,
+.scc-wrap button:focus-visible,
+.scc-wrap [tabindex]:focus-visible,
+.scc-wrap .scc-seg:focus-within { outline: none; box-shadow: var(--scc-ring); border-radius: 8px; }
+
+/* Screen-reader-only utility (status messages, labels). */
+.scc-sr-only {
+	position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+	clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
 
 /* Simple Generate form. */
 .scc-quickgen .scc-field { margin: 0 0 14px; }
@@ -516,3 +591,12 @@
 .scc-copilot__result { margin-top: 10px; }
 .scc-copilot__what { font-weight: 600; margin: 4px 0; }
 .scc-copilot__result .scc-opps { margin-top: 10px; }
+
+/* ---------------------------------------------------------------------------
+ * Responsive: keep wide tables from breaking the layout on narrow admin widths.
+ * ------------------------------------------------------------------------- */
+@media (max-width: 782px) {
+	.scc-wrap .scc-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+	.scc-context-bar { gap: 6px; }
+	.scc-card { padding: 16px; }
+}

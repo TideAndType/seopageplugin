@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.34.0
+ * Version:           1.35.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.34.0' );
+	define( 'SCC_VERSION', '1.35.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
