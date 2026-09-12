@@ -435,3 +435,34 @@ require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-gen
 
 // --- Admin (pure hub_active_tab helper under test) --------------------------
 require_once __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php';
+
+// --- AI Elementor Layout Engine --------------------------------------------
+if ( ! function_exists( 'wp_trim_words' ) ) {
+	function wp_trim_words( $text, $num_words = 55, $more = '…' ) {
+		$text  = trim( (string) $text );
+		$words = preg_split( '/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY );
+		if ( count( $words ) <= (int) $num_words ) {
+			return $text;
+		}
+		return implode( ' ', array_slice( $words, 0, (int) $num_words ) ) . $more;
+	}
+}
+if ( ! function_exists( 'wp_list_pluck' ) ) {
+	function wp_list_pluck( $list, $field ) {
+		$out = array();
+		foreach ( (array) $list as $row ) {
+			if ( is_array( $row ) && isset( $row[ $field ] ) ) {
+				$out[] = $row[ $field ];
+			} elseif ( is_object( $row ) && isset( $row->$field ) ) {
+				$out[] = $row->$field;
+			}
+		}
+		return $out;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-registry.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-analyzer.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-rule-provider.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-validator.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-engine.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-content-mapper.php';

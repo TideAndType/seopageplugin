@@ -984,6 +984,10 @@
 						actions.appendChild( document.createTextNode( ' ' ) );
 						actions.appendChild( v );
 					}
+					var lay = el( 'a', 'Build layout', 'button button-small' );
+					lay.href = window.location.pathname + '?page=seo-command-center-layout&post=' + encodeURIComponent( it.post_id );
+					actions.appendChild( document.createTextNode( ' ' ) );
+					actions.appendChild( lay );
 					tr.appendChild( actions );
 					tbody.appendChild( tr );
 				} );
@@ -2947,5 +2951,90 @@
 		bindInsights();
 		bindMetaEditor();
 		bindContentIdeas();
+		bindLayoutEngine();
 	} );
+
+	// ---- AI Elementor Layout Engine ------------------------------------
+	function bindLayoutEngine() {
+		var root = document.getElementById( 'scc-layout' );
+		if ( ! root ) { return; }
+		var postId  = parseInt( root.getAttribute( 'data-post' ), 10 ) || 0;
+		var preview = document.getElementById( 'scc-layout-preview' );
+		var msg     = document.getElementById( 'scc-layout-msg' );
+		var metaEl  = document.getElementById( 'scc-layout-meta' );
+		var applyBtn= document.getElementById( 'scc-layout-apply' );
+		var regen   = document.getElementById( 'scc-layout-regen' );
+		var aiBox   = document.getElementById( 'scc-layout-ai' );
+		if ( ! preview || postId <= 0 ) { return; }
+
+		var blocks = []; // [{id, name}]
+
+		function esc( s ) { var d = document.createElement( 'div' ); d.textContent = ( s == null ? '' : String( s ) ); return d.innerHTML; }
+
+		function draw() {
+			preview.innerHTML = '';
+			if ( ! blocks.length ) {
+				preview.appendChild( el( 'p', 'No blocks — try Regenerate.', 'scc-note' ) );
+				applyBtn.disabled = true;
+				return;
+			}
+			applyBtn.disabled = false;
+			blocks.forEach( function ( b, i ) {
+				var row = el( 'div', null, 'scc-lblock' );
+				row.appendChild( el( 'span', b.name, 'scc-lblock__name' ) );
+				var ctl = el( 'span', null, 'scc-lblock__ctl' );
+				var up = el( 'button', '↑', 'button button-small' ); up.title = 'Move up'; up.disabled = ( i === 0 );
+				var dn = el( 'button', '↓', 'button button-small' ); dn.title = 'Move down'; dn.disabled = ( i === blocks.length - 1 );
+				var rm = el( 'button', '✕', 'button button-small' ); rm.title = 'Remove';
+				up.addEventListener( 'click', function () { if ( i > 0 ) { var t = blocks[ i - 1 ]; blocks[ i - 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
+				dn.addEventListener( 'click', function () { if ( i < blocks.length - 1 ) { var t = blocks[ i + 1 ]; blocks[ i + 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
+				rm.addEventListener( 'click', function () { blocks.splice( i, 1 ); draw(); } );
+				ctl.appendChild( up ); ctl.appendChild( dn ); ctl.appendChild( rm );
+				row.appendChild( ctl );
+				preview.appendChild( row );
+			} );
+		}
+
+		function propose() {
+			applyBtn.disabled = true;
+			setStatus( msg, 'Analyzing content and choosing blocks…' );
+			request( '/layout/propose', { method: 'POST', data: { post_id: postId, use_ai: aiBox && aiBox.checked } } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					blocks = ( d.blocks || [] ).map( function ( b ) { return { id: b.id, name: b.name }; } );
+					if ( metaEl ) {
+						metaEl.hidden = false;
+						metaEl.textContent = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) +
+							' · order by ' + ( d.source === 'ai' ? 'AI' : 'rules' ) + ( d.ai_available ? '' : ' (no AI provider configured)' );
+					}
+					setStatus( msg, 'Done.', 'is-ok' );
+					draw();
+				} )
+				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		}
+
+		function apply() {
+			var applyMsg = document.getElementById( 'scc-layout-apply-msg' );
+			applyBtn.disabled = true;
+			setStatus( applyMsg, 'Building your Elementor page…' );
+			request( '/layout/apply', { method: 'POST', data: { post_id: postId, layout: blocks.map( function ( b ) { return b.id; } ) } } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					setStatus( applyMsg, 'Done.', 'is-ok' );
+					preview.innerHTML = '';
+					var ok = el( 'div', null, 'scc-empty' );
+					ok.appendChild( el( 'div', '✅', 'scc-empty__icon' ) );
+					ok.appendChild( el( 'h2', 'Elementor page created' ) );
+					ok.appendChild( el( 'p', 'The layout was applied. Open it in Elementor to fine-tune, or edit the draft.', 'scc-note' ) );
+					if ( d.elementor_url ) { var e = el( 'a', 'Edit in Elementor', 'button button-primary' ); e.href = d.elementor_url; ok.appendChild( e ); }
+					if ( d.edit_url ) { var ed = el( 'a', ' Edit draft', 'button' ); ed.href = d.edit_url; ok.appendChild( document.createTextNode( ' ' ) ); ok.appendChild( ed ); }
+					preview.appendChild( ok );
+				} )
+				.catch( function ( err ) { setStatus( applyMsg, ( err && err.message ) || i18n.error, 'is-error' ); applyBtn.disabled = false; } );
+		}
+
+		if ( regen ) { regen.addEventListener( 'click', propose ); }
+		if ( applyBtn ) { applyBtn.addEventListener( 'click', apply ); }
+		propose();
+	}
 } )();

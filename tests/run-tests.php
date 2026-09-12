@@ -1474,6 +1474,72 @@ assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Different', 'primary
 assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Different', 'recommended_url' => 'https://x.com/services/local-seo/' ), $scc_taken ), 'is_taken matches by slug' );
 assert_true( ! SCC_Content_Plan::is_taken( array( 'title' => 'Brand New Page', 'primary_keyword' => 'something else', 'recommended_url' => '/brand-new' ), $scc_taken ), 'is_taken passes a genuinely new idea' );
 
+echo "\n== Layout Engine: block registry ==\n";
+$scc_reg = SCC_Block_Registry::all();
+assert_true( isset( $scc_reg['hero'], $scc_reg['cta'], $scc_reg['faq'], $scc_reg['service-grid'] ), 'core blocks are registered' );
+assert_true( in_array( 'hero', SCC_Block_Registry::required_ids(), true ) && in_array( 'cta', SCC_Block_Registry::required_ids(), true ), 'hero + cta are required' );
+assert_true( SCC_Block_Registry::exists( 'faq' ) && ! SCC_Block_Registry::exists( 'not-a-block' ), 'exists() distinguishes real vs fake ids' );
+assert_true( in_array( 'FAQ_ITEMS', $scc_reg['faq']['fields'], true ), 'faq block declares FAQ_ITEMS field' );
+
+echo "\n== Layout Engine: validator (allowlist + required + order) ==\n";
+$scc_v = SCC_Layout_Validator::validate( array( 'content', 'bogus-block', 'faq', 'faq', 'cta', 'hero' ) );
+assert_true( ! in_array( 'bogus-block', $scc_v, true ), 'unknown block ids are dropped' );
+assert_eq( 'hero', $scc_v[0], 'hero is moved to the front' );
+assert_eq( 'cta', end( $scc_v ), 'cta is moved to the end' );
+assert_eq( 1, count( array_keys( $scc_v, 'faq', true ) ), 'non-repeatable faq de-duplicated' );
+$scc_v2 = SCC_Layout_Validator::validate( array( 'content' ) );
+assert_true( in_array( 'hero', $scc_v2, true ) && in_array( 'cta', $scc_v2, true ), 'required blocks injected when absent' );
+
+echo "\n== Layout Engine: deterministic rule provider ==\n";
+$scc_rule = new SCC_Layout_Rule_Provider();
+$scc_svc  = $scc_rule->decide( array( 'content_type' => 'service', 'search_intent' => 'commercial' ) );
+assert_true( in_array( 'hero', $scc_svc, true ) && in_array( 'content', $scc_svc, true ) && in_array( 'cta', $scc_svc, true ), 'service layout has hero + content + cta' );
+$scc_art = $scc_rule->decide( array( 'content_type' => 'article', 'search_intent' => 'informational' ) );
+assert_true( in_array( 'toc', $scc_art, true ), 'article layout offers a TOC' );
+
+echo "\n== Layout Engine: availability gate + conflict resolution ==\n";
+$scc_an_min = array( 'intro' => '', 'content_html' => '<p>Hi</p>', 'counts' => array( 'faqs' => 0, 'services' => 0, 'benefits' => 0, 'process' => 0, 'stats' => 0, 'related' => 0, 'sections' => 0 ), 'areas' => array(), 'city' => '' );
+$scc_gated = SCC_Layout_Engine::gate_by_availability( array( 'hero', 'faq', 'service-grid', 'content', 'cta' ), $scc_an_min );
+assert_true( ! in_array( 'faq', $scc_gated, true ), 'faq dropped when there are no FAQs' );
+assert_true( ! in_array( 'service-grid', $scc_gated, true ), 'service-grid dropped when there are no services' );
+assert_true( in_array( 'hero', $scc_gated, true ) && in_array( 'cta', $scc_gated, true ), 'required blocks survive the gate' );
+$scc_res = SCC_Layout_Engine::resolve_conflicts( array( 'hero', 'content-intro', 'benefits', 'content', 'faq', 'cta' ) );
+assert_true( ! in_array( 'content-intro', $scc_res, true ) && ! in_array( 'benefits', $scc_res, true ), 'prose-duplicating blocks removed when full content present' );
+assert_true( in_array( 'faq', $scc_res, true ), 'discrete blocks kept alongside content' );
+
+echo "\n== Layout Engine: analyzer ==\n";
+assert_eq( 'blog_post', SCC_Layout_Analyzer::normalize_type( 'Blog' ), 'normalize_type maps Blog => blog_post' );
+assert_eq( 'local_service', SCC_Layout_Analyzer::normalize_type( 'local service' ), 'normalize_type maps local service' );
+assert_eq( 'local', SCC_Layout_Analyzer::normalize_intent( 'commercial/local' ), 'normalize_intent detects local' );
+assert_eq( 'commercial', SCC_Layout_Analyzer::normalize_intent( '', 'service' ), 'normalize_intent defaults service => commercial' );
+$scc_heads = SCC_Layout_Analyzer::extract_headings( '<h2>Local Citations</h2><p>x</p><h3>Sub</h3>' );
+assert_eq( 2, count( $scc_heads ), 'extract_headings finds h2 + h3' );
+assert_eq( 'local-citations', $scc_heads[0]['anchor'], 'heading anchor is slugified' );
+$scc_ben = SCC_Layout_Analyzer::extract_benefits( '<ul><li>One</li><li>Two</li><li>Three</li></ul>' );
+assert_eq( 3, count( $scc_ben ), 'extract_benefits reads a 3-item list' );
+$scc_faqs = SCC_Layout_Analyzer::extract_faqs_from_html( '<details><summary>Q1?</summary><p>A1.</p></details>' );
+assert_eq( 'Q1?', $scc_faqs[0]['question'], 'extract_faqs_from_html parses details' );
+
+echo "\n== Layout Engine: content mapper ==\n";
+$scc_analysis = array(
+	'content_type' => 'article', 'search_intent' => 'informational',
+	'title' => 'Guide', 'h1' => 'Guide', 'primary_keyword' => 'local seo',
+	'intro' => 'An intro paragraph.', 'content_html' => '<p>An intro paragraph.</p><h2>Body</h2><p>More.</p><details><summary>Q?</summary><p>A.</p></details>',
+	'sections' => array( array( 'level' => 'h2', 'text' => 'Body', 'anchor' => 'body' ) ),
+	'services' => array(), 'benefits' => array(), 'process' => array(), 'stats' => array(),
+	'faqs' => array( array( 'question' => 'Q?', 'answer' => 'A.' ) ), 'related' => array(), 'areas' => array(),
+	'city' => '', 'service' => '', 'cta' => '', 'cta_text' => '', 'cta_url' => '', 'image' => array(), 'has_image' => false,
+);
+$scc_blocks = SCC_Content_Mapper::map( array( 'hero', 'content', 'faq', 'cta' ), $scc_analysis, array() );
+$scc_by = array();
+foreach ( $scc_blocks as $bk ) { $scc_by[ $bk['id'] ] = $bk; }
+assert_eq( 'Guide', $scc_by['hero']['vars']['HERO_TITLE'], 'hero title mapped from h1' );
+assert_true( false === strpos( $scc_by['content']['vars']['CONTENT'], '<details' ), 'content body has the FAQ lifted out' );
+assert_true( ! $scc_by['faq']['empty'] && $scc_by['faq']['vars']['FAQ_ITEMS'][0]['question'] === 'Q?', 'faq block populated' );
+assert_true( false !== strpos( $scc_by['cta']['vars']['CTA_TITLE'], 'local seo' ), 'cta title uses the keyword' );
+$scc_empty_faq = SCC_Content_Mapper::map( array( 'faq' ), array( 'faqs' => array(), 'content_html' => '', 'intro' => '', 'primary_keyword' => '' ) + $scc_analysis, array() );
+assert_true( $scc_empty_faq[0]['empty'], 'faq block reports empty when there are no FAQs' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -82,6 +82,7 @@ class SCC_Admin {
 			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+			self::SLUG . '-layout'           => array( __( 'Elementor Layout', 'seo-command-center' ), 'render_layout' ),
 		);
 		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
 			$hidden[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' );
@@ -497,6 +498,27 @@ class SCC_Admin {
 	 */
 	public function render_ideas() {
 		$this->view( 'ideas', array() );
+	}
+
+	/**
+	 * AI Elementor Layout Engine — preview + build an Elementor page for a
+	 * generated post. Reached via ?post=ID from the generated-content lists.
+	 */
+	public function render_layout() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only screen bootstrap; all actions are nonce-checked REST calls.
+		$post_id = isset( $_GET['post'] ) ? (int) $_GET['post'] : 0;
+		$post    = $post_id ? get_post( $post_id ) : null;
+		$this->view(
+			'layout',
+			array(
+				'data' => array(
+					'post_id'          => $post_id,
+					'post_title'       => $post ? get_the_title( $post ) : '',
+					'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
+					'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
+				),
+			)
+		);
 	}
 
 	/**

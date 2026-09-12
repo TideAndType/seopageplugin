@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.35.1
+ * Version:           1.36.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.35.1' );
+	define( 'SCC_VERSION', '1.36.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -116,6 +116,19 @@ require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-wordpress-renderer.php'
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-gutenberg-renderer.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-elementor-renderer.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-renderer-manager.php';
+
+// AI Elementor Layout Engine — controlled block registry + layout decisioning
+// (deterministic rules, optional AI) + content mapping + Elementor rendering.
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-registry.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-intel.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-analyzer.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-rule-provider.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-ai-provider.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-validator.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-engine.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-content-mapper.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-elementor-renderer.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-service.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';

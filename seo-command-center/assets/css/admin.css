@@ -595,6 +595,21 @@
 .scc-copilot__result .scc-opps { margin-top: 10px; }
 
 /* ---------------------------------------------------------------------------
+ * AI Elementor Layout Engine — structure preview.
+ * ------------------------------------------------------------------------- */
+.scc-layout-preview { display: flex; flex-direction: column; gap: 8px; margin: 12px 0 16px; }
+.scc-lblock {
+	display: flex; align-items: center; justify-content: space-between; gap: 12px;
+	border: 1px solid var(--scc-border); border-radius: var(--scc-radius-sm);
+	background: var(--scc-surface-2); padding: 12px 14px;
+}
+.scc-lblock__name { font-weight: 600; color: var(--scc-ink); }
+.scc-lblock__ctl { display: inline-flex; gap: 4px; }
+.scc-lblock__ctl .button { min-width: 30px; text-align: center; }
+.scc-layout-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.scc-adv-summary { cursor: pointer; font-weight: 600; }
+
+/* ---------------------------------------------------------------------------
  * Responsive: keep wide tables from breaking the layout on narrow admin widths.
  * ------------------------------------------------------------------------- */
 @media (max-width: 782px) {

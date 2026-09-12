@@ -443,6 +443,26 @@ class SCC_REST {
 			)
 		);
 
+		// AI Elementor Layout Engine.
+		register_rest_route(
+			self::NS,
+			'/layout/propose',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'layout_propose' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/layout/apply',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'layout_apply' ),
+				'permission_callback' => $perm,
+			)
+		);
+
 		register_rest_route(
 			self::NS,
 			'/cannibalization',
@@ -1891,6 +1911,59 @@ class SCC_REST {
 	public function competitors_debug_last( WP_REST_Request $request ) {
 		$log = get_option( 'scc_comp_debug', array() );
 		return $this->ok( array( 'trace' => is_array( $log ) ? $log : array() ) );
+	}
+
+	/**
+	 * POST /layout/propose — propose an Elementor block layout for a generated
+	 * post. Deterministic by default; AI-assisted only when use_ai is set AND a
+	 * provider is configured. Returns the ordered block list + a preview.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function layout_propose( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		$use_ai  = ! empty( $params['use_ai'] );
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
+		}
+		$service = new SCC_Layout_Service( $this->ai );
+		$result  = $service->propose_for_post( $post_id, $use_ai );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /layout/apply — render a confirmed layout into the post as an editable
+	 * Elementor page (validated server-side; block ids are allowlisted).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function layout_apply( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		$layout  = isset( $params['layout'] ) && is_array( $params['layout'] ) ? $params['layout'] : array();
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
+		}
+		$service = new SCC_Layout_Service( $this->ai );
+		$result  = $service->apply( $post_id, $layout );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
 	}
 
 	/**

@@ -241,10 +241,37 @@ class SCC_Plugin {
 .scc-faq__a{padding:.85rem 1.1rem 1rem}
 .scc-faq__a>*:first-child{margin-top:0}.scc-faq__a>*:last-child{margin-bottom:0}
 .scc-faq__q:focus-visible{outline:2px solid var(--scc-accent,#2563eb);outline-offset:-2px}
+/* AI Elementor Layout Engine block sections (native fallback + HTML widgets) */
+.scc-block{margin:0 0 1.5em}
+.scc-block__title{margin:0 0 .6em}
+.scc-btn{display:inline-block;padding:.7em 1.3em;border-radius:10px;background:var(--scc-accent,#2563eb);color:#fff;text-decoration:none;font-weight:600}
+.scc-btn:focus-visible{outline:2px solid var(--scc-accent,#2563eb);outline-offset:2px}
+.scc-hero{padding:1.5em 0}
+.scc-hero__title{margin:0 0 .3em}
+.scc-hero__sub{font-size:1.15rem;color:var(--scc-muted,#6b7280);margin:0 0 1em;max-width:52ch}
+.scc-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1em}
+.scc-card-item{border:1px solid var(--scc-border,#e2e4ea);border-radius:12px;padding:1.1em 1.2em;background:var(--scc-card,#fff)}
+.scc-card-item h3{margin:0 0 .4em}
+.scc-card__link{font-weight:600;color:var(--scc-accent,#2563eb);text-decoration:none}
+.scc-benefits{list-style:none;padding:0;margin:0;display:grid;gap:.5em}
+.scc-benefits li{position:relative;padding-left:1.6em}
+.scc-benefits li::before{content:"\2713";position:absolute;left:0;color:var(--scc-accent,#2563eb);font-weight:700}
+.scc-related{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:.5em}
+.scc-related li a{display:inline-block;padding:.4em .9em;border:1px solid var(--scc-border,#e2e4ea);border-radius:999px;text-decoration:none;color:var(--scc-accent,#2563eb)}
+.scc-toc{border:1px solid var(--scc-border,#e2e4ea);border-radius:12px;padding:1em 1.2em;background:var(--scc-soft,rgba(2,6,23,.03))}
+.scc-toc__title{font-weight:700;margin:0 0 .5em}
+.scc-toc ul{margin:0;padding-left:1.1em}
+.scc-split{display:grid;grid-template-columns:1fr 1fr;gap:1.4em;align-items:center}
+.scc-split img{border-radius:12px}
+.scc-quote{border-left:4px solid var(--scc-accent,#2563eb);margin:0;padding:.4em 0 .4em 1.2em;font-size:1.1rem}
+.scc-quote cite{display:block;font-size:.9rem;color:var(--scc-muted,#6b7280);margin-top:.4em}
+.scc-block--cta .scc-cta{display:block;text-align:center}
+.scc-block--cta .scc-cta .scc-btn{margin-top:.4em}
 @media(max-width:600px){
 .scc-content h2{margin-top:2em}
 .scc-stats{grid-template-columns:1fr 1fr}
 .scc-cta{flex-direction:column;align-items:flex-start}
+.scc-split{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.scc-content *{transition:none!important;animation:none!important}}
 CSS;

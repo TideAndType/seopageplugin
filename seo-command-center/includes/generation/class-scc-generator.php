@@ -440,6 +440,12 @@ class SCC_Generator {
 		}
 		update_post_meta( $post_id, '_scc_renderer', $renderer_id );
 		update_post_meta( $post_id, '_scc_template', $template->family );
+		// Persist the content type + intent so the Elementor Layout Engine can
+		// rebuild an accurate content object from the post later (additive).
+		update_post_meta( $post_id, '_scc_content_type', (string) ( $entry['page_type'] ?? $content->content_type ) );
+		if ( '' !== (string) ( $entry['intent'] ?? '' ) ) {
+			update_post_meta( $post_id, '_scc_search_intent', (string) $entry['intent'] );
+		}
 		$used_renderer = $renderer_id;
 
 		// Native WordPress taxonomy + excerpt (uses core taxonomies, never a new
