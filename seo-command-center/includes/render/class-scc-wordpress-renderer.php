@@ -34,7 +34,7 @@ class SCC_WordPress_Renderer implements SCC_Renderer_Interface {
 	/**
 	 * @inheritDoc
 	 */
-	public function is_available( $content_type = '' ) {
+	public function is_available( $content_type = '', $template = null ) {
 		return true; // Always works.
 	}
 

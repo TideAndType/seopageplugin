@@ -36,10 +36,18 @@ class SCC_Crawler {
 	 * @param bool   $respect_robots  Whether to honor robots.txt (true for external).
 	 * @return array|WP_Error Parsed data (incl. crawl_url/final_url/canonical) or error.
 	 */
-	public function fetch( $url, $respect_robots = true ) {
+	public function fetch( $url, $respect_robots = true, $timeout = null ) {
 		$url = esc_url_raw( $url );
 		if ( empty( $url ) ) {
 			return new WP_Error( 'scc_bad_url', __( 'Invalid URL.', 'seo-command-center' ) );
+		}
+
+		// A caller may cap the per-request wait (e.g. bulk competitor crawling,
+		// where a single slow host must not eat the whole request budget). Falls
+		// back to the default TIMEOUT when not given or out of range.
+		$timeout = ( null === $timeout ) ? self::TIMEOUT : (int) $timeout;
+		if ( $timeout < 1 || $timeout > self::TIMEOUT ) {
+			$timeout = self::TIMEOUT;
 		}
 
 		// SSRF guard, immediately before the request: refuse private/reserved/
@@ -57,7 +65,7 @@ class SCC_Crawler {
 		$response = wp_remote_get(
 			$url,
 			array(
-				'timeout'     => self::TIMEOUT,
+				'timeout'     => $timeout,
 				'redirection' => self::MAX_REDIRECTS, // WP caps the chain, preventing loops.
 				'sslverify'   => true,
 				'user-agent'  => self::USER_AGENT,

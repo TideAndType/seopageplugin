@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name:       SEO Command Center
+ * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
- * Description:       AI-powered SEO Command Center for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.25.0
+ * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
+ * Version:           1.40.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -21,14 +21,28 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// Constants.
+// Idempotent load. Earlier versions bailed out entirely when scc_bootstrap()
+// already existed, to fatal-proof against a second plugin folder — but some
+// hosts/scanners re-include a plugin's own main file in the same request, and
+// that bail wrongly hid the whole plugin (menu included). We no longer bail.
+// Instead every top-level declaration below is written to be safe if this same
+// file is included more than once: constants are guarded with defined(), class
+// files use require_once (which dedupes by path), and the boot function + hook
+// are guarded with function_exists()/has_action(). A single install therefore
+// always loads fully; a same-file re-include is a harmless no-op.
 // ---------------------------------------------------------------------------
-define( 'SCC_VERSION', '1.25.0' );
-define( 'SCC_DB_VERSION', '1.18.0' );
-define( 'SCC_PLUGIN_FILE', __FILE__ );
-define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
-define( 'SCC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
-define( 'SCC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+
+// ---------------------------------------------------------------------------
+// Constants (guarded so a same-file re-include never re-defines them).
+// ---------------------------------------------------------------------------
+if ( ! defined( 'SCC_VERSION' ) ) {
+	define( 'SCC_VERSION', '1.40.0' );
+	define( 'SCC_DB_VERSION', '1.20.0' );
+	define( 'SCC_PLUGIN_FILE', __FILE__ );
+	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+	define( 'SCC_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+	define( 'SCC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+}
 
 // ---------------------------------------------------------------------------
 // Autoload-free, explicit includes (predictable load order, no dependencies).
@@ -96,11 +110,25 @@ require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template.php';
 require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-store.php';
 require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-map.php';
 require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-selector.php';
+require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-content-presenter.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/interface-scc-renderer.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-wordpress-renderer.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-gutenberg-renderer.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-elementor-renderer.php';
 require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-renderer-manager.php';
+
+// AI Elementor Layout Engine — controlled block registry + layout decisioning
+// (deterministic rules, optional AI) + content mapping + Elementor rendering.
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-registry.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-intel.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-analyzer.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-rule-provider.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-ai-provider.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-validator.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-engine.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-content-mapper.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-elementor-renderer.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-service.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';
@@ -119,6 +147,7 @@ require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-health-timeline.p
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-experiments.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-entity-graph.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-ai-visibility.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-copilot.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
 require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';
@@ -134,9 +163,32 @@ register_deactivation_hook( __FILE__, array( 'SCC_Deactivator', 'deactivate' ) )
 
 /**
  * Boot the plugin once all plugins are loaded (so we can detect SEO plugins,
- * Elementor, etc.).
+ * Elementor, etc.). Guarded so a re-include of this file never redeclares it.
  */
-function scc_bootstrap() {
-	SCC_Plugin::instance()->run();
+if ( ! function_exists( 'scc_bootstrap' ) ) {
+	function scc_bootstrap() {
+		SCC_Plugin::instance()->run();
+	}
 }
-add_action( 'plugins_loaded', 'scc_bootstrap' );
+if ( ! has_action( 'plugins_loaded', 'scc_bootstrap' ) ) {
+	add_action( 'plugins_loaded', 'scc_bootstrap' );
+}
+
+/**
+ * Flush PHP OPcache when this plugin is updated, so the new files are executed
+ * immediately instead of stale cached bytecode (managed hosts often run
+ * opcache.validate_timestamps=0). Safe no-op when OPcache is unavailable.
+ */
+if ( ! function_exists( 'scc_reset_opcache_on_update' ) ) {
+	function scc_reset_opcache_on_update( $upgrader, $data ) {
+		if ( ! function_exists( 'opcache_reset' ) ) {
+			return;
+		}
+		if ( is_array( $data ) && isset( $data['type'] ) && 'plugin' === $data['type'] ) {
+			@opcache_reset(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+	}
+}
+if ( ! has_action( 'upgrader_process_complete', 'scc_reset_opcache_on_update' ) ) {
+	add_action( 'upgrader_process_complete', 'scc_reset_opcache_on_update', 10, 2 );
+}

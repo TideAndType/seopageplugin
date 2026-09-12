@@ -94,6 +94,34 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 					<p class="description"><?php esc_html_e( 'Click “Detect models” to pull the loaded model IDs from your LM Studio server (this also confirms the URL is reachable). “local-model” uses whatever model is currently loaded.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
+			<tr>
+				<th scope="row"><label for="scc-lmstudio-timeout"><?php esc_html_e( 'LM Studio timeout (seconds)', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="number" class="small-text" id="scc-lmstudio-timeout" name="lmstudio_timeout" min="60" max="1800" step="30" value="<?php echo esc_attr( isset( $s['lmstudio_timeout'] ) && (int) $s['lmstudio_timeout'] > 0 ? (int) $s['lmstudio_timeout'] : 600 ); ?>">
+					<p class="description"><?php esc_html_e( 'How long to wait for the local model to finish one generation. Large models (for example a 27B) writing a long article can take several minutes — raise this if you see a timeout (cURL error 28). Max 1800 (30 min). Generation keeps running on the server even if your browser disconnects; the draft appears when it finishes.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-competitor-crawl-budget"><?php esc_html_e( 'Competitor crawl budget (seconds)', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="number" class="small-text" id="scc-competitor-crawl-budget" name="competitor_crawl_budget" min="10" max="300" step="5" value="<?php echo esc_attr( isset( $s['competitor_crawl_budget'] ) && (int) $s['competitor_crawl_budget'] > 0 ? (int) $s['competitor_crawl_budget'] : 45 ); ?>">
+					<p class="description"><?php esc_html_e( 'Total time the Competitor Gaps tool spends reading competitor pages before it hands off to the AI. It keeps whatever it has read when this budget is spent, so a slow or unresponsive competitor site can no longer stall the whole analysis into a timeout. The AI step that follows uses the LM Studio timeout above. Lower this if gap analysis still times out; raise it to sample more competitor pages.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Generation length', 'seo-command-center' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="generation_unlimited_tokens" value="1" <?php checked( ! empty( $s['generation_unlimited_tokens'] ) ); ?>>
+						<?php esc_html_e( 'Unlimited output tokens (let the model write until it finishes)', 'seo-command-center' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'Removes the token budget for content generation. On LM Studio this sends max_tokens = -1, so the local model runs until the article is complete (no early truncation) — combined with a high timeout above. Hosted providers (Claude/OpenAI/Gemini) still apply their own high ceiling. Leave off to size the budget automatically from the target word count.', 'seo-command-center' ); ?></p>
+					<p class="description">
+						<label for="scc-gen-max-tokens"><?php esc_html_e( 'Or a fixed max tokens (0 = auto, ignored when Unlimited is on):', 'seo-command-center' ); ?></label>
+						<input type="number" class="small-text" id="scc-gen-max-tokens" name="generation_max_tokens" min="0" max="200000" step="256" value="<?php echo esc_attr( isset( $s['generation_max_tokens'] ) ? (int) $s['generation_max_tokens'] : 0 ); ?>">
+					</p>
+				</td>
+			</tr>
 		</table>
 
 		<h2><?php esc_html_e( 'AI model per task', 'seo-command-center' ); ?></h2>
@@ -119,6 +147,67 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 					</td>
 				</tr>
 			<?php endforeach; ?>
+		</table>
+
+		<h2><?php esc_html_e( 'Content style', 'seo-command-center' ); ?></h2>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="scc-content-target-words"><?php esc_html_e( 'Target word count', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="number" class="small-text" id="scc-content-target-words" name="content_target_words" min="0" max="20000" step="50" value="<?php echo esc_attr( isset( $s['content_target_words'] ) ? (int) $s['content_target_words'] : 0 ); ?>">
+					<p class="description"><?php esc_html_e( 'The length every generated article should aim for. Set a number (for example 1500) and generation targets it; leave 0 to size automatically from each plan entry. The model is told to write at least this many words — a capable model will hit it; very small local models may still fall short.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Visual presentation', 'seo-command-center' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="visual_presentation" value="1" <?php checked( ! isset( $s['visual_presentation'] ) || ! empty( $s['visual_presentation'] ) ); ?>>
+						<?php esc_html_e( 'Transform generated articles into a scannable, component layout (callouts, takeaway cards, process steps, timelines, stat cards, responsive tables)', 'seo-command-center' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'Semantic, CSS-only enhancement applied to newly generated drafts. Keeps all headings, links, lists, tables and SEO copy intact — it only improves the layout. Inherits your theme’s fonts and colours. Turn off to output plain article HTML.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><?php esc_html_e( 'Elementor layout', 'seo-command-center' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="layout_auto_build" value="1" <?php checked( ! isset( $s['layout_auto_build'] ) || ! empty( $s['layout_auto_build'] ) ); ?>>
+						<?php esc_html_e( 'Automatically build an Elementor layout when content is generated', 'seo-command-center' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'When Elementor is active, newly generated drafts are turned into an editable Elementor page from the block library (deterministic — no AI required). Pages that already use a mapped Elementor template are left as-is. Turn off to keep plain drafts and build layouts manually from Create ▸ Recently generated ▸ Build layout.', 'seo-command-center' ); ?></p>
+					<?php $scc_preset = isset( $s['layout_design_preset'] ) ? (string) $s['layout_design_preset'] : 'modern'; ?>
+					<p style="margin-top:10px;">
+						<label for="scc-design-preset"><strong><?php esc_html_e( 'Design style', 'seo-command-center' ); ?></strong></label><br>
+						<select id="scc-design-preset" name="layout_design_preset">
+							<option value="modern" <?php selected( $scc_preset, 'modern' ); ?>><?php esc_html_e( 'Modern (default)', 'seo-command-center' ); ?></option>
+							<option value="professional" <?php selected( $scc_preset, 'professional' ); ?>><?php esc_html_e( 'Professional (tighter, restrained)', 'seo-command-center' ); ?></option>
+							<option value="bold" <?php selected( $scc_preset, 'bold' ); ?>><?php esc_html_e( 'Bold (large type, generous spacing)', 'seo-command-center' ); ?></option>
+						</select>
+					</p>
+					<p class="description"><?php esc_html_e( 'Controls typography scale, spacing and corner radius of generated Elementor pages. All styles inherit your site’s primary colour from Elementor.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-content-persona"><?php esc_html_e( 'Writing persona', 'seo-command-center' ); ?></label></th>
+				<td>
+					<select id="scc-content-persona" name="content_persona">
+						<option value="" <?php selected( ( $s['content_persona'] ?? '' ), '' ); ?>><?php esc_html_e( 'Default (senior SEO copywriter)', 'seo-command-center' ); ?></option>
+						<?php foreach ( SCC_Generator::personas() as $pkey => $p ) : ?>
+							<option value="<?php echo esc_attr( $pkey ); ?>" <?php selected( ( $s['content_persona'] ?? '' ), $pkey ); ?>><?php echo esc_html( $p['label'] ); ?></option>
+						<?php endforeach; ?>
+						<option value="custom" <?php selected( ( $s['content_persona'] ?? '' ), 'custom' ); ?>><?php esc_html_e( 'Custom (use only the instructions below)', 'seo-command-center' ); ?></option>
+					</select>
+					<p class="description"><?php esc_html_e( 'The voice/expertise the AI writes with. Applies to every generated draft.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-content-persona-custom"><?php esc_html_e( 'Custom style instructions', 'seo-command-center' ); ?></label></th>
+				<td>
+					<textarea id="scc-content-persona-custom" name="content_persona_custom" class="large-text" rows="3" placeholder="<?php esc_attr_e( 'e.g. Write in a confident, no-nonsense tone. Use short sentences. Always include a comparison table where relevant.', 'seo-command-center' ); ?>"><?php echo esc_textarea( isset( $s['content_persona_custom'] ) ? (string) $s['content_persona_custom'] : '' ); ?></textarea>
+					<p class="description"><?php esc_html_e( 'Extra instructions added on top of the persona (or used on their own if the persona is set to “Custom”). These are appended to the AI system prompt for content generation.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
 		</table>
 
 		<h2><?php esc_html_e( 'SEO defaults', 'seo-command-center' ); ?></h2>

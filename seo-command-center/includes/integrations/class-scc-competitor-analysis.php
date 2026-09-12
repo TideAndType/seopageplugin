@@ -35,6 +35,32 @@ class SCC_Competitor_Analysis {
 	}
 
 	/**
+	 * Always-on debug tracer for the competitor gap-map, mirroring the generator's.
+	 * Writes to the option scc_comp_debug (independent of WP_DEBUG) so the last
+	 * gap-map attempt is always visible in the Competitor Gaps debug panel — even
+	 * when a gateway drops the connection mid-run.
+	 *
+	 * @param string $step Step label.
+	 * @param array  $data Small context payload.
+	 * @return void
+	 */
+	public static function dbg( $step, array $data = array() ) {
+		$log = get_option( 'scc_comp_debug', array() );
+		if ( ! is_array( $log ) ) {
+			$log = array();
+		}
+		$log[] = array(
+			't'    => current_time( 'mysql' ),
+			'step' => (string) $step,
+			'data' => $data,
+		);
+		if ( count( $log ) > 60 ) {
+			$log = array_slice( $log, -60 );
+		}
+		update_option( 'scc_comp_debug', $log, false );
+	}
+
+	/**
 	 * Analyze one or more competitor URLs and produce a strategic CONTENT MAP of
 	 * the pages your site is missing — the topics they cover that you do not.
 	 *
@@ -48,10 +74,13 @@ class SCC_Competitor_Analysis {
 	public function gap_map( array $urls ) {
 		$urls = array_values( array_filter( array_map( 'esc_url_raw', array_map( 'trim', $urls ) ) ) );
 		$urls = array_slice( array_unique( $urls ), 0, 5 );
+		self::dbg( '--- gap_map() start ---', array( 'urls' => $urls, 'count' => count( $urls ) ) );
 		if ( empty( $urls ) ) {
+			self::dbg( 'abort: no urls' );
 			return new WP_Error( 'scc_no_urls', __( 'Add at least one competitor URL.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 		if ( ! $this->ai instanceof SCC_AI_Manager ) {
+			self::dbg( 'abort: AI not configured' );
 			return new WP_Error( 'scc_no_ai', __( 'AI is not configured. Connect a provider in Settings first.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 
@@ -61,27 +90,44 @@ class SCC_Competitor_Analysis {
 		$max_crawls  = 15;             // Hard ceiling across all competitors.
 		$per_site    = count( $urls ) === 1 ? 6 : 3; // Extra pages to sample per site.
 
+		// Wall-clock budget for the ENTIRE crawl phase. Up to 15 sequential fetches
+		// at the crawler's full timeout could otherwise burn several minutes before
+		// the AI call even starts, which trips browser/gateway timeouts even though
+		// the server keeps running. We keep the whole operation synchronous ("run
+		// directly") but bound the crawl so it always yields to the AI step quickly:
+		// once the budget is spent we stop sampling and analyse whatever we reached.
+		// Configurable via the same settings surface as the LM Studio timeout.
+		$crawl_budget   = (int) SCC_Settings::get( 'competitor_crawl_budget', 45 );
+		$crawl_budget   = ( $crawl_budget >= 10 && $crawl_budget <= 300 ) ? $crawl_budget : 45;
+		$primary_wait   = 12; // Per-competitor fetch: the pages we most need.
+		$secondary_wait = 8;  // Sampled internal pages: skip fast if slow.
+		$deadline       = microtime( true ) + $crawl_budget;
+
 		foreach ( $urls as $url ) {
-			if ( $crawled >= $max_crawls ) {
+			if ( $crawled >= $max_crawls || microtime( true ) >= $deadline ) {
 				break;
 			}
-			$data = $crawler->fetch( $url, true );
+			$data = $crawler->fetch( $url, true, $primary_wait );
 			$crawled++;
 			if ( is_wp_error( $data ) ) {
+				self::dbg( 'crawl failed', array( 'url' => $url, 'error' => $data->get_error_message() ) );
 				$competitors[] = array( 'url' => $url, 'error' => $data->get_error_message(), 'headings' => array() );
 				continue;
 			}
-			$competitors[] = $this->summarize_page( $data );
+			$sum = $this->summarize_page( $data );
+			self::dbg( 'crawled', array( 'url' => $url, 'headings' => count( $sum['headings'] ?? array() ), 'words' => (int) ( $sum['word_count'] ?? 0 ) ) );
+			$competitors[] = $sum;
 
 			// Look at MORE than the entered page: sample a few of this site's own
 			// key pages (services/about/etc.) so the comparison reflects the whole
-			// site, not just one URL.
+			// site, not just one URL. These are the first thing we drop when the
+			// crawl budget runs low — the entered competitor pages matter more.
 			$extra = $this->pick_internal_pages( (array) ( $data['internal_link_urls'] ?? array() ), $url, $per_site );
 			foreach ( $extra as $sub_url ) {
-				if ( $crawled >= $max_crawls ) {
+				if ( $crawled >= $max_crawls || microtime( true ) >= $deadline ) {
 					break;
 				}
-				$sub = $crawler->fetch( $sub_url, true );
+				$sub = $crawler->fetch( $sub_url, true, $secondary_wait );
 				$crawled++;
 				if ( is_wp_error( $sub ) ) {
 					continue;
@@ -91,16 +137,27 @@ class SCC_Competitor_Analysis {
 		}
 
 		$reachable = array_filter( $competitors, function ( $c ) { return empty( $c['error'] ); } );
+		$budget_spent = microtime( true ) >= $deadline;
+		self::dbg( 'crawl phase done', array(
+			'crawled'      => $crawled,
+			'reachable'    => count( $reachable ),
+			'unreachable'  => count( $competitors ) - count( $reachable ),
+			'budget_spent' => $budget_spent,
+		) );
 		if ( empty( $reachable ) ) {
+			self::dbg( 'abort: no reachable competitors' );
 			return new WP_Error( 'scc_unreachable', __( 'None of those competitor URLs could be fetched (blocked by robots.txt, offline, or protected).', 'seo-command-center' ), array( 'status' => 502 ) );
 		}
 
 		$our_pages = class_exists( 'SCC_Keyword_Strategy' ) ? SCC_Keyword_Strategy::existing_site_pages( 200 ) : array();
+		self::dbg( 'our pages loaded', array( 'count' => count( (array) $our_pages ) ) );
 
 		$gaps  = $this->ai_gap_map( $reachable, $our_pages );
 		if ( is_wp_error( $gaps ) ) {
+			self::dbg( 'ai_gap_map error', array( 'code' => $gaps->get_error_code(), 'message' => $gaps->get_error_message() ) );
 			return $gaps;
 		}
+		self::dbg( 'gap_map() done', array( 'gaps' => count( $gaps['gaps'] ?? array() ) ) );
 
 		// Return a lean competitor summary to the UI (drop the big excerpt).
 		$competitor_summary = array_map( function ( $c ) {
@@ -207,6 +264,21 @@ class SCC_Competitor_Analysis {
 			'our_pages'   => $our_pages,
 		) );
 
+		// Token budget for the answer. A hard cap of 3000 was starving "reasoning"
+		// local models (e.g. Qwen3): they spend the whole budget on their internal
+		// <think> phase and hit the ceiling before emitting the JSON, so LM Studio
+		// returns an empty completion. Give the answer real room (unlimited when
+		// the user enabled it, otherwise a generous floor). This payload is large,
+		// so ask for more than the shared default.
+		$budget = SCC_AI_Manager::token_budget( 8000 );
+
+		self::dbg( 'AI request', array(
+			'competitors'   => count( $competitors ),
+			'our_pages'     => count( (array) $our_pages ),
+			'payload_bytes' => strlen( (string) $payload ),
+			'max_tokens'    => $budget,
+		) );
+
 		$response = $this->ai->complete(
 			array(
 				'system'      => $system,
@@ -214,27 +286,45 @@ class SCC_Competitor_Analysis {
 					array( 'role' => 'user', 'content' => "Data (JSON):\n" . $payload . "\n\nProduce the content-gap map JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 3000,
+				'max_tokens'  => $budget,
 				'temperature' => 0.4,
 			),
 			'competitor-analysis'
 		);
 		if ( $response->is_error() ) {
+			self::dbg( 'AI error', array(
+				'provider' => (string) ( $response->provider ?? '' ),
+				'message'  => $response->error instanceof WP_Error ? $response->error->get_error_message() : 'unknown',
+			) );
 			return $response->error;
 		}
 		$parsed = $response->json();
 		if ( ! is_array( $parsed ) || empty( $parsed['gaps'] ) ) {
+			$raw = (string) ( $response->content ?? '' );
+			self::dbg( 'AI returned no usable gaps', array(
+				'provider'      => (string) ( $response->provider ?? '' ),
+				'parsed_ok'     => is_array( $parsed ),
+				'raw_len'       => strlen( $raw ),
+				'raw_excerpt'   => function_exists( 'mb_substr' ) ? mb_substr( $raw, 0, 400 ) : substr( $raw, 0, 400 ),
+			) );
 			return new WP_Error( 'scc_no_gaps', __( 'The AI did not return any gaps. Try different or more competitor URLs.', 'seo-command-center' ), array( 'status' => 502 ) );
 		}
+		self::dbg( 'AI parsed', array( 'raw_gaps' => count( (array) $parsed['gaps'] ) ) );
+
+		// Dedupe against pages the user already planned or already has live, so a
+		// gap they've already added to the plan never re-appears. OUR_PAGES the AI
+		// saw are the live pages ({title, path}); add them as extra signatures.
+		$taken = class_exists( 'SCC_Content_Plan' ) ? SCC_Content_Plan::taken_signatures( $our_pages ) : array( 'titles' => array(), 'keywords' => array(), 'slugs' => array() );
 
 		$gaps = array();
+		$skipped = 0;
 		foreach ( (array) $parsed['gaps'] as $g ) {
 			$title = SCC_Security::sanitize_text( $g['title'] ?? '' );
 			if ( '' === $title ) {
 				continue;
 			}
 			$prio = strtolower( (string) ( $g['priority'] ?? 'medium' ) );
-			$gaps[] = array(
+			$row  = array(
 				'title'           => $title,
 				'primary_keyword' => SCC_Security::sanitize_text( $g['primary_keyword'] ?? '' ),
 				'intent'          => SCC_Security::sanitize_text( $g['intent'] ?? '' ),
@@ -244,7 +334,13 @@ class SCC_Competitor_Analysis {
 				'why'             => SCC_Security::sanitize_text( $g['why'] ?? '' ),
 				'covered_by'      => array_slice( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $g['covered_by'] ?? array() ) ), 0, 5 ),
 			);
+			if ( class_exists( 'SCC_Content_Plan' ) && SCC_Content_Plan::is_taken( $row, $taken ) ) {
+				$skipped++;
+				continue;
+			}
+			$gaps[] = $row;
 		}
+		self::dbg( 'gaps after dedupe', array( 'kept' => count( $gaps ), 'skipped_already_planned_or_live' => $skipped ) );
 
 		return array(
 			'gaps'  => array_slice( $gaps, 0, 30 ),

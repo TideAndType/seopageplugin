@@ -454,9 +454,10 @@ class SCC_Keyword_Strategy {
 				),
 			),
 			'json'       => true,
-			// Sized to the chosen depth. If a model truncates the tail, the
-			// tolerant JSON parser closes and salvages what came through.
-			'max_tokens' => (int) $p['tokens'],
+			// Sized to the chosen depth, with headroom for reasoning models. If a
+			// model truncates the tail, the tolerant JSON parser closes and
+			// salvages what came through.
+			'max_tokens' => SCC_AI_Manager::token_budget( (int) $p['tokens'] ),
 			'temperature'=> 0.4,
 		);
 	}

@@ -59,11 +59,14 @@ class SCC_Elementor_Renderer implements SCC_Renderer_Interface {
 	/**
 	 * @inheritDoc
 	 */
-	public function is_available( $content_type = '' ) {
+	public function is_available( $content_type = '', $template = null ) {
 		if ( ! class_exists( 'SCC_Elementor' ) || ! SCC_Elementor::is_active() ) {
 			return false;
 		}
-		return $this->source_id( $content_type ) > 0;
+		// Pass the selected template so a template that pins its own Elementor
+		// source (the new template store) counts as available — not only the
+		// legacy content-type → Elementor mapping.
+		return $this->source_id( $content_type, $template ) > 0;
 	}
 
 	/**
@@ -87,13 +90,53 @@ class SCC_Elementor_Renderer implements SCC_Renderer_Interface {
 		$post_content = is_wp_error( $base ) ? '' : $base['post_content'];
 		$post_name    = is_wp_error( $base ) ? sanitize_title( $content->title ) : $base['post_name'];
 
+		// Match Elementor's template type to the destination post type so Elementor
+		// fully takes over the front end (otherwise the theme can render the native
+		// post_content too, which looks like the content is posted twice).
+		$target_type   = class_exists( 'SCC_Generator' ) ? SCC_Generator::post_type_for( $content->content_type ) : 'page';
+		$template_type = ( 'page' === $target_type ) ? 'wp-page' : 'wp-post';
+
 		$meta = array(
 			'_elementor_data'          => wp_slash( wp_json_encode( $tree ) ),
 			'_elementor_edit_mode'     => 'builder',
-			'_elementor_template_type' => 'wp-page',
+			'_elementor_template_type' => $template_type,
 		);
 		if ( defined( 'ELEMENTOR_VERSION' ) ) {
 			$meta['_elementor_version'] = ELEMENTOR_VERSION;
+		}
+
+		// Carry the template's PAGE settings/layout so the new post matches it:
+		// the WordPress page template (Elementor Canvas / Full Width / theme) and
+		// Elementor's page-level settings (content width, background, etc.).
+		$src_page_template = get_post_meta( $source, '_wp_page_template', true );
+		$page_tpl          = ( is_string( $src_page_template ) && '' !== $src_page_template && 'default' !== $src_page_template ) ? $src_page_template : '';
+		if ( '' === $page_tpl ) {
+			// Elementor Library templates carry no WordPress page template, so an
+			// applied post would fall into the theme's normal (often narrow, with
+			// sidebar) layout instead of the full-width design the template shows in
+			// the editor. Default to Elementor Full Width (keeps the site header and
+			// footer, content spans the page). Filterable, and can be turned off by
+			// returning '' or 'default'.
+			$page_tpl = (string) apply_filters( 'scc_elementor_page_template', 'elementor_header_footer', $content->content_type, $target_type );
+		}
+		if ( '' !== $page_tpl && 'default' !== $page_tpl ) {
+			$meta['_wp_page_template'] = $page_tpl;
+		}
+		$src_page_settings = get_post_meta( $source, '_elementor_page_settings', true );
+		if ( ! empty( $src_page_settings ) ) {
+			$meta['_elementor_page_settings'] = $src_page_settings;
+		}
+
+		if ( class_exists( 'SCC_Generator' ) ) {
+			$src_post = get_post( $source );
+			SCC_Generator::dbg( 'elementor page settings copy', array(
+				'source_id'           => (int) $source,
+				'source_post_type'    => $src_post ? $src_post->post_type : '',
+				'src_wp_page_template'=> is_string( $src_page_template ) ? $src_page_template : '',
+				'has_page_settings'   => empty( $src_page_settings ) ? 'no' : 'yes',
+				'page_settings'       => is_array( $src_page_settings ) ? $src_page_settings : (string) $src_page_settings,
+				'template_type_set'   => $template_type,
+			) );
 		}
 
 		return array(

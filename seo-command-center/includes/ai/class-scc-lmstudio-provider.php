@@ -21,7 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 
 	const DEFAULT_BASE    = 'http://localhost:1234/v1';
-	const DEFAULT_TIMEOUT = 300; // Local models can be slow; allow long generations.
+	const DEFAULT_TIMEOUT = 600; // Local models can be slow; allow long generations (10 min).
 
 	/**
 	 * @inheritDoc
@@ -170,10 +170,18 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			$messages[] = array( 'role' => 'user', 'content' => (string) ( $request['prompt'] ?? 'Hello' ) );
 		}
 
+		// max_tokens <= 0 means "unlimited": LM Studio accepts -1 to generate until
+		// the model stops on its own (end of the JSON) or the context window fills,
+		// which prevents long articles from being truncated mid-JSON.
+		$mt = isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024;
+		if ( $mt <= 0 ) {
+			$mt = -1;
+		}
+
 		$body = array(
 			'model'      => $model,
 			'messages'   => $messages,
-			'max_tokens' => isset( $request['max_tokens'] ) ? (int) $request['max_tokens'] : 1024,
+			'max_tokens' => $mt,
 			'stream'     => false,
 		);
 		if ( isset( $request['temperature'] ) ) {
@@ -263,13 +271,28 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		return wp_remote_post(
 			$url,
 			array(
-				'timeout'   => self::DEFAULT_TIMEOUT,
+				'timeout'   => self::request_timeout(),
 				'headers'   => $headers,
 				'body'      => wp_json_encode( $body ),
 				// Local endpoints are typically plain HTTP; only verify for HTTPS.
 				'sslverify' => ( 0 === strpos( $url, 'https://' ) ),
 			)
 		);
+	}
+
+	/**
+	 * How long to wait for a local model to respond, in seconds. Large local
+	 * models (e.g. a 27B) can take several minutes to write a long article, so
+	 * this is generous and configurable via the lmstudio_timeout setting.
+	 *
+	 * @return int
+	 */
+	protected static function request_timeout() {
+		$t = class_exists( 'SCC_Settings' ) ? (int) SCC_Settings::get( 'lmstudio_timeout', self::DEFAULT_TIMEOUT ) : self::DEFAULT_TIMEOUT;
+		if ( $t < 60 ) {
+			$t = self::DEFAULT_TIMEOUT;
+		}
+		return min( 1800, max( 60, $t ) );
 	}
 
 	/**
@@ -283,6 +306,21 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * @return string
 	 */
 	protected function extract_error( $data, $raw, $code ) {
+		// Cloudflare tunnel timeouts (520-524, most often 524) mean the model took
+		// longer than the tunnel allows for one request — trycloudflare.com "Quick
+		// Tunnels" cut off any request after ~100 seconds. This is by far the most
+		// common LM Studio failure for long generations, so give a specific, useful
+		// message instead of dumping Cloudflare's HTML error page.
+		$is_cf_tunnel = ( '' !== (string) $raw && false !== stripos( (string) $raw, 'cloudflare' ) )
+			|| ( '' !== (string) $raw && false !== stripos( (string) $raw, 'trycloudflare' ) );
+		if ( in_array( (int) $code, array( 520, 522, 523, 524 ), true ) && $is_cf_tunnel ) {
+			return sprintf(
+				/* translators: %d: HTTP status code */
+				__( 'HTTP %d — the request timed out in your Cloudflare tunnel (trycloudflare.com Quick Tunnels drop any request that takes longer than ~100 seconds). Your model did not finish generating in time. Fixes: use a smaller/faster model, lower the target word count, or connect LM Studio directly (or via a tunnel without the 100s limit) instead of a free Cloudflare Quick Tunnel.', 'seo-command-center' ),
+				(int) $code
+			);
+		}
+
 		if ( is_array( $data ) ) {
 			if ( isset( $data['error']['message'] ) && '' !== (string) $data['error']['message'] ) {
 				return sprintf( 'HTTP %d — %s', $code, (string) $data['error']['message'] );

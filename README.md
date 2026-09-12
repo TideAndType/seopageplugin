@@ -11,10 +11,12 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.25.0.** All seven foundational phases plus the intelligence
-engine, CMS-agnostic template system, and the recent hardening + simplification
-passes are implemented. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the detailed
-breakdown.
+**Current version: 1.26.0.** The plugin is organized around four areas —
+**Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
+Dashboard that answers plain-language questions using your real data. All seven
+foundational phases plus the intelligence engine, CMS-agnostic template system,
+and the hardening + simplification passes are implemented. See
+[`docs/ROADMAP.md`](docs/ROADMAP.md) for the detailed breakdown.
 
 **Foundation (phases 1–7)**
 - **Foundation:** bootstrap/loader/lifecycle, versioned custom tables, security
@@ -57,10 +59,18 @@ breakdown.
   duplicate H1) and **Template** (structured service/location/landing/custom pages
   through the renderer layer). A one-topic quick-generate flow and a decluttered
   Generate screen (progressive disclosure).
-- **v1.25.0 — Simpler navigation:** the admin menu is consolidated into three
-  tabbed hubs (Content / SEO / Strategy); no screen or feature removed.
+- **v1.25.0 — Simpler navigation:** the admin menu is consolidated into tabbed
+  hubs; no screen or feature removed.
+- **v1.26.0 — Action-oriented product:** the plugin now revolves around four
+  areas — **Dashboard**, **Create**, **Optimize**, **Opportunities** — and adds
+  an **SEO Copilot** on the Dashboard. Ask in plain language ("what should I work
+  on this week?", "find pages losing traffic", "find cannibalization") and it
+  routes to the existing Opportunity Engine, returning real, ranked opportunities
+  with reason + evidence + a recommended action and one-click Add-to-queue /
+  Dismiss. It never fabricates data and says plainly when a source (e.g. Search
+  Console) isn't connected. Built entirely on the existing intelligence layer.
 
-Internal REST API at `/wp-json/seo-command/v1/*`; **398** passing unit tests.
+Internal REST API at `/wp-json/seo-command/v1/*`; **423** passing unit tests.
 
 ## Documentation
 

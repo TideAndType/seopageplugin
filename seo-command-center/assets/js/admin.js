@@ -1,5 +1,5 @@
 /**
- * SEO Command Center — admin JS.
+ * TideOrbit — admin JS.
  * Talks to the internal REST API using wp.apiFetch with the wp_rest nonce.
  * No API keys are ever present in this file or the page.
  */
@@ -21,10 +21,16 @@
 		if ( ! el ) {
 			return;
 		}
-		el.textContent = message || '';
-		el.classList.remove( 'is-error', 'is-ok' );
+		message = message || '';
+		el.textContent = message;
+		el.classList.remove( 'is-error', 'is-ok', 'scc-loading' );
 		if ( state ) {
 			el.classList.add( state );
+		}
+		// Any in-progress message (ends with an ellipsis, no ok/error state) gets a
+		// calm spinner automatically — consistent async feedback everywhere.
+		if ( message && ! state && ( /[…]\s*$/.test( message ) || /\.\.\.\s*$/.test( message ) ) ) {
+			el.classList.add( 'scc-loading' );
 		}
 	}
 
@@ -834,6 +840,27 @@
 		return e;
 	}
 
+	// Build a collapsible diagnostics block from a generation result's debug data.
+	function debugBlock( d ) {
+		if ( ! d || ! d.debug ) { return null; }
+		var det = el( 'details' );
+		det.style.marginTop = '8px';
+		var sum = el( 'summary', 'Diagnostics (copy this if the draft is missing)' );
+		sum.style.cursor = 'pointer';
+		det.appendChild( sum );
+		var pre = el( 'pre' );
+		pre.style.whiteSpace = 'pre-wrap';
+		pre.style.fontSize = '11px';
+		pre.style.background = '#f6f7f7';
+		pre.style.padding = '8px';
+		pre.style.border = '1px solid #dcdcde';
+		pre.style.userSelect = 'all';
+		try { pre.textContent = JSON.stringify( d.debug, null, 2 ); }
+		catch ( e ) { pre.textContent = String( d.debug ); }
+		det.appendChild( pre );
+		return det;
+	}
+
 	function renderBrief( panel, brief ) {
 		panel.innerHTML = '';
 		panel.appendChild( el( 'h3', 'Content brief' ) );
@@ -876,6 +903,101 @@
 		bindGenerateTable( document.getElementById( 'scc-generate-table' ), document.getElementById( 'scc-generate-msg' ) );
 		bindGenerateTable( document.getElementById( 'scc-plan-table' ), document.getElementById( 'scc-plan-status-msg' ) );
 		bindQuickGenerate();
+		loadRecentGenerated();
+		bindGenDebug();
+	}
+
+	// ---- Always-on generation debug trace -------------------------------
+	function bindGenDebug() {
+		var btn = document.getElementById( 'scc-debug-refresh' );
+		if ( btn ) { btn.addEventListener( 'click', loadGenDebug ); }
+		loadGenDebug();
+	}
+
+	function loadGenDebug() {
+		var box = document.getElementById( 'scc-gen-debug' );
+		if ( ! box ) { return; }
+		request( '/debug/last', { method: 'GET' } )
+			.then( function ( res ) {
+				var trace = ( res.data && res.data.trace ) || [];
+				box.innerHTML = '';
+				if ( ! trace.length ) {
+					box.appendChild( el( 'p', 'No generation traced yet. Generate a draft, then click Refresh debug.', 'scc-note' ) );
+					return;
+				}
+				var lines = trace.map( function ( r ) {
+					var data = '';
+					try { data = r.data && Object.keys( r.data ).length ? ( '  ' + JSON.stringify( r.data ) ) : ''; }
+					catch ( e ) { data = ''; }
+					return ( r.t || '' ) + '  ' + ( r.step || '' ) + data;
+				} ).join( '\n' );
+				var pre = el( 'pre' );
+				pre.style.whiteSpace = 'pre-wrap';
+				pre.style.fontSize = '11px';
+				pre.style.background = '#f6f7f7';
+				pre.style.padding = '8px';
+				pre.style.border = '1px solid #dcdcde';
+				pre.style.maxHeight = '360px';
+				pre.style.overflow = 'auto';
+				pre.style.userSelect = 'all';
+				pre.textContent = lines;
+				box.appendChild( pre );
+			} )
+			.catch( function ( err ) {
+				box.innerHTML = '';
+				box.appendChild( el( 'p', ( err && err.message ) || 'Could not load debug trace.', 'scc-note' ) );
+			} );
+	}
+
+	// ---- Recently generated (from the DB, any type/status) --------------
+	function loadRecentGenerated() {
+		var box = document.getElementById( 'scc-recent-generated' );
+		if ( ! box ) { return; }
+		request( '/generated/recent', { method: 'GET' } )
+			.then( function ( res ) {
+				var items = ( res.data && res.data.items ) || [];
+				box.innerHTML = '';
+				if ( ! items.length ) {
+					box.appendChild( el( 'p', 'Nothing generated yet. When you create a draft it will appear here with a direct Edit link.', 'scc-note' ) );
+					return;
+				}
+				var table = el( 'table', null, 'widefat striped scc-table' );
+				var thead = el( 'thead' );
+				thead.innerHTML = '<tr><th>Title</th><th>Type</th><th>Status</th><th>ID</th><th></th></tr>';
+				table.appendChild( thead );
+				var tbody = el( 'tbody' );
+				items.forEach( function ( it ) {
+					var tr = el( 'tr' );
+					tr.appendChild( el( 'td', it.title ) );
+					tr.appendChild( el( 'td', ( it.type_label || it.post_type ) + ( it.post_type === 'page' ? ' (Pages)' : ( it.post_type === 'post' ? ' (Posts)' : '' ) ) ) );
+					tr.appendChild( el( 'td', it.status ) );
+					tr.appendChild( el( 'td', String( it.post_id ) ) );
+					var actions = el( 'td' );
+					if ( it.edit_url ) {
+						var a = el( 'a', 'Edit', 'button button-small button-primary' );
+						a.href = it.edit_url;
+						actions.appendChild( a );
+					}
+					if ( it.view_url && it.status === 'publish' ) {
+						var v = el( 'a', 'View', 'button button-small' );
+						v.href = it.view_url; v.target = '_blank'; v.rel = 'noopener';
+						actions.appendChild( document.createTextNode( ' ' ) );
+						actions.appendChild( v );
+					}
+					var lay = el( 'a', 'Build layout', 'button button-small' );
+					lay.href = window.location.pathname + '?page=seo-command-center-layout&post=' + encodeURIComponent( it.post_id );
+					actions.appendChild( document.createTextNode( ' ' ) );
+					actions.appendChild( lay );
+					tr.appendChild( actions );
+					tbody.appendChild( tr );
+				} );
+				table.appendChild( tbody );
+				box.appendChild( table );
+			} )
+			.catch( function ( err ) {
+				box.innerHTML = '';
+				box.appendChild( el( 'p', ( err && err.message ) || 'Could not load recent drafts.', 'scc-note' ) );
+			} );
 	}
 
 	// ---- Simple path: topic -> draft ------------------------------------
@@ -964,19 +1086,36 @@
 						resultEl.hidden = false;
 						resultEl.innerHTML = '';
 						var score = ( d.score && d.score.score ) || 0;
-						resultEl.appendChild( el( 'p', score
-							? ( 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' )
-							: 'Draft created and saved as a WordPress draft.' ) );
+						var where = ( d.post_type === 'page' ) ? 'Pages' : 'Posts';
+						var kind  = ( d.post_type === 'page' ) ? 'Page' : 'Post';
+						var known = { draft: 1, publish: 1, pending: 1, future: 1, private: 1 };
+						var st    = ( known[ d.status ] ) ? d.status : 'draft';
+						var how   = ( d.mode === 'template' )
+							? ( 'a ' + ( d.elementor ? 'Elementor' : 'templated' ) + ' ' + kind )
+							: ( 'a native WordPress ' + kind );
+						resultEl.appendChild( el( 'p', 'Saved as ' + st + ' — ' + how + '. Find it under ' + where + ' → Drafts.'
+							+ ( score ? ( ' Optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) : '' ) ) );
 						if ( d.edit_url ) {
-							var a = el( 'a', 'Edit draft in WordPress' );
+							var a = el( 'a', 'Edit ' + st + ' in WordPress' );
 							a.href = d.edit_url; a.className = 'button button-primary';
 							resultEl.appendChild( a );
 						}
-						if ( d.renderer ) {
-							resultEl.appendChild( el( 'span', ' ' ) );
-							resultEl.appendChild( el( 'span', d.elementor ? 'Rendered with Elementor.' : ( 'wordpress' === d.renderer ? 'Native WordPress post.' : ( 'Rendered with ' + d.renderer + '.' ) ) ) );
+						if ( d.post_id && d.edit_url ) {
+							var ee = el( 'a', '✏️ Edit with Elementor' );
+							ee.href = d.edit_url.replace( /action=edit/, 'action=elementor' );
+							ee.target = '_blank'; ee.rel = 'noopener'; ee.className = 'button';
+							resultEl.appendChild( document.createTextNode( ' ' ) );
+							resultEl.appendChild( ee );
+							var bl = el( 'a', '🧩 Layout' );
+							bl.href = window.location.pathname + '?page=seo-command-center-layout&post=' + encodeURIComponent( d.post_id );
+							bl.className = 'button';
+							resultEl.appendChild( document.createTextNode( ' ' ) );
+							resultEl.appendChild( bl );
 						}
+						var dbg = debugBlock( d );
+						if ( dbg ) { resultEl.appendChild( dbg ); }
 					}
+					loadRecentGenerated();
 				} )
 				.catch( function ( err ) {
 					genBtn.disabled = false;
@@ -1030,35 +1169,53 @@
 						briefRow.hidden = false;
 						panel.innerHTML = '';
 						var score = ( d.score && d.score.score ) || 0;
-						if ( score ) {
-							panel.appendChild( el( 'p', 'Draft created — optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) );
-						} else {
-							panel.appendChild( el( 'p', 'Draft created and saved as a WordPress draft.' ) );
-						}
+						var where = ( d.post_type === 'page' ) ? 'Pages' : 'Posts';
+						var kind  = ( d.post_type === 'page' ) ? 'Page' : 'Post';
+						var known = { draft: 1, publish: 1, pending: 1, future: 1, private: 1 };
+						var st    = ( known[ d.status ] ) ? d.status : 'draft';
+						var how   = ( d.mode === 'template' )
+							? ( 'a ' + ( d.elementor ? 'Elementor' : 'templated' ) + ' ' + kind )
+							: ( 'a native WordPress ' + kind );
+						panel.appendChild( el( 'p', 'Saved as ' + st + ' — ' + how + '. Find it under ' + where + ' → Drafts.'
+							+ ( score ? ( ' Optimization score ' + score + '/100 (internal guide, not a ranking guarantee).' ) : '' ) ) );
 						if ( d.edit_url ) {
-							var a = el( 'a', 'Edit draft in WordPress' );
+							var a = el( 'a', 'Edit ' + st + ' in WordPress' );
 							a.href = d.edit_url;
 							a.className = 'button button-primary';
 							panel.appendChild( a );
 						}
+						var dbg = debugBlock( d );
+						if ( dbg ) { panel.appendChild( dbg ); }
 					}
 					setStatus( msg, 'Draft created.', 'is-ok' );
 					e.target.disabled = false;
+					loadRecentGenerated();
+					loadGenDebug();
 				}
 
 				// Fire the generation. It runs server-side with ignore_user_abort,
 				// so the draft finishes and saves even if this connection is cut.
+				// A returned error (bad AI output, transport error, etc.) is captured
+				// and surfaced instead of being hidden behind a generic timeout.
+				var genError = null;
 				request( '/generate', { method: 'POST', data: { entry_id: id } } )
 					.then( function ( res ) { showDone( res.data || {} ); } )
-					.catch( function () { /* rely on polling — the draft may still be saving */ } );
+					.catch( function ( err ) { genError = err && err.message ? err.message : null; loadGenDebug(); } );
 
 				// Poll until the plan entry gets its post_id (generation complete).
+				// A real failure returns a message quickly, so we don't wait long for
+				// one; only a dropped connection (no message) gets the long window,
+				// because the server may still be finishing the draft.
 				var started = Date.now();
 				( function poll() {
-					if ( settled || Date.now() - started > 12 * 60 * 1000 ) {
+					var deadline = genError ? 90 * 1000 : 12 * 60 * 1000;
+					if ( settled || Date.now() - started > deadline ) {
 						if ( ! settled ) {
-							if ( statusCell ) { statusCell.textContent = 'unknown'; }
-							setStatus( msg, 'Still working (or the model stalled). Check Posts/Pages → Drafts; if nothing appears, try a shorter word count or a faster model.', 'is-error' );
+							settled = true;
+							if ( statusCell ) { statusCell.textContent = genError ? 'error' : 'unknown'; }
+							setStatus( msg, genError
+								? ( 'Generation failed: ' + genError )
+								: 'Still working (or the model stalled). Check Posts/Pages → Drafts; if nothing appears, try a shorter word count or a faster model.', 'is-error' );
 							e.target.disabled = false;
 						}
 						return;
@@ -1323,6 +1480,42 @@
 		} );
 	}
 
+	// ---- Competitor gap-map debug trace --------------------------------
+	function loadCompDebug() {
+		var box = document.getElementById( 'scc-comp-debug' );
+		if ( ! box ) { return; }
+		request( '/competitors/debug/last', { method: 'GET' } )
+			.then( function ( res ) {
+				var trace = ( res.data && res.data.trace ) || [];
+				box.innerHTML = '';
+				if ( ! trace.length ) {
+					box.appendChild( el( 'p', 'No gap analysis traced yet. Run one, then click Refresh debug.', 'scc-note' ) );
+					return;
+				}
+				var lines = trace.map( function ( r ) {
+					var data = '';
+					try { data = r.data && Object.keys( r.data ).length ? ( '  ' + JSON.stringify( r.data ) ) : ''; }
+					catch ( e ) { data = ''; }
+					return ( r.t || '' ) + '  ' + ( r.step || '' ) + data;
+				} ).join( '\n' );
+				var pre = el( 'pre' );
+				pre.style.whiteSpace = 'pre-wrap';
+				pre.style.fontSize = '11px';
+				pre.style.background = '#f6f7f7';
+				pre.style.padding = '8px';
+				pre.style.border = '1px solid #dcdcde';
+				pre.style.maxHeight = '360px';
+				pre.style.overflow = 'auto';
+				pre.style.userSelect = 'all';
+				pre.textContent = lines;
+				box.appendChild( pre );
+			} )
+			.catch( function ( err ) {
+				box.innerHTML = '';
+				box.appendChild( el( 'p', ( err && err.message ) || 'Could not load debug trace.', 'scc-note' ) );
+			} );
+	}
+
 	// ---- Competitor content-gap map ------------------------------------
 	function bindCompetitorGaps() {
 		var btn = document.getElementById( 'scc-comp-go' );
@@ -1331,6 +1524,11 @@
 		}
 		var status = document.getElementById( 'scc-comp-status' );
 		var out = document.getElementById( 'scc-comp-results' );
+
+		// Always-on debug trace for the last gap-map run (mirrors gen debug).
+		var dbgBtn = document.getElementById( 'scc-comp-debug-refresh' );
+		if ( dbgBtn ) { dbgBtn.addEventListener( 'click', loadCompDebug ); }
+		loadCompDebug();
 
 		function esc( s ) {
 			var d = document.createElement( 'div' );
@@ -1434,15 +1632,71 @@
 			}
 			btn.disabled = true;
 			setStatus( status, 'Reading competitors and mapping gaps… this can take up to a minute.' );
-			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls } } )
-				.then( function ( res ) {
-					btn.disabled = false;
-					setStatus( status, 'Done.', 'is-ok' );
-					render( res );
-				} )
-				.catch( function ( err ) {
-					btn.disabled = false;
-					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+
+			// A per-click id ties this run to the server-side record the recovery
+			// poll reads — so a dropped connection can never lose the finished
+			// result, and there is no clock comparison to get wrong.
+			var runId = 'ui_' + Date.now().toString( 36 ) + Math.random().toString( 36 ).slice( 2, 8 );
+			var finished = false;
+
+			function done( res ) {
+				if ( finished ) { return; }
+				finished = true;
+				btn.disabled = false;
+				setStatus( status, 'Done.', 'is-ok' );
+				render( res );
+				loadCompDebug();
+			}
+			function failed( msg ) {
+				if ( finished ) { return; }
+				finished = true;
+				btn.disabled = false;
+				setStatus( status, msg || i18n.error, 'is-error' );
+				loadCompDebug();
+			}
+
+			// If the direct response is lost (a gateway/tunnel drops the long
+			// request), the run still finishes on the server. Poll its status
+			// record — matched by our run id — until it reports done or error.
+			// The model can take a few minutes locally, so poll patiently.
+			function recover( tries ) {
+				if ( finished ) { return; }
+				request( '/competitors/gap-map/last', { method: 'GET' } )
+					.then( function ( last ) {
+						if ( last && last.found && last.run_id === runId ) {
+							if ( last.status === 'done' && last.result ) {
+								done( last.result );
+								return;
+							}
+							if ( last.status === 'error' ) {
+								failed( last.message );
+								return;
+							}
+							// status 'running' — keep waiting.
+						}
+						if ( tries <= 0 ) {
+							failed( 'The analysis is taking longer than expected. It may still be running on the server — reload this page in a minute to see the results, or try fewer competitor URLs.' );
+							return;
+						}
+						window.setTimeout( function () { recover( tries - 1 ); }, 5000 );
+					} )
+					.catch( function () {
+						if ( tries <= 0 ) {
+							failed( i18n.error );
+							return;
+						}
+						window.setTimeout( function () { recover( tries - 1 ); }, 5000 );
+					} );
+			}
+
+			request( '/competitors/gap-map', { method: 'POST', data: { urls: urls, run_id: runId } } )
+				.then( function ( res ) { done( res ); } )
+				.catch( function () {
+					// The connection may have dropped while the server keeps working.
+					// Switch to polling the run's status instead of erroring out.
+					if ( finished ) { return; }
+					setStatus( status, 'Still finishing on the server — recovering your results…' );
+					recover( 60 ); // ~5 min at 5s between polls.
 				} );
 		} );
 	}
@@ -1496,6 +1750,128 @@
 				} else if ( e.target.classList.contains( 'scc-opp-dismiss' ) ) {
 					row.style.opacity = '0.4';
 					// Promote as dismissed so it stays out of the queue.
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'dismissed' } } )
+						.then( function () { row.parentNode.removeChild( row ); } )
+						.catch( function () { row.style.opacity = '1'; } );
+				}
+			} );
+		}
+	}
+
+	// ---- SEO Copilot (Dashboard) --------------------------------------
+	function bindCopilot() {
+		var card = document.getElementById( 'scc-copilot' );
+		if ( ! card ) {
+			return;
+		}
+		var input  = document.getElementById( 'scc-copilot-q' );
+		var go      = document.getElementById( 'scc-copilot-go' );
+		var msg     = document.getElementById( 'scc-copilot-msg' );
+		var result  = document.getElementById( 'scc-copilot-result' );
+
+		function esc( s ) {
+			var d = document.createElement( 'div' );
+			d.textContent = ( s == null ) ? '' : String( s );
+			return d.innerHTML;
+		}
+
+		function oppCard( op ) {
+			var wrap = el( 'div', '' );
+			wrap.className = 'scc-opp';
+			wrap.setAttribute( 'data-opp-id', op.id || '' );
+			var factors = ( op.factors || [] ).map( function ( f ) {
+				return '<span class="scc-opp__factor">+' + ( parseInt( f.points, 10 ) || 0 ) + ' ' + esc( f.label ) + '</span>';
+			} ).join( '' );
+			var cap = function ( s ) { s = String( s || ''); return s.charAt( 0 ).toUpperCase() + s.slice( 1 ); };
+			var meta =
+				'<div class="scc-opp__meta">' +
+					'<span>Impact: <strong>' + esc( cap( op.expected_impact ) ) + '</strong></span>' +
+					'<span>Effort: <strong>' + esc( op.effort || '' ) + '</strong></span>' +
+					'<span>Confidence: <strong>' + ( parseInt( op.confidence, 10 ) || 0 ) + '%</strong></span>' +
+				'</div>';
+			var details = ( op.recommended_action || factors )
+				? '<details class="scc-opp__more"><summary>Details</summary>' +
+					'<div class="scc-opp__do">' + esc( op.recommended_action || '' ) + '</div>' +
+					'<div class="scc-opp__factors">' + factors + '</div></details>'
+				: '';
+			wrap.innerHTML =
+				'<div class="scc-opp__score"><span class="scc-opp__num">' + ( parseInt( op.score, 10 ) || 0 ) + '</span><span class="scc-opp__den">/100</span></div>' +
+				'<div class="scc-opp__body">' +
+					'<div class="scc-opp__title"><strong>' + esc( op.title ) + '</strong> ' +
+						'<span class="scc-flag scc-flag--prio-' + esc( op.priority ) + '">' + esc( cap( op.priority ) ) + '</span></div>' +
+					'<p class="scc-opp__why">' + esc( op.reason ) + '</p>' +
+					meta + details +
+				'</div>' +
+				'<div class="scc-opp__actions">' +
+					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
+					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
+				'</div>';
+			return wrap;
+		}
+
+		function render( data ) {
+			result.hidden = false;
+			result.innerHTML = '';
+			result.appendChild( el( 'p', data.what || '' ) ).className = 'scc-copilot__what';
+			if ( data.why ) {
+				var why = el( 'p', data.why );
+				why.className = 'scc-copilot__why scc-note';
+				result.appendChild( why );
+			}
+			( data.missing || [] ).forEach( function ( m ) {
+				var n = el( 'div', m.message || '' );
+				n.className = 'notice notice-warning inline';
+				result.appendChild( n );
+			} );
+			var opps = data.opportunities || [];
+			if ( opps.length ) {
+				var list = el( 'div', '' );
+				list.className = 'scc-opps';
+				list.id = 'scc-copilot-opps';
+				opps.forEach( function ( op ) { list.appendChild( oppCard( op ) ); } );
+				result.appendChild( list );
+			}
+		}
+
+		function ask( q ) {
+			q = ( q || '' ).trim();
+			if ( ! q ) { input && input.focus(); return; }
+			go.disabled = true;
+			setStatus( msg, 'Thinking…' );
+			request( '/copilot', { method: 'POST', data: { query: q } } )
+				.then( function ( res ) {
+					go.disabled = false;
+					setStatus( msg, '', '' );
+					render( res.data || {} );
+				} )
+				.catch( function ( err ) {
+					go.disabled = false;
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+				} );
+		}
+
+		if ( go ) { go.addEventListener( 'click', function () { ask( input.value ); } ); }
+		if ( input ) {
+			input.addEventListener( 'keydown', function ( e ) { if ( 'Enter' === e.key ) { e.preventDefault(); ask( input.value ); } } );
+		}
+		card.querySelectorAll( '.scc-copilot-suggest' ).forEach( function ( btn ) {
+			btn.addEventListener( 'click', function () { if ( input ) { input.value = btn.textContent; } ask( btn.textContent ); } );
+		} );
+
+		// Reuse the Action Queue for Add-to-queue / Dismiss on Copilot cards.
+		if ( result ) {
+			result.addEventListener( 'click', function ( e ) {
+				var row = e.target.closest( '.scc-opp' );
+				if ( ! row ) { return; }
+				var oid = row.getAttribute( 'data-opp-id' );
+				if ( e.target.classList.contains( 'scc-opp-approve' ) ) {
+					e.target.disabled = true;
+					setStatus( msg, 'Adding to the action queue…' );
+					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'approved' } } )
+						.then( function () { e.target.textContent = 'Added ✓'; setStatus( msg, 'Added to the action queue.', 'is-ok' ); } )
+						.catch( function ( err ) { e.target.disabled = false; setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				} else if ( e.target.classList.contains( 'scc-opp-dismiss' ) ) {
+					row.style.opacity = '0.4';
 					request( '/actions', { method: 'POST', data: { opportunity_id: oid, status: 'dismissed' } } )
 						.then( function () { row.parentNode.removeChild( row ); } )
 						.catch( function () { row.style.opacity = '1'; } );
@@ -1664,7 +2040,11 @@
 			out.hidden = false;
 			var head = el( 'div', null, 'scc-card' );
 			var grounded = ( d.grounded && d.grounded.gsc ) ? 'grounded in your real pages + Search Console demand' : 'grounded in your real pages';
-			head.appendChild( el( 'p', ideas.length + ' page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			if ( ideas.length ) {
+				head.appendChild( el( 'p', ideas.length + ' new page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			} else {
+				head.appendChild( el( 'p', 'No new ideas this time — everything suggested is already in your plan or live on your site.', 'scc-note' ) );
+			}
 			if ( d.notes ) { head.appendChild( el( 'p', d.notes, 'scc-note' ) ); }
 
 			// Refine bar — adjust or extend this set with a follow-up instruction.
@@ -1720,7 +2100,15 @@
 					add.disabled = true;
 					setStatus( st, 'Adding…' );
 					request( '/content-plan', { method: 'POST', data: planData( idea ) } )
-						.then( function () { add.textContent = 'Added ✓'; setStatus( st, 'Added to Content Plan.', 'is-ok' ); } )
+						.then( function () {
+							add.textContent = 'Added ✓';
+							setStatus( st, 'Added to Content Plan.', 'is-ok' );
+							gen.disabled = true;
+							card.classList.add( 'is-added' );
+							// Drop it from the working set so a later Refine never
+							// re-sends it as a "previous" idea (server also dedupes).
+							lastIdeas = lastIdeas.filter( function ( x ) { return x !== idea; } );
+						} )
 						.catch( function ( err ) { add.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
 				} );
 				gen.addEventListener( 'click', function () { generateDraft( idea, st, gen ); } );
@@ -2570,9 +2958,95 @@
 		bindSchemaSettings();
 		bindNativeTemplates();
 		bindOpportunities();
+		bindCopilot();
 		bindActionQueue();
 		bindInsights();
 		bindMetaEditor();
 		bindContentIdeas();
+		bindLayoutEngine();
 	} );
+
+	// ---- AI Elementor Layout Engine ------------------------------------
+	function bindLayoutEngine() {
+		var root = document.getElementById( 'scc-layout' );
+		if ( ! root ) { return; }
+		var postId  = parseInt( root.getAttribute( 'data-post' ), 10 ) || 0;
+		var preview = document.getElementById( 'scc-layout-preview' );
+		var msg     = document.getElementById( 'scc-layout-msg' );
+		var metaEl  = document.getElementById( 'scc-layout-meta' );
+		var applyBtn= document.getElementById( 'scc-layout-apply' );
+		var regen   = document.getElementById( 'scc-layout-regen' );
+		var aiBox   = document.getElementById( 'scc-layout-ai' );
+		if ( ! preview || postId <= 0 ) { return; }
+
+		var blocks = []; // [{id, name}]
+
+		function esc( s ) { var d = document.createElement( 'div' ); d.textContent = ( s == null ? '' : String( s ) ); return d.innerHTML; }
+
+		function draw() {
+			preview.innerHTML = '';
+			if ( ! blocks.length ) {
+				preview.appendChild( el( 'p', 'No blocks — try Regenerate.', 'scc-note' ) );
+				applyBtn.disabled = true;
+				return;
+			}
+			applyBtn.disabled = false;
+			blocks.forEach( function ( b, i ) {
+				var row = el( 'div', null, 'scc-lblock' );
+				row.appendChild( el( 'span', b.name, 'scc-lblock__name' ) );
+				var ctl = el( 'span', null, 'scc-lblock__ctl' );
+				var up = el( 'button', '↑', 'button button-small' ); up.title = 'Move up'; up.disabled = ( i === 0 );
+				var dn = el( 'button', '↓', 'button button-small' ); dn.title = 'Move down'; dn.disabled = ( i === blocks.length - 1 );
+				var rm = el( 'button', '✕', 'button button-small' ); rm.title = 'Remove';
+				up.addEventListener( 'click', function () { if ( i > 0 ) { var t = blocks[ i - 1 ]; blocks[ i - 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
+				dn.addEventListener( 'click', function () { if ( i < blocks.length - 1 ) { var t = blocks[ i + 1 ]; blocks[ i + 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
+				rm.addEventListener( 'click', function () { blocks.splice( i, 1 ); draw(); } );
+				ctl.appendChild( up ); ctl.appendChild( dn ); ctl.appendChild( rm );
+				row.appendChild( ctl );
+				preview.appendChild( row );
+			} );
+		}
+
+		function propose() {
+			applyBtn.disabled = true;
+			setStatus( msg, 'Analyzing content and choosing blocks…' );
+			request( '/layout/propose', { method: 'POST', data: { post_id: postId, use_ai: aiBox && aiBox.checked } } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					blocks = ( d.blocks || [] ).map( function ( b ) { return { id: b.id, name: b.name }; } );
+					if ( metaEl ) {
+						metaEl.hidden = false;
+						metaEl.textContent = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) +
+							' · order by ' + ( d.source === 'ai' ? 'AI' : 'rules' ) + ( d.ai_available ? '' : ' (no AI provider configured)' );
+					}
+					setStatus( msg, 'Done.', 'is-ok' );
+					draw();
+				} )
+				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+		}
+
+		function apply() {
+			var applyMsg = document.getElementById( 'scc-layout-apply-msg' );
+			applyBtn.disabled = true;
+			setStatus( applyMsg, 'Building your Elementor page…' );
+			request( '/layout/apply', { method: 'POST', data: { post_id: postId, layout: blocks.map( function ( b ) { return b.id; } ) } } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					setStatus( applyMsg, 'Done.', 'is-ok' );
+					preview.innerHTML = '';
+					var ok = el( 'div', null, 'scc-empty' );
+					ok.appendChild( el( 'div', '✅', 'scc-empty__icon' ) );
+					ok.appendChild( el( 'h2', 'Elementor page created' ) );
+					ok.appendChild( el( 'p', 'The layout was applied. Open it in Elementor to fine-tune, or edit the draft.', 'scc-note' ) );
+					if ( d.elementor_url ) { var e = el( 'a', 'Edit in Elementor', 'button button-primary' ); e.href = d.elementor_url; ok.appendChild( e ); }
+					if ( d.edit_url ) { var ed = el( 'a', ' Edit draft', 'button' ); ed.href = d.edit_url; ok.appendChild( document.createTextNode( ' ' ) ); ok.appendChild( ed ); }
+					preview.appendChild( ok );
+				} )
+				.catch( function ( err ) { setStatus( applyMsg, ( err && err.message ) || i18n.error, 'is-error' ); applyBtn.disabled = false; } );
+		}
+
+		if ( regen ) { regen.addEventListener( 'click', propose ); }
+		if ( applyBtn ) { applyBtn.addEventListener( 'click', apply ); }
+		propose();
+	}
 } )();

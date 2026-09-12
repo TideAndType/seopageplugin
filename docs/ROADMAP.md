@@ -210,6 +210,33 @@ Additive; no DB changes. Adds the `includes/net/` layer.
   every screen stays registered as a hidden route so deep links keep working. No
   screen or feature removed.
 
+## v1.26 — Action-oriented product: four areas + SEO Copilot ✅
+The product now answers "tell me what's wrong, what matters most, and let me fix
+it." No new engine, no new data store — this is a consolidation + conversational
+surface over the existing intelligence layer. Additive; no DB changes.
+
+- ✅ **Four-area IA.** The menu revolves around **Dashboard**, **Create**,
+  **Optimize**, **Opportunities** (plus Templates/Settings/Connections as config).
+  Create = Generate/Ideas/Content Plan/Publishing; Optimize = Action Queue/Internal
+  Links/Meta/Site Audit; Opportunities = ranked list/Keywords/Topical Authority/
+  Competitors/Architecture. Every prior screen is preserved as a hub tab + hidden
+  route (deep links unaffected).
+- ✅ **SEO Copilot** (`SCC_Copilot`, `POST /copilot`) on the Dashboard. Classifies
+  a plain-language request deterministically (no AI guesswork, unit-tested) and
+  returns the REAL matching opportunities from `SCC_Opportunity_Engine` — each with
+  its reason, evidence, recommended action, score and confidence — plus one-click
+  Add-to-queue / Dismiss via the existing Action Queue. It never fabricates data
+  and states explicitly when a required source (e.g. Search Console) is not
+  connected. Reuses the existing opportunity + action abstractions; adds no engine.
+- ✅ **Unified action/opportunity abstraction confirmed.** `SCC_Opportunity_Engine`
+  already normalizes every signal (GSC striking-distance & untapped demand,
+  content decay, intent drift, cannibalization, orphans, thin content, missing
+  meta, topical gaps) into one shape (type, target, factors/evidence, reason,
+  expected impact, effort, risk, action_type, recommended_action, score, priority,
+  confidence, data-availability, stable id); `SCC_Action_Queue` provides the
+  preview/apply/verify/dismiss lifecycle. The Copilot and every area feed from
+  these — no per-opportunity engines.
+
 ---
 
 ## Cross-cutting (every phase)
