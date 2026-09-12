@@ -139,6 +139,18 @@ class SCC_Block_Elementor_Renderer {
 		$vars   = (array) $block['vars'];
 		$kids   = array();
 
+		// The full-body "content" block is expanded into MULTIPLE section bands —
+		// one per H2 — with alternating backgrounds, so a plain article becomes a
+		// designed, rhythmic page instead of one wall of text.
+		if ( 'content' === $block['id'] ) {
+			$containers = array();
+			foreach ( self::split_sections( (string) ( $vars['CONTENT'] ?? '' ) ) as $sec ) {
+				$w = self::widget( 'text-editor', array( 'editor' => $sec['html'] ) );
+				$containers[] = self::container( array( $w ), $sec['style'], 'readable' );
+			}
+			return ! empty( $containers ) ? $containers : array( self::container( array( self::widget( 'text-editor', array( 'editor' => (string) ( $vars['CONTENT'] ?? '' ) ) ) ), 'plain', 'readable' ) );
+		}
+
 		switch ( $render ) {
 			case 'hero':
 				$kids[] = self::widget( 'heading', array( 'title' => (string) $vars['HERO_TITLE'], 'header_size' => 'h1' ) );
@@ -178,6 +190,39 @@ class SCC_Block_Elementor_Renderer {
 	}
 
 	/**
+	 * Split article HTML at each <h2> into section segments with an alternating
+	 * background style (plain / tint) for visual rhythm. The lead text before the
+	 * first H2 is its own plain segment. Pure.
+	 *
+	 * @param string $html Body HTML (FAQ/CTA already lifted out).
+	 * @return array List of { style: 'plain'|'tint', html: string }.
+	 */
+	public static function split_sections( $html ) {
+		$html = trim( (string) $html );
+		if ( '' === $html ) {
+			return array();
+		}
+		// Keep the <h2> as the start of each section.
+		$parts = preg_split( '/(?=<h2\b)/i', $html );
+		$out   = array();
+		$n     = 0;
+		foreach ( (array) $parts as $seg ) {
+			$seg = trim( (string) $seg );
+			if ( '' === $seg || '' === trim( wp_strip_all_tags( $seg ) ) ) {
+				continue;
+			}
+			$has_h2 = (bool) preg_match( '/^<h2\b/i', $seg );
+			// Lead paragraph (no H2) stays plain; H2 sections alternate plain/tint.
+			$style  = $has_h2 ? ( ( $n % 2 === 1 ) ? 'tint' : 'plain' ) : 'plain';
+			$out[]  = array( 'style' => $style, 'html' => $seg );
+			if ( $has_h2 ) {
+				$n++;
+			}
+		}
+		return $out;
+	}
+
+	/**
 	 * The design treatment for a section — a controlled "web-designer" rule set
 	 * that gives the page rhythm: a soft feature band for the hero, a brand band
 	 * for the CTA, tinted bands for proof/FAQ, plain elsewhere. Pure.
@@ -209,14 +254,15 @@ class SCC_Block_Elementor_Renderer {
 	 * @param string $style    Section style from section_style().
 	 * @return array
 	 */
-	protected static function container( array $children, $style = 'plain' ) {
+	protected static function container( array $children, $style = 'plain', $extra_class = '' ) {
 		$palette = class_exists( 'SCC_Design_Intel' ) ? SCC_Design_Intel::palette() : array();
 		$brand   = ! empty( $palette['primary'] ) ? $palette['primary'] : '#4f46e5';
 
+		$classes = 'scc-sec scc-sec--' . $style . ( '' !== $extra_class ? ' scc-sec--' . $extra_class : '' );
 		$settings = array(
 			'content_width' => 'boxed',
-			'_css_classes'  => 'scc-sec scc-sec--' . $style,
-			'padding'       => array( 'unit' => 'px', 'top' => '64', 'right' => '20', 'bottom' => '64', 'left' => '20', 'isLinked' => false ),
+			'_css_classes'  => $classes,
+			'padding'       => array( 'unit' => 'px', 'top' => '56', 'right' => '20', 'bottom' => '56', 'left' => '20', 'isLinked' => false ),
 		);
 
 		if ( 'brand' === $style ) {
@@ -305,14 +351,24 @@ class SCC_Block_Elementor_Renderer {
 	 * @return string
 	 */
 	protected static function block_html( array $block, $palette_css ) {
+		$styleAttr = '' !== $palette_css ? ' style="' . esc_attr( $palette_css ) . '"' : '';
+
+		// The content block becomes multiple alternating section bands.
+		if ( 'content' === $block['id'] ) {
+			$out = '';
+			foreach ( self::split_sections( (string) ( $block['vars']['CONTENT'] ?? '' ) ) as $sec ) {
+				$out .= '<section class="scc-block scc-block--content scc-sec scc-sec--' . esc_attr( $sec['style'] ) . ' scc-sec--readable"' . $styleAttr . '><div class="scc-sec__in">' . $sec['html'] . '</div></section>';
+			}
+			return $out;
+		}
+
 		$inner = self::inner_html( $block, $palette_css );
 		if ( '' === trim( $inner ) ) {
 			return '';
 		}
-		$style   = '' !== $palette_css ? ' style="' . esc_attr( $palette_css ) . '"' : '';
 		$secType = self::section_style( $block['id'] );
 		$cls     = 'scc-block scc-block--' . $block['id'] . ' scc-sec scc-sec--' . $secType;
-		return '<section class="' . esc_attr( $cls ) . '"' . $style . '>' . '<div class="scc-sec__in">' . $inner . '</div></section>';
+		return '<section class="' . esc_attr( $cls ) . '"' . $styleAttr . '>' . '<div class="scc-sec__in">' . $inner . '</div></section>';
 	}
 
 	/**

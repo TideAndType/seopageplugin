@@ -304,7 +304,9 @@ class SCC_Plugin {
 .scc-block--cta .scc-cta p{font-size:1.15rem;margin:0 0 1.2em;color:rgba(255,255,255,.9)}
 .scc-block--cta .scc-btn{background:#fff;color:var(--scc-accent,#4f46e5)!important;box-shadow:0 10px 24px -12px rgba(0,0,0,.45)}
 /* The full-body content block keeps normal article width */
-.scc-block--content .scc-sec__in{max-width:820px}
+.scc-block--content .scc-sec__in,.scc-sec--readable .scc-sec__in{max-width:820px}
+.scc-sec--readable h2:first-child,.scc-sec--readable h3:first-child{margin-top:0}
+.scc-sec--readable{padding:48px 0}
 @media(max-width:768px){
 .scc-sec{padding:44px 0}
 .scc-toc ul{columns:1}

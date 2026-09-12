@@ -1540,6 +1540,15 @@ assert_true( false !== strpos( $scc_by['cta']['vars']['CTA_TITLE'], 'local seo' 
 $scc_empty_faq = SCC_Content_Mapper::map( array( 'faq' ), array( 'faqs' => array(), 'content_html' => '', 'intro' => '', 'primary_keyword' => '' ) + $scc_analysis, array() );
 assert_true( $scc_empty_faq[0]['empty'], 'faq block reports empty when there are no FAQs' );
 
+echo "\n== Layout Engine: content split into section bands ==\n";
+$scc_secs = SCC_Block_Elementor_Renderer::split_sections( '<p>Intro lead.</p><h2>One</h2><p>a</p><h2>Two</h2><p>b</p><h2>Three</h2><p>c</p>' );
+assert_eq( 4, count( $scc_secs ), 'lead + 3 H2 sections => 4 segments' );
+assert_eq( 'plain', $scc_secs[0]['style'], 'lead segment is plain' );
+assert_eq( 'plain', $scc_secs[1]['style'], 'first H2 section plain' );
+assert_eq( 'tint', $scc_secs[2]['style'], 'second H2 section tinted (alternating)' );
+assert_true( false !== strpos( $scc_secs[1]['html'], '<h2>One</h2>' ), 'each section keeps its H2' );
+assert_eq( 0, count( SCC_Block_Elementor_Renderer::split_sections( '   ' ) ), 'empty body => no sections' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

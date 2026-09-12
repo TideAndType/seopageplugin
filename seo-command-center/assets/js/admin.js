@@ -1100,8 +1100,13 @@
 							a.href = d.edit_url; a.className = 'button button-primary';
 							resultEl.appendChild( a );
 						}
-						if ( d.post_id ) {
-							var bl = el( 'a', '🧩 Build Elementor layout' );
+						if ( d.post_id && d.edit_url ) {
+							var ee = el( 'a', '✏️ Edit with Elementor' );
+							ee.href = d.edit_url.replace( /action=edit/, 'action=elementor' );
+							ee.target = '_blank'; ee.rel = 'noopener'; ee.className = 'button';
+							resultEl.appendChild( document.createTextNode( ' ' ) );
+							resultEl.appendChild( ee );
+							var bl = el( 'a', '🧩 Layout' );
 							bl.href = window.location.pathname + '?page=seo-command-center-layout&post=' + encodeURIComponent( d.post_id );
 							bl.className = 'button';
 							resultEl.appendChild( document.createTextNode( ' ' ) );

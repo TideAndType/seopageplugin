@@ -466,3 +466,4 @@ require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-validator.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-content-mapper.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-elementor-renderer.php';
