@@ -135,58 +135,38 @@ class SCC_Block_Elementor_Renderer {
 	 * @return array Top-level element nodes.
 	 */
 	protected static function block_elements( array $block, $palette_css ) {
-		$render = (string) $block['render'];
-		$vars   = (array) $block['vars'];
-		$kids   = array();
-
-		// The full-body "content" block is expanded into MULTIPLE section bands —
-		// one per H2 — with alternating backgrounds, so a plain article becomes a
-		// designed, rhythmic page instead of one wall of text.
-		if ( 'content' === $block['id'] ) {
-			$containers = array();
-			foreach ( self::split_sections( (string) ( $vars['CONTENT'] ?? '' ) ) as $sec ) {
-				$w = self::widget( 'text-editor', array( 'editor' => $sec['html'] ) );
-				$containers[] = self::container( array( $w ), $sec['style'], 'readable' );
-			}
-			return ! empty( $containers ) ? $containers : array( self::container( array( self::widget( 'text-editor', array( 'editor' => (string) ( $vars['CONTENT'] ?? '' ) ) ) ), 'plain', 'readable' ) );
+		// Every block renders as a FULL-WIDTH Elementor container holding one HTML
+		// widget with the block's designed, semantic markup. Full-width is a stable
+		// Elementor setting; all visual design (bands, spacing, grids, hero, cards,
+		// CTA) is painted by the plugin's own scoped CSS — so the look never
+		// depends on per-widget Elementor settings we can't verify. Each section is
+		// still an editable Elementor container the user can reorder or tweak.
+		$markup = self::block_html( $block, $palette_css );
+		if ( '' === trim( $markup ) ) {
+			return array();
 		}
+		return array( self::container_full( array( self::widget( 'html', array( 'html' => $markup ) ) ) ) );
+	}
 
-		switch ( $render ) {
-			case 'hero':
-				$kids[] = self::widget( 'heading', array( 'title' => (string) $vars['HERO_TITLE'], 'header_size' => 'h1' ) );
-				if ( '' !== trim( (string) ( $vars['HERO_SUBTITLE'] ?? '' ) ) ) {
-					$kids[] = self::widget( 'text-editor', array( 'editor' => '<p>' . esc_html( $vars['HERO_SUBTITLE'] ) . '</p>' ) );
-				}
-				$kids[] = self::button( (string) $vars['CTA_TEXT'], (string) $vars['CTA_URL'] );
-				break;
-
-			case 'cta':
-				$kids[] = self::widget( 'heading', array( 'title' => (string) $vars['CTA_TITLE'], 'header_size' => 'h2' ) );
-				if ( '' !== trim( (string) ( $vars['CTA_TEXT'] ?? '' ) ) ) {
-					$kids[] = self::widget( 'text-editor', array( 'editor' => '<p>' . esc_html( $vars['CTA_TEXT'] ) . '</p>' ) );
-				}
-				$kids[] = self::button( (string) $vars['CTA_TEXT'], (string) $vars['CTA_URL'] );
-				break;
-
-			case 'text': // content-intro
-				$kids[] = self::widget( 'text-editor', array( 'editor' => '<p>' . esc_html( (string) ( $vars['INTRO'] ?? '' ) ) . '</p>' ) );
-				break;
-
-			default:
-				// content + all visual blocks: one HTML widget carrying the block's
-				// semantic markup (editable, crawlable, styled by the plugin CSS).
-				$markup = self::inner_html( $block, $palette_css );
-				if ( 'content' === $block['id'] ) {
-					// The article body is already sanitised HTML — use a text-editor
-					// widget so it is fully editable as rich content in Elementor.
-					$kids[] = self::widget( 'text-editor', array( 'editor' => (string) ( $vars['CONTENT'] ?? '' ) ) );
-				} else {
-					$kids[] = self::widget( 'html', array( 'html' => $markup ) );
-				}
-				break;
-		}
-
-		return array( self::container( $kids, self::section_style( $block['id'] ) ) );
+	/**
+	 * A full-width Elementor container (no boxed width, no padding — the plugin
+	 * CSS handles bands and spacing). Only the stable `content_width: full`
+	 * setting is used.
+	 *
+	 * @param array $children Child widgets.
+	 * @return array
+	 */
+	protected static function container_full( array $children ) {
+		return array(
+			'id'       => self::new_id(),
+			'elType'   => 'container',
+			'settings' => array(
+				'content_width' => 'full',
+				'padding'       => array( 'unit' => 'px', 'top' => '0', 'right' => '0', 'bottom' => '0', 'left' => '0', 'isLinked' => true ),
+			),
+			'elements' => array_values( $children ),
+			'isInner'  => false,
+		);
 	}
 
 	/**
@@ -352,12 +332,13 @@ class SCC_Block_Elementor_Renderer {
 	 */
 	protected static function block_html( array $block, $palette_css ) {
 		$styleAttr = '' !== $palette_css ? ' style="' . esc_attr( $palette_css ) . '"' : '';
+		$preset    = self::preset_class();
 
 		// The content block becomes multiple alternating section bands.
 		if ( 'content' === $block['id'] ) {
 			$out = '';
 			foreach ( self::split_sections( (string) ( $block['vars']['CONTENT'] ?? '' ) ) as $sec ) {
-				$out .= '<section class="scc-block scc-block--content scc-sec scc-sec--' . esc_attr( $sec['style'] ) . ' scc-sec--readable"' . $styleAttr . '><div class="scc-sec__in">' . $sec['html'] . '</div></section>';
+				$out .= '<section class="scc-block scc-block--content scc-sec scc-sec--' . esc_attr( $sec['style'] ) . ' scc-sec--readable ' . esc_attr( $preset ) . '"' . $styleAttr . '><div class="scc-sec__in">' . $sec['html'] . '</div></section>';
 			}
 			return $out;
 		}
@@ -367,8 +348,24 @@ class SCC_Block_Elementor_Renderer {
 			return '';
 		}
 		$secType = self::section_style( $block['id'] );
-		$cls     = 'scc-block scc-block--' . $block['id'] . ' scc-sec scc-sec--' . $secType;
+		$cls     = 'scc-block scc-block--' . $block['id'] . ' scc-sec scc-sec--' . $secType . ' ' . $preset;
 		return '<section class="' . esc_attr( $cls ) . '"' . $styleAttr . '>' . '<div class="scc-sec__in">' . $inner . '</div></section>';
+	}
+
+	/**
+	 * The design-preset CSS class ("modern" default). Tokens per preset live in
+	 * the plugin front CSS.
+	 *
+	 * @return string e.g. "scc-preset--modern"
+	 */
+	public static function preset_class() {
+		$p = class_exists( 'SCC_Settings' ) ? (string) SCC_Settings::get( 'layout_design_preset', 'modern' ) : 'modern';
+		$p = sanitize_key( $p );
+		$allowed = array( 'modern', 'professional', 'bold' );
+		if ( ! in_array( $p, $allowed, true ) ) {
+			$p = 'modern';
+		}
+		return 'scc-preset--' . $p;
 	}
 
 	/**
@@ -384,11 +381,15 @@ class SCC_Block_Elementor_Renderer {
 
 		switch ( $render ) {
 			case 'hero':
-				$h  = '<h1 class="scc-hero__title">' . esc_html( (string) $vars['HERO_TITLE'] ) . '</h1>';
+				$h = '';
+				if ( '' !== trim( (string) ( $vars['HERO_EYEBROW'] ?? '' ) ) ) {
+					$h .= '<p class="scc-eyebrow">' . esc_html( (string) $vars['HERO_EYEBROW'] ) . '</p>';
+				}
+				$h .= '<h1 class="scc-hero__title">' . esc_html( (string) $vars['HERO_TITLE'] ) . '</h1>';
 				if ( '' !== trim( (string) ( $vars['HERO_SUBTITLE'] ?? '' ) ) ) {
 					$h .= '<p class="scc-hero__sub">' . esc_html( (string) $vars['HERO_SUBTITLE'] ) . '</p>';
 				}
-				$h .= self::cta_link( (string) $vars['CTA_TEXT'], (string) $vars['CTA_URL'] );
+				$h .= '<div class="scc-hero__cta">' . self::cta_link( (string) $vars['CTA_TEXT'], (string) $vars['CTA_URL'] ) . '</div>';
 				return '<div class="scc-hero">' . $h . '</div>';
 
 			case 'text':
@@ -450,15 +451,20 @@ class SCC_Block_Elementor_Renderer {
 
 			case 'steps':
 				$items = '';
+				$count = 0;
 				foreach ( (array) ( $vars['STEPS'] ?? array() ) as $st ) {
 					$t = esc_html( (string) ( $st['title'] ?? '' ) );
 					if ( '' === $t ) {
 						continue;
 					}
-					$d = '' !== (string) ( $st['description'] ?? '' ) ? ' ' . esc_html( (string) $st['description'] ) : '';
+					$d = '' !== (string) ( $st['description'] ?? '' ) ? '<span>' . esc_html( (string) $st['description'] ) . '</span>' : '';
 					$items .= '<li><strong>' . $t . '</strong>' . $d . '</li>';
+					$count++;
 				}
-				return '' !== $items ? self::heading( $vars['SECTION_TITLE'] ?? '' ) . '<ol class="scc-steps">' . $items . '</ol>' : '';
+				// 3–4 short steps read best as a connected horizontal row; more (or
+				// longer) steps stack as a numbered vertical list.
+				$row = ( $count >= 3 && $count <= 4 ) ? ' scc-steps--row' : '';
+				return '' !== $items ? self::heading( $vars['SECTION_TITLE'] ?? '' ) . '<ol class="scc-steps' . $row . '">' . $items . '</ol>' : '';
 
 			case 'faq':
 				return self::faq_html( (array) ( $vars['FAQ_ITEMS'] ?? array() ), (string) ( $vars['SECTION_TITLE'] ?? '' ) );

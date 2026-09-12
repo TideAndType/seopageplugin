@@ -61,6 +61,7 @@ class SCC_Content_Mapper {
 		switch ( $id ) {
 			case 'hero':
 				return array(
+					'HERO_EYEBROW'  => self::eyebrow( $analysis ),
 					'HERO_TITLE'    => (string) ( $analysis['h1'] ?: $analysis['title'] ),
 					'HERO_SUBTITLE' => self::trim_words( (string) $analysis['intro'], 32 ),
 					'CTA_TEXT'      => self::cta_text( $analysis ),
@@ -289,6 +290,32 @@ class SCC_Content_Mapper {
 			return $burl;
 		}
 		return home_url( '/contact/' );
+	}
+
+	/**
+	 * A short hero eyebrow label from the content — the location for a local page,
+	 * else a human label for the content type. Never fabricated.
+	 *
+	 * @param array $analysis Analysis.
+	 * @return string
+	 */
+	protected static function eyebrow( array $analysis ) {
+		$city = trim( (string) ( $analysis['city'] ?? '' ) );
+		if ( '' !== $city ) {
+			return $city;
+		}
+		$labels = array(
+			'service'       => __( 'Services', 'seo-command-center' ),
+			'local_service' => __( 'Local services', 'seo-command-center' ),
+			'location'      => __( 'Service area', 'seo-command-center' ),
+			'landing'       => __( 'Overview', 'seo-command-center' ),
+			'comparison'    => __( 'Comparison', 'seo-command-center' ),
+			'blog_post'     => __( 'Guide', 'seo-command-center' ),
+			'article'       => __( 'Guide', 'seo-command-center' ),
+			'informational' => __( 'Guide', 'seo-command-center' ),
+		);
+		$type = (string) ( $analysis['content_type'] ?? 'article' );
+		return isset( $labels[ $type ] ) ? $labels[ $type ] : '';
 	}
 
 	/**

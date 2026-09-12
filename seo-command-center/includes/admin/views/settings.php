@@ -176,6 +176,16 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 						<?php esc_html_e( 'Automatically build an Elementor layout when content is generated', 'seo-command-center' ); ?>
 					</label>
 					<p class="description"><?php esc_html_e( 'When Elementor is active, newly generated drafts are turned into an editable Elementor page from the block library (deterministic — no AI required). Pages that already use a mapped Elementor template are left as-is. Turn off to keep plain drafts and build layouts manually from Create ▸ Recently generated ▸ Build layout.', 'seo-command-center' ); ?></p>
+					<?php $scc_preset = isset( $s['layout_design_preset'] ) ? (string) $s['layout_design_preset'] : 'modern'; ?>
+					<p style="margin-top:10px;">
+						<label for="scc-design-preset"><strong><?php esc_html_e( 'Design style', 'seo-command-center' ); ?></strong></label><br>
+						<select id="scc-design-preset" name="layout_design_preset">
+							<option value="modern" <?php selected( $scc_preset, 'modern' ); ?>><?php esc_html_e( 'Modern (default)', 'seo-command-center' ); ?></option>
+							<option value="professional" <?php selected( $scc_preset, 'professional' ); ?>><?php esc_html_e( 'Professional (tighter, restrained)', 'seo-command-center' ); ?></option>
+							<option value="bold" <?php selected( $scc_preset, 'bold' ); ?>><?php esc_html_e( 'Bold (large type, generous spacing)', 'seo-command-center' ); ?></option>
+						</select>
+					</p>
+					<p class="description"><?php esc_html_e( 'Controls typography scale, spacing and corner radius of generated Elementor pages. All styles inherit your site’s primary colour from Elementor.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 			<tr>
