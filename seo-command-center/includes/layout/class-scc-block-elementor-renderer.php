@@ -174,23 +174,63 @@ class SCC_Block_Elementor_Renderer {
 				break;
 		}
 
-		return array( self::container( $kids ) );
+		return array( self::container( $kids, self::section_style( $block['id'] ) ) );
 	}
 
 	/**
-	 * A flex container element wrapping child widgets (boxed width).
+	 * The design treatment for a section — a controlled "web-designer" rule set
+	 * that gives the page rhythm: a soft feature band for the hero, a brand band
+	 * for the CTA, tinted bands for proof/FAQ, plain elsewhere. Pure.
 	 *
-	 * @param array $children Child elements.
+	 * @param string $id Block id.
+	 * @return string 'feature' | 'brand' | 'tint' | 'plain'
+	 */
+	public static function section_style( $id ) {
+		switch ( $id ) {
+			case 'hero':
+				return 'feature';
+			case 'cta':
+				return 'brand';
+			case 'stats':
+			case 'faq':
+			case 'testimonial':
+				return 'tint';
+			default:
+				return 'plain';
+		}
+	}
+
+	/**
+	 * A flex container element wrapping child widgets, with a full-width design
+	 * band (background + generous padding) per style. Only stable Elementor
+	 * container settings are used so it renders reliably across Elementor 3.x.
+	 *
+	 * @param array  $children Child elements.
+	 * @param string $style    Section style from section_style().
 	 * @return array
 	 */
-	protected static function container( array $children ) {
+	protected static function container( array $children, $style = 'plain' ) {
+		$palette = class_exists( 'SCC_Design_Intel' ) ? SCC_Design_Intel::palette() : array();
+		$brand   = ! empty( $palette['primary'] ) ? $palette['primary'] : '#4f46e5';
+
+		$settings = array(
+			'content_width' => 'boxed',
+			'_css_classes'  => 'scc-sec scc-sec--' . $style,
+			'padding'       => array( 'unit' => 'px', 'top' => '64', 'right' => '20', 'bottom' => '64', 'left' => '20', 'isLinked' => false ),
+		);
+
+		if ( 'brand' === $style ) {
+			$settings['background_background'] = 'classic';
+			$settings['background_color']      = $brand;
+		} elseif ( 'tint' === $style || 'feature' === $style ) {
+			$settings['background_background'] = 'classic';
+			$settings['background_color']      = ( 'feature' === $style ) ? '#f3f5fb' : '#f7f8fb';
+		}
+
 		return array(
 			'id'       => self::new_id(),
 			'elType'   => 'container',
-			'settings' => array(
-				'content_width' => 'boxed',
-				'padding'       => array( 'unit' => 'px', 'top' => '40', 'right' => '20', 'bottom' => '40', 'left' => '20', 'isLinked' => false ),
-			),
+			'settings' => $settings,
 			'elements' => array_values( $children ),
 			'isInner'  => false,
 		);
@@ -269,8 +309,10 @@ class SCC_Block_Elementor_Renderer {
 		if ( '' === trim( $inner ) ) {
 			return '';
 		}
-		$style = '' !== $palette_css ? ' style="' . esc_attr( $palette_css ) . '"' : '';
-		return '<section class="scc-block scc-block--' . esc_attr( $block['id'] ) . '"' . $style . '>' . $inner . '</section>';
+		$style   = '' !== $palette_css ? ' style="' . esc_attr( $palette_css ) . '"' : '';
+		$secType = self::section_style( $block['id'] );
+		$cls     = 'scc-block scc-block--' . $block['id'] . ' scc-sec scc-sec--' . $secType;
+		return '<section class="' . esc_attr( $cls ) . '"' . $style . '>' . '<div class="scc-sec__in">' . $inner . '</div></section>';
 	}
 
 	/**

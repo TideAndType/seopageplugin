@@ -83,11 +83,14 @@ class SCC_Layout_AI_Provider {
 			'blocks'         => $catalog,
 		);
 
-		$system = 'You are a web layout strategist. Choose the best ORDER of page sections for an SEO page, '
-			. 'picking ONLY from allowed_blocks (use each id exactly as given). Base the choice on content_type, '
-			. 'search_intent and what content is actually available — never include a block whose content is 0/false. '
-			. 'A page should open with "hero" and end with "cta". Do NOT invent blocks, HTML, or Elementor code. '
-			. 'Return ONLY JSON of this exact shape: {"layout":["hero","content-intro", ...]} using ids from allowed_blocks.';
+		$system = 'You are a senior conversion-focused web designer laying out a page for a real business. '
+			. 'Design the best ORDER of page sections for this content, choosing ONLY from allowed_blocks (use each id '
+			. 'exactly as given). Think like a designer: open with a strong "hero", establish value and proof early for '
+			. 'commercial/local intent, keep informational pages skimmable (intro, sections, FAQ, related), give the page '
+			. 'a natural rhythm, and always close with a "cta". Base every choice on content_type, search_intent and what '
+			. 'content is actually available — NEVER include a block whose available content is 0/false. Do NOT invent '
+			. 'blocks, write HTML, CSS, or Elementor code — only order the allowed block ids. '
+			. 'Return ONLY JSON of this exact shape: {"layout":["hero","content", ...]} using ids from allowed_blocks.';
 
 		$response = $this->ai->complete(
 			array(

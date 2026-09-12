@@ -31,11 +31,32 @@ $el_ok    = ! empty( $data['elementor_active'] );
 	</div>
 
 	<?php if ( $post_id <= 0 ) : ?>
-		<div class="scc-card scc-empty">
-			<div class="scc-empty__icon" aria-hidden="true">🧩</div>
-			<h2><?php esc_html_e( 'Pick a draft first', 'seo-command-center' ); ?></h2>
-			<p><?php esc_html_e( 'Open this from a generated draft (Create → Recently generated) to build its Elementor layout.', 'seo-command-center' ); ?></p>
-			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-generate' ) ); ?>"><?php esc_html_e( 'Go to Create', 'seo-command-center' ); ?></a>
+		<?php $recent = isset( $data['recent'] ) ? (array) $data['recent'] : array(); ?>
+		<div class="scc-card">
+			<h2><?php esc_html_e( 'Choose a page to design', 'seo-command-center' ); ?></h2>
+			<?php if ( empty( $recent ) ) : ?>
+				<div class="scc-empty">
+					<div class="scc-empty__icon" aria-hidden="true">🧩</div>
+					<h2><?php esc_html_e( 'No generated drafts yet', 'seo-command-center' ); ?></h2>
+					<p><?php esc_html_e( 'Generate a draft first, then come back here to turn it into an Elementor page.', 'seo-command-center' ); ?></p>
+					<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-generate' ) ); ?>"><?php esc_html_e( 'Create content', 'seo-command-center' ); ?></a>
+				</div>
+			<?php else : ?>
+				<p class="scc-note"><?php esc_html_e( 'Pick a generated draft to preview and build its Elementor layout.', 'seo-command-center' ); ?></p>
+				<table class="widefat striped scc-table">
+					<thead><tr><th><?php esc_html_e( 'Title', 'seo-command-center' ); ?></th><th><?php esc_html_e( 'Type', 'seo-command-center' ); ?></th><th><?php esc_html_e( 'Status', 'seo-command-center' ); ?></th><th></th></tr></thead>
+					<tbody>
+						<?php foreach ( $recent as $r ) : ?>
+							<tr>
+								<td><strong><?php echo esc_html( $r['title'] ); ?></strong></td>
+								<td><?php echo esc_html( ucfirst( $r['type'] ) ); ?></td>
+								<td><?php echo esc_html( $r['status'] ); ?></td>
+								<td><a class="button button-small button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-layout&post=' . (int) $r['id'] ) ); ?>">🧩 <?php esc_html_e( 'Build layout', 'seo-command-center' ); ?></a></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
 		</div>
 	<?php elseif ( ! $el_ok ) : ?>
 		<div class="scc-card scc-empty">

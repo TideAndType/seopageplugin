@@ -106,6 +106,7 @@ class SCC_Admin {
 				'tabs'    => array(
 					'generate'   => array( __( 'Generate', 'seo-command-center' ), self::SLUG . '-generate', 'render_generate' ),
 					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
+					'layout'     => array( __( 'Elementor Layout', 'seo-command-center' ), self::SLUG . '-layout', 'render_layout' ),
 					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
 					'publishing' => array( __( 'Publishing', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
 				),
@@ -513,6 +514,29 @@ class SCC_Admin {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only screen bootstrap; all actions are nonce-checked REST calls.
 		$post_id = isset( $_GET['post'] ) ? (int) $_GET['post'] : 0;
 		$post    = $post_id ? get_post( $post_id ) : null;
+
+		// When no post is chosen, offer a picker of recent generated drafts.
+		$recent = array();
+		if ( ! $post_id ) {
+			$q = new WP_Query( array(
+				'post_type'      => array( 'post', 'page' ),
+				'post_status'    => array( 'draft', 'pending', 'publish', 'private', 'future' ),
+				'posts_per_page' => 25,
+				'no_found_rows'  => true,
+				'meta_key'       => '_scc_generated', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'orderby'        => 'date',
+				'order'          => 'DESC',
+			) );
+			foreach ( $q->posts as $p ) {
+				$recent[] = array(
+					'id'     => (int) $p->ID,
+					'title'  => get_the_title( $p ),
+					'type'   => $p->post_type,
+					'status' => $p->post_status,
+				);
+			}
+		}
+
 		$this->view(
 			'layout',
 			array(
@@ -521,6 +545,7 @@ class SCC_Admin {
 					'post_title'       => $post ? get_the_title( $post ) : '',
 					'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
 					'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
+					'recent'           => $recent,
 				),
 			)
 		);
