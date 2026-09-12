@@ -169,6 +169,16 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 				</td>
 			</tr>
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Elementor layout', 'seo-command-center' ); ?></th>
+				<td>
+					<label>
+						<input type="checkbox" name="layout_auto_build" value="1" <?php checked( ! isset( $s['layout_auto_build'] ) || ! empty( $s['layout_auto_build'] ) ); ?>>
+						<?php esc_html_e( 'Automatically build an Elementor layout when content is generated', 'seo-command-center' ); ?>
+					</label>
+					<p class="description"><?php esc_html_e( 'When Elementor is active, newly generated drafts are turned into an editable Elementor page from the block library (deterministic — no AI required). Pages that already use a mapped Elementor template are left as-is. Turn off to keep plain drafts and build layouts manually from Create ▸ Recently generated ▸ Build layout.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><label for="scc-content-persona"><?php esc_html_e( 'Writing persona', 'seo-command-center' ); ?></label></th>
 				<td>
 					<select id="scc-content-persona" name="content_persona">

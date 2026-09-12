@@ -85,6 +85,25 @@ class SCC_Layout_Service {
 	}
 
 	/**
+	 * Decide a layout for a post and build the Elementor page in one step (no UI).
+	 * Used for auto-build at generation time. Deterministic by default.
+	 *
+	 * @param int  $post_id Post id.
+	 * @param bool $use_ai  Whether to try the AI provider for ordering.
+	 * @return array|WP_Error
+	 */
+	public function build( $post_id, $use_ai = false ) {
+		$obj = SCC_Layout_Analyzer::content_object_from_post( $post_id );
+		if ( is_wp_error( $obj ) ) {
+			return $obj;
+		}
+		$analysis = SCC_Layout_Analyzer::analyze( $obj );
+		$engine   = new SCC_Layout_Engine( $this->ai );
+		$decision = $engine->decide( $analysis, array( 'use_ai' => (bool) $use_ai ) );
+		return $this->apply( $post_id, $decision['layout'] );
+	}
+
+	/**
 	 * Apply a (user-confirmed or engine) layout to a post as an Elementor page.
 	 *
 	 * @param int   $post_id Post id.

@@ -519,6 +519,31 @@ class SCC_Generator {
 			);
 		}
 
+		// Auto-build an Elementor layout from the controlled block library, when
+		// enabled and Elementor is active — UNLESS this render already produced an
+		// Elementor page from a mapped template (never clobber the user's template
+		// design). Deterministic (rules only, no AI) so it stays fast and runs
+		// directly; never fatal to generation.
+		if ( class_exists( 'SCC_Layout_Service' )
+			&& class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active()
+			&& 'elementor' !== $used_renderer
+			&& ( ! class_exists( 'SCC_Settings' ) || SCC_Settings::get( 'layout_auto_build', true ) )
+		) {
+			try {
+				$built = ( new SCC_Layout_Service() )->build( $post_id, false );
+				self::dbg( 'auto-built Elementor layout', array(
+					'ok'     => ! is_wp_error( $built ),
+					'blocks' => is_array( $built ) && isset( $built['layout'] ) ? count( (array) $built['layout'] ) : 0,
+					'error'  => is_wp_error( $built ) ? $built->get_error_message() : '',
+				) );
+				if ( ! is_wp_error( $built ) ) {
+					$used_renderer = 'elementor';
+				}
+			} catch ( \Throwable $e ) {
+				SCC_Logger::info( 'generator', 'Auto layout build failed', array( 'error' => $e->getMessage() ) );
+			}
+		}
+
 		SCC_Logger::info( 'generator', 'Draft created', array( 'post_id' => $post_id, 'status' => $status, 'score' => $score['score'], 'renderer' => $used_renderer, 'template' => $template->family, 'mode' => ( 'native' === $template->family || self::is_native_mode( $content->content_type, $manual_family ) ) ? 'native' : 'template' ) );
 
 		$mode = $has_mapped_template ? 'template' : ( self::is_native_mode( $content->content_type, $manual_family ) ? 'native' : 'template' );

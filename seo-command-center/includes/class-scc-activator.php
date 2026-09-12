@@ -73,6 +73,7 @@ class SCC_Activator {
 			'content_persona'       => '',
 			'content_persona_custom'=> '',
 			'visual_presentation'   => true,
+			'layout_auto_build'     => true,
 			// Per-operation AI routing (empty = use the primary provider/model).
 			'route_keyword_strategy_provider'   => '',
 			'route_keyword_strategy_model'      => '',

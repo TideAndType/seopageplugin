@@ -62,6 +62,7 @@ class SCC_Settings {
 			'content_persona'          => 'text',
 			'content_persona_custom'   => 'textarea',
 			'visual_presentation'      => 'bool',
+			'layout_auto_build'        => 'bool',
 			'route_keyword_strategy_provider'   => 'provider_or_empty',
 			'route_keyword_strategy_model'      => 'text',
 			'route_content_generation_provider' => 'provider_or_empty',
