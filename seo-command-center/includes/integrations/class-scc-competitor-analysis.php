@@ -311,14 +311,20 @@ class SCC_Competitor_Analysis {
 		}
 		self::dbg( 'AI parsed', array( 'raw_gaps' => count( (array) $parsed['gaps'] ) ) );
 
+		// Dedupe against pages the user already planned or already has live, so a
+		// gap they've already added to the plan never re-appears. OUR_PAGES the AI
+		// saw are the live pages ({title, path}); add them as extra signatures.
+		$taken = class_exists( 'SCC_Content_Plan' ) ? SCC_Content_Plan::taken_signatures( $our_pages ) : array( 'titles' => array(), 'keywords' => array(), 'slugs' => array() );
+
 		$gaps = array();
+		$skipped = 0;
 		foreach ( (array) $parsed['gaps'] as $g ) {
 			$title = SCC_Security::sanitize_text( $g['title'] ?? '' );
 			if ( '' === $title ) {
 				continue;
 			}
 			$prio = strtolower( (string) ( $g['priority'] ?? 'medium' ) );
-			$gaps[] = array(
+			$row  = array(
 				'title'           => $title,
 				'primary_keyword' => SCC_Security::sanitize_text( $g['primary_keyword'] ?? '' ),
 				'intent'          => SCC_Security::sanitize_text( $g['intent'] ?? '' ),
@@ -328,7 +334,13 @@ class SCC_Competitor_Analysis {
 				'why'             => SCC_Security::sanitize_text( $g['why'] ?? '' ),
 				'covered_by'      => array_slice( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) ( $g['covered_by'] ?? array() ) ), 0, 5 ),
 			);
+			if ( class_exists( 'SCC_Content_Plan' ) && SCC_Content_Plan::is_taken( $row, $taken ) ) {
+				$skipped++;
+				continue;
+			}
+			$gaps[] = $row;
 		}
+		self::dbg( 'gaps after dedupe', array( 'kept' => count( $gaps ), 'skipped_already_planned_or_live' => $skipped ) );
 
 		return array(
 			'gaps'  => array_slice( $gaps, 0, 30 ),

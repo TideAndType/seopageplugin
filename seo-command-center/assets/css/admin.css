@@ -482,6 +482,8 @@
 .scc-idea__meta .scc-label, .scc-idea__kw .scc-label { display: inline; margin-right: 4px; }
 .scc-idea__why { font-size: 13px; color: var(--scc-muted, #475569); margin: 6px 0; }
 .scc-idea__actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.scc-idea.is-added { opacity: .6; }
+.scc-idea.is-added::after { content: "In your plan"; display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 700; color: var(--scc-ok); }
 
 /* Content Ideas — refine bar. */
 .scc-refine { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--scc-border, #e2e8f0); }

@@ -1459,6 +1459,21 @@ assert_eq( 4000, SCC_AI_Manager::token_budget( 1800 ), '1800 raised to 4000 floo
 assert_eq( 8000, SCC_AI_Manager::token_budget( 8000 ), 'large default kept as-is' );
 assert_eq( 4000, SCC_AI_Manager::token_budget( 0 ), 'zero/unset default => floor' );
 
+echo "\n== Content Plan: dedupe signatures ==\n";
+assert_eq( 'local seo services', SCC_Content_Plan::norm_text( '  Local SEO Services!  ' ), 'norm_text lowercases + strips punctuation' );
+assert_eq( 'local seo services', SCC_Content_Plan::norm_text( '<strong>Local SEO Services</strong>' ), 'norm_text strips tags' );
+assert_eq( 'services/local-seo', SCC_Content_Plan::norm_slug( 'https://example.com/services/local-seo/' ), 'norm_slug reduces to path, no host/scheme/slashes' );
+assert_eq( 'services/local-seo', SCC_Content_Plan::norm_slug( '/services/local-seo' ), 'norm_slug handles bare slug' );
+$scc_taken = array(
+	'titles'   => array( 'local seo services' => true ),
+	'keywords' => array( 'local seo' => true ),
+	'slugs'    => array( 'services/local-seo' => true ),
+);
+assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Local SEO Services' ), $scc_taken ), 'is_taken matches by title' );
+assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Different', 'primary_keyword' => 'Local SEO' ), $scc_taken ), 'is_taken matches by keyword' );
+assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Different', 'recommended_url' => 'https://x.com/services/local-seo/' ), $scc_taken ), 'is_taken matches by slug' );
+assert_true( ! SCC_Content_Plan::is_taken( array( 'title' => 'Brand New Page', 'primary_keyword' => 'something else', 'recommended_url' => '/brand-new' ), $scc_taken ), 'is_taken passes a genuinely new idea' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -2024,7 +2024,11 @@
 			out.hidden = false;
 			var head = el( 'div', null, 'scc-card' );
 			var grounded = ( d.grounded && d.grounded.gsc ) ? 'grounded in your real pages + Search Console demand' : 'grounded in your real pages';
-			head.appendChild( el( 'p', ideas.length + ' page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			if ( ideas.length ) {
+				head.appendChild( el( 'p', ideas.length + ' new page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			} else {
+				head.appendChild( el( 'p', 'No new ideas this time — everything suggested is already in your plan or live on your site.', 'scc-note' ) );
+			}
 			if ( d.notes ) { head.appendChild( el( 'p', d.notes, 'scc-note' ) ); }
 
 			// Refine bar — adjust or extend this set with a follow-up instruction.
@@ -2080,7 +2084,15 @@
 					add.disabled = true;
 					setStatus( st, 'Adding…' );
 					request( '/content-plan', { method: 'POST', data: planData( idea ) } )
-						.then( function () { add.textContent = 'Added ✓'; setStatus( st, 'Added to Content Plan.', 'is-ok' ); } )
+						.then( function () {
+							add.textContent = 'Added ✓';
+							setStatus( st, 'Added to Content Plan.', 'is-ok' );
+							gen.disabled = true;
+							card.classList.add( 'is-added' );
+							// Drop it from the working set so a later Refine never
+							// re-sends it as a "previous" idea (server also dedupes).
+							lastIdeas = lastIdeas.filter( function ( x ) { return x !== idea; } );
+						} )
 						.catch( function ( err ) { add.disabled = false; setStatus( st, ( err && err.message ) || i18n.error, 'is-error' ); } );
 				} );
 				gen.addEventListener( 'click', function () { generateDraft( idea, st, gen ); } );

@@ -215,4 +215,90 @@ class SCC_Content_Plan {
 		$count = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE url = %s", $url ) ); // phpcs:ignore WordPress.DB
 		return $count > 0;
 	}
+
+	/**
+	 * Normalize a title/keyword for duplicate comparison: lowercase, strip tags
+	 * and punctuation, collapse whitespace. Pure.
+	 *
+	 * @param string $s Text.
+	 * @return string
+	 */
+	public static function norm_text( $s ) {
+		$s = strtolower( trim( wp_strip_all_tags( (string) $s ) ) );
+		$s = preg_replace( '/[^a-z0-9\s]+/u', ' ', $s );
+		$s = preg_replace( '/\s+/u', ' ', (string) $s );
+		return trim( (string) $s );
+	}
+
+	/**
+	 * Normalize a URL or slug path for duplicate comparison: path only, no scheme
+	 * or host, lowercase, no leading/trailing slashes. Pure.
+	 *
+	 * @param string $url URL or slug.
+	 * @return string
+	 */
+	public static function norm_slug( $url ) {
+		$url  = trim( (string) $url );
+		if ( '' === $url ) {
+			return '';
+		}
+		$path = ( false !== strpos( $url, '://' ) ) ? (string) wp_parse_url( $url, PHP_URL_PATH ) : $url;
+		$path = strtolower( trim( (string) $path ) );
+		return trim( $path, '/' );
+	}
+
+	/**
+	 * Signature sets of everything already in the plan — normalized titles,
+	 * primary keywords and slugs — for deduping AI suggestions against pages the
+	 * user has ALREADY planned (not just published). Optionally seed with more
+	 * pages (e.g. published site pages: {title, path}).
+	 *
+	 * @param array $also Extra {title?, url?/path?, primary_keyword?} rows to include.
+	 * @return array {titles: string[], keywords: string[], slugs: string[]} (values are keys => true)
+	 */
+	public static function taken_signatures( array $also = array() ) {
+		$titles   = array();
+		$keywords = array();
+		$slugs    = array();
+		$add = function ( $title, $url, $kw ) use ( &$titles, &$keywords, &$slugs ) {
+			$nt = self::norm_text( $title );
+			$nk = self::norm_text( $kw );
+			$ns = self::norm_slug( $url );
+			if ( '' !== $nt ) { $titles[ $nt ]     = true; }
+			if ( '' !== $nk ) { $keywords[ $nk ]   = true; }
+			if ( '' !== $ns ) { $slugs[ $ns ]      = true; }
+		};
+		foreach ( self::all() as $row ) {
+			$add( $row['title'] ?? '', $row['url'] ?? '', $row['primary_keyword'] ?? '' );
+		}
+		foreach ( $also as $row ) {
+			$url = isset( $row['url'] ) ? $row['url'] : ( $row['path'] ?? '' );
+			$add( $row['title'] ?? '', $url, $row['primary_keyword'] ?? '' );
+		}
+		return array( 'titles' => $titles, 'keywords' => $keywords, 'slugs' => $slugs );
+	}
+
+	/**
+	 * Is this suggestion a duplicate of something already taken (planned/existing)?
+	 * Matches on normalized title, primary keyword, or slug. Pure given $taken.
+	 *
+	 * @param array $idea  {title, primary_keyword, recommended_url|url}
+	 * @param array $taken Output of taken_signatures().
+	 * @return bool
+	 */
+	public static function is_taken( array $idea, array $taken ) {
+		$nt = self::norm_text( $idea['title'] ?? '' );
+		$nk = self::norm_text( $idea['primary_keyword'] ?? '' );
+		$ns = self::norm_slug( $idea['recommended_url'] ?? ( $idea['url'] ?? '' ) );
+		if ( '' !== $nt && ! empty( $taken['titles'][ $nt ] ) ) {
+			return true;
+		}
+		if ( '' !== $nk && ! empty( $taken['keywords'][ $nk ] ) ) {
+			return true;
+		}
+		if ( '' !== $ns && ! empty( $taken['slugs'][ $ns ] ) ) {
+			return true;
+		}
+		return false;
+	}
 }
