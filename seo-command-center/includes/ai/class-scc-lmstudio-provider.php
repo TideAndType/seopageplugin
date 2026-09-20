@@ -219,17 +219,35 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		// times — a brief blip then only kills generation if it recurs on every
 		// attempt. Retries stay internal, so generation is still one synchronous
 		// call from the caller's side.
-		$attempts = 3;
-		$http      = null;
+		// A failed attempt from a tunnel blip returns quickly (at the drop), and the
+		// tunnel reconnects within ~1s, so the next attempt starts with a fresh,
+		// usually-clean window. Five tries with a growing wait rides out several
+		// blips; to fail, the tunnel has to drop during every attempt in a row.
+		// Filterable if a very unstable tunnel needs even more.
+		$attempts = (int) apply_filters( 'scc_lmstudio_max_attempts', 5 );
+		$attempts = max( 1, min( 10, $attempts ) );
+		$http     = null;
 		for ( $i = 1; $i <= $attempts; $i++ ) {
 			$http = $this->post_chat( $url, $headers, $body );
-			if ( ! is_wp_error( $http ) ) {
-				break;
+
+			if ( is_wp_error( $http ) ) {
+				SCC_Logger::error( 'lmstudio', sprintf( 'Transport error (attempt %d/%d): %s', $i, $attempts, $http->get_error_message() ) );
+				if ( $i < $attempts ) {
+					sleep( min( 12, 1 + $i * 2 ) ); // 3s, 5s, 7s, 9s … let the tunnel reconnect.
+				}
+				continue;
 			}
-			SCC_Logger::error( 'lmstudio', sprintf( 'Transport error (attempt %d/%d): %s', $i, $attempts, $http->get_error_message() ) );
-			if ( $i < $attempts ) {
-				sleep( $i * 2 ); // 2s, then 4s — give the tunnel time to reconnect.
+
+			// A tunnel/proxy often answers a mid-flight drop with a transient gateway
+			// error (502/503/504) rather than a clean disconnect — also worth resending.
+			$try_code = (int) wp_remote_retrieve_response_code( $http );
+			if ( in_array( $try_code, array( 502, 503, 504 ), true ) && $i < $attempts ) {
+				SCC_Logger::error( 'lmstudio', sprintf( 'Gateway HTTP %d (attempt %d/%d) — tunnel likely dropped; retrying', $try_code, $i, $attempts ) );
+				sleep( min( 12, 1 + $i * 2 ) );
+				continue;
 			}
+
+			break; // Success, or a real response we should surface as-is.
 		}
 
 		if ( is_wp_error( $http ) ) {
