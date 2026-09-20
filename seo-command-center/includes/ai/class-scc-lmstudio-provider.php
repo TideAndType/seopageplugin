@@ -212,15 +212,33 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			return $response;
 		}
 
-		$http = $this->post_chat( $url, $headers, $body );
+		// Resilient send. A tunnel in front of LM Studio (e.g. Pangolin) can blip
+		// for ~1s and re-establish on its own, cutting a request off mid-response
+		// (cURL 56 "unexpected eof"). The request itself is fine, so on a transport
+		// failure we wait for the tunnel to heal and resend the whole request a few
+		// times — a brief blip then only kills generation if it recurs on every
+		// attempt. Retries stay internal, so generation is still one synchronous
+		// call from the caller's side.
+		$attempts = 3;
+		$http      = null;
+		for ( $i = 1; $i <= $attempts; $i++ ) {
+			$http = $this->post_chat( $url, $headers, $body );
+			if ( ! is_wp_error( $http ) ) {
+				break;
+			}
+			SCC_Logger::error( 'lmstudio', sprintf( 'Transport error (attempt %d/%d): %s', $i, $attempts, $http->get_error_message() ) );
+			if ( $i < $attempts ) {
+				sleep( $i * 2 ); // 2s, then 4s — give the tunnel time to reconnect.
+			}
+		}
 
 		if ( is_wp_error( $http ) ) {
-			SCC_Logger::error( 'lmstudio', 'Transport error: ' . $http->get_error_message() );
 			$response->error = new WP_Error(
 				'scc_transport',
 				sprintf(
-					/* translators: %s: error message */
-					__( 'Could not reach LM Studio (%s). Make sure the local server is running and its address is reachable from your WordPress server.', 'seo-command-center' ),
+					/* translators: %1$d: attempt count, %2$s: error message */
+					__( 'Could not reach LM Studio after %1$d attempts (%2$s). If LM Studio is behind a tunnel (Pangolin/Cloudflare), the tunnel is dropping the connection mid-response — stabilise it (wired connection, persistent keepalive, or a relayed instead of hole-punched tunnel). Otherwise make sure the local server is running and reachable from your WordPress host.', 'seo-command-center' ),
+					$attempts,
 					$http->get_error_message()
 				)
 			);
