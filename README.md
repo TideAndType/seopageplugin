@@ -11,7 +11,7 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.41.0.** The plugin is organized around four areas —
+**Current version: 1.42.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
@@ -48,7 +48,8 @@ and the hardening + simplification passes are implemented. See
   competitor gap analysis.
 
 **Recent passes (this branch)**
-- **v1.41.0 — Native Elementor Design Engine:** generated layouts now prefer real Elementor containers and core widgets (heading, text, button, image) instead of placing every designed section inside one HTML widget. A capability layer detects the installed Elementor runtime, Design Intel builds a cached site profile from the active Kit plus existing-page spacing signals, and deterministic block variants choose appropriate hero/card/content/CTA treatments. Existing mapped templates still take priority and the previous HTML-widget renderer remains the compatibility fallback. EMCP Tools is detected as an optional agent surface but is not required.
+- **v1.42.0 — Professional Elementor Design Engine:** the article/content engine now hands completed copy to a separate design-only contract. Visual composition no longer reads keyword, search intent, city, or page-type metadata. TideOrbit owns its Elementor widget catalog and uses runtime discovery to choose real Heading, Text Editor, Button, Image, Icon List, Accordion and Counter widgets when available. Long-form content is composed section-by-section into editorial, split-list, media-split, callout, wide and readable treatments, with responsive containers and safe fallbacks. CTAs are only rendered when supplied by the content layer; the design layer does not invent CTA copy or destinations.
+- **v1.41.0 — Native Elementor Design Engine foundation:** generated layouts began preferring real Elementor containers and core widgets over one large HTML widget, with Elementor capability discovery and cached site Design Intel.
 - **v1.23.0 — Hardening:** centralized outbound-URL SSRF guard (`SCC_URL`) enforced
   before every request (loopback allowed for LM Studio; private/reserved/metadata
   blocked), a proper `robots.txt` matcher (`SCC_Robots`), RFC 3986 crawler URL
