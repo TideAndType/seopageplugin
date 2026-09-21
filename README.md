@@ -81,6 +81,7 @@ Internal REST API at `/wp-json/seo-command/v1/*`; **423** passing unit tests.
 - [`docs/API.md`](docs/API.md) — REST routes
 - [`docs/TEMPLATES.md`](docs/TEMPLATES.md) — template engine + tokens
 - [`docs/RENDERERS.md`](docs/RENDERERS.md) — renderer abstraction
+- [`docs/ELEMENTOR_DESIGN_ENGINE.md`](docs/ELEMENTOR_DESIGN_ENGINE.md) — native Elementor component rendering, design profiling, variants, and fallback order
 
 ## Install (dev)
 
