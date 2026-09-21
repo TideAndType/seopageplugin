@@ -79,7 +79,7 @@ class SCC_Meta_Optimizer {
 					),
 				),
 				'json'        => true,
-				'max_tokens'  => 1800,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 1800 ),
 				'temperature' => 0.6,
 			),
 			'meta-optimization'

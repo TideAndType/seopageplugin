@@ -35,8 +35,8 @@ class SCC_Admin {
 		$cap = SCC_Security::capability();
 
 		add_menu_page(
-			__( 'SEO Command Center', 'seo-command-center' ),
-			__( 'SEO Command', 'seo-command-center' ),
+			__( 'TideOrbit', 'seo-command-center' ),
+			__( 'TideOrbit', 'seo-command-center' ),
 			$cap,
 			self::SLUG,
 			array( $this, 'render_dashboard' ),
@@ -44,19 +44,20 @@ class SCC_Admin {
 			58
 		);
 
-		// A small, clear menu. Overlapping screens are consolidated into three
-		// tabbed hubs (Content / SEO / Strategy) instead of a flat wall of links.
-		// Every individual screen still exists — it is registered as a hidden route
-		// (reached through its hub's tabs and from in-app links), so nothing breaks.
+		// The whole plugin revolves around four questions: how is my site doing
+		// (Dashboard), what should I make (Create), what should I fix (Optimize),
+		// and where's the upside (Opportunities). Everything else is a tab inside
+		// one of those, or a config screen. Overlapping screens are consolidated
+		// into tabbed hubs; every individual screen stays registered as a hidden
+		// route (reached via its hub tab and in-app links), so nothing breaks.
 		$pages = array(
-			self::SLUG                   => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
-			self::SLUG . '-content'      => array( __( 'Content', 'seo-command-center' ), 'render_content_hub' ),
-			self::SLUG . '-seo'          => array( __( 'SEO', 'seo-command-center' ), 'render_seo_hub' ),
-			self::SLUG . '-strategy'     => array( __( 'Strategy', 'seo-command-center' ), 'render_strategy_hub' ),
-			self::SLUG . '-action-queue' => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
-			self::SLUG . '-templates'    => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
-			self::SLUG . '-settings'     => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
-			self::SLUG . '-connections'  => array( __( 'Connections', 'seo-command-center' ), 'render_connections' ),
+			self::SLUG                     => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
+			self::SLUG . '-create'         => array( __( 'Create', 'seo-command-center' ), 'render_create_hub' ),
+			self::SLUG . '-optimize'       => array( __( 'Optimize', 'seo-command-center' ), 'render_optimize_hub' ),
+			self::SLUG . '-opportunities'  => array( __( 'Opportunities', 'seo-command-center' ), 'render_opportunities_hub' ),
+			self::SLUG . '-templates'      => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
+			self::SLUG . '-settings'       => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
+			self::SLUG . '-connections'    => array( __( 'Connections', 'seo-command-center' ), 'render_connections' ),
 		);
 
 		foreach ( $pages as $slug => $page ) {
@@ -70,6 +71,7 @@ class SCC_Admin {
 			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 'render_publishing' ),
+			self::SLUG . '-action-queue'     => array( __( 'Action Queue', 'seo-command-center' ), 'render_action_queue' ),
 			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 'render_seo_audit' ),
 			self::SLUG . '-keyword-strategy' => array( __( 'Keywords', 'seo-command-center' ), 'render_keyword_strategy' ),
 			self::SLUG . '-architecture'     => array( __( 'Site Architecture', 'seo-command-center' ), 'render_architecture' ),
@@ -80,6 +82,7 @@ class SCC_Admin {
 			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
+			self::SLUG . '-layout'           => array( __( 'Elementor Layout', 'seo-command-center' ), 'render_layout' ),
 		);
 		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
 			$hidden[ self::SLUG . '-elementor' ] = array( __( 'Elementor Templates', 'seo-command-center' ), 'render_elementor' );
@@ -97,31 +100,36 @@ class SCC_Admin {
 	 */
 	protected function hubs() {
 		return array(
-			self::SLUG . '-content'  => array(
-				'title'   => __( 'Content', 'seo-command-center' ),
+			// CREATE — make something new. Blog Post generation is the simple default.
+			self::SLUG . '-create'        => array(
+				'title'   => __( 'Create', 'seo-command-center' ),
 				'tabs'    => array(
-					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
-					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
 					'generate'   => array( __( 'Generate', 'seo-command-center' ), self::SLUG . '-generate', 'render_generate' ),
+					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
+					'layout'     => array( __( 'Elementor Layout', 'seo-command-center' ), self::SLUG . '-layout', 'render_layout' ),
+					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
 					'publishing' => array( __( 'Publishing', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
 				),
 			),
-			self::SLUG . '-seo'      => array(
-				'title'   => __( 'SEO', 'seo-command-center' ),
+			// OPTIMIZE — fix what exists. The Action Queue is the apply/verify centre.
+			self::SLUG . '-optimize'      => array(
+				'title'   => __( 'Optimize', 'seo-command-center' ),
 				'tabs'    => array(
-					'audit'        => array( __( 'Site Audit', 'seo-command-center' ), self::SLUG . '-seo-audit', 'render_seo_audit' ),
-					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
-					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
-					'links'        => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
-					'meta'         => array( __( 'Meta Editor', 'seo-command-center' ), self::SLUG . '-meta-editor', 'render_meta_editor' ),
+					'actions' => array( __( 'Action Queue', 'seo-command-center' ), self::SLUG . '-action-queue', 'render_action_queue' ),
+					'links'   => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
+					'meta'    => array( __( 'Meta Editor', 'seo-command-center' ), self::SLUG . '-meta-editor', 'render_meta_editor' ),
+					'audit'   => array( __( 'Site Audit', 'seo-command-center' ), self::SLUG . '-seo-audit', 'render_seo_audit' ),
 				),
 			),
-			self::SLUG . '-strategy' => array(
-				'title'   => __( 'Strategy', 'seo-command-center' ),
+			// OPPORTUNITIES — where's the upside. The ranked opportunity list leads.
+			self::SLUG . '-opportunities' => array(
+				'title'   => __( 'Opportunities', 'seo-command-center' ),
 				'tabs'    => array(
-					'opportunities' => array( __( 'Opportunities', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
-					'topical'       => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
-					'competitors'   => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
+					'all'          => array( __( 'All Opportunities', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
+					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
+					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
+					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
+					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
 			),
 		);
@@ -184,24 +192,24 @@ class SCC_Admin {
 	}
 
 	/**
-	 * Content hub (Plan / Ideas / Generate / Publishing).
+	 * Create hub (Generate / Ideas / Content Plan / Publishing).
 	 */
-	public function render_content_hub() {
-		$this->render_hub( self::SLUG . '-content' );
+	public function render_create_hub() {
+		$this->render_hub( self::SLUG . '-create' );
 	}
 
 	/**
-	 * SEO hub (Audit / Keywords / Architecture / Internal Links / Meta).
+	 * Optimize hub (Action Queue / Internal Links / Meta / Site Audit).
 	 */
-	public function render_seo_hub() {
-		$this->render_hub( self::SLUG . '-seo' );
+	public function render_optimize_hub() {
+		$this->render_hub( self::SLUG . '-optimize' );
 	}
 
 	/**
-	 * Strategy hub (Opportunities / Topical Authority / Competitors).
+	 * Opportunities hub (All / Keywords / Topical Authority / Competitors / Architecture).
 	 */
-	public function render_strategy_hub() {
-		$this->render_hub( self::SLUG . '-strategy' );
+	public function render_opportunities_hub() {
+		$this->render_hub( self::SLUG . '-opportunities' );
 	}
 
 	/**
@@ -267,7 +275,7 @@ class SCC_Admin {
 		foreach ( $types as $type ) {
 			add_meta_box(
 				'scc_seo_panel',
-				__( 'SEO Command Center', 'seo-command-center' ),
+				__( 'TideOrbit', 'seo-command-center' ),
 				array( $this, 'render_seo_panel' ),
 				$type,
 				'side',
@@ -281,7 +289,7 @@ class SCC_Admin {
 		foreach ( array( 'page', 'post' ) as $type ) {
 			add_meta_box(
 				'scc_seo_template',
-				__( 'SEO Command: SEO template', 'seo-command-center' ),
+				__( 'TideOrbit: SEO template', 'seo-command-center' ),
 				array( $this, 'render_meta_box' ),
 				$type,
 				'side',
@@ -291,7 +299,7 @@ class SCC_Admin {
 	}
 
 	/**
-	 * Render the unified SEO Command Center editor panel.
+	 * Render the unified TideOrbit editor panel.
 	 *
 	 * @param WP_Post $post Post.
 	 */
@@ -313,9 +321,14 @@ class SCC_Admin {
 				<button type="button" class="button" id="scc-panel-meta"><?php esc_html_e( 'Meta variants', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-panel-schema"><?php esc_html_e( 'Schema', 'seo-command-center' ); ?></button>
 			</div>
+			<?php if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) : ?>
+				<p class="scc-panel__actions" style="margin-top:8px;">
+					<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-layout&post=' . (int) $post->ID ) ); ?>">🧩 <?php esc_html_e( 'Build Elementor layout', 'seo-command-center' ); ?></a>
+				</p>
+			<?php endif; ?>
 			<div class="scc-panel__out" id="scc-panel-out"></div>
 			<span class="scc-inline-status" id="scc-panel-status"></span>
-			<p class="scc-note"><?php echo $saved ? esc_html__( 'Generated by SEO Command Center.', 'seo-command-center' ) : esc_html__( 'Save the post first for the most accurate analysis.', 'seo-command-center' ); ?></p>
+			<p class="scc-note"><?php echo $saved ? esc_html__( 'Generated by TideOrbit.', 'seo-command-center' ) : esc_html__( 'Save the post first for the most accurate analysis.', 'seo-command-center' ); ?></p>
 		</div>
 		<?php
 	}
@@ -491,6 +504,68 @@ class SCC_Admin {
 	 */
 	public function render_ideas() {
 		$this->view( 'ideas', array() );
+	}
+
+	/**
+	 * AI Elementor Layout Engine — preview + build an Elementor page for a
+	 * generated post. Reached via ?post=ID from the generated-content lists.
+	 */
+	public function render_layout() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only screen bootstrap; all actions are nonce-checked REST calls.
+		$post_id = isset( $_GET['post'] ) ? (int) $_GET['post'] : 0;
+		$post    = $post_id ? get_post( $post_id ) : null;
+
+		// When no post is chosen, offer a picker. Prefer TideOrbit-generated
+		// drafts; if none are found, fall back to recent pages/posts so there is
+		// always something to select. Covers custom post types too.
+		$recent    = array();
+		$is_scc    = false;
+		if ( ! $post_id ) {
+			$statuses = array( 'draft', 'pending', 'publish', 'private', 'future' );
+			$gen = new WP_Query( array(
+				'post_type'      => 'any',
+				'post_status'    => $statuses,
+				'posts_per_page' => 30,
+				'no_found_rows'  => true,
+				'meta_key'       => '_scc_generated', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'orderby'        => 'date',
+				'order'          => 'DESC',
+			) );
+			$posts = $gen->posts;
+			$is_scc = ! empty( $posts );
+			if ( empty( $posts ) ) {
+				// Fallback: any recent editable pages/posts.
+				$any = new WP_Query( array(
+					'post_type'      => array( 'page', 'post' ),
+					'post_status'    => $statuses,
+					'posts_per_page' => 30,
+					'no_found_rows'  => true,
+					'orderby'        => 'modified',
+					'order'          => 'DESC',
+				) );
+				$posts = $any->posts;
+			}
+			foreach ( $posts as $p ) {
+				$recent[] = array(
+					'id'     => (int) $p->ID,
+					'title'  => get_the_title( $p ) ? get_the_title( $p ) : ( '#' . $p->ID ),
+					'type'   => $p->post_type,
+					'status' => $p->post_status,
+				);
+			}
+		}
+
+		$this->view(
+			'layout',
+			array(
+				'post_id'          => $post_id,
+				'post_title'       => $post ? get_the_title( $post ) : '',
+				'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
+				'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
+				'recent'           => $recent,
+				'recent_generated' => $is_scc,
+			)
+		);
 	}
 
 	/**

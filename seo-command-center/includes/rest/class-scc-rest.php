@@ -42,6 +42,13 @@ class SCC_REST {
 	public function register_routes() {
 		$perm = array( 'SCC_Security', 'rest_permission' );
 
+		// Safety net: never let a $wpdb error (e.g. a missing table before the DB
+		// upgrade runs) print HTML into one of our JSON responses — that surfaces
+		// in the admin as the opaque "The response is not a valid JSON response."
+		// For our namespace we suppress DB error DISPLAY (still logged) so the
+		// handler always returns clean JSON, including a proper error envelope.
+		add_filter( 'rest_pre_dispatch', array( $this, 'guard_json_output' ), 10, 3 );
+
 		register_rest_route(
 			self::NS,
 			'/status',
@@ -286,6 +293,12 @@ class SCC_REST {
 			'permission_callback' => $perm,
 		) );
 
+		register_rest_route( self::NS, '/copilot', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'copilot' ),
+			'permission_callback' => $perm,
+		) );
+
 		register_rest_route( self::NS, '/opportunities', array(
 			'methods'             => WP_REST_Server::READABLE,
 			'callback'            => array( $this, 'opportunities' ),
@@ -404,6 +417,52 @@ class SCC_REST {
 			)
 		);
 
+		// Recover the most recent completed gap-map. The gap-map request runs long
+		// (crawl + AI) and its result is returned inline, so if a gateway/tunnel
+		// drops the connection after the AI finished the browser sees an error and
+		// the finished result is lost. gap-map persists its result, and the UI
+		// falls back to this endpoint to recover it instead of showing an error.
+		register_rest_route(
+			self::NS,
+			'/competitors/gap-map/last',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'competitors_gap_map_last' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		// Always-on debug trace for the most recent competitor gap-map run.
+		register_rest_route(
+			self::NS,
+			'/competitors/debug/last',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'competitors_debug_last' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		// AI Elementor Layout Engine.
+		register_rest_route(
+			self::NS,
+			'/layout/propose',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'layout_propose' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/layout/apply',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'layout_apply' ),
+				'permission_callback' => $perm,
+			)
+		);
+
 		register_rest_route(
 			self::NS,
 			'/cannibalization',
@@ -457,6 +516,26 @@ class SCC_REST {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'generate_quick' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/generated/recent',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'generated_recent' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/debug/last',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'debug_last' ),
 				'permission_callback' => $perm,
 			)
 		);
@@ -962,9 +1041,11 @@ class SCC_REST {
 			array(
 				'system'     => 'You are a connectivity test. Reply with the single word: OK',
 				'messages'   => array( array( 'role' => 'user', 'content' => 'Say OK' ) ),
-				// Generous budget so "thinking" models (Gemini 3.x, etc.) still
-				// produce visible output after their internal reasoning tokens.
-				'max_tokens' => 256,
+				// Generous budget so "thinking" models (Gemini 3.x, Qwen3, etc.)
+				// still produce visible output after their internal reasoning
+				// tokens — 256 was too small and made the test fail for them. A
+				// fixed value (never unlimited) keeps this diagnostic quick.
+				'max_tokens' => 2048,
 				'model'      => isset( $models[ $provider_id ] ) ? $models[ $provider_id ] : '',
 			)
 		);
@@ -1420,6 +1501,26 @@ class SCC_REST {
 	}
 
 	/**
+	 * POST /copilot — natural-language SEO Copilot. Routes the request to the
+	 * existing opportunity engine and returns real, matching opportunities (never
+	 * fabricated), plus an honest note about any missing data source.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function copilot( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$query  = SCC_Security::sanitize_text( $params['query'] ?? '' );
+
+		$copilot = new SCC_Copilot();
+		return $this->ok( $copilot->answer( $query ) );
+	}
+
+	/**
 	 * GET /opportunities — the ranked, explained opportunity list.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -1699,6 +1800,14 @@ class SCC_REST {
 		if ( is_string( $urls ) ) {
 			$urls = preg_split( '/[\r\n,]+/', $urls );
 		}
+		// A per-click id from the UI ties this run to the record the browser polls
+		// for recovery, so a dropped connection never loses the finished result and
+		// no clock comparison is involved. Fall back to a server-made id.
+		$run_id = SCC_Security::sanitize_text( $params['run_id'] ?? '' );
+		if ( '' === $run_id ) {
+			$run_id = 'srv_' . (string) wp_generate_password( 12, false, false );
+		}
+		$urls_norm = array_values( array_map( 'strval', is_array( $urls ) ? $urls : array() ) );
 
 		// This crawls remote sites and calls the AI — give it room to finish
 		// directly (never punt to a background worker on this host).
@@ -1709,8 +1818,148 @@ class SCC_REST {
 			ignore_user_abort( true );
 		}
 
+		// Fresh debug trace for this run, so the Competitor Gaps debug panel shows
+		// exactly what happened this time (mirrors the generation debug reset).
+		update_option( 'scc_comp_debug', array(), false );
+
+		// Mark the run as RUNNING before the long work starts, so the recovery
+		// poll can tell "still working" apart from "never started". Updated to
+		// done/error below. Written even if the browser has already disconnected.
+		$this->save_gap_map_run( array(
+			'run_id' => $run_id,
+			'status' => 'running',
+			'urls'   => $urls_norm,
+		) );
+
 		$service = new SCC_Competitor_Analysis( $this->ai );
 		$result  = $service->gap_map( is_array( $urls ) ? $urls : array() );
+
+		if ( is_wp_error( $result ) ) {
+			// Record the failure so the UI shows the real reason instead of hanging
+			// on "recovering…" — the request may already be disconnected.
+			$this->save_gap_map_run( array(
+				'run_id'  => $run_id,
+				'status'  => 'error',
+				'urls'    => $urls_norm,
+				'code'    => (string) $result->get_error_code(),
+				'message' => (string) $result->get_error_message(),
+			) );
+			return $result;
+		}
+
+		// Persist the completed result BEFORE returning it. If the connection was
+		// already dropped by a gateway/tunnel while the AI ran, the response below
+		// never reaches the browser — but the UI can then recover this saved copy
+		// via /competitors/gap-map/last instead of showing "something went wrong".
+		$this->save_gap_map_run( array(
+			'run_id' => $run_id,
+			'status' => 'done',
+			'urls'   => $urls_norm,
+			'result' => $result,
+		) );
+
+		return $this->ok( array_merge( $result, array( 'run_id' => $run_id ) ) );
+	}
+
+	/**
+	 * Persist the state of the latest competitor gap-map run (running/done/error)
+	 * so the UI can recover it after a dropped connection.
+	 *
+	 * @param array $record Run record.
+	 * @return void
+	 */
+	protected function save_gap_map_run( array $record ) {
+		$record['epoch'] = time();
+		$record['t']     = current_time( 'mysql' );
+		update_option( 'scc_gap_map_last', $record, false );
+	}
+
+	/**
+	 * GET /competitors/gap-map/last — the latest gap-map run's state, so the UI
+	 * can recover a result (or surface the real error) whose inline response was
+	 * lost to a dropped connection. Returns {found:false} when nothing has run.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function competitors_gap_map_last( WP_REST_Request $request ) {
+		$saved = get_option( 'scc_gap_map_last', array() );
+		if ( ! is_array( $saved ) || empty( $saved['run_id'] ) ) {
+			return $this->ok( array( 'found' => false ) );
+		}
+		return $this->ok( array(
+			'found'   => true,
+			'run_id'  => (string) $saved['run_id'],
+			'status'  => (string) ( $saved['status'] ?? 'done' ),
+			'epoch'   => (int) ( $saved['epoch'] ?? 0 ),
+			't'       => (string) ( $saved['t'] ?? '' ),
+			'urls'    => array_values( (array) ( $saved['urls'] ?? array() ) ),
+			'code'    => (string) ( $saved['code'] ?? '' ),
+			'message' => (string) ( $saved['message'] ?? '' ),
+			'result'  => isset( $saved['result'] ) ? $saved['result'] : null,
+		) );
+	}
+
+	/**
+	 * GET /competitors/debug/last — the always-on step-by-step trace of the most
+	 * recent competitor gap-map run (option scc_comp_debug). Lets the user copy
+	 * the full trace when the analysis returns nothing or errors.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function competitors_debug_last( WP_REST_Request $request ) {
+		$log = get_option( 'scc_comp_debug', array() );
+		return $this->ok( array( 'trace' => is_array( $log ) ? $log : array() ) );
+	}
+
+	/**
+	 * POST /layout/propose — propose an Elementor block layout for a generated
+	 * post. Deterministic by default; AI-assisted only when use_ai is set AND a
+	 * provider is configured. Returns the ordered block list + a preview.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function layout_propose( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		$use_ai  = ! empty( $params['use_ai'] );
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
+		}
+		$service = new SCC_Layout_Service( $this->ai );
+		$result  = $service->propose_for_post( $post_id, $use_ai );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /layout/apply — render a confirmed layout into the post as an editable
+	 * Elementor page (validated server-side; block ids are allowlisted).
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function layout_apply( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		$layout  = isset( $params['layout'] ) && is_array( $params['layout'] ) ? $params['layout'] : array();
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
+		}
+		$service = new SCC_Layout_Service( $this->ai );
+		$result  = $service->apply( $post_id, $layout );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -1790,19 +2039,26 @@ class SCC_REST {
 		}
 		$post_id = (int) ( $entry['post_id'] ?? 0 );
 		if ( $post_id > 0 && get_post( $post_id ) ) {
+			$post = get_post( $post_id );
 			return $this->ok( array(
-				'done'     => true,
-				'post_id'  => $post_id,
-				'edit_url' => get_edit_post_link( $post_id, 'raw' ),
-				'status'   => (string) ( $entry['status'] ?? 'draft' ),
+				'done'      => true,
+				'post_id'   => $post_id,
+				'edit_url'  => get_edit_post_link( $post_id, 'raw' ),
+				'status'    => $post ? (string) $post->post_status : (string) ( $entry['status'] ?? 'draft' ),
+				'post_type' => $post ? (string) $post->post_type : '',
 			) );
 		}
 		return $this->ok( array( 'done' => false ) );
 	}
 
 	public function generate( WP_REST_Request $request ) {
+		// Start a fresh debug trace for this run (always-on, no WP_DEBUG needed).
+		update_option( 'scc_gen_debug', array(), false );
+		SCC_Generator::dbg( 'REST /generate called', array( 'entry_id' => (int) $request->get_param( 'entry_id' ) ) );
+
 		$entry = SCC_Content_Plan::find( (int) $request->get_param( 'entry_id' ) );
 		if ( ! $entry ) {
+			SCC_Generator::dbg( 'entry NOT FOUND', array( 'entry_id' => (int) $request->get_param( 'entry_id' ) ) );
 			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
 		}
 
@@ -1823,13 +2079,35 @@ class SCC_REST {
 			$result    = $generator->generate( $entry, $brief );
 		} catch ( \Throwable $e ) {
 			SCC_Logger::error( 'generate', 'Fatal during generation: ' . $e->getMessage() );
-			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'The draft was written but saving it failed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
+			SCC_Generator::dbg( 'PHP EXCEPTION during generation', array(
+				'message' => $e->getMessage(),
+				'file'    => $e->getFile(),
+				'line'    => $e->getLine(),
+			) );
+			return $this->fail( 'generate_exception', sprintf( /* translators: %s: error */ __( 'Generation crashed: %s', 'seo-command-center' ), $e->getMessage() ), 500 );
 		}
 
 		if ( is_wp_error( $result ) ) {
+			SCC_Generator::dbg( 'generate() returned WP_Error to REST', array(
+				'code'    => $result->get_error_code(),
+				'message' => $result->get_error_message(),
+			) );
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /debug/last — the always-on trace of the most recent generation attempt
+	 * (stored in the scc_gen_debug option, independent of WP_DEBUG). Lets the user
+	 * copy the full step-by-step trace even when nothing reaches debug.log.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function debug_last( WP_REST_Request $request ) {
+		$log = get_option( 'scc_gen_debug', array() );
+		return $this->ok( array( 'trace' => is_array( $log ) ? $log : array() ) );
 	}
 
 	/**
@@ -1905,6 +2183,46 @@ class SCC_REST {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * GET /generated/recent — every post this plugin generated, from the DB
+	 * directly (any post type, any status). Lets the user find a draft even when
+	 * it is a Page rather than a Post, or filtered out of the list screens.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function generated_recent( WP_REST_Request $request ) {
+		$query = new WP_Query(
+			array(
+				'post_type'        => 'any',
+				'post_status'      => array( 'draft', 'pending', 'future', 'private', 'publish' ),
+				'posts_per_page'   => 25,
+				'orderby'          => 'date',
+				'order'            => 'DESC',
+				'no_found_rows'    => true,
+				'meta_key'         => '_scc_generated', // phpcs:ignore WordPress.DB.SlowDBQuery
+				'suppress_filters' => false,
+			)
+		);
+
+		$items = array();
+		foreach ( $query->posts as $post ) {
+			$type_obj = get_post_type_object( $post->post_type );
+			$items[]  = array(
+				'post_id'    => (int) $post->ID,
+				'title'      => get_the_title( $post ) ? get_the_title( $post ) : __( '(no title)', 'seo-command-center' ),
+				'post_type'  => $post->post_type,
+				'type_label' => $type_obj ? $type_obj->labels->singular_name : $post->post_type,
+				'status'     => $post->post_status,
+				'edit_url'   => get_edit_post_link( $post->ID, 'raw' ),
+				'view_url'   => get_permalink( $post->ID ),
+				'generated'  => (string) get_post_meta( $post->ID, '_scc_generated', true ),
+			);
+		}
+
+		return $this->ok( array( 'items' => $items ) );
 	}
 
 	/**
@@ -2710,7 +3028,7 @@ class SCC_REST {
 		$params = is_array( $params ) ? $params : $request->get_params();
 		$id     = SCC_Template_Store::create( is_array( $params ) ? $params : array() );
 		if ( ! $id ) {
-			return $this->fail( 'create_failed', __( 'Could not create the template.', 'seo-command-center' ), 500 );
+			return $this->fail( 'create_failed', $this->db_reason( __( 'Could not create the template.', 'seo-command-center' ) ), 500 );
 		}
 		return $this->ok( array( 'id' => $id ) );
 	}
@@ -2806,7 +3124,7 @@ class SCC_REST {
 			'elementor_source_id' => $source,
 		) );
 		if ( ! $id ) {
-			return $this->fail( 'import_failed', __( 'Could not import the template.', 'seo-command-center' ), 500 );
+			return $this->fail( 'import_failed', $this->db_reason( __( 'Could not import the template.', 'seo-command-center' ) ), 500 );
 		}
 		return $this->ok( array( 'id' => $id ) );
 	}
@@ -2854,6 +3172,37 @@ class SCC_REST {
 			'source'   => $selection['source'],
 			'html'     => is_wp_error( $rendered ) ? '' : $rendered['post_content'],
 		) );
+	}
+
+	/**
+	 * Suppress $wpdb error output for requests to our namespace so a DB notice can
+	 * never corrupt a JSON response. Errors are still recorded in $wpdb->last_error
+	 * (and our own logger where callers check it). Returns $result unchanged.
+	 *
+	 * @param mixed           $result  Short-circuit result (null to continue).
+	 * @param WP_REST_Server  $server  Server.
+	 * @param WP_REST_Request $request Request.
+	 * @return mixed
+	 */
+	public function guard_json_output( $result, $server, $request ) {
+		$route = is_object( $request ) && method_exists( $request, 'get_route' ) ? (string) $request->get_route() : '';
+		if ( 0 === strpos( ltrim( $route, '/' ), self::NS ) && isset( $GLOBALS['wpdb'] ) && is_object( $GLOBALS['wpdb'] ) ) {
+			$GLOBALS['wpdb']->hide_errors();
+		}
+		return $result;
+	}
+
+	/**
+	 * Append the last DB error to a failure message when there is one. The screens
+	 * that use this require manage_options, so surfacing the real cause (e.g. a
+	 * missing table or a column error) is safe and saves a blind debugging round.
+	 *
+	 * @param string $base Base message.
+	 * @return string
+	 */
+	protected function db_reason( $base ) {
+		$err = class_exists( 'SCC_DB' ) ? (string) SCC_DB::$last_error : '';
+		return '' !== $err ? ( $base . ' (' . $err . ')' ) : $base;
 	}
 
 	/**

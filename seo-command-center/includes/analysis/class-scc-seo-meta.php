@@ -56,7 +56,7 @@ class SCC_SEO_Meta {
 			case self::PLUGIN_AIOSEO:
 				return 'All in One SEO';
 			default:
-				return __( 'None (SEO Command Center will store metadata itself)', 'seo-command-center' );
+				return __( 'None (TideOrbit will store metadata itself)', 'seo-command-center' );
 		}
 	}
 

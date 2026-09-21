@@ -68,19 +68,20 @@ class SCC_Renderer_Manager {
 	 * Pick a renderer, honoring the preference then falling back to an available
 	 * one. Never returns null (wordpress is always available).
 	 *
-	 * @param string $preferred    Preferred renderer id.
-	 * @param string $content_type Content type (for availability checks).
+	 * @param string       $preferred    Preferred renderer id.
+	 * @param string       $content_type Content type (for availability checks).
+	 * @param SCC_Template $template     Selected template (may pin a source).
 	 * @return SCC_Renderer_Interface
 	 */
-	public function pick( $preferred, $content_type = '' ) {
+	public function pick( $preferred, $content_type = '', $template = null ) {
 		$candidate = $this->get( $preferred );
-		if ( $candidate && $candidate->is_available( $content_type ) ) {
+		if ( $candidate && $candidate->is_available( $content_type, $template ) ) {
 			return $candidate;
 		}
 
 		foreach ( self::FALLBACK as $id ) {
 			$r = $this->get( $id );
-			if ( $r && $r->is_available( $content_type ) ) {
+			if ( $r && $r->is_available( $content_type, $template ) ) {
 				if ( $id !== $preferred ) {
 					SCC_Logger::info( 'renderer', 'Falling back', array( 'from' => $preferred, 'to' => $id ) );
 				}

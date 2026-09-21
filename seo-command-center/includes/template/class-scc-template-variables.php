@@ -290,10 +290,15 @@ class SCC_Template_Variables {
 			'FAQ_5'         => self::faq_one( $faqs, 4 ),
 			'QUESTIONS'     => array_map( function ( $f ) { return $f['question']; }, $faqs ),
 			'DIRECT_ANSWER' => isset( $faqs[0] ) ? $faqs[0]['answer'] : '',
-			// Conversion.
+			// Conversion. CTA_TEXT/CTA_URL fall back sensibly so a button widget in
+			// the template is never left blank when only a CTA sentence was produced.
 			'CTA'           => $obj->cta,
-			'CTA_TEXT'      => (string) ( $context['cta_text'] ?? '' ),
-			'CTA_URL'       => (string) ( $context['cta_url'] ?? '' ),
+			'CTA_TEXT'      => '' !== (string) ( $context['cta_text'] ?? '' )
+				? (string) $context['cta_text']
+				: ( '' !== trim( (string) $obj->cta_text ) ? $obj->cta_text : ( '' !== trim( wp_strip_all_tags( (string) $obj->cta ) ) ? wp_strip_all_tags( (string) $obj->cta ) : __( 'Get in touch', 'seo-command-center' ) ) ),
+			'CTA_URL'       => '' !== (string) ( $context['cta_url'] ?? '' )
+				? (string) $context['cta_url']
+				: ( '' !== trim( (string) $obj->cta_url ) ? $obj->cta_url : (string) ( $business['url'] ?? home_url( '/' ) ) ),
 			'PHONE'         => (string) ( $business['phone'] ?? '' ),
 			'EMAIL'         => (string) ( $business['email'] ?? '' ),
 			'BUSINESS_NAME' => (string) ( $business['organization_name'] ?? '' ),

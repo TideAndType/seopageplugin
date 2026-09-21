@@ -21,6 +21,12 @@ if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 if ( ! defined( 'DAY_IN_SECONDS' ) ) {
 	define( 'DAY_IN_SECONDS', 86400 );
 }
+if ( ! defined( 'ARRAY_A' ) ) {
+	define( 'ARRAY_A', 'ARRAY_A' );
+}
+if ( ! defined( 'OBJECT' ) ) {
+	define( 'OBJECT', 'OBJECT' );
+}
 
 // --- Minimal WP function stubs --------------------------------------------
 if ( ! function_exists( 'sanitize_text_field' ) ) {
@@ -356,8 +362,10 @@ if ( ! class_exists( 'SCC_Elementor' ) ) {
 }
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-content-object.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template.php';
+require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-store.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-map.php';
 require_once __DIR__ . '/../seo-command-center/includes/template/class-scc-template-selector.php';
+require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-content-presenter.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/interface-scc-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-wordpress-renderer.php';
 require_once __DIR__ . '/../seo-command-center/includes/render/class-scc-gutenberg-renderer.php';
@@ -386,6 +394,12 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-h
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-experiments.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-entity-graph.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-ai-visibility.php';
+if ( ! function_exists( '_n' ) ) {
+	function _n( $single, $plural, $number, $domain = 'default' ) {
+		return ( 1 === (int) $number ) ? $single : $plural;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-copilot.php';
 
 // --- Generator (native vs template mode: pure static helpers under test) ----
 if ( ! function_exists( 'get_bloginfo' ) ) {
@@ -421,3 +435,35 @@ require_once __DIR__ . '/../seo-command-center/includes/generation/class-scc-gen
 
 // --- Admin (pure hub_active_tab helper under test) --------------------------
 require_once __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php';
+
+// --- AI Elementor Layout Engine --------------------------------------------
+if ( ! function_exists( 'wp_trim_words' ) ) {
+	function wp_trim_words( $text, $num_words = 55, $more = '…' ) {
+		$text  = trim( (string) $text );
+		$words = preg_split( '/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY );
+		if ( count( $words ) <= (int) $num_words ) {
+			return $text;
+		}
+		return implode( ' ', array_slice( $words, 0, (int) $num_words ) ) . $more;
+	}
+}
+if ( ! function_exists( 'wp_list_pluck' ) ) {
+	function wp_list_pluck( $list, $field ) {
+		$out = array();
+		foreach ( (array) $list as $row ) {
+			if ( is_array( $row ) && isset( $row[ $field ] ) ) {
+				$out[] = $row[ $field ];
+			} elseif ( is_object( $row ) && isset( $row->$field ) ) {
+				$out[] = $row->$field;
+			}
+		}
+		return $out;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-registry.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-analyzer.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-rule-provider.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-validator.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-engine.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-content-mapper.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-elementor-renderer.php';

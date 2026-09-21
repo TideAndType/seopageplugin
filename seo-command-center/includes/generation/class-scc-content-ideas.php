@@ -54,6 +54,20 @@ class SCC_Content_Ideas {
 
 		// Real site context — never invent what the site is or already has.
 		$existing = class_exists( 'SCC_Keyword_Strategy' ) ? SCC_Keyword_Strategy::existing_site_pages( 200 ) : array();
+
+		// Pages already IN THE CONTENT PLAN (added but not yet published). The AI
+		// must not re-propose these, and we also filter them out deterministically
+		// below so a refine never surfaces ideas the user already added.
+		$planned     = class_exists( 'SCC_Content_Plan' ) ? SCC_Content_Plan::all() : array();
+		$planned_ctx = array();
+		foreach ( $planned as $row ) {
+			$planned_ctx[] = array(
+				'title'           => (string) ( $row['title'] ?? '' ),
+				'primary_keyword' => (string) ( $row['primary_keyword'] ?? '' ),
+				'recommended_url' => (string) ( $row['url'] ?? '' ),
+			);
+		}
+		$planned_ctx = array_slice( $planned_ctx, 0, 150 );
 		$gsc      = class_exists( 'SCC_Keyword_Strategy' ) ? SCC_Keyword_Strategy::gsc_signals() : array();
 		$business = class_exists( 'SCC_Schema_Engine' ) ? SCC_Schema_Engine::business() : array();
 
@@ -78,6 +92,7 @@ class SCC_Content_Ideas {
 				'service_areas' => array_slice( (array) ( $business['service_areas'] ?? array() ), 0, 20 ),
 			),
 			'existing_pages'   => array_slice( $existing, 0, 150 ),
+			'planned_pages'    => $planned_ctx,
 			'pillars'          => array_values( array_unique( $pillars ) ),
 			'gsc_top_queries'  => array_slice( (array) ( $gsc['top_queries'] ?? array() ), 0, 40 ),
 			'gsc_quick_wins'   => array_slice( (array) ( $gsc['quick_wins'] ?? array() ), 0, 25 ),
@@ -94,7 +109,8 @@ class SCC_Content_Ideas {
 		$refine_rule = ( '' !== $refine )
 			? 'This is a REFINEMENT of PREVIOUS_IDEAS. Apply REFINE_INSTRUCTION: keep the ideas that already fit, '
 				. 'revise the others to match, and add new ones so there are EXACTLY ' . $count . ' in total. Keep '
-				. 'everything grounded and never duplicate existing_pages. '
+				. 'everything grounded and never duplicate existing_pages OR planned_pages — the user has already '
+				. 'added planned_pages to their plan, so propose genuinely NEW pages instead. '
 			: '';
 
 		$system = 'You are a senior SEO content strategist. The user will describe pages they want. Propose EXACTLY '
@@ -102,7 +118,7 @@ class SCC_Content_Ideas {
 			. $refine_rule
 			. 'GROUND every idea in the provided context: infer the real business from existing_pages + business; '
 			. 'reuse REAL demand from gsc_top_queries / gsc_quick_wins / gsc_untapped for keywords where relevant; '
-			. 'and NEVER duplicate a page already in existing_pages. If the request names a page TYPE (e.g. industry '
+			. 'and NEVER duplicate a page already in existing_pages OR planned_pages. If the request names a page TYPE (e.g. industry '
 			. 'pages, location pages, service pages, comparison pages), produce that type. For each page give: a '
 			. 'natural H1-style title; a click-optimized meta_title (<=60 chars, earns the click, no clickbait); a '
 			. 'meta_description (<=155 chars, a real reason to click); the primary_keyword (prefer real GSC phrasing); '
@@ -120,7 +136,7 @@ class SCC_Content_Ideas {
 					array( 'role' => 'user', 'content' => "Context (JSON):\n" . wp_json_encode( $context ) . "\n\nReturn the ideas JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 2600,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 2600 ),
 				'temperature' => 0.6,
 			),
 			'content-ideas'
@@ -132,6 +148,25 @@ class SCC_Content_Ideas {
 		$ideas  = self::sanitize_ideas( is_array( $parsed ) ? $parsed : array() );
 		if ( empty( $ideas ) ) {
 			return new WP_Error( 'scc_no_ideas', __( 'No ideas came back. Try rephrasing your request.', 'seo-command-center' ), array( 'status' => 502 ) );
+		}
+
+		// Deterministically drop anything the user has already planned or that is
+		// already a live page — so refining never re-surfaces ideas already added.
+		if ( class_exists( 'SCC_Content_Plan' ) ) {
+			$taken = SCC_Content_Plan::taken_signatures( $existing );
+			$ideas = array_values( array_filter( $ideas, function ( $idea ) use ( $taken ) {
+				return ! SCC_Content_Plan::is_taken( $idea, $taken );
+			} ) );
+			if ( empty( $ideas ) ) {
+				return array(
+					'ideas'    => array(),
+					'notes'    => __( 'Every idea that came back is already in your plan or live on your site. Try a different angle, or ask for more.', 'seo-command-center' ),
+					'grounded' => array(
+						'gsc'            => ! empty( $gsc['connected'] ),
+						'existing_pages' => count( $existing ),
+					),
+				);
+			}
 		}
 
 		return array(

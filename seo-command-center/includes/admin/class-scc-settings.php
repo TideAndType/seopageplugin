@@ -54,6 +54,16 @@ class SCC_Settings {
 			'gemini_model'             => 'text',
 			'lmstudio_model'           => 'text',
 			'lmstudio_base_url'        => 'url',
+			'lmstudio_timeout'         => 'int',
+			'competitor_crawl_budget'  => 'int',
+			'generation_unlimited_tokens' => 'bool',
+			'generation_max_tokens'    => 'int',
+			'content_target_words'     => 'int',
+			'content_persona'          => 'text',
+			'content_persona_custom'   => 'textarea',
+			'visual_presentation'      => 'bool',
+			'layout_auto_build'        => 'bool',
+			'layout_design_preset'     => 'text',
 			'route_keyword_strategy_provider'   => 'provider_or_empty',
 			'route_keyword_strategy_model'      => 'text',
 			'route_content_generation_provider' => 'provider_or_empty',
@@ -118,6 +128,9 @@ class SCC_Settings {
 					break;
 				case 'bool':
 					$value = SCC_Security::sanitize_bool( $value );
+					break;
+				case 'textarea':
+					$value = SCC_Security::sanitize_textarea( $value );
 					break;
 				default:
 					$value = SCC_Security::sanitize_text( $value );

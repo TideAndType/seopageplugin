@@ -45,7 +45,7 @@ class SCC_Security {
 		}
 		return new WP_Error(
 			'scc_forbidden',
-			__( 'You do not have permission to use SEO Command Center.', 'seo-command-center' ),
+			__( 'You do not have permission to use TideOrbit.', 'seo-command-center' ),
 			array( 'status' => rest_authorization_required_code() )
 		);
 	}

@@ -20,7 +20,7 @@ $seo_plugin = (string) ( $init['seo_plugin'] ?? '' );
 	</div>
 
 	<div class="scc-context-bar">
-		<span class="scc-chip"><?php esc_html_e( 'Writing to:', 'seo-command-center' ); ?> <strong><?php echo esc_html( $seo_plugin ? $seo_plugin : __( 'SEO Command Center', 'seo-command-center' ) ); ?></strong></span>
+		<span class="scc-chip"><?php esc_html_e( 'Writing to:', 'seo-command-center' ); ?> <strong><?php echo esc_html( $seo_plugin ? $seo_plugin : __( 'TideOrbit', 'seo-command-center' ) ); ?></strong></span>
 	</div>
 
 	<div class="scc-card">

@@ -33,4 +33,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 	</div>
 
 	<div id="scc-comp-results" hidden></div>
+
+	<div class="scc-card">
+		<div class="scc-card__head">
+			<h2><?php esc_html_e( 'Competitor debug', 'seo-command-center' ); ?></h2>
+			<button type="button" class="button" id="scc-comp-debug-refresh"><?php esc_html_e( 'Refresh debug', 'seo-command-center' ); ?></button>
+		</div>
+		<p class="scc-note"><?php esc_html_e( 'A step-by-step trace of the last gap analysis — how many competitor pages were read, whether the AI answered, and why any run returned nothing. If a run fails, click Refresh debug and copy this so the exact failure point is clear.', 'seo-command-center' ); ?></p>
+		<div id="scc-comp-debug"></div>
+	</div>
 </div>

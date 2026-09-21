@@ -225,7 +225,7 @@ class SCC_Link_Engine {
 					array( 'role' => 'user', 'content' => "Page + candidates (JSON):\n" . $payload . "\n\nReturn the internal-link JSON now." ),
 				),
 				'json'        => true,
-				'max_tokens'  => 1400,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 1400 ),
 				'temperature' => 0.3,
 			),
 			'internal-linking'
@@ -461,13 +461,18 @@ class SCC_Link_Engine {
 			'tokens'          => SCC_Content_Index::tokenize( $content->title . ' ' . $text ),
 		);
 
-		$high  = self::thresholds()['high'];
+		// Use the MEDIUM threshold for auto-weaving: a link is only ever inserted
+		// where a natural anchor phrase ALREADY appears verbatim in the new article
+		// (enforced just below), so weaving stays conservative and never fabricates
+		// a link even at the lower relevance bar. The high bar left most fresh
+		// drafts with zero links even when relevant pages existed.
+		$min   = self::thresholds()['medium'];
 		$out   = array();
 		$rows  = SCC_Content_Index::all( 3000 );
 
 		foreach ( $rows as $other ) {
 			$rel = SCC_Content_Index::relevance( $subject, $other );
-			if ( $rel < $high ) {
+			if ( $rel < $min ) {
 				continue;
 			}
 			$anchor = SCC_Anchor_Engine::choose( $other, $text, self::anchors_pointing_at( (int) $other['post_id'], $rows ) );
@@ -479,13 +484,18 @@ class SCC_Link_Engine {
 				'target_url' => $other['url'],
 				'anchor'     => $anchor['anchor'],
 				'confidence' => (int) round( $rel ),
+				'relevance'  => (float) $rel,
 				'reason'     => $this->reason( 0, $other, $rel ),
 			);
-			if ( count( $out ) >= $limit ) {
-				break;
-			}
 		}
-		return $out;
+		// Strongest matches first, then cap — so the best links win when limited.
+		usort(
+			$out,
+			function ( $a, $b ) {
+				return $b['relevance'] <=> $a['relevance'];
+			}
+		);
+		return array_slice( $out, 0, max( 0, (int) $limit ) );
 	}
 
 	/**

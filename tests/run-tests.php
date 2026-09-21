@@ -1253,6 +1253,302 @@ assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, 'bogus' ), 'unknown ta
 assert_eq( 'meta', SCC_Admin::hub_active_tab( $hub_tabs, 'META' ), 'requested tab is normalized (case) before matching' );
 assert_eq( 'audit', SCC_Admin::hub_active_tab( $hub_tabs, '../evil' ), 'unsafe tab value is rejected, falls back to first' );
 
+echo "\n== SEO Copilot (intent routing, no fabrication) ==\n";
+assert_eq( 'triage', SCC_Copilot::classify( 'What should I work on this week?' ), 'triage intent for "what should I work on"' );
+assert_eq( 'triage', SCC_Copilot::classify( 'find my biggest SEO opportunities' ), 'triage intent for "biggest opportunities"' );
+assert_eq( 'refresh', SCC_Copilot::classify( 'Find pages that are losing traffic' ), 'refresh intent for losing traffic' );
+assert_eq( 'refresh', SCC_Copilot::classify( 'find content I should refresh' ), 'refresh intent for refresh' );
+assert_eq( 'keywords', SCC_Copilot::classify( 'find keywords we are close to ranking for' ), 'keyword-opportunity intent (surfaces striking-distance + untapped)' );
+assert_eq( 'striking', SCC_Copilot::classify( 'show me striking distance pages on page 2' ), 'striking intent for explicit striking-distance phrasing' );
+assert_eq( 'cannibalization', SCC_Copilot::classify( 'find cannibalization' ), 'cannibalization intent' );
+assert_eq( 'links', SCC_Copilot::classify( 'find pages that need internal links' ), 'links intent' );
+assert_eq( 'metadata', SCC_Copilot::classify( 'fix my worst metadata' ), 'metadata intent' );
+assert_eq( 'create', SCC_Copilot::classify( 'give me 5 articles I should create' ), 'create intent' );
+assert_eq( 'triage', SCC_Copilot::classify( '' ), 'empty query falls back to triage' );
+assert_eq( 'triage', SCC_Copilot::classify( 'hello there' ), 'unrecognized query falls back to triage' );
+
+// filter_opportunities is pure: matches types and caps.
+$sample_opps = array(
+	array( 'id' => 'a', 'type' => 'content_decay', 'score' => 80 ),
+	array( 'id' => 'b', 'type' => 'striking_distance', 'score' => 70 ),
+	array( 'id' => 'c', 'type' => 'fix_orphan', 'score' => 60 ),
+	array( 'id' => 'd', 'type' => 'content_decay', 'score' => 50 ),
+);
+$decay_only = SCC_Copilot::filter_opportunities( $sample_opps, array( 'content_decay', 'intent_drift' ), 8 );
+assert_eq( 2, count( $decay_only ), 'filter keeps only matching types' );
+assert_eq( 'a', $decay_only[0]['id'], 'filter preserves order' );
+$all = SCC_Copilot::filter_opportunities( $sample_opps, array(), 8 );
+assert_eq( 4, count( $all ), 'empty types returns all' );
+$capped = SCC_Copilot::filter_opportunities( $sample_opps, array(), 2 );
+assert_eq( 2, count( $capped ), 'limit caps the result count' );
+
+// answer() with injected opportunities: no engine/network, no fabrication.
+$GLOBALS['scc_test_options']['scc_credentials'] = array(); // GSC not connected.
+$copilot = new SCC_Copilot();
+$ans = $copilot->answer( 'find pages losing traffic', $sample_opps );
+assert_eq( 'refresh', $ans['intent'], 'answer classifies the query' );
+assert_eq( 2, count( $ans['opportunities'] ), 'answer returns only decay opportunities' );
+assert_true( ! empty( $ans['missing'] ), 'answer reports GSC missing when not connected' );
+assert_eq( 'gsc', $ans['missing'][0]['key'], 'missing data names the GSC source' );
+
+$ans2 = $copilot->answer( 'find internal link opportunities', $sample_opps );
+assert_eq( 'links', $ans2['intent'], 'links intent routed' );
+assert_eq( 1, count( $ans2['opportunities'] ), 'links returns the orphan opportunity' );
+assert_eq( array(), $ans2['missing'], 'links intent needs no external data (nothing missing)' );
+
+$ans3 = $copilot->answer( 'what should I work on this week?', $sample_opps );
+assert_eq( 4, count( $ans3['opportunities'] ), 'triage returns all opportunities (capped)' );
+assert_true( '' !== $ans3['why'], 'answer includes a why-it-matters line' );
+
+echo "\n== DB schema is strict-mode safe (no zero-date defaults) ==\n";
+$db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database/class-scc-db.php' );
+assert_true( false === strpos( $db_src, "0000-00-00" ), 'no 0000-00-00 date defaults (rejected by MySQL 8 / MariaDB strict mode)' );
+assert_true( false !== strpos( $db_src, 'hide_errors' ), 'install() hides $wpdb errors so activation cannot leak DB output' );
+
+// No column is a MySQL reserved word (unquoted reserved-word columns are a hard
+// syntax error and the whole table fails to create — e.g. `cursor`).
+$mysql_reserved = array( 'cursor', 'groups', 'rank', 'system', 'interval', 'range', 'order', 'key', 'lead', 'window', 'over', 'recursive', 'usage', 'condition', 'option' );
+$reserved_cols = array();
+if ( preg_match_all( '/^\s+([a-z_]+)\s+(?:BIGINT|INT|VARCHAR|TEXT|LONGTEXT|DATETIME|DATE|TINYINT|DECIMAL|FLOAT)\b/mi', $db_src, $m ) ) {
+	foreach ( array_unique( array_map( 'strtolower', $m[1] ) ) as $col ) {
+		if ( in_array( $col, $mysql_reserved, true ) ) {
+			$reserved_cols[] = $col;
+		}
+	}
+}
+assert_eq( array(), $reserved_cols, 'no schema column uses a MySQL reserved word (would break CREATE TABLE)' );
+
+echo "\n== Template store sanitize: status is never null ==\n";
+$scc_sanitize = new ReflectionMethod( 'SCC_Template_Store', 'sanitize' );
+$scc_sanitize->setAccessible( true );
+// No status supplied (the import/create path) must default to 'active', not null.
+$row_default = $scc_sanitize->invoke( null, array( 'name' => 'X', 'content_type' => 'article', 'renderer' => 'elementor' ) );
+assert_eq( 'active', $row_default['status'], 'missing status defaults to active (not null — was a DB NOT NULL failure)' );
+$row_draft = $scc_sanitize->invoke( null, array( 'name' => 'X', 'status' => 'draft' ) );
+assert_eq( 'draft', $row_draft['status'], 'valid status is kept' );
+$row_bad = $scc_sanitize->invoke( null, array( 'name' => 'X', 'status' => 'bogus' ) );
+assert_eq( 'active', $row_bad['status'], 'invalid status falls back to active' );
+
+echo "\n== Generator salvage: raw model output -> HTML ==\n";
+$scc_t2h = new ReflectionMethod( 'SCC_Generator', 'text_to_html' );
+$scc_t2h->setAccessible( true );
+// Plain prose (no JSON) becomes paragraphs + headings + a list.
+$salv = $scc_t2h->invoke( null, "# Intro\n\nFirst paragraph.\n\n## Details\n\n- one\n- two" );
+assert_true( false !== strpos( $salv, '<h2>Intro</h2>' ), 'markdown # heading -> h2 (not h1)' );
+assert_true( false !== strpos( $salv, '<h3>Details</h3>' ), 'markdown ## heading -> h3' );
+assert_true( false !== strpos( $salv, '<p>First paragraph.</p>' ), 'prose block wrapped in <p>' );
+assert_true( false !== strpos( $salv, '<li>one</li>' ), 'bullet list converted to <li>' );
+assert_true( false === strpos( $salv, '<h1' ), 'salvage never emits an in-body h1' );
+// Already-HTML input is kept, but an in-body <h1> is downgraded to <h2>.
+$salv2 = $scc_t2h->invoke( null, '<h1>Title</h1><p>Body copy here.</p>' );
+assert_true( false === strpos( $salv2, '<h1' ), 'existing <h1> downgraded' );
+assert_true( false !== strpos( $salv2, '<p>Body copy here.</p>' ), 'existing HTML preserved' );
+// A code-fenced block has the fence stripped.
+$salv3 = $scc_t2h->invoke( null, "```html\n<p>Fenced.</p>\n```" );
+assert_true( false === strpos( $salv3, '`' ), 'code fences stripped' );
+// Regression: JSON-shaped output must NEVER be dumped into the post — the
+// content_html value is extracted, and braces/keys never survive.
+$json_body = '{"title":"T","content_html":"<h2>Real Heading</h2><p>Body sentence that is definitely long enough to keep.</p>","meta_title":"M"}';
+$salv4 = $scc_t2h->invoke( null, $json_body );
+assert_true( false !== strpos( $salv4, '<p>Body sentence that is definitely long enough to keep.</p>' ), 'content_html extracted from JSON' );
+assert_true( false === strpos( $salv4, '"content_html"' ), 'JSON key never dumped into body' );
+assert_true( false === strpos( $salv4, '{' ), 'JSON braces never dumped into body' );
+
+echo "\n== Generator salvage: extract_json_field ==\n";
+$scc_ejf = new ReflectionMethod( 'SCC_Generator', 'extract_json_field' );
+$scc_ejf->setAccessible( true );
+$ejf_src = '{"title":"Hello \"World\"","content_html":"<p>A <b>bold</b> line.</p>"}';
+assert_eq( 'Hello "World"', $scc_ejf->invoke( null, $ejf_src, 'title' ), 'extract_json_field unescapes embedded quotes' );
+assert_true( false !== strpos( $scc_ejf->invoke( null, $ejf_src, 'content_html' ), '<b>bold</b>' ), 'extract_json_field decodes \\u escapes' );
+assert_eq( '', $scc_ejf->invoke( null, $ejf_src, 'missing_key' ), 'extract_json_field returns empty for a missing key' );
+
+echo "\n== Generator: internal-link whitelist ==\n";
+$scc_eil = new ReflectionMethod( 'SCC_Generator', 'enforce_internal_links' );
+$scc_eil->setAccessible( true );
+$allowed = array( 'https://example.com/services/seo/', 'https://example.com/about/' );
+$kept = array();
+$in  = '<p>See our <a href="https://example.com/services/seo/">SEO services</a> and '
+	. '<a href="https://example.com/made-up-page/">a fake page</a> plus '
+	. '<a href="/about/">about us</a> and an <a href="https://other.com/x">external</a> link.</p>';
+$args = array( $in, $allowed, &$kept );
+$outh = $scc_eil->invokeArgs( null, $args );
+assert_true( false !== strpos( $outh, 'href="https://example.com/services/seo/"' ), 'allowed internal link kept' );
+assert_true( false !== strpos( $outh, 'href="/about/"' ), 'root-relative allowed link kept' );
+assert_true( false === strpos( $outh, 'href="https://example.com/made-up-page/"' ), 'invented internal URL is unwrapped' );
+assert_true( false !== strpos( $outh, 'href="https://other.com/x"' ), 'external link is left untouched' );
+assert_true( false !== strpos( $outh, 'a fake page' ), 'unwrapped link keeps its anchor text' );
+assert_true( count( $kept ) >= 2, 'kept list records the real internal links' );
+
+echo "\n== Generator: linkify markdown ==\n";
+$scc_lm = new ReflectionMethod( 'SCC_Generator', 'linkify_markdown' );
+$scc_lm->setAccessible( true );
+$md = 'See [our SEO services](https://example.com/services/seo/) and [about](/about/).';
+$lmout = $scc_lm->invoke( null, $md );
+assert_true( false !== strpos( $lmout, '<a href="https://example.com/services/seo/">our SEO services</a>' ), 'markdown absolute link converted to anchor' );
+assert_true( false !== strpos( $lmout, '<a href="/about/">about</a>' ), 'markdown root-relative link converted' );
+$md2 = 'Array access like items[0](not a link) stays literal.';
+assert_true( false === strpos( $scc_lm->invoke( null, $md2 ), '<a ' ), 'non-URL bracket/paren is not linkified' );
+
+echo "\n== Content presenter: visual components ==\n";
+// Callout from a labelled paragraph.
+$pz = SCC_Content_Presenter::enhance( '<p>Tip: Keep your title under 60 characters.</p>' );
+assert_true( false !== strpos( $pz, 'scc-callout--tip' ), 'Tip paragraph becomes a tip callout' );
+assert_true( false === strpos( $pz, 'Tip: Keep' ), 'callout strips the leading label from the body' );
+assert_true( false !== strpos( $pz, 'Keep your title under 60 characters.' ), 'callout keeps the body text' );
+// Normal paragraph is left alone (still a plain <p>, just wrapped).
+$pz2 = SCC_Content_Presenter::enhance( '<p>This is a normal explanatory paragraph.</p>' );
+assert_true( false === strpos( $pz2, 'scc-callout' ), 'a normal paragraph is not turned into a callout' );
+assert_true( false !== strpos( $pz2, '<div class="scc-content">' ), 'content is wrapped in scc-content' );
+// Key takeaways card.
+$tk = SCC_Content_Presenter::enhance( '<h2>Key takeaways</h2><ul><li>One</li><li>Two</li></ul>' );
+assert_true( false !== strpos( $tk, 'scc-takeaways' ), 'Key takeaways heading + list becomes a takeaways card' );
+// Process steps.
+$ps = SCC_Content_Presenter::enhance( '<h2>Our process</h2><ol><li>Audit</li><li>Strategy</li><li>Create</li></ol>' );
+assert_true( false !== strpos( $ps, '<ol class="scc-steps">' ), 'process heading + ordered list becomes steps' );
+// Timeline.
+$tl = SCC_Content_Presenter::enhance( '<ul><li>Month 1-3: Setup</li><li>Month 4-6: Growth</li><li>Month 7-12: Scale</li></ul>' );
+assert_true( false !== strpos( $tl, 'scc-timeline' ), 'a month-range list becomes a timeline' );
+// A plain unordered list is NOT a timeline.
+$ul = SCC_Content_Presenter::enhance( '<ul><li>Apples</li><li>Oranges</li><li>Pears</li></ul>' );
+assert_true( false === strpos( $ul, 'scc-timeline' ), 'a plain list is not turned into a timeline' );
+// Stat cards.
+$sc = SCC_Content_Presenter::enhance( '<h2>By the numbers</h2><ul><li>Traffic: 3x growth</li><li>Leads: 120 per month</li></ul>' );
+assert_true( false !== strpos( $sc, 'scc-stats' ) && false !== strpos( $sc, 'scc-stat__value' ), 'stat heading + list becomes stat cards' );
+// Responsive table wrap.
+$tb = SCC_Content_Presenter::enhance( '<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>' );
+assert_true( false !== strpos( $tb, 'scc-table__scroll' ), 'tables get a responsive scroll wrapper' );
+// Idempotent.
+$once  = SCC_Content_Presenter::enhance( '<p>Hello world paragraph.</p>' );
+$twice = SCC_Content_Presenter::enhance( $once );
+assert_eq( $once, $twice, 'enhance is idempotent (never double-wraps)' );
+
+echo "\n== Generator: relocate FAQs from body ==\n";
+$scc_relo = new ReflectionMethod( 'SCC_Generator', 'relocate_faqs_from_html' );
+$scc_relo->setAccessible( true );
+$scc_faq_html = '<p>Intro paragraph.</p><h2>How long does it take?</h2><p>About six months.</p><h2>What does it cost?</h2><p>It depends on scope.</p><p>Closing.</p>';
+$scc_relo_faqs = $scc_relo->invokeArgs( null, array( &$scc_faq_html ) );
+assert_eq( 2, count( $scc_relo_faqs ), 'two Q&A pairs relocated out of the body' );
+assert_eq( 'How long does it take?', $scc_relo_faqs[0]['question'], 'first question captured' );
+assert_true( false === strpos( $scc_faq_html, 'How long does it take?' ), 'relocated FAQ removed from body' );
+assert_true( false !== strpos( $scc_faq_html, 'Intro paragraph.' ), 'non-FAQ body kept' );
+// A single rhetorical question heading is NOT treated as an FAQ.
+$scc_one = '<h2>Why bother?</h2><p>Because it works.</p><p>More text.</p>';
+assert_eq( 0, count( $scc_relo->invokeArgs( null, array( &$scc_one ) ) ), 'a single question heading is not relocated' );
+
+echo "\n== Generator: FAQ section HTML ==\n";
+$scc_faq_block = SCC_Generator::faq_section_html( array( array( 'question' => 'Q1?', 'answer' => 'A1.' ) ) );
+assert_true( false !== strpos( $scc_faq_block, '<summary class="scc-faq__q">Q1?</summary>' ), 'FAQ block renders question' );
+assert_eq( '', SCC_Generator::faq_section_html( array() ), 'empty FAQ list => empty block' );
+
+echo "\n== Generator: writing personas ==\n";
+$scc_personas = SCC_Generator::personas();
+assert_true( isset( $scc_personas['seo_guru']['prompt'] ), 'SEO Guru persona exists with a prompt' );
+assert_true( false !== stripos( $scc_personas['seo_guru']['prompt'], 'SEO' ), 'SEO Guru persona mentions SEO' );
+assert_true( isset( $scc_personas['conversion']['label'] ), 'conversion persona has a label' );
+
+echo "\n== Generator: mapped template forces template mode ==\n";
+// With no mapping present, native types stay native (existing behaviour).
+assert_eq( false, SCC_Generator::has_mapped_template( 'blog_post' ), 'no mapping => not mapped' );
+assert_true( SCC_Generator::is_native_mode( 'blog_post' ), 'blog_post still native when unmapped' );
+
+echo "\n== AI manager: token budget floor ==\n";
+// With the test SCC_Settings stub, generation_unlimited_tokens reads false, so
+// token_budget() returns the caller's default raised to the reasoning floor.
+assert_eq( 4000, SCC_AI_Manager::token_budget( 1200 ), 'small default raised to 4000 floor' );
+assert_eq( 4000, SCC_AI_Manager::token_budget( 1800 ), '1800 raised to 4000 floor' );
+assert_eq( 8000, SCC_AI_Manager::token_budget( 8000 ), 'large default kept as-is' );
+assert_eq( 4000, SCC_AI_Manager::token_budget( 0 ), 'zero/unset default => floor' );
+
+echo "\n== Content Plan: dedupe signatures ==\n";
+assert_eq( 'local seo services', SCC_Content_Plan::norm_text( '  Local SEO Services!  ' ), 'norm_text lowercases + strips punctuation' );
+assert_eq( 'local seo services', SCC_Content_Plan::norm_text( '<strong>Local SEO Services</strong>' ), 'norm_text strips tags' );
+assert_eq( 'services/local-seo', SCC_Content_Plan::norm_slug( 'https://example.com/services/local-seo/' ), 'norm_slug reduces to path, no host/scheme/slashes' );
+assert_eq( 'services/local-seo', SCC_Content_Plan::norm_slug( '/services/local-seo' ), 'norm_slug handles bare slug' );
+$scc_taken = array(
+	'titles'   => array( 'local seo services' => true ),
+	'keywords' => array( 'local seo' => true ),
+	'slugs'    => array( 'services/local-seo' => true ),
+);
+assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Local SEO Services' ), $scc_taken ), 'is_taken matches by title' );
+assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Different', 'primary_keyword' => 'Local SEO' ), $scc_taken ), 'is_taken matches by keyword' );
+assert_true( SCC_Content_Plan::is_taken( array( 'title' => 'Different', 'recommended_url' => 'https://x.com/services/local-seo/' ), $scc_taken ), 'is_taken matches by slug' );
+assert_true( ! SCC_Content_Plan::is_taken( array( 'title' => 'Brand New Page', 'primary_keyword' => 'something else', 'recommended_url' => '/brand-new' ), $scc_taken ), 'is_taken passes a genuinely new idea' );
+
+echo "\n== Layout Engine: block registry ==\n";
+$scc_reg = SCC_Block_Registry::all();
+assert_true( isset( $scc_reg['hero'], $scc_reg['cta'], $scc_reg['faq'], $scc_reg['service-grid'] ), 'core blocks are registered' );
+assert_true( in_array( 'hero', SCC_Block_Registry::required_ids(), true ) && in_array( 'cta', SCC_Block_Registry::required_ids(), true ), 'hero + cta are required' );
+assert_true( SCC_Block_Registry::exists( 'faq' ) && ! SCC_Block_Registry::exists( 'not-a-block' ), 'exists() distinguishes real vs fake ids' );
+assert_true( in_array( 'FAQ_ITEMS', $scc_reg['faq']['fields'], true ), 'faq block declares FAQ_ITEMS field' );
+
+echo "\n== Layout Engine: validator (allowlist + required + order) ==\n";
+$scc_v = SCC_Layout_Validator::validate( array( 'content', 'bogus-block', 'faq', 'faq', 'cta', 'hero' ) );
+assert_true( ! in_array( 'bogus-block', $scc_v, true ), 'unknown block ids are dropped' );
+assert_eq( 'hero', $scc_v[0], 'hero is moved to the front' );
+assert_eq( 'cta', end( $scc_v ), 'cta is moved to the end' );
+assert_eq( 1, count( array_keys( $scc_v, 'faq', true ) ), 'non-repeatable faq de-duplicated' );
+$scc_v2 = SCC_Layout_Validator::validate( array( 'content' ) );
+assert_true( in_array( 'hero', $scc_v2, true ) && in_array( 'cta', $scc_v2, true ), 'required blocks injected when absent' );
+
+echo "\n== Layout Engine: deterministic rule provider ==\n";
+$scc_rule = new SCC_Layout_Rule_Provider();
+$scc_svc  = $scc_rule->decide( array( 'content_type' => 'service', 'search_intent' => 'commercial' ) );
+assert_true( in_array( 'hero', $scc_svc, true ) && in_array( 'content', $scc_svc, true ) && in_array( 'cta', $scc_svc, true ), 'service layout has hero + content + cta' );
+$scc_art = $scc_rule->decide( array( 'content_type' => 'article', 'search_intent' => 'informational' ) );
+assert_true( in_array( 'toc', $scc_art, true ), 'article layout offers a TOC' );
+
+echo "\n== Layout Engine: availability gate + conflict resolution ==\n";
+$scc_an_min = array( 'intro' => '', 'content_html' => '<p>Hi</p>', 'counts' => array( 'faqs' => 0, 'services' => 0, 'benefits' => 0, 'process' => 0, 'stats' => 0, 'related' => 0, 'sections' => 0 ), 'areas' => array(), 'city' => '' );
+$scc_gated = SCC_Layout_Engine::gate_by_availability( array( 'hero', 'faq', 'service-grid', 'content', 'cta' ), $scc_an_min );
+assert_true( ! in_array( 'faq', $scc_gated, true ), 'faq dropped when there are no FAQs' );
+assert_true( ! in_array( 'service-grid', $scc_gated, true ), 'service-grid dropped when there are no services' );
+assert_true( in_array( 'hero', $scc_gated, true ) && in_array( 'cta', $scc_gated, true ), 'required blocks survive the gate' );
+$scc_res = SCC_Layout_Engine::resolve_conflicts( array( 'hero', 'content-intro', 'benefits', 'content', 'faq', 'cta' ) );
+assert_true( ! in_array( 'content-intro', $scc_res, true ) && ! in_array( 'benefits', $scc_res, true ), 'prose-duplicating blocks removed when full content present' );
+assert_true( in_array( 'faq', $scc_res, true ), 'discrete blocks kept alongside content' );
+
+echo "\n== Layout Engine: analyzer ==\n";
+assert_eq( 'blog_post', SCC_Layout_Analyzer::normalize_type( 'Blog' ), 'normalize_type maps Blog => blog_post' );
+assert_eq( 'local_service', SCC_Layout_Analyzer::normalize_type( 'local service' ), 'normalize_type maps local service' );
+assert_eq( 'local', SCC_Layout_Analyzer::normalize_intent( 'commercial/local' ), 'normalize_intent detects local' );
+assert_eq( 'commercial', SCC_Layout_Analyzer::normalize_intent( '', 'service' ), 'normalize_intent defaults service => commercial' );
+$scc_heads = SCC_Layout_Analyzer::extract_headings( '<h2>Local Citations</h2><p>x</p><h3>Sub</h3>' );
+assert_eq( 2, count( $scc_heads ), 'extract_headings finds h2 + h3' );
+assert_eq( 'local-citations', $scc_heads[0]['anchor'], 'heading anchor is slugified' );
+$scc_ben = SCC_Layout_Analyzer::extract_benefits( '<ul><li>One</li><li>Two</li><li>Three</li></ul>' );
+assert_eq( 3, count( $scc_ben ), 'extract_benefits reads a 3-item list' );
+$scc_faqs = SCC_Layout_Analyzer::extract_faqs_from_html( '<details><summary>Q1?</summary><p>A1.</p></details>' );
+assert_eq( 'Q1?', $scc_faqs[0]['question'], 'extract_faqs_from_html parses details' );
+
+echo "\n== Layout Engine: content mapper ==\n";
+$scc_analysis = array(
+	'content_type' => 'article', 'search_intent' => 'informational',
+	'title' => 'Guide', 'h1' => 'Guide', 'primary_keyword' => 'local seo',
+	'intro' => 'An intro paragraph.', 'content_html' => '<p>An intro paragraph.</p><h2>Body</h2><p>More.</p><details><summary>Q?</summary><p>A.</p></details>',
+	'sections' => array( array( 'level' => 'h2', 'text' => 'Body', 'anchor' => 'body' ) ),
+	'services' => array(), 'benefits' => array(), 'process' => array(), 'stats' => array(),
+	'faqs' => array( array( 'question' => 'Q?', 'answer' => 'A.' ) ), 'related' => array(), 'areas' => array(),
+	'city' => '', 'service' => '', 'cta' => '', 'cta_text' => '', 'cta_url' => '', 'image' => array(), 'has_image' => false,
+);
+$scc_blocks = SCC_Content_Mapper::map( array( 'hero', 'content', 'faq', 'cta' ), $scc_analysis, array() );
+$scc_by = array();
+foreach ( $scc_blocks as $bk ) { $scc_by[ $bk['id'] ] = $bk; }
+assert_eq( 'Guide', $scc_by['hero']['vars']['HERO_TITLE'], 'hero title mapped from h1' );
+assert_true( false === strpos( $scc_by['content']['vars']['CONTENT'], '<details' ), 'content body has the FAQ lifted out' );
+assert_true( ! $scc_by['faq']['empty'] && $scc_by['faq']['vars']['FAQ_ITEMS'][0]['question'] === 'Q?', 'faq block populated' );
+assert_true( false !== strpos( $scc_by['cta']['vars']['CTA_TITLE'], 'local seo' ), 'cta title uses the keyword' );
+$scc_empty_faq = SCC_Content_Mapper::map( array( 'faq' ), array( 'faqs' => array(), 'content_html' => '', 'intro' => '', 'primary_keyword' => '' ) + $scc_analysis, array() );
+assert_true( $scc_empty_faq[0]['empty'], 'faq block reports empty when there are no FAQs' );
+
+echo "\n== Layout Engine: content split into section bands ==\n";
+$scc_secs = SCC_Block_Elementor_Renderer::split_sections( '<p>Intro lead.</p><h2>One</h2><p>a</p><h2>Two</h2><p>b</p><h2>Three</h2><p>c</p>' );
+assert_eq( 4, count( $scc_secs ), 'lead + 3 H2 sections => 4 segments' );
+assert_eq( 'plain', $scc_secs[0]['style'], 'lead segment is plain' );
+assert_eq( 'plain', $scc_secs[1]['style'], 'first H2 section plain' );
+assert_eq( 'tint', $scc_secs[2]['style'], 'second H2 section tinted (alternating)' );
+assert_true( false !== strpos( $scc_secs[1]['html'], '<h2>One</h2>' ), 'each section keeps its H2' );
+assert_eq( 0, count( SCC_Block_Elementor_Renderer::split_sections( '   ' ) ), 'empty body => no sections' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

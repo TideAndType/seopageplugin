@@ -26,6 +26,8 @@ class SCC_Template_Store {
 			$type = 'custom';
 		}
 		$renderer = sanitize_key( $raw['renderer'] ?? '' );
+		$status   = (string) ( $raw['status'] ?? 'active' );
+		$status   = in_array( $status, array( 'active', 'draft', 'archived' ), true ) ? $status : 'active';
 
 		// Structure: accept array or JSON string; default to the type default.
 		$structure = isset( $raw['structure'] ) ? $raw['structure'] : null;
@@ -45,7 +47,7 @@ class SCC_Template_Store {
 			'structure'           => wp_json_encode( $structure ),
 			'renderer'            => $renderer,
 			'elementor_source_id' => SCC_Security::sanitize_int( $raw['elementor_source_id'] ?? 0, 0, PHP_INT_MAX ),
-			'status'              => in_array( ( $raw['status'] ?? 'active' ), array( 'active', 'draft', 'archived' ), true ) ? $raw['status'] : 'active',
+			'status'              => $status,
 		);
 	}
 
@@ -90,7 +92,16 @@ class SCC_Template_Store {
 		$data['version'] = 1;
 		$data['created_at']  = current_time( 'mysql' );
 		$data['modified_at'] = current_time( 'mysql' );
-		return SCC_DB::insert( 'templates', $data );
+		$id = SCC_DB::insert( 'templates', $data );
+
+		// Self-heal: if the insert failed because the table is missing (e.g. a
+		// prior install was blocked before this table was created), build the
+		// schema once and retry rather than failing the user's action.
+		if ( ! $id && ! SCC_DB::table_exists( 'templates' ) ) {
+			SCC_DB::install();
+			$id = SCC_DB::insert( 'templates', $data );
+		}
+		return $id;
 	}
 
 	/**

@@ -69,7 +69,7 @@ class SCC_Content_Brief {
 					),
 				),
 				'json'        => true,
-				'max_tokens'  => 2500,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 2500 ),
 				'temperature' => 0.5,
 			),
 			'content-brief'

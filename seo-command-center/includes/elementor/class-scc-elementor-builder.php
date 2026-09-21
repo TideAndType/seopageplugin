@@ -85,6 +85,15 @@ class SCC_Elementor_Builder {
 		if ( ! is_array( $data ) ) {
 			return new WP_Error( 'scc_no_template_data', __( 'The selected template has no Elementor data.', 'seo-command-center' ) );
 		}
+
+		// {{BODY}} and {{CONTENT}} are interchangeable and both hold the full
+		// article. If a template uses BOTH, filling both prints the article twice —
+		// keep CONTENT and blank BODY so the body appears exactly once.
+		$tokens = SCC_Placeholders::detect( $data );
+		if ( in_array( 'BODY', $tokens, true ) && in_array( 'CONTENT', $tokens, true ) ) {
+			$replacements['BODY'] = '';
+		}
+
 		$filled = SCC_Placeholders::replace( $data, $replacements );
 		return self::regenerate_ids( $filled );
 	}

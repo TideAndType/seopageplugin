@@ -18,6 +18,13 @@ class SCC_Activator {
 	 * Run on activation.
 	 */
 	public static function activate() {
+		// Reset PHP OPcache so freshly-installed plugin files are executed instead
+		// of stale cached bytecode (common on managed hosts with
+		// opcache.validate_timestamps=0). Guarded + silenced; harmless if absent.
+		if ( function_exists( 'opcache_reset' ) ) {
+			@opcache_reset(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+
 		SCC_DB::install();
 
 		// Default settings (non-secret) if none exist.
@@ -65,6 +72,16 @@ class SCC_Activator {
 			'gemini_model'          => 'gemini-flash-latest',
 			'lmstudio_model'        => 'local-model',
 			'lmstudio_base_url'     => 'http://localhost:1234/v1',
+			'lmstudio_timeout'      => 600,
+			'competitor_crawl_budget' => 45,
+			'generation_unlimited_tokens' => false,
+			'generation_max_tokens' => 0,
+			'content_target_words'  => 0,
+			'content_persona'       => '',
+			'content_persona_custom'=> '',
+			'visual_presentation'   => true,
+			'layout_auto_build'     => true,
+			'layout_design_preset'  => 'modern',
 			// Per-operation AI routing (empty = use the primary provider/model).
 			'route_keyword_strategy_provider'   => '',
 			'route_keyword_strategy_model'      => '',
