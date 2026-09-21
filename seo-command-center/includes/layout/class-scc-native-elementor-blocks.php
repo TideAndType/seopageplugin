@@ -81,7 +81,7 @@ class SCC_Native_Elementor_Blocks {
 	}
 
 	protected static function gap( $size ) {
-		return array( 'unit' => 'px', 'size' => (int) $size, 'sizes' => array() );
+		return array( 'unit' => 'px', 'size' => (int) $size, 'sizes' => array(), 'column' => (string) (int) $size, 'row' => (string) (int) $size, 'isLinked' => true );
 	}
 
 	protected static function container( array $children, array $settings = array(), $inner = false ) {
@@ -122,7 +122,7 @@ class SCC_Native_Elementor_Blocks {
 			'content_width' => 'boxed',
 			'boxed_width'   => array( 'unit' => 'px', 'size' => $width, 'sizes' => array() ),
 			'flex_direction'=> $direction,
-			'gap'           => self::gap( self::spacing( 'gap', 24 ) ),
+			'flex_gap'      => self::gap( self::spacing( 'gap', 24 ) ),
 		);
 		return self::container( $children, array_merge( $settings, $extra ), true );
 	}
@@ -177,19 +177,19 @@ class SCC_Native_Elementor_Blocks {
 		$eyebrow = ! empty( $v['HERO_EYEBROW'] ) ? self::text( '<strong>' . esc_html( $v['HERO_EYEBROW'] ) . '</strong>' ) : null;
 		$sub = self::text( '<p>' . esc_html( (string) ( $v['HERO_SUBTITLE'] ?? '' ) ) . '</p>' );
 		$cta = self::button( $v['CTA_TEXT'] ?? '', $v['CTA_URL'] ?? '' );
-		$copy = self::container( array( $eyebrow, $title, $sub, $cta ), array( 'flex_direction' => 'column', 'gap' => self::gap( 18 ) ), true );
+		$copy = self::container( array( $eyebrow, $title, $sub, $cta ), array( 'flex_direction' => 'column', 'flex_gap' => self::gap( 18 ) ), true );
 
 		if ( 'split-image' === $variant && ! empty( $v['HERO_IMAGE'] ) ) {
 			$img = self::image( $v['HERO_IMAGE'] );
 			if ( $img ) {
 				$media = self::container( array( $img ), array( 'flex_direction' => 'column' ), true );
-				$row = self::inner( array( $copy, $media ), 'row', array( 'align_items' => 'center', 'flex_direction_mobile' => 'column' ) );
+				$row = self::inner( array( $copy, $media ), 'row', array( 'flex_align_items' => 'center', 'flex_direction_mobile' => 'column' ) );
 				return array( self::outer( array( $row ), 'tint' ) );
 			}
 		}
 
 		$align = 'editorial' === $variant ? 'left' : 'center';
-		$copy['settings']['align_items'] = 'center' === $align ? 'center' : 'flex-start';
+		$copy['settings']['flex_align_items'] = 'center' === $align ? 'center' : 'flex-start';
 		return array( self::outer( array( self::inner( array( $copy ), 'column' ) ), 'tint' ) );
 	}
 
@@ -240,7 +240,7 @@ class SCC_Native_Elementor_Blocks {
 			if ( '' !== $url ) { $children[] = self::button( __( 'Learn more', 'seo-command-center' ), $url ); }
 			$cards[] = self::container( $children, array(
 				'flex_direction' => 'column',
-				'gap' => self::gap( 14 ),
+				'flex_gap' => self::gap( 14 ),
 				'padding' => self::dims( 28, 28, 28, 28 ),
 				'background_background' => 'classic',
 				'background_color' => self::color( 'surface', '#ffffff' ),
@@ -252,7 +252,7 @@ class SCC_Native_Elementor_Blocks {
 			), true );
 		}
 		if ( empty( $cards ) ) { return array(); }
-		$grid = self::container( $cards, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'gap' => self::gap( 24 ) ), true );
+		$grid = self::container( $cards, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'flex_gap' => self::gap( 24 ) ), true );
 		return array( self::outer( array( self::inner( array( self::heading( $v['SECTION_TITLE'] ?? '' ), $grid ) ) ), 'plain' ) );
 	}
 
@@ -262,10 +262,10 @@ class SCC_Native_Elementor_Blocks {
 		foreach ( (array) ( $v['STATS'] ?? array() ) as $stat ) {
 			$value = is_array( $stat ) ? (string) ( $stat['value'] ?? $stat['number'] ?? '' ) : '';
 			$label = is_array( $stat ) ? (string) ( $stat['label'] ?? $stat['text'] ?? '' ) : (string) $stat;
-			$items[] = self::container( array( self::heading( $value, 'h3', 'center' ), self::text( '<p>' . esc_html( $label ) . '</p>', 'center' ) ), array( 'flex_direction' => 'column', 'align_items' => 'center', 'gap' => self::gap( 8 ) ), true );
+			$items[] = self::container( array( self::heading( $value, 'h3', 'center' ), self::text( '<p>' . esc_html( $label ) . '</p>', 'center' ) ), array( 'flex_direction' => 'column', 'flex_align_items' => 'center', 'flex_gap' => self::gap( 8 ) ), true );
 		}
 		if ( empty( $items ) ) { return array(); }
-		$row = self::container( $items, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'justify_content' => 'space-between', 'gap' => self::gap( 24 ) ), true );
+		$row = self::container( $items, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'flex_justify_content' => 'space-between', 'flex_gap' => self::gap( 24 ) ), true );
 		return array( self::outer( array( self::inner( array( self::heading( $v['SECTION_TITLE'] ?? '', 'h2', 'center' ), $row ) ) ), 'tint' ) );
 	}
 
@@ -280,11 +280,11 @@ class SCC_Native_Elementor_Blocks {
 				self::heading( sprintf( '%02d', $i ), 'h3' ),
 				'' !== $title ? self::heading( $title, 'h3' ) : null,
 				self::text( '<p>' . esc_html( $text ) . '</p>' ),
-			), array( 'flex_direction' => 'column', 'gap' => self::gap( 10 ), 'padding' => self::dims( 24, 24, 24, 24 ) ), true );
+			), array( 'flex_direction' => 'column', 'flex_gap' => self::gap( 10 ), 'padding' => self::dims( 24, 24, 24, 24 ) ), true );
 			$i++;
 		}
 		if ( empty( $items ) ) { return array(); }
-		$row = self::container( $items, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'gap' => self::gap( 20 ) ), true );
+		$row = self::container( $items, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'flex_gap' => self::gap( 20 ) ), true );
 		return array( self::outer( array( self::inner( array( self::heading( $v['SECTION_TITLE'] ?? '' ), $row ) ) ), 'plain' ) );
 	}
 
@@ -298,7 +298,7 @@ class SCC_Native_Elementor_Blocks {
 				self::text( '<p>' . esc_html( (string) ( $faq['answer'] ?? '' ) ) . '</p>' ),
 			), array(
 				'flex_direction' => 'column',
-				'gap' => self::gap( 8 ),
+				'flex_gap' => self::gap( 8 ),
 				'padding' => self::dims( 22, 22, 22, 22 ),
 				'background_background' => 'classic',
 				'background_color' => self::color( 'surface', '#ffffff' ),
@@ -317,10 +317,10 @@ class SCC_Native_Elementor_Blocks {
 			$url = is_array( $item ) ? (string) ( $item['url'] ?? '' ) : '';
 			$children = array( self::heading( $title, 'h3' ) );
 			if ( '' !== $url ) { $children[] = self::button( __( 'View', 'seo-command-center' ), $url ); }
-			$items[] = self::container( $children, array( 'flex_direction' => 'column', 'gap' => self::gap( 10 ), 'padding' => self::dims( 20, 20, 20, 20 ) ), true );
+			$items[] = self::container( $children, array( 'flex_direction' => 'column', 'flex_gap' => self::gap( 10 ), 'padding' => self::dims( 20, 20, 20, 20 ) ), true );
 		}
 		if ( empty( $items ) ) { return array(); }
-		$row = self::container( $items, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'gap' => self::gap( 20 ) ), true );
+		$row = self::container( $items, array( 'flex_direction' => 'row', 'flex_wrap' => 'wrap', 'flex_gap' => self::gap( 20 ) ), true );
 		return array( self::outer( array( self::inner( array( self::heading( $v['SECTION_TITLE'] ?? '' ), $row ) ) ), 'plain' ) );
 	}
 
@@ -331,7 +331,7 @@ class SCC_Native_Elementor_Blocks {
 		$text = ! empty( $v['CTA_TEXT_BODY'] ) ? self::text( '<p>' . esc_html( (string) $v['CTA_TEXT_BODY'] ) . '</p>', 'center' ) : null;
 		if ( is_array( $text ) ) { $text['settings']['text_color'] = '#ffffff'; }
 		$button = self::button( $v['CTA_TEXT'] ?? '', $v['CTA_URL'] ?? '', 'center' );
-		$box = self::inner( array( $title, $text, $button ), 'column', array( 'align_items' => 'center' ) );
+		$box = self::inner( array( $title, $text, $button ), 'column', array( 'flex_align_items' => 'center' ) );
 		return array( self::outer( array( $box ), 'brand' ) );
 	}
 
