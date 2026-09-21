@@ -1,88 +1,142 @@
-# TideOrbit Native Elementor Design Engine
+# TideOrbit Professional Elementor Design Engine
 
-Introduced in **v1.41.0**.
+Introduced as a native foundation in **v1.41.0** and separated into a dedicated
+article-to-design pipeline in **v1.42.0**.
 
-## Goal
+## Boundary
 
-TideOrbit should build pages that remain genuinely editable in Elementor instead
-of placing every designed section inside a single HTML widget.
+The content/article system decides **what the page says**.
 
-The design engine keeps the existing safe pipeline:
+The Elementor design system decides **how the finished content is presented**.
 
-1. analyze real page content,
-2. select an allowlisted semantic block layout,
-3. choose a deterministic visual variant,
-4. map only verified content into the block,
-5. render native Elementor containers/widgets when the installed runtime supports them,
-6. fall back to the existing semantic HTML widget renderer when it does not,
-7. preserve crawlable `post_content` as a builder-independent fallback.
+SEO strategy stops before the design boundary. Keyword, search intent, city and
+page type are retained elsewhere for product compatibility, but they are not
+inputs to visual composition.
 
-Existing mapped Elementor templates still have first priority.
+```
+Completed article/page
+        ↓
+SCC_Design_Handoff
+        ↓
+SCC_Design_Composer
+        ↓
+SCC_Content_Mapper
+        ↓
+SCC_Native_Elementor_Blocks
+        ↓
+Editable Elementor document
+```
 
-## Components
+## Design handoff
 
-### `SCC_Elementor_Capabilities`
+`SCC_Design_Handoff` converts finished content into a design-only contract:
 
-Discovers the active Elementor version and available widgets at runtime. TideOrbit
-never assumes a third-party widget exists. It also reports whether **EMCP Tools**
-(`EMCP_TOOLS_VERSION`) is active, but EMCP is optional and is not required for
-page generation.
+- headline and introduction,
+- body HTML split into H2-led sections,
+- section word/paragraph/list/table/quote/media signals,
+- supplied hero media,
+- supplied stats and process steps,
+- supplied FAQs and related links,
+- supplied CTA copy/label/destination.
 
-### `SCC_Design_Intel::profile()`
+It deliberately excludes keyword, search-intent, local-targeting and page-type
+metadata.
 
-Builds a cached, read-only design profile from:
+## Professional design composer
 
-- the active Elementor Kit's system/custom colors,
-- system/custom typography,
-- Kit content width,
-- spacing/gap/radius signals sampled from up to five existing Elementor pages.
+`SCC_Design_Composer` selects presentation from content structure and the
+site's Elementor design profile.
 
-Missing values use conservative defaults. No AI call is made.
+Current section treatments include:
 
-### `SCC_Block_Variant_Selector`
+- editorial,
+- readable/narrow prose,
+- wide/table sections,
+- split-list sections,
+- alternating media-left/media-right sections,
+- callout sections,
+- split-image or text-first heroes,
+- counter proof bands,
+- numbered process cards,
+- FAQ accordion or stacked fallback,
+- related-content card/bento grids,
+- split or centered CTA sections.
 
-Keeps AI away from raw Elementor JSON. The semantic layout may contain `hero`,
-`content`, `stats`, etc.; TideOrbit deterministically chooses a visual variant
-such as `split-image`, `editorial`, `numbered-cards`, or `split`.
+Composition is deterministic: identical finished content produces the same
+visual plan even if SEO metadata changes.
 
-### `SCC_Native_Elementor_Blocks`
+## Elementor widget catalog
 
-Produces real Elementor Flexbox Containers and core widgets:
+`SCC_Elementor_Widget_Catalog` is owned by TideOrbit. It is not an EMCP
+dependency.
 
-- Heading
-- Text Editor
-- Button
-- Image
+TideOrbit discovers the widgets actually installed on the site and only emits
+widget structures it knows how to populate safely. The current catalog includes
+Elementor Free and optional Pro roles, with active rendering support for:
 
-Current native block coverage includes hero, content, intro, benefit lists, card
-grids, stats, process steps, FAQ stacks, related/location grids, CTA, TOC,
-comparison and highlight blocks.
+- Heading,
+- Text Editor,
+- Button,
+- Image,
+- Icon List,
+- Accordion,
+- Counter.
 
-The renderer uses Elementor's current container setting names
-(`flex_gap`, `flex_align_items`, `flex_justify_content`, responsive width
-settings, etc.).
+Additional catalog entries make future support possible for Image Box,
+Testimonial, Video, Image Carousel, Google Maps, Form, Call to Action and Loop
+Grid without coupling the design engine to a third-party MCP plugin.
 
-## Fallback order
+## Site design DNA
 
-For every block:
+`SCC_Design_Intel::profile()` reads the active Elementor Kit and recent
+Elementor pages to inherit:
 
-1. mapped existing Elementor template,
-2. TideOrbit native Elementor block,
-3. legacy TideOrbit HTML-widget block.
+- system/custom colors,
+- heading/body font families,
+- content width,
+- typical vertical section spacing,
+- container gaps,
+- border radius.
 
-This keeps v1.41 backward compatible with existing mappings and generated pages.
+Missing values use conservative defaults. No AI call is required.
 
-## EMCP Tools
+## Safety and fallbacks
 
-TideOrbit detects EMCP Tools when installed so a later agent workflow can use
-its MCP surface for visual inspection, snapshots, rollback and iterative edits.
-The core renderer deliberately does **not** depend on EMCP; page generation must
-continue to work when that plugin is absent or disabled.
+The design engine never executes model-generated raw Elementor JSON.
 
-## Next expansion
+For every component the fallback order remains:
 
-The native block renderer is intentionally structured so additional variants can
-be added without changing the semantic content engine. Useful next variants are
-background-image heroes, trust/logo rows, icon feature grids, pricing sections,
-testimonial cards, lead-form heroes, image-card carousels and Elementor-native
-accordion/tab implementations where the installed widget schema is verified.
+1. an explicitly mapped existing Elementor template,
+2. TideOrbit's native Elementor component renderer,
+3. the legacy semantic HTML-widget renderer.
+
+A crawlable `post_content` copy is also retained.
+
+## CTA ownership
+
+The design layer does not create marketing copy or destinations. CTA sections
+are composed only when the completed content supplies a CTA signal. Button text
+and URLs are passed through from content fields or an explicit CTA link in the
+article.
+
+## Responsive behavior
+
+Generated native components include mobile/tablet width fallbacks and stack
+multi-column compositions on small screens. The renderer uses Flexbox Containers
+and site-derived spacing rather than a fixed page template.
+
+## Future expansion
+
+The next design-side additions can focus entirely on presentation:
+
+- richer image-box/service-card schemas,
+- native testimonial widgets,
+- lead-form composition when Elementor Pro Form is installed,
+- gallery/carousel treatments when media exists,
+- background-image hero variants,
+- logo/trust rows,
+- pricing/testimonial component families,
+- visual inspection and repair tooling.
+
+Those additions should continue to respect the same boundary: content is
+complete before the design engine begins.
