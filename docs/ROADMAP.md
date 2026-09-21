@@ -239,12 +239,19 @@ surface over the existing intelligence layer. Additive; no DB changes.
 
 
 ## v1.41 — Native Elementor Design Engine ✅
-- ✅ Runtime Elementor capability discovery (version, core widget availability, containers, atomic support) with optional EMCP Tools detection.
+- ✅ Runtime Elementor capability discovery (version, installed widgets, containers, atomic support).
 - ✅ Cached site design profile from the active Elementor Kit plus spacing signals sampled from existing Elementor pages.
-- ✅ Deterministic block variants so AI selects semantic structure rather than raw Elementor JSON.
-- ✅ Native Elementor Flexbox Container rendering for hero, content, cards, stats, process, FAQ, related/location, CTA and utility blocks using core Heading/Text/Button/Image widgets.
-- ✅ Existing mapped Elementor templates remain first priority; the proven HTML-widget renderer remains the compatibility fallback.
-- ✅ Responsive card widths and verified Elementor container setting names from the current Elementor source.
+- ✅ Native Elementor Flexbox Container rendering with safe HTML fallback.
+
+## v1.42 — Professional Elementor Design Engine ✅
+- ✅ Explicit article/content → design handoff; SEO strategy stops before visual composition.
+- ✅ Self-contained Elementor widget catalog with runtime discovery; no EMCP dependency.
+- ✅ Design composer that is invariant to keyword, search intent, city and page type.
+- ✅ Section-level professional treatments: editorial, readable, wide, callout, split-list and alternating media splits.
+- ✅ Native Icon List for feature/list sections, Accordion for FAQ, Counter for numeric proof, plus Heading/Text/Button/Image fallbacks.
+- ✅ Responsive split heroes, bento/card grids, numbered process cards, related-content grids and split CTAs.
+- ✅ CTA content/destination is never invented by the design layer; it must come from completed content.
+- ✅ Existing mapped Elementor templates remain first priority; legacy semantic HTML remains the compatibility fallback.
 
 
 ---
