@@ -176,9 +176,12 @@ class SCC_Design_Intel {
 					if ( $v > 0 ) { $ys[] = $v; }
 				}
 			}
-			if ( isset( $s['gap'] ) ) {
-				$v = self::size_value( $s['gap'] );
-				if ( $v > 0 ) { $gaps[] = $v; }
+			foreach ( array( 'flex_gap', 'gap' ) as $gap_key ) {
+				if ( isset( $s[ $gap_key ] ) ) {
+					$v = self::size_value( $s[ $gap_key ] );
+					if ( $v > 0 ) { $gaps[] = $v; }
+					break;
+				}
 			}
 			if ( isset( $s['border_radius'] ) && is_array( $s['border_radius'] ) ) {
 				$v = isset( $s['border_radius']['top'] ) ? (int) $s['border_radius']['top'] : 0;
