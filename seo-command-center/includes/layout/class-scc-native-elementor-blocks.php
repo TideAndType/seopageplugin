@@ -247,6 +247,7 @@ class SCC_Native_Elementor_Blocks {
 				'border_border' => 'solid',
 				'border_width' => self::dims( 1, 1, 1, 1 ),
 				'border_color' => self::color( 'border', '#e5e7eb' ),
+				'border_radius' => self::dims( self::spacing( 'radius', 12 ), self::spacing( 'radius', 12 ), self::spacing( 'radius', 12 ), self::spacing( 'radius', 12 ) ),
 				'width' => array( 'unit' => '%', 'size' => 31, 'sizes' => array() ),
 			), true );
 		}
@@ -309,7 +310,7 @@ class SCC_Native_Elementor_Blocks {
 
 	protected static function related( array $block ) {
 		$v = (array) ( $block['vars'] ?? array() );
-		$raw = (array) ( $v['RELATED_ITEMS'] ?? $v['AREAS'] ?? array() );
+		$raw = (array) ( $v['RELATED_ITEMS'] ?? $v['AREA_ITEMS'] ?? $v['AREAS'] ?? array() );
 		$items = array();
 		foreach ( $raw as $item ) {
 			$title = is_array( $item ) ? (string) ( $item['title'] ?? $item['text'] ?? $item['name'] ?? '' ) : (string) $item;
@@ -326,7 +327,9 @@ class SCC_Native_Elementor_Blocks {
 	protected static function cta( array $block ) {
 		$v = (array) ( $block['vars'] ?? array() );
 		$title = self::heading( $v['CTA_TITLE'] ?? '', 'h2', 'center' );
+		if ( is_array( $title ) ) { $title['settings']['title_color'] = '#ffffff'; }
 		$text = ! empty( $v['CTA_TEXT_BODY'] ) ? self::text( '<p>' . esc_html( (string) $v['CTA_TEXT_BODY'] ) . '</p>', 'center' ) : null;
+		if ( is_array( $text ) ) { $text['settings']['text_color'] = '#ffffff'; }
 		$button = self::button( $v['CTA_TEXT'] ?? '', $v['CTA_URL'] ?? '', 'center' );
 		$box = self::inner( array( $title, $text, $button ), 'column', array( 'align_items' => 'center' ) );
 		return array( self::outer( array( $box ), 'brand' ) );
