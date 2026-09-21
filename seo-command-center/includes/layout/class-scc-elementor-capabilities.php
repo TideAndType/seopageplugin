@@ -2,10 +2,8 @@
 /**
  * Elementor capability discovery.
  *
- * Reads the actually installed Elementor runtime instead of assuming a fixed
- * widget set. TideOrbit uses this as a safety boundary before emitting native
- * Elementor widgets. EMCP Tools is detected as an optional external agent
- * surface, never a runtime dependency.
+ * Reads the installed Elementor runtime instead of assuming a fixed widget set.
+ * TideOrbit's design engine is self-contained and does not depend on EMCP.
  *
  * @package SEO_Command_Center
  */
@@ -63,13 +61,6 @@ class SCC_Elementor_Capabilities {
 		return '' !== $v && version_compare( $v, '4.0.0', '>=' );
 	}
 
-	public static function emcp() {
-		return array(
-			'available' => defined( 'EMCP_TOOLS_VERSION' ),
-			'version'   => defined( 'EMCP_TOOLS_VERSION' ) ? (string) EMCP_TOOLS_VERSION : '',
-		);
-	}
-
 	public static function snapshot() {
 		return array(
 			'elementor' => self::available(),
@@ -77,7 +68,6 @@ class SCC_Elementor_Capabilities {
 			'containers'=> self::supports_containers(),
 			'atomic'    => self::supports_atomic(),
 			'widgets'   => self::widget_types(),
-			'emcp'      => self::emcp(),
 		);
 	}
 }
