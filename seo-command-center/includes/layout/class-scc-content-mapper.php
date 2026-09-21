@@ -38,11 +38,12 @@ class SCC_Content_Mapper {
 			}
 			$vars  = self::vars_for( $id, $analysis, $layout, $context );
 			$blocks[] = array(
-				'id'     => $id,
-				'name'   => $meta['name'],
-				'render' => $meta['render'],
-				'vars'   => $vars,
-				'empty'  => self::is_empty( $meta['render'], $vars ),
+				'id'      => $id,
+				'name'    => $meta['name'],
+				'render'  => $meta['render'],
+				'variant' => class_exists( 'SCC_Block_Variant_Selector' ) ? SCC_Block_Variant_Selector::select( $id, $analysis, $context ) : 'default',
+				'vars'    => $vars,
+				'empty'   => self::is_empty( $meta['render'], $vars ),
 			);
 		}
 		return $blocks;
@@ -64,6 +65,7 @@ class SCC_Content_Mapper {
 					'HERO_EYEBROW'  => self::eyebrow( $analysis ),
 					'HERO_TITLE'    => (string) ( $analysis['h1'] ?: $analysis['title'] ),
 					'HERO_SUBTITLE' => self::trim_words( (string) $analysis['intro'], 32 ),
+					'HERO_IMAGE'    => (array) ( $analysis['image'] ?? array() ),
 					'CTA_TEXT'      => self::cta_text( $analysis ),
 					'CTA_URL'       => self::cta_url( $analysis, $context ),
 				);
