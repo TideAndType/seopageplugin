@@ -462,7 +462,10 @@ if ( ! function_exists( 'wp_list_pluck' ) ) {
 }
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-registry.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-capabilities.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-widget-catalog.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-intel.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-handoff.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-composer.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-variant-selector.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-analyzer.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-rule-provider.php';
