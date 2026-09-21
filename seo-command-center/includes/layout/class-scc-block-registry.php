@@ -375,7 +375,7 @@ class SCC_Block_Registry {
 			'purpose'        => 'close',
 			'content_types'  => array( '*' ),
 			'intents'        => array( '*' ),
-			'min'            => 1,
+			'min'            => 0,
 			'max'            => 1,
 			'fields'         => array( 'CTA_TITLE', 'CTA_TEXT', 'CTA_URL' ),
 			'repeatable'     => false,
@@ -383,7 +383,7 @@ class SCC_Block_Registry {
 			'supports_cta'   => true,
 			'supports_links' => true,
 			'render'         => 'cta',
-			'required'       => true,
+			'required'       => false,
 		);
 
 		/**
