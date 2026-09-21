@@ -278,7 +278,12 @@ class SCC_Content_Mapper {
 	 */
 	protected static function cta_text( array $analysis ) {
 		$t = trim( (string) ( $analysis['cta_text'] ?? '' ) );
-		return '' !== $t ? $t : __( 'Get in touch', 'seo-command-center' );
+		if ( '' !== $t ) { return $t; }
+		$cta = (string) ( $analysis['cta'] ?? '' );
+		if ( preg_match( '/<a\b[^>]*>(.*?)<\/a>/is', $cta, $m ) ) {
+			return trim( wp_strip_all_tags( $m[1] ) );
+		}
+		return '';
 	}
 
 	/**
@@ -290,15 +295,12 @@ class SCC_Content_Mapper {
 	 */
 	protected static function cta_url( array $analysis, array $context ) {
 		$url = trim( (string) ( $analysis['cta_url'] ?? '' ) );
-		if ( '' !== $url ) {
-			return $url;
+		if ( '' !== $url ) { return $url; }
+		$cta = (string) ( $analysis['cta'] ?? '' );
+		if ( preg_match( '/<a\b[^>]*href=["\']([^"\']+)["\']/i', $cta, $m ) ) {
+			return esc_url_raw( (string) $m[1] );
 		}
-		$business = isset( $context['business'] ) && is_array( $context['business'] ) ? $context['business'] : array();
-		$burl = trim( (string) ( $business['url'] ?? '' ) );
-		if ( '' !== $burl ) {
-			return $burl;
-		}
-		return home_url( '/contact/' );
+		return '';
 	}
 
 	/**
