@@ -1477,7 +1477,7 @@ assert_true( ! SCC_Content_Plan::is_taken( array( 'title' => 'Brand New Page', '
 echo "\n== Layout Engine: block registry ==\n";
 $scc_reg = SCC_Block_Registry::all();
 assert_true( isset( $scc_reg['hero'], $scc_reg['cta'], $scc_reg['faq'], $scc_reg['service-grid'] ), 'core blocks are registered' );
-assert_true( in_array( 'hero', SCC_Block_Registry::required_ids(), true ) && in_array( 'cta', SCC_Block_Registry::required_ids(), true ), 'hero + cta are required' );
+assert_true( in_array( 'hero', SCC_Block_Registry::required_ids(), true ) && ! in_array( 'cta', SCC_Block_Registry::required_ids(), true ), 'hero is required but CTA is only rendered when article content supplies one' );
 assert_true( SCC_Block_Registry::exists( 'faq' ) && ! SCC_Block_Registry::exists( 'not-a-block' ), 'exists() distinguishes real vs fake ids' );
 assert_true( in_array( 'FAQ_ITEMS', $scc_reg['faq']['fields'], true ), 'faq block declares FAQ_ITEMS field' );
 
@@ -1488,7 +1488,7 @@ assert_eq( 'hero', $scc_v[0], 'hero is moved to the front' );
 assert_eq( 'cta', end( $scc_v ), 'cta is moved to the end' );
 assert_eq( 1, count( array_keys( $scc_v, 'faq', true ) ), 'non-repeatable faq de-duplicated' );
 $scc_v2 = SCC_Layout_Validator::validate( array( 'content' ) );
-assert_true( in_array( 'hero', $scc_v2, true ) && in_array( 'cta', $scc_v2, true ), 'required blocks injected when absent' );
+assert_true( in_array( 'hero', $scc_v2, true ) && ! in_array( 'cta', $scc_v2, true ), 'validator injects the required hero but does not invent a CTA' );
 
 echo "\n== Layout Engine: deterministic rule provider ==\n";
 $scc_rule = new SCC_Layout_Rule_Provider();
