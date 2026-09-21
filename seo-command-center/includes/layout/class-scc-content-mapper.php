@@ -83,7 +83,15 @@ class SCC_Content_Mapper {
 				return array( 'TOC_ITEMS' => $items );
 
 			case 'content':
-				return array( 'CONTENT' => self::body_html( $analysis, $layout ) );
+				$body = self::body_html( $analysis, $layout );
+				$sections = class_exists( 'SCC_Design_Handoff' ) ? SCC_Design_Handoff::sections( $body ) : array();
+				if ( class_exists( 'SCC_Design_Composer' ) ) {
+					$sections = SCC_Design_Composer::decorate_sections( $sections );
+				}
+				return array(
+					'CONTENT'          => $body,
+					'CONTENT_SECTIONS' => $sections,
+				);
 
 			case 'benefits':
 				return array(
@@ -255,10 +263,9 @@ class SCC_Content_Mapper {
 	 * @return string
 	 */
 	protected static function cta_title( array $analysis ) {
-		$kw = trim( (string) $analysis['primary_keyword'] );
-		if ( '' !== $kw ) {
-			/* translators: %s: primary keyword */
-			return sprintf( __( 'Ready to get started with %s?', 'seo-command-center' ), $kw );
+		$explicit = trim( wp_strip_all_tags( (string) ( $analysis['cta'] ?? '' ) ) );
+		if ( '' !== $explicit && strlen( $explicit ) <= 120 ) {
+			return $explicit;
 		}
 		return __( 'Ready to get started?', 'seo-command-center' );
 	}
@@ -302,22 +309,9 @@ class SCC_Content_Mapper {
 	 * @return string
 	 */
 	protected static function eyebrow( array $analysis ) {
-		$city = trim( (string) ( $analysis['city'] ?? '' ) );
-		if ( '' !== $city ) {
-			return $city;
-		}
-		$labels = array(
-			'service'       => __( 'Services', 'seo-command-center' ),
-			'local_service' => __( 'Local services', 'seo-command-center' ),
-			'location'      => __( 'Service area', 'seo-command-center' ),
-			'landing'       => __( 'Overview', 'seo-command-center' ),
-			'comparison'    => __( 'Comparison', 'seo-command-center' ),
-			'blog_post'     => __( 'Guide', 'seo-command-center' ),
-			'article'       => __( 'Guide', 'seo-command-center' ),
-			'informational' => __( 'Guide', 'seo-command-center' ),
-		);
-		$type = (string) ( $analysis['content_type'] ?? 'article' );
-		return isset( $labels[ $type ] ) ? $labels[ $type ] : '';
+		// The design layer must not invent labels from SEO/page-type metadata.
+		// Only pass through an explicit eyebrow supplied by the content layer.
+		return trim( (string) ( $analysis['eyebrow'] ?? '' ) );
 	}
 
 	/**
