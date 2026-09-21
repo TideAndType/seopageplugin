@@ -1549,6 +1549,36 @@ assert_eq( 'tint', $scc_secs[2]['style'], 'second H2 section tinted (alternating
 assert_true( false !== strpos( $scc_secs[1]['html'], '<h2>One</h2>' ), 'each section keeps its H2' );
 assert_eq( 0, count( SCC_Block_Elementor_Renderer::split_sections( '   ' ) ), 'empty body => no sections' );
 
+echo "\n== Native Elementor Design Engine ==\n";
+assert_true( ! SCC_Elementor_Capabilities::available(), 'Elementor capability layer is safely inactive in unit environment' );
+$scc_caps = SCC_Elementor_Capabilities::snapshot();
+assert_true( isset( $scc_caps['widgets'], $scc_caps['emcp'] ), 'capability snapshot exposes widgets + optional EMCP surface' );
+assert_eq( 'editorial', SCC_Block_Variant_Selector::select( 'hero', array( 'content_type' => 'article', 'search_intent' => 'informational', 'has_image' => false ) ), 'article hero uses editorial variant' );
+assert_eq( 'split-image', SCC_Block_Variant_Selector::select( 'hero', array( 'content_type' => 'service', 'search_intent' => 'commercial', 'has_image' => true ) ), 'commercial hero with media uses split-image variant' );
+assert_eq( 'split', SCC_Block_Variant_Selector::select( 'cta', array( 'search_intent' => 'local' ) ), 'local CTA uses split variant' );
+$scc_profile = SCC_Design_Intel::profile();
+assert_eq( 1140, $scc_profile['layout']['content_width'], 'design profile has safe default content width without Elementor' );
+assert_true( isset( $scc_profile['spacing']['section_y'], $scc_profile['colors']['surface'] ), 'design profile exposes spacing and surface tokens' );
+$scc_variant_analysis = array(
+	'content_type' => 'article',
+	'search_intent' => 'informational',
+	'title' => 'Native Layout Guide',
+	'h1' => 'Native Layout Guide',
+	'primary_keyword' => 'native elementor layouts',
+	'intro' => 'A short introduction for the native layout test.',
+	'content_html' => '<h2>Section</h2><p>Body.</p>',
+	'sections' => array( array( 'level' => 'h2', 'text' => 'Section', 'anchor' => 'section' ) ),
+	'services' => array(), 'benefits' => array(), 'process' => array(), 'stats' => array(),
+	'faqs' => array(), 'related' => array(), 'areas' => array(), 'city' => '', 'service' => '',
+	'cta' => '', 'cta_text' => '', 'cta_url' => '',
+	'image' => array( 'url' => 'https://example.com/hero.jpg', 'id' => 10 ),
+	'has_image' => true,
+);
+$scc_variant_blocks = SCC_Content_Mapper::map( array( 'hero', 'content', 'cta' ), $scc_variant_analysis, array() );
+assert_eq( 'editorial', $scc_variant_blocks[0]['variant'], 'content mapper stores deterministic block variant' );
+assert_eq( 'https://example.com/hero.jpg', $scc_variant_blocks[0]['vars']['HERO_IMAGE']['url'], 'hero media flows into the renderer' );
+assert_eq( array(), SCC_Native_Elementor_Blocks::render_block( $scc_variant_blocks[0] ), 'native renderer safely declines when Elementor containers are unavailable' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
