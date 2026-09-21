@@ -1,0 +1,24 @@
+name: Build TideOrbit WordPress ZIP
+
+on:
+  push:
+    branches:
+      - build/tideorbit-1.41.0-upload
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package plugin
+        run: zip -r tideorbit-1.41.0.zip seo-command-center -x '*.DS_Store'
+      - name: Upload WordPress plugin ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: tideorbit-1.41.0-wordpress
+          path: tideorbit-1.41.0.zip
+          if-no-files-found: error
+          retention-days: 7
