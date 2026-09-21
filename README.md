@@ -1,17 +1,17 @@
-# SEO Command Center
+# TideOrbit
 
-An AI-powered SEO Command Center for WordPress + Elementor. It analyzes a
+An AI-powered SEO operating system for WordPress + Elementor. It analyzes a
 WordPress site, helps you decide what it should rank for, plans the pages and
 articles it needs, and (in later phases) generates them using your Elementor
 templates — always as **drafts you approve**, never auto-published by default.
 
-> Working name / prefix: **SEO Command Center** · `scc` · text domain
-> `seo-command-center`. Built to grow into a commercial plugin, not a one-off
-> script.
+> Product name: **TideOrbit**. Internal `SCC_` / `scc_` prefixes and the
+> `seo-command-center` text domain are intentionally retained for backward
+> compatibility with existing installs.
 
 ## Status
 
-**Current version: 1.26.0.** The plugin is organized around four areas —
+**Current version: 1.41.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
@@ -48,6 +48,7 @@ and the hardening + simplification passes are implemented. See
   competitor gap analysis.
 
 **Recent passes (this branch)**
+- **v1.41.0 — Native Elementor Design Engine:** generated layouts now prefer real Elementor containers and core widgets (heading, text, button, image) instead of placing every designed section inside one HTML widget. A capability layer detects the installed Elementor runtime, Design Intel builds a cached site profile from the active Kit plus existing-page spacing signals, and deterministic block variants choose appropriate hero/card/content/CTA treatments. Existing mapped templates still take priority and the previous HTML-widget renderer remains the compatibility fallback. EMCP Tools is detected as an optional agent surface but is not required.
 - **v1.23.0 — Hardening:** centralized outbound-URL SSRF guard (`SCC_URL`) enforced
   before every request (loopback allowed for LM Studio; private/reserved/metadata
   blocked), a proper `robots.txt` matcher (`SCC_Robots`), RFC 3986 crawler URL
