@@ -121,7 +121,10 @@ require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-renderer-manager.php';
 // (deterministic rules, optional AI) + content mapping + Elementor rendering.
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-registry.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-capabilities.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-widget-catalog.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-intel.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-handoff.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-composer.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-variant-selector.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-analyzer.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-rule-provider.php';
