@@ -173,10 +173,11 @@ class SCC_Native_Elementor_Blocks {
 	protected static function hero( array $block ) {
 		$v = (array) ( $block['vars'] ?? array() );
 		$variant = (string) ( $block['variant'] ?? 'centered' );
-		$title = self::heading( $v['HERO_TITLE'] ?? '', 'h1', 'left' );
-		$eyebrow = ! empty( $v['HERO_EYEBROW'] ) ? self::text( '<strong>' . esc_html( $v['HERO_EYEBROW'] ) . '</strong>' ) : null;
-		$sub = self::text( '<p>' . esc_html( (string) ( $v['HERO_SUBTITLE'] ?? '' ) ) . '</p>' );
-		$cta = self::button( $v['CTA_TEXT'] ?? '', $v['CTA_URL'] ?? '' );
+		$text_align = 'centered' === $variant ? 'center' : 'left';
+		$title = self::heading( $v['HERO_TITLE'] ?? '', 'h1', $text_align );
+		$eyebrow = ! empty( $v['HERO_EYEBROW'] ) ? self::text( '<strong>' . esc_html( $v['HERO_EYEBROW'] ) . '</strong>', $text_align ) : null;
+		$sub = self::text( '<p>' . esc_html( (string) ( $v['HERO_SUBTITLE'] ?? '' ) ) . '</p>', $text_align );
+		$cta = self::button( $v['CTA_TEXT'] ?? '', $v['CTA_URL'] ?? '', $text_align );
 		$copy = self::container( array( $eyebrow, $title, $sub, $cta ), array( 'flex_direction' => 'column', 'flex_gap' => self::gap( 18 ) ), true );
 
 		if ( 'split-image' === $variant && ! empty( $v['HERO_IMAGE'] ) ) {
@@ -243,12 +244,14 @@ class SCC_Native_Elementor_Blocks {
 				'flex_gap' => self::gap( 14 ),
 				'padding' => self::dims( 28, 28, 28, 28 ),
 				'background_background' => 'classic',
-				'background_color' => self::color( 'surface', '#ffffff' ),
+				'background_color' => self::color( 'card', '#ffffff' ),
 				'border_border' => 'solid',
 				'border_width' => self::dims( 1, 1, 1, 1 ),
 				'border_color' => self::color( 'border', '#e5e7eb' ),
 				'border_radius' => self::dims( self::spacing( 'radius', 12 ), self::spacing( 'radius', 12 ), self::spacing( 'radius', 12 ), self::spacing( 'radius', 12 ) ),
 				'width' => array( 'unit' => '%', 'size' => 31, 'sizes' => array() ),
+				'width_tablet' => array( 'unit' => '%', 'size' => 48, 'sizes' => array() ),
+				'width_mobile' => array( 'unit' => '%', 'size' => 100, 'sizes' => array() ),
 			), true );
 		}
 		if ( empty( $cards ) ) { return array(); }
@@ -301,7 +304,7 @@ class SCC_Native_Elementor_Blocks {
 				'flex_gap' => self::gap( 8 ),
 				'padding' => self::dims( 22, 22, 22, 22 ),
 				'background_background' => 'classic',
-				'background_color' => self::color( 'surface', '#ffffff' ),
+				'background_color' => self::color( 'card', '#ffffff' ),
 			), true );
 		}
 		if ( empty( $items ) ) { return array(); }
@@ -331,6 +334,10 @@ class SCC_Native_Elementor_Blocks {
 		$text = ! empty( $v['CTA_TEXT_BODY'] ) ? self::text( '<p>' . esc_html( (string) $v['CTA_TEXT_BODY'] ) . '</p>', 'center' ) : null;
 		if ( is_array( $text ) ) { $text['settings']['text_color'] = '#ffffff'; }
 		$button = self::button( $v['CTA_TEXT'] ?? '', $v['CTA_URL'] ?? '', 'center' );
+		if ( is_array( $button ) ) {
+			$button['settings']['background_color'] = '#ffffff';
+			$button['settings']['button_text_color'] = self::color( 'primary', '#4f46e5' );
+		}
 		$box = self::inner( array( $title, $text, $button ), 'column', array( 'flex_align_items' => 'center' ) );
 		return array( self::outer( array( $box ), 'brand' ) );
 	}
