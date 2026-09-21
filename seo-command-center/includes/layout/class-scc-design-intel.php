@@ -33,7 +33,8 @@ class SCC_Design_Intel {
 				'text'      => '',
 				'heading'   => '',
 				'accent'    => '',
-				'surface'   => '#ffffff',
+				'surface'   => '#f7f8fb',
+				'card'      => '#ffffff',
 				'border'    => '#e5e7eb',
 			),
 			'typography' => array(
