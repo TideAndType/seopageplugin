@@ -237,6 +237,16 @@ surface over the existing intelligence layer. Additive; no DB changes.
   preview/apply/verify/dismiss lifecycle. The Copilot and every area feed from
   these — no per-opportunity engines.
 
+
+## v1.41 — Native Elementor Design Engine ✅
+- ✅ Runtime Elementor capability discovery (version, core widget availability, containers, atomic support) with optional EMCP Tools detection.
+- ✅ Cached site design profile from the active Elementor Kit plus spacing signals sampled from existing Elementor pages.
+- ✅ Deterministic block variants so AI selects semantic structure rather than raw Elementor JSON.
+- ✅ Native Elementor Flexbox Container rendering for hero, content, cards, stats, process, FAQ, related/location, CTA and utility blocks using core Heading/Text/Button/Image widgets.
+- ✅ Existing mapped Elementor templates remain first priority; the proven HTML-widget renderer remains the compatibility fallback.
+- ✅ Responsive card widths and verified Elementor container setting names from the current Elementor source.
+
+
 ---
 
 ## Cross-cutting (every phase)
