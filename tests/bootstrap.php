@@ -15,6 +15,9 @@ error_reporting( E_ALL & ~E_DEPRECATED );
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', __DIR__ . '/' );
 }
+if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
+	define( 'MINUTE_IN_SECONDS', 60 );
+}
 if ( ! defined( 'HOUR_IN_SECONDS' ) ) {
 	define( 'HOUR_IN_SECONDS', 3600 );
 }
@@ -327,6 +330,8 @@ if ( ! function_exists( 'wp_http_validate_url' ) ) {
 	}
 }
 require_once __DIR__ . '/../seo-command-center/includes/index/class-scc-content-index.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-topic-coverage.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-tidescore.php';
 require_once __DIR__ . '/../seo-command-center/includes/index/class-scc-change-history.php';
 require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-anchor-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/links/class-scc-link-engine.php';
@@ -461,6 +466,9 @@ if ( ! function_exists( 'wp_list_pluck' ) ) {
 	}
 }
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-registry.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-page-architect.php';
+add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
+SCC_Block_Registry::flush();
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-capabilities.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-widget-catalog.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-intel.php';
