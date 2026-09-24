@@ -23,6 +23,7 @@ class SCC_Deactivator {
 			wp_unschedule_event( $timestamp, 'scc_run_jobs' );
 		}
 		wp_clear_scheduled_hook( 'scc_run_jobs' );
+		wp_clear_scheduled_hook( 'scc_run_jobs_kick' );
 		flush_rewrite_rules();
 	}
 }
