@@ -45,12 +45,14 @@ class SCC_Block_Elementor_Renderer {
 			if ( ! empty( $block['empty'] ) ) {
 				continue; // Never render an empty section.
 			}
-			$id   = (string) $block['id'];
-			$vars = (array) $block['vars'];
+			$id      = (string) $block['id'];
+			$base_id = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( $id ) : $id;
+			$vars    = (array) $block['vars'];
 
 			// 1) Existing-template reuse takes priority (use the site's design).
-			if ( isset( $map[ $id ] ) && class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
-				$tpl = self::render_template_block( (int) $map[ $id ], $vars );
+			$template_id = isset( $map[ $id ] ) ? (int) $map[ $id ] : ( isset( $map[ $base_id ] ) ? (int) $map[ $base_id ] : 0 );
+			if ( $template_id > 0 && class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active() ) {
+				$tpl = self::render_template_block( $template_id, $vars );
 				if ( ! empty( $tpl ) ) {
 					$elements = array_merge( $elements, $tpl );
 					$html[]   = self::block_html( $block, $palette_css );
