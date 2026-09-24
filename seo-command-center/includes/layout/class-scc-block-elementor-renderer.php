@@ -135,12 +135,24 @@ class SCC_Block_Elementor_Renderer {
 	 * @return array Top-level element nodes.
 	 */
 	protected static function block_elements( array $block, $palette_css ) {
-		// Every block renders as a FULL-WIDTH Elementor container holding one HTML
-		// widget with the block's designed, semantic markup. Full-width is a stable
-		// Elementor setting; all visual design (bands, spacing, grids, hero, cards,
-		// CTA) is painted by the plugin's own scoped CSS — so the look never
-		// depends on per-widget Elementor settings we can't verify. Each section is
-		// still an editable Elementor container the user can reorder or tweak.
+		// Prefer real Elementor containers/widgets. The native renderer is
+		// deterministic and capability-gated: it only emits structures TideOrbit
+		// knows how to build for the installed Elementor runtime.
+		if ( class_exists( 'SCC_Native_Elementor_Blocks' ) ) {
+			$native = SCC_Native_Elementor_Blocks::render_block(
+				$block,
+				array(
+					'palette_css' => $palette_css,
+					'profile'     => class_exists( 'SCC_Design_Intel' ) ? SCC_Design_Intel::profile() : array(),
+				)
+			);
+			if ( ! empty( $native ) ) {
+				return $native;
+			}
+		}
+
+		// Compatibility fallback: unsupported/third-party blocks still render
+		// through the proven semantic HTML-widget path.
 		$markup = self::block_html( $block, $palette_css );
 		if ( '' === trim( $markup ) ) {
 			return array();

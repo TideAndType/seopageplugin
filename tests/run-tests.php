@@ -1477,7 +1477,7 @@ assert_true( ! SCC_Content_Plan::is_taken( array( 'title' => 'Brand New Page', '
 echo "\n== Layout Engine: block registry ==\n";
 $scc_reg = SCC_Block_Registry::all();
 assert_true( isset( $scc_reg['hero'], $scc_reg['cta'], $scc_reg['faq'], $scc_reg['service-grid'] ), 'core blocks are registered' );
-assert_true( in_array( 'hero', SCC_Block_Registry::required_ids(), true ) && in_array( 'cta', SCC_Block_Registry::required_ids(), true ), 'hero + cta are required' );
+assert_true( in_array( 'hero', SCC_Block_Registry::required_ids(), true ) && ! in_array( 'cta', SCC_Block_Registry::required_ids(), true ), 'hero is required but CTA is only rendered when article content supplies one' );
 assert_true( SCC_Block_Registry::exists( 'faq' ) && ! SCC_Block_Registry::exists( 'not-a-block' ), 'exists() distinguishes real vs fake ids' );
 assert_true( in_array( 'FAQ_ITEMS', $scc_reg['faq']['fields'], true ), 'faq block declares FAQ_ITEMS field' );
 
@@ -1488,7 +1488,7 @@ assert_eq( 'hero', $scc_v[0], 'hero is moved to the front' );
 assert_eq( 'cta', end( $scc_v ), 'cta is moved to the end' );
 assert_eq( 1, count( array_keys( $scc_v, 'faq', true ) ), 'non-repeatable faq de-duplicated' );
 $scc_v2 = SCC_Layout_Validator::validate( array( 'content' ) );
-assert_true( in_array( 'hero', $scc_v2, true ) && in_array( 'cta', $scc_v2, true ), 'required blocks injected when absent' );
+assert_true( in_array( 'hero', $scc_v2, true ) && ! in_array( 'cta', $scc_v2, true ), 'validator injects the required hero but does not invent a CTA' );
 
 echo "\n== Layout Engine: deterministic rule provider ==\n";
 $scc_rule = new SCC_Layout_Rule_Provider();
@@ -1536,7 +1536,7 @@ foreach ( $scc_blocks as $bk ) { $scc_by[ $bk['id'] ] = $bk; }
 assert_eq( 'Guide', $scc_by['hero']['vars']['HERO_TITLE'], 'hero title mapped from h1' );
 assert_true( false === strpos( $scc_by['content']['vars']['CONTENT'], '<details' ), 'content body has the FAQ lifted out' );
 assert_true( ! $scc_by['faq']['empty'] && $scc_by['faq']['vars']['FAQ_ITEMS'][0]['question'] === 'Q?', 'faq block populated' );
-assert_true( false !== strpos( $scc_by['cta']['vars']['CTA_TITLE'], 'local seo' ), 'cta title uses the keyword' );
+assert_true( false === strpos( strtolower( $scc_by['cta']['vars']['CTA_TITLE'] ), 'local seo' ), 'design CTA title is not derived from SEO keyword metadata' );
 $scc_empty_faq = SCC_Content_Mapper::map( array( 'faq' ), array( 'faqs' => array(), 'content_html' => '', 'intro' => '', 'primary_keyword' => '' ) + $scc_analysis, array() );
 assert_true( $scc_empty_faq[0]['empty'], 'faq block reports empty when there are no FAQs' );
 
@@ -1548,6 +1548,62 @@ assert_eq( 'plain', $scc_secs[1]['style'], 'first H2 section plain' );
 assert_eq( 'tint', $scc_secs[2]['style'], 'second H2 section tinted (alternating)' );
 assert_true( false !== strpos( $scc_secs[1]['html'], '<h2>One</h2>' ), 'each section keeps its H2' );
 assert_eq( 0, count( SCC_Block_Elementor_Renderer::split_sections( '   ' ) ), 'empty body => no sections' );
+
+echo "\n== Native Elementor Professional Design Engine ==\n";
+assert_true( ! SCC_Elementor_Capabilities::available(), 'Elementor capability layer is safely inactive in unit environment' );
+$scc_caps = SCC_Elementor_Capabilities::snapshot();
+assert_true( isset( $scc_caps['widgets'] ) && ! isset( $scc_caps['emcp'] ), 'capability snapshot is self-contained and has no EMCP dependency' );
+assert_eq( 'centered', SCC_Block_Variant_Selector::select( 'hero', array( 'content_type' => 'article', 'search_intent' => 'informational', 'h1' => 'Short title', 'sections' => array(), 'has_image' => false ) ), 'short text-only hero is centered from structural signals' );
+assert_eq( 'centered', SCC_Block_Variant_Selector::select( 'hero', array( 'content_type' => 'service', 'search_intent' => 'transactional', 'h1' => 'Short title', 'sections' => array(), 'has_image' => false ) ), 'changing SEO metadata does not change the visual variant' );
+assert_eq( 'split-image', SCC_Block_Variant_Selector::select( 'hero', array( 'content_type' => 'article', 'search_intent' => 'informational', 'h1' => 'Short title', 'sections' => array(), 'has_image' => true ) ), 'hero with media uses split-image regardless of SEO metadata' );
+assert_eq( 'split', SCC_Block_Variant_Selector::select( 'cta', array( 'search_intent' => 'informational' ) ), 'CTA visual treatment is design-driven, not intent-driven' );
+$scc_profile = SCC_Design_Intel::profile();
+assert_eq( 1140, $scc_profile['layout']['content_width'], 'design profile has safe default content width without Elementor' );
+assert_true( isset( $scc_profile['spacing']['section_y'], $scc_profile['colors']['surface'] ), 'design profile exposes spacing and surface tokens' );
+
+$scc_variant_analysis = array(
+	'content_type' => 'article',
+	'search_intent' => 'informational',
+	'title' => 'Native Layout Guide',
+	'h1' => 'Native Layout Guide',
+	'primary_keyword' => 'native elementor layouts',
+	'intro' => 'A short introduction for the native layout test.',
+	'content_html' => '<h2>What matters</h2><p>Body copy.</p><ul><li>One</li><li>Two</li><li>Three</li></ul><h2>More detail</h2><p>Another section.</p>',
+	'sections' => array(
+		array( 'level' => 'h2', 'text' => 'What matters', 'anchor' => 'what-matters' ),
+		array( 'level' => 'h2', 'text' => 'More detail', 'anchor' => 'more-detail' ),
+	),
+	'services' => array(), 'benefits' => array(), 'process' => array(), 'stats' => array(),
+	'faqs' => array( array( 'question' => 'Q?', 'answer' => 'A.' ) ),
+	'related' => array(), 'areas' => array(), 'city' => 'Daytona Beach', 'service' => 'SEO',
+	'cta' => 'Talk with us', 'cta_text' => 'Contact us', 'cta_url' => '/contact/',
+	'image' => array( 'url' => 'https://example.com/hero.jpg', 'id' => 10 ),
+	'has_image' => true,
+);
+$scc_handoff_a = SCC_Design_Handoff::from_analysis( $scc_variant_analysis );
+$scc_variant_analysis_b = $scc_variant_analysis;
+$scc_variant_analysis_b['content_type'] = 'local_service';
+$scc_variant_analysis_b['search_intent'] = 'transactional';
+$scc_variant_analysis_b['primary_keyword'] = 'completely different keyword';
+$scc_variant_analysis_b['city'] = 'Orlando';
+$scc_handoff_b = SCC_Design_Handoff::from_analysis( $scc_variant_analysis_b );
+$scc_plan_a = SCC_Design_Composer::compose( $scc_handoff_a, $scc_profile );
+$scc_plan_b = SCC_Design_Composer::compose( $scc_handoff_b, $scc_profile );
+assert_eq( $scc_plan_a, $scc_plan_b, 'identical finished content produces the same design plan even when SEO metadata changes' );
+assert_eq( 'split-list', $scc_plan_a['sections'][0]['layout'], 'list-heavy content section becomes a professional split-list treatment' );
+assert_true( in_array( 'faq', $scc_plan_a['layout'], true ), 'FAQ content is handed to the design layer as a visual component' );
+assert_true( in_array( 'cta', $scc_plan_a['layout'], true ), 'explicit article CTA is handed to the design layer' );
+
+$scc_variant_blocks = SCC_Content_Mapper::map( $scc_plan_a['layout'], $scc_variant_analysis, array( 'design' => $scc_plan_a ) );
+assert_eq( 'split-image', $scc_variant_blocks[0]['variant'], 'content mapper uses the design composer hero variant' );
+assert_eq( 'https://example.com/hero.jpg', $scc_variant_blocks[0]['vars']['HERO_IMAGE']['url'], 'hero media flows into the renderer' );
+$scc_content_block = null;
+foreach ( $scc_variant_blocks as $block ) {
+	if ( 'content' === $block['id'] ) { $scc_content_block = $block; break; }
+}
+assert_true( is_array( $scc_content_block ) && ! empty( $scc_content_block['vars']['CONTENT_SECTIONS'] ), 'content mapper creates section-level design handoff data' );
+assert_eq( 'split-list', $scc_content_block['vars']['CONTENT_SECTIONS'][0]['layout'], 'section-level composition survives mapping into Elementor renderer input' );
+assert_eq( array(), SCC_Native_Elementor_Blocks::render_block( $scc_variant_blocks[0] ), 'native renderer safely declines when Elementor containers are unavailable' );
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";

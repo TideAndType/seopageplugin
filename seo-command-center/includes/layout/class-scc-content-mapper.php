@@ -38,11 +38,12 @@ class SCC_Content_Mapper {
 			}
 			$vars  = self::vars_for( $id, $analysis, $layout, $context );
 			$blocks[] = array(
-				'id'     => $id,
-				'name'   => $meta['name'],
-				'render' => $meta['render'],
-				'vars'   => $vars,
-				'empty'  => self::is_empty( $meta['render'], $vars ),
+				'id'      => $id,
+				'name'    => $meta['name'],
+				'render'  => $meta['render'],
+				'variant' => class_exists( 'SCC_Block_Variant_Selector' ) ? SCC_Block_Variant_Selector::select( $id, $analysis, $context ) : 'default',
+				'vars'    => $vars,
+				'empty'   => self::is_empty( $meta['render'], $vars ),
 			);
 		}
 		return $blocks;
@@ -64,6 +65,7 @@ class SCC_Content_Mapper {
 					'HERO_EYEBROW'  => self::eyebrow( $analysis ),
 					'HERO_TITLE'    => (string) ( $analysis['h1'] ?: $analysis['title'] ),
 					'HERO_SUBTITLE' => self::trim_words( (string) $analysis['intro'], 32 ),
+					'HERO_IMAGE'    => (array) ( $analysis['image'] ?? array() ),
 					'CTA_TEXT'      => self::cta_text( $analysis ),
 					'CTA_URL'       => self::cta_url( $analysis, $context ),
 				);
@@ -81,7 +83,15 @@ class SCC_Content_Mapper {
 				return array( 'TOC_ITEMS' => $items );
 
 			case 'content':
-				return array( 'CONTENT' => self::body_html( $analysis, $layout ) );
+				$body = self::body_html( $analysis, $layout );
+				$sections = class_exists( 'SCC_Design_Handoff' ) ? SCC_Design_Handoff::sections( $body ) : array();
+				if ( class_exists( 'SCC_Design_Composer' ) ) {
+					$sections = SCC_Design_Composer::decorate_sections( $sections );
+				}
+				return array(
+					'CONTENT'          => $body,
+					'CONTENT_SECTIONS' => $sections,
+				);
 
 			case 'benefits':
 				return array(
@@ -253,10 +263,9 @@ class SCC_Content_Mapper {
 	 * @return string
 	 */
 	protected static function cta_title( array $analysis ) {
-		$kw = trim( (string) $analysis['primary_keyword'] );
-		if ( '' !== $kw ) {
-			/* translators: %s: primary keyword */
-			return sprintf( __( 'Ready to get started with %s?', 'seo-command-center' ), $kw );
+		$explicit = trim( wp_strip_all_tags( (string) ( $analysis['cta'] ?? '' ) ) );
+		if ( '' !== $explicit && strlen( $explicit ) <= 120 ) {
+			return $explicit;
 		}
 		return __( 'Ready to get started?', 'seo-command-center' );
 	}
@@ -269,7 +278,12 @@ class SCC_Content_Mapper {
 	 */
 	protected static function cta_text( array $analysis ) {
 		$t = trim( (string) ( $analysis['cta_text'] ?? '' ) );
-		return '' !== $t ? $t : __( 'Get in touch', 'seo-command-center' );
+		if ( '' !== $t ) { return $t; }
+		$cta = (string) ( $analysis['cta'] ?? '' );
+		if ( preg_match( '/<a\b[^>]*>(.*?)<\/a>/is', $cta, $m ) ) {
+			return trim( wp_strip_all_tags( $m[1] ) );
+		}
+		return '';
 	}
 
 	/**
@@ -281,15 +295,12 @@ class SCC_Content_Mapper {
 	 */
 	protected static function cta_url( array $analysis, array $context ) {
 		$url = trim( (string) ( $analysis['cta_url'] ?? '' ) );
-		if ( '' !== $url ) {
-			return $url;
+		if ( '' !== $url ) { return $url; }
+		$cta = (string) ( $analysis['cta'] ?? '' );
+		if ( preg_match( '/<a\b[^>]*href=["\']([^"\']+)["\']/i', $cta, $m ) ) {
+			return esc_url_raw( (string) $m[1] );
 		}
-		$business = isset( $context['business'] ) && is_array( $context['business'] ) ? $context['business'] : array();
-		$burl = trim( (string) ( $business['url'] ?? '' ) );
-		if ( '' !== $burl ) {
-			return $burl;
-		}
-		return home_url( '/contact/' );
+		return '';
 	}
 
 	/**
@@ -300,22 +311,9 @@ class SCC_Content_Mapper {
 	 * @return string
 	 */
 	protected static function eyebrow( array $analysis ) {
-		$city = trim( (string) ( $analysis['city'] ?? '' ) );
-		if ( '' !== $city ) {
-			return $city;
-		}
-		$labels = array(
-			'service'       => __( 'Services', 'seo-command-center' ),
-			'local_service' => __( 'Local services', 'seo-command-center' ),
-			'location'      => __( 'Service area', 'seo-command-center' ),
-			'landing'       => __( 'Overview', 'seo-command-center' ),
-			'comparison'    => __( 'Comparison', 'seo-command-center' ),
-			'blog_post'     => __( 'Guide', 'seo-command-center' ),
-			'article'       => __( 'Guide', 'seo-command-center' ),
-			'informational' => __( 'Guide', 'seo-command-center' ),
-		);
-		$type = (string) ( $analysis['content_type'] ?? 'article' );
-		return isset( $labels[ $type ] ) ? $labels[ $type ] : '';
+		// The design layer must not invent labels from SEO/page-type metadata.
+		// Only pass through an explicit eyebrow supplied by the content layer.
+		return trim( (string) ( $analysis['eyebrow'] ?? '' ) );
 	}
 
 	/**

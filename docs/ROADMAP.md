@@ -237,6 +237,23 @@ surface over the existing intelligence layer. Additive; no DB changes.
   preview/apply/verify/dismiss lifecycle. The Copilot and every area feed from
   these — no per-opportunity engines.
 
+
+## v1.41 — Native Elementor Design Engine ✅
+- ✅ Runtime Elementor capability discovery (version, installed widgets, containers, atomic support).
+- ✅ Cached site design profile from the active Elementor Kit plus spacing signals sampled from existing Elementor pages.
+- ✅ Native Elementor Flexbox Container rendering with safe HTML fallback.
+
+## v1.42 — Professional Elementor Design Engine ✅
+- ✅ Explicit article/content → design handoff; SEO strategy stops before visual composition.
+- ✅ Self-contained Elementor widget catalog with runtime discovery; no EMCP dependency.
+- ✅ Design composer that is invariant to keyword, search intent, city and page type.
+- ✅ Section-level professional treatments: editorial, readable, wide, callout, split-list and alternating media splits.
+- ✅ Native Icon List for feature/list sections, Accordion for FAQ, Counter for numeric proof, plus Heading/Text/Button/Image fallbacks.
+- ✅ Responsive split heroes, bento/card grids, numbered process cards, related-content grids and split CTAs.
+- ✅ CTA content/destination is never invented by the design layer; it must come from completed content.
+- ✅ Existing mapped Elementor templates remain first priority; legacy semantic HTML remains the compatibility fallback.
+
+
 ---
 
 ## Cross-cutting (every phase)
