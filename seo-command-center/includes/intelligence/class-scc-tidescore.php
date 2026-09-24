@@ -82,11 +82,15 @@ class SCC_TideScore {
 	}
 
 	protected static function factor( $label, $pct, $weight, $note ) {
+		$pct = max( 0, min( 100, (int) $pct ) );
+		$weight = (int) $weight;
 		return array(
-			'label' => __( $label, 'seo-command-center' ),
-			'pct' => max( 0, min( 100, (int) $pct ) ),
-			'weight' => (int) $weight,
-			'note' => (string) $note,
+			'label'  => (string) $label,
+			'pct'    => $pct,
+			'weight' => $weight,
+			'points' => (int) round( $weight * $pct / 100 ),
+			'max'    => $weight,
+			'note'   => (string) $note,
 		);
 	}
 
