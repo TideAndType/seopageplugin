@@ -348,6 +348,9 @@ class SCC_Block_Elementor_Renderer {
 	 * @return string 'feature' | 'brand' | 'tint' | 'plain'
 	 */
 	public static function section_style( $id ) {
+		if ( class_exists( 'SCC_Page_Architect' ) ) {
+			$id = SCC_Page_Architect::base_block( $id );
+		}
 		switch ( $id ) {
 			case 'hero':
 				return 'feature';
@@ -468,11 +471,12 @@ class SCC_Block_Elementor_Renderer {
 	 * @return string
 	 */
 	protected static function block_html( array $block, $palette_css ) {
+		$base_id = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( (string) $block['id'] ) : (string) $block['id'];
 		$styleAttr = '' !== $palette_css ? ' style="' . esc_attr( $palette_css ) . '"' : '';
 		$preset    = self::preset_class();
 
 		// The content block becomes multiple alternating section bands.
-		if ( 'content' === $block['id'] ) {
+		if ( 'content' === $base_id ) {
 			$out = '';
 			foreach ( self::split_sections( (string) ( $block['vars']['CONTENT'] ?? '' ) ) as $sec ) {
 				$out .= '<section class="scc-block scc-block--content scc-sec scc-sec--' . esc_attr( $sec['style'] ) . ' scc-sec--readable ' . esc_attr( $preset ) . '"' . $styleAttr . '><div class="scc-sec__in">' . $sec['html'] . '</div></section>';
@@ -513,6 +517,7 @@ class SCC_Block_Elementor_Renderer {
 	 * @return string
 	 */
 	protected static function inner_html( array $block, $palette_css ) {
+		$base_id = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( (string) $block['id'] ) : (string) $block['id'];
 		$vars   = (array) $block['vars'];
 		$render = (string) $block['render'];
 
@@ -533,7 +538,7 @@ class SCC_Block_Elementor_Renderer {
 				return '<p>' . esc_html( (string) ( $vars['INTRO'] ?? '' ) ) . '</p>';
 
 			case 'html':
-				if ( 'content' === $block['id'] ) {
+				if ( 'content' === $base_id ) {
 					return (string) ( $vars['CONTENT'] ?? '' );
 				}
 				if ( isset( $vars['COMPARISON_HTML'] ) ) {
