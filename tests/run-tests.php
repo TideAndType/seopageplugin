@@ -1541,6 +1541,8 @@ assert_eq( 'Guide', $scc_by['hero']['vars']['HERO_TITLE'], 'hero title mapped fr
 assert_true( false === strpos( $scc_by['content']['vars']['CONTENT'], '<details' ), 'content body has the FAQ lifted out' );
 assert_true( ! $scc_by['faq']['empty'] && $scc_by['faq']['vars']['FAQ_ITEMS'][0]['question'] === 'Q?', 'faq block populated' );
 assert_true( false === strpos( strtolower( $scc_by['cta']['vars']['CTA_TITLE'] ), 'local seo' ), 'design CTA title is not derived from SEO keyword metadata' );
+assert_eq( '', $scc_by['cta']['vars']['CTA_TITLE'], 'design layer does not invent CTA copy when the article supplies none' );
+assert_true( $scc_by['cta']['empty'], 'CTA block stays empty when completed content supplies no CTA' );
 $scc_empty_faq = SCC_Content_Mapper::map( array( 'faq' ), array( 'faqs' => array(), 'content_html' => '', 'intro' => '', 'primary_keyword' => '' ) + $scc_analysis, array() );
 assert_true( $scc_empty_faq[0]['empty'], 'faq block reports empty when there are no FAQs' );
 
