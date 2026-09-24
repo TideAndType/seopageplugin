@@ -163,8 +163,8 @@ class SCC_Block_Elementor_Renderer {
 			);
 		}
 
-		if ( class_exists( '\\Elementor\\Plugin' ) && isset( \\Elementor\\Plugin::$instance->files_manager ) ) {
-			\\Elementor\\Plugin::$instance->files_manager->clear_cache();
+		if ( class_exists( '\Elementor\Plugin' ) && isset( \Elementor\Plugin::$instance->files_manager ) ) {
+			\Elementor\Plugin::$instance->files_manager->clear_cache();
 		}
 		if ( class_exists( 'SCC_Logger' ) ) {
 			SCC_Logger::info( 'layout', 'Elementor layout applied', array( 'post_id' => $post_id, 'blocks' => count( $built['elementor'] ) ) );
