@@ -38,7 +38,9 @@ class SCC_Page_Brain {
 			if ( '' === $label ) { continue; }
 			$hay = strtolower( $primary . ' ' . implode( ' ', $secondary ) . ' ' . $location . ' ' . (string) ( $entry['title'] ?? '' ) );
 			$needle = strtolower( $label );
-			if ( false !== strpos( $hay, $needle ) || false !== strpos( $needle, strtolower( $location ) ) ) {
+			$location_lc = strtolower( trim( $location ) );
+			$location_match = '' !== $location_lc && false !== strpos( $needle, $location_lc );
+			if ( false !== strpos( $hay, $needle ) || $location_match ) {
 				$entities[] = $label;
 			}
 		}
