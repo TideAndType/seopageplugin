@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.42.1
+ * Version:           1.50.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.42.1' );
+	define( 'SCC_VERSION', '1.50.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -91,6 +91,11 @@ require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-content-index.php';
 require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-change-history.php';
 require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-seo-report.php';
 
+// Site-aware planning foundation.
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-brand-brain.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-site-knowledge.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-brain.php';
+
 require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-graph.php';
 require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-recommender.php';
 require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-inserter.php';
@@ -127,6 +132,7 @@ require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-handoff.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-composer.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-variant-selector.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-analyzer.php';
+require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-page-architect.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-rule-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-ai-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-validator.php';
@@ -137,6 +143,7 @@ require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-elementor-rendere
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-service.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-gsc-learning.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-competitor-analysis.php';
 
@@ -149,6 +156,8 @@ require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-intent-drift.php'
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-opportunity-engine.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-action-queue.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-optimizer.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-tidescore.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-critic.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-health-timeline.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-experiments.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-entity-graph.php';
