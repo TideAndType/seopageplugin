@@ -2663,6 +2663,13 @@
 						if ( ( brain.entities || [] ).length ) {
 							wrap.appendChild( el( 'div', 'Planned entities/topics: ' + brain.entities.slice( 0, 8 ).join( ', ' ), 'scc-note' ) );
 						}
+						var coverage = tide.topic_coverage || {};
+						if ( ( coverage.missing_topics || [] ).length ) {
+							wrap.appendChild( el( 'div', 'Missing topic coverage: ' + coverage.missing_topics.slice( 0, 8 ).join( ', ' ), 'scc-note is-bad' ) );
+						}
+						if ( ( coverage.missing_questions || [] ).length ) {
+							wrap.appendChild( el( 'div', 'Questions still weakly covered: ' + coverage.missing_questions.slice( 0, 5 ).join( ' • ' ), 'scc-note' ) );
+						}
 
 						var recs = learn.recommendations || [];
 						if ( recs.length ) {
