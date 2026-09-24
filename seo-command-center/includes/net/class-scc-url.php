@@ -6,9 +6,10 @@
  * and the integrations all behave consistently:
  *
  *   - {@see is_safe_outbound_url()} — SSRF guard applied IMMEDIATELY BEFORE an
- *     outbound request (not only when a setting is saved). Loopback is allowed
- *     (LM Studio runs locally), private/reserved/link-local/multicast targets,
- *     cloud metadata endpoints, credentialed URLs and non-HTTP schemes are not.
+ *     outbound request (not only when a setting is saved). Loopback is blocked
+ *     by default and must be explicitly enabled by trusted callers such as LM
+ *     Studio. Private/reserved/link-local/multicast targets, cloud metadata
+ *     endpoints, credentialed URLs and non-HTTP schemes are not.
  *   - {@see resolve()} — RFC 3986 relative-reference resolution for the crawler.
  *   - {@see normalize_for_crawl()} — canonical crawl identity (drops the
  *     fragment and tracking-only query parameters, lowercases scheme/host,
@@ -47,15 +48,15 @@ class SCC_URL {
 	 * Whether a URL is safe to request from the server. This is the SSRF guard:
 	 * call it immediately before every outbound HTTP request.
 	 *
-	 * Loopback (127.0.0.0/8, ::1, and the literal host "localhost") is allowed
-	 * because LM Studio and other local model servers legitimately live there.
-	 * Everything else that is not a public address is rejected.
+	 * Loopback (127.0.0.0/8, ::1, and the literal host "localhost") is blocked
+	 * unless a trusted caller explicitly opts in. Everything else that is not a
+	 * public address is rejected.
 	 *
 	 * @param string $url            URL to check.
-	 * @param bool   $allow_loopback Whether loopback targets are acceptable (default true).
+	 * @param bool   $allow_loopback Whether loopback targets are acceptable (default false).
 	 * @return true|WP_Error True when safe, else a WP_Error explaining why.
 	 */
-	public static function is_safe_outbound_url( $url, $allow_loopback = true ) {
+	public static function is_safe_outbound_url( $url, $allow_loopback = false ) {
 		$url   = trim( (string) $url );
 		$parts = wp_parse_url( $url );
 
