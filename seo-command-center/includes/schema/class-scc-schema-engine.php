@@ -86,26 +86,49 @@ class SCC_Schema_Engine {
 			return array( 'page_type' => '', 'recommended' => array(), 'not_recommended' => array() );
 		}
 
-		// Derive a page type from content plan (if generated) or heuristics.
 		$page_type = self::page_type_of( $post );
 		$content   = SCC_Content_Index::get_plain_text( $post );
 		$has_faq   = (bool) preg_match( '/frequently asked|<h[23][^>]*>\s*(what|how|why|when|can|do|is|are)\b/i', $post->post_content );
 
-		$recommended = array( 'WebPage', 'BreadcrumbList' );
-		switch ( $page_type ) {
-			case 'article':
-				$recommended[] = 'BlogPosting';
-				break;
-			case 'service':
-			case 'pillar':
-				$recommended[] = 'Service';
-				break;
-			case 'location':
-				$recommended[] = 'LocalBusiness';
-				break;
+		// Prefer the Page Brain's page-specific schema plan when one exists. The
+		// generic WebPage node remains useful context, while FAQPage is added only
+		// when visible question/answer content actually exists.
+		$brain = class_exists( 'SCC_Page_Brain' ) ? SCC_Page_Brain::for_post( $post_id ) : array();
+		$planned = array_values( array_intersect(
+			(array) ( $brain['schema_types'] ?? array() ),
+			SCC_Schema::ALLOWED
+		) );
+
+		if ( ! empty( $planned ) ) {
+			$recommended = array_merge( array( 'WebPage' ), $planned );
+		} else {
+			$recommended = array( 'WebPage', 'BreadcrumbList' );
+			switch ( $page_type ) {
+				case 'article':
+				case 'blog':
+				case 'blog_post':
+					$recommended[] = 'BlogPosting';
+					break;
+				case 'service':
+				case 'landing':
+				case 'pillar':
+					$recommended[] = 'Service';
+					break;
+				case 'local_service':
+					$recommended[] = 'Service';
+					$recommended[] = 'LocalBusiness';
+					break;
+				case 'location':
+					$recommended[] = 'LocalBusiness';
+					break;
+			}
 		}
-		if ( $has_faq ) {
+
+		if ( $has_faq && ! in_array( 'FAQPage', $recommended, true ) ) {
 			$recommended[] = 'FAQPage';
+		}
+		if ( ! $has_faq ) {
+			$recommended = array_values( array_diff( $recommended, array( 'FAQPage' ) ) );
 		}
 		$recommended = array_values( array_unique( $recommended ) );
 
@@ -117,6 +140,7 @@ class SCC_Schema_Engine {
 			'not_recommended' => $not_recommended,
 			'has_faq'         => $has_faq,
 			'word_count'      => str_word_count( $content ),
+			'source'          => ! empty( $planned ) ? 'page_brain' : 'page_type',
 		);
 	}
 
