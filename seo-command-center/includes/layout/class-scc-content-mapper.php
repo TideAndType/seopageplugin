@@ -267,7 +267,7 @@ class SCC_Content_Mapper {
 		if ( '' !== $explicit && strlen( $explicit ) <= 120 ) {
 			return $explicit;
 		}
-		return __( 'Ready to get started?', 'seo-command-center' );
+		return '';
 	}
 
 	/**
