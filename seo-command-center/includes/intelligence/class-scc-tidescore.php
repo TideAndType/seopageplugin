@@ -18,10 +18,18 @@ class SCC_TideScore {
 		$brief = (array) ( $piece['brief'] ?? array() );
 		$plan  = (array) ( $brief['page_brain'] ?? array() );
 
-		$entities  = (array) ( $plan['entities'] ?? $brief['entities'] ?? array() );
-		$questions = (array) ( $plan['questions_to_answer'] ?? $brief['questions'] ?? array() );
-		$covered_entities = self::coverage( $text, $entities );
-		$covered_questions = self::question_coverage( $text, $questions );
+		$coverage_plan = $plan;
+		if ( empty( $coverage_plan['entities'] ) && ! empty( $brief['entities'] ) ) {
+			$coverage_plan['entities'] = (array) $brief['entities'];
+		}
+		if ( empty( $coverage_plan['questions_to_answer'] ) && ! empty( $brief['questions'] ) ) {
+			$coverage_plan['questions_to_answer'] = (array) $brief['questions'];
+		}
+		$coverage = class_exists( 'SCC_Topic_Coverage' )
+			? SCC_Topic_Coverage::analyze_text( $text, $coverage_plan )
+			: array( 'score' => 100, 'topic_coverage' => 100, 'question_coverage' => 100, 'missing_topics' => array(), 'missing_questions' => array() );
+		$covered_entities = (int) ( $coverage['topic_coverage'] ?? 100 );
+		$covered_questions = (int) ( $coverage['question_coverage'] ?? 100 );
 
 		$factors = array();
 		$factors[] = self::factor( 'Intent match', self::intent_score( $text, $brief, $plan ), 20, 'Does the page visibly satisfy the planned search intent?' );
@@ -56,6 +64,7 @@ class SCC_TideScore {
 			'score'      => $score,
 			'factors'    => $factors,
 			'issues'     => $issues,
+			'topic_coverage' => $coverage,
 			'disclaimer' => __( 'TideScore is an internal optimization diagnostic, not a Google ranking prediction.', 'seo-command-center' ),
 		);
 	}
