@@ -842,7 +842,8 @@ class SCC_Generator {
 			. 'Produce genuinely useful, specific, original content a knowledgeable buyer would trust. '
 			// Accuracy & E-E-A-T.
 			. 'ACCURACY & E-E-A-T: write from real, practical expertise; use concrete specifics, verified numbers when supplied, steps and trade-offs; '
-			. 'never invent facts, statistics, prices, awards, clients or testimonials. Treat page_brain.evidence_slots as the only verified business proof supplied for this page, and respect page_brain.brand_context.forbidden_claims. ' Use current, correct terminology '
+			. 'never invent facts, statistics, prices, awards, clients or testimonials. Treat page_brain.evidence_slots as the only verified business proof supplied for this page, and respect page_brain.brand_context.forbidden_claims. '
+			. 'Use current, correct terminology '
 			. '(for example "Google Business Profile", never "GMB" or "GBP"). Do NOT repeat SEO myths or folklore tactics '
 			. '(for example, do not claim that geotagging images improves rankings). '
 			// No overpromising.
