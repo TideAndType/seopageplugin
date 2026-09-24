@@ -95,32 +95,157 @@ class SCC_Block_Elementor_Renderer {
 			return new WP_Error( 'scc_empty_layout', __( 'The layout produced no renderable blocks.', 'seo-command-center' ) );
 		}
 
-		update_post_meta( $post_id, '_elementor_data', wp_slash( wp_json_encode( $built['elementor'] ) ) );
-		update_post_meta( $post_id, '_elementor_edit_mode', 'builder' );
-		$post_type     = get_post_type( $post_id );
-		update_post_meta( $post_id, '_elementor_template_type', 'page' === $post_type ? 'wp-page' : 'wp-post' );
-		if ( defined( 'ELEMENTOR_VERSION' ) ) {
-			update_post_meta( $post_id, '_elementor_version', ELEMENTOR_VERSION );
+		$elementor_json = wp_json_encode( $built['elementor'] );
+		if ( ! is_string( $elementor_json ) || '' === $elementor_json ) {
+			return new WP_Error( 'scc_elementor_encode', __( 'Could not encode the Elementor layout.', 'seo-command-center' ) );
 		}
+
+		// Capture the existing document before touching any Elementor or content
+		// fields. This snapshot survives a successful apply as the user's one-click
+		// recovery point and is also used automatically if any write below fails.
+		$snapshot = self::snapshot_post( $post_id );
+		if ( ! self::update_meta_verified( $post_id, '_scc_elementor_backup', $snapshot, $snapshot ) ) {
+			return new WP_Error( 'scc_backup_failed', __( 'Could not create a rollback snapshot, so the existing page was left unchanged.', 'seo-command-center' ) );
+		}
+		if ( function_exists( 'wp_save_post_revision' ) ) {
+			wp_save_post_revision( $post_id );
+		}
+
+		$post_type = get_post_type( $post_id );
+		$writes    = array(
+			array( '_elementor_data', wp_slash( $elementor_json ), $elementor_json ),
+			array( '_elementor_edit_mode', 'builder', 'builder' ),
+			array( '_elementor_template_type', 'page' === $post_type ? 'wp-page' : 'wp-post', 'page' === $post_type ? 'wp-page' : 'wp-post' ),
+		);
+		if ( defined( 'ELEMENTOR_VERSION' ) ) {
+			$writes[] = array( '_elementor_version', ELEMENTOR_VERSION, ELEMENTOR_VERSION );
+		}
+
 		// Full-width Elementor layout so the design spans the page (filterable).
 		$page_tpl = (string) apply_filters( 'scc_elementor_page_template', 'elementor_header_footer', $post_type, $post_type );
 		if ( '' !== $page_tpl && 'default' !== $page_tpl ) {
-			update_post_meta( $post_id, '_wp_page_template', $page_tpl );
+			$writes[] = array( '_wp_page_template', $page_tpl, $page_tpl );
 		}
-		// Mark as SCC-generated so the front-end component styles load, and keep a
-		// crawlable native copy in post_content.
-		if ( '' === (string) get_post_meta( $post_id, '_scc_generated', true ) ) {
-			update_post_meta( $post_id, '_scc_generated', current_time( 'mysql' ) );
-		}
-		wp_update_post( array( 'ID' => $post_id, 'post_content' => $built['html'] ) );
 
-		if ( class_exists( '\Elementor\Plugin' ) && isset( \Elementor\Plugin::$instance->files_manager ) ) {
-			\Elementor\Plugin::$instance->files_manager->clear_cache();
+		// Mark as SCC-generated so the front-end component styles load.
+		if ( '' === (string) get_post_meta( $post_id, '_scc_generated', true ) ) {
+			$generated = current_time( 'mysql' );
+			$writes[]  = array( '_scc_generated', $generated, $generated );
+		}
+
+		foreach ( $writes as $write ) {
+			if ( ! self::update_meta_verified( $post_id, $write[0], $write[1], $write[2] ) ) {
+				self::restore_snapshot( $post_id, $snapshot );
+				return new WP_Error(
+					'scc_elementor_write',
+					sprintf(
+						/* translators: %s: post-meta key */
+						__( 'Could not save Elementor field %s. The previous page was restored.', 'seo-command-center' ),
+						$write[0]
+					)
+				);
+			}
+		}
+
+		// Keep a crawlable native copy in post_content. Ask WordPress for a real
+		// WP_Error so a failed content write cannot be reported as success.
+		$updated = wp_update_post( array( 'ID' => $post_id, 'post_content' => $built['html'] ), true );
+		if ( is_wp_error( $updated ) || ! $updated ) {
+			self::restore_snapshot( $post_id, $snapshot );
+			$message = is_wp_error( $updated ) ? $updated->get_error_message() : __( 'Unknown WordPress update error.', 'seo-command-center' );
+			return new WP_Error(
+				'scc_post_update',
+				sprintf(
+					/* translators: %s: WordPress error message */
+					__( 'Could not update the page content (%s). The previous page was restored.', 'seo-command-center' ),
+					$message
+				)
+			);
+		}
+
+		if ( class_exists( '\\Elementor\\Plugin' ) && isset( \\Elementor\\Plugin::$instance->files_manager ) ) {
+			\\Elementor\\Plugin::$instance->files_manager->clear_cache();
 		}
 		if ( class_exists( 'SCC_Logger' ) ) {
 			SCC_Logger::info( 'layout', 'Elementor layout applied', array( 'post_id' => $post_id, 'blocks' => count( $built['elementor'] ) ) );
 		}
 		return true;
+	}
+
+	/**
+	 * Capture the page fields TideOrbit mutates during an Elementor apply.
+	 *
+	 * @param int $post_id Post id.
+	 * @return array
+	 */
+	protected static function snapshot_post( $post_id ) {
+		$post = get_post( (int) $post_id );
+		$keys = array(
+			'_elementor_data',
+			'_elementor_edit_mode',
+			'_elementor_template_type',
+			'_elementor_version',
+			'_wp_page_template',
+			'_scc_generated',
+		);
+		$meta = array();
+		foreach ( $keys as $key ) {
+			$meta[ $key ] = array(
+				'exists' => metadata_exists( 'post', (int) $post_id, $key ),
+				'value'  => get_post_meta( (int) $post_id, $key, true ),
+			);
+		}
+		return array(
+			'created_at'   => current_time( 'mysql' ),
+			'post_content' => $post ? (string) $post->post_content : '',
+			'meta'         => $meta,
+		);
+	}
+
+	/**
+	 * Update post meta and distinguish a real failure from WordPress returning
+	 * false because the requested value was already stored.
+	 *
+	 * @param int    $post_id  Post id.
+	 * @param string $key      Meta key.
+	 * @param mixed  $value    Value passed to update_post_meta().
+	 * @param mixed  $expected Value expected back from get_post_meta().
+	 * @return bool
+	 */
+	protected static function update_meta_verified( $post_id, $key, $value, $expected ) {
+		$written = update_post_meta( (int) $post_id, $key, $value );
+		if ( false !== $written ) {
+			return true;
+		}
+		return get_post_meta( (int) $post_id, $key, true ) === $expected;
+	}
+
+	/**
+	 * Restore a previously captured Elementor/page snapshot.
+	 *
+	 * @param int   $post_id  Post id.
+	 * @param array $snapshot Snapshot from snapshot_post().
+	 * @return void
+	 */
+	protected static function restore_snapshot( $post_id, array $snapshot ) {
+		foreach ( (array) ( $snapshot['meta'] ?? array() ) as $key => $state ) {
+			if ( ! empty( $state['exists'] ) ) {
+				$value = $state['value'] ?? '';
+				if ( '_elementor_data' === $key && is_string( $value ) ) {
+					$value = wp_slash( $value );
+				}
+				update_post_meta( (int) $post_id, $key, $value );
+			} else {
+				delete_post_meta( (int) $post_id, $key );
+			}
+		}
+		wp_update_post(
+			array(
+				'ID'           => (int) $post_id,
+				'post_content' => (string) ( $snapshot['post_content'] ?? '' ),
+			),
+			true
+		);
 	}
 
 	/* ---------------------------------------------------------------------
