@@ -34,6 +34,8 @@ class SCC_Schema {
 			case 'location':
 				return 'LocalBusiness';
 			case 'service':
+			case 'local_service':
+			case 'landing':
 			case 'pillar':
 				return 'Service';
 			default:
