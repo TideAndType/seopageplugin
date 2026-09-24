@@ -25,6 +25,9 @@ class SCC_REST {
 	/** @var SCC_Jobs|null */
 	protected $jobs;
 
+	/** @var bool|null Previous $wpdb error-display state for the active REST request. */
+	protected $wpdb_show_errors = null;
+
 	/**
 	 * Constructor.
 	 *
@@ -48,6 +51,7 @@ class SCC_REST {
 		// For our namespace we suppress DB error DISPLAY (still logged) so the
 		// handler always returns clean JSON, including a proper error envelope.
 		add_filter( 'rest_pre_dispatch', array( $this, 'guard_json_output' ), 10, 3 );
+		add_filter( 'rest_post_dispatch', array( $this, 'restore_json_output' ), 10, 3 );
 
 		register_rest_route(
 			self::NS,
@@ -1932,6 +1936,10 @@ class SCC_REST {
 		if ( $post_id <= 0 ) {
 			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
 		}
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) {
+			return $guard;
+		}
 		$service = new SCC_Layout_Service( $this->ai );
 		$result  = $service->propose_for_post( $post_id, $use_ai );
 		if ( is_wp_error( $result ) ) {
@@ -1957,6 +1965,10 @@ class SCC_REST {
 		$layout  = isset( $params['layout'] ) && is_array( $params['layout'] ) ? $params['layout'] : array();
 		if ( $post_id <= 0 ) {
 			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
+		}
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) {
+			return $guard;
 		}
 		$service = new SCC_Layout_Service( $this->ai );
 		$result  = $service->apply( $post_id, $layout );
@@ -3187,9 +3199,36 @@ class SCC_REST {
 	public function guard_json_output( $result, $server, $request ) {
 		$route = is_object( $request ) && method_exists( $request, 'get_route' ) ? (string) $request->get_route() : '';
 		if ( 0 === strpos( ltrim( $route, '/' ), self::NS ) && isset( $GLOBALS['wpdb'] ) && is_object( $GLOBALS['wpdb'] ) ) {
-			$GLOBALS['wpdb']->hide_errors();
+			if ( null === $this->wpdb_show_errors ) {
+				$this->wpdb_show_errors = (bool) $GLOBALS['wpdb']->hide_errors();
+			} else {
+				$GLOBALS['wpdb']->hide_errors();
+			}
 		}
 		return $result;
+	}
+
+	/**
+	 * Restore the DB error-display state after our REST response has been built.
+	 * This prevents the namespace guard from leaking a global $wpdb side effect
+	 * into other REST callbacks executed in the same PHP request.
+	 *
+	 * @param mixed           $response Response.
+	 * @param WP_REST_Server  $server   Server.
+	 * @param WP_REST_Request $request  Request.
+	 * @return mixed
+	 */
+	public function restore_json_output( $response, $server, $request ) {
+		$route = is_object( $request ) && method_exists( $request, 'get_route' ) ? (string) $request->get_route() : '';
+		if ( 0 === strpos( ltrim( $route, '/' ), self::NS ) && null !== $this->wpdb_show_errors && isset( $GLOBALS['wpdb'] ) && is_object( $GLOBALS['wpdb'] ) ) {
+			if ( $this->wpdb_show_errors ) {
+				$GLOBALS['wpdb']->show_errors();
+			} else {
+				$GLOBALS['wpdb']->hide_errors();
+			}
+			$this->wpdb_show_errors = null;
+		}
+		return $response;
 	}
 
 	/**
