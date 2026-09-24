@@ -92,6 +92,12 @@ class SCC_SEO_Report {
 
 		$score = $max > 0 ? (int) round( 100 * $points / $max ) : 0;
 
+		$tidescore = class_exists( 'SCC_TideScore' ) ? SCC_TideScore::score_post( $post_id ) : array();
+		$page_brain = class_exists( 'SCC_Page_Brain' ) ? SCC_Page_Brain::for_post( $post_id ) : array();
+		$learning_raw = get_post_meta( $post_id, '_scc_gsc_learning', true );
+		$gsc_learning = is_string( $learning_raw ) ? json_decode( $learning_raw, true ) : $learning_raw;
+		$gsc_learning = is_array( $gsc_learning ) ? $gsc_learning : array();
+
 		return array(
 			'post_id' => (int) $post_id,
 			'title'   => get_the_title( $post ),
@@ -104,6 +110,9 @@ class SCC_SEO_Report {
 				array( 'label' => __( 'Schema', 'seo-command-center' ), 'value' => $schema_valid ? __( 'valid', 'seo-command-center' ) : __( 'none', 'seo-command-center' ), 'ok' => $schema_valid ),
 				array( 'label' => __( 'Breadcrumbs', 'seo-command-center' ), 'value' => $breadcrumbs ? __( 'detected', 'seo-command-center' ) : __( 'no', 'seo-command-center' ), 'ok' => $breadcrumbs ),
 			),
+			'tidescore'  => $tidescore,
+			'page_brain' => $page_brain,
+			'gsc_learning' => $gsc_learning,
 			'disclaimer' => __( 'Internal optimization score — not a guarantee of Google rankings.', 'seo-command-center' ),
 		);
 	}
