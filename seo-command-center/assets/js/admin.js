@@ -2623,6 +2623,73 @@
 				.catch( function () {} );
 		}
 
+		var smartBtn = document.getElementById( 'scc-panel-smart' );
+		if ( smartBtn ) {
+			smartBtn.addEventListener( 'click', function () {
+				setStatus( status, 'Reading Page Brain, TideScore and Search Console learning…' );
+				out.innerHTML = '';
+				request( '/seo-report?post_id=' + postId, { method: 'GET' } )
+					.then( function ( res ) {
+						setStatus( status, '', 'is-ok' );
+						var d = res.data || {};
+						var tide = d.tidescore || {};
+						var brain = d.page_brain || {};
+						var learn = d.gsc_learning || {};
+
+						var wrap = el( 'div', null, 'scc-pageopt' );
+						wrap.appendChild( el( 'div', 'TideScore ' + ( tide.score == null ? '—' : tide.score + '/100' ), 'scc-panel__item-h' ) );
+
+						( tide.factors || [] ).forEach( function ( factor ) {
+							var row = el( 'div', null, 'scc-po-bar' );
+							var head = el( 'div', null, 'scc-po-bar__head' );
+							head.appendChild( el( 'span', factor.label || '' ) );
+							head.appendChild( el( 'strong', String( factor.pct == null ? 0 : factor.pct ) + '%' ) );
+							row.appendChild( head );
+							var track = el( 'div', null, 'scc-po-track' );
+							var fill = el( 'div', null, 'scc-po-fill' );
+							fill.style.width = String( factor.pct == null ? 0 : factor.pct ) + '%';
+							track.appendChild( fill );
+							row.appendChild( track );
+							if ( factor.note ) { row.appendChild( el( 'div', factor.note, 'scc-note' ) ); }
+							wrap.appendChild( row );
+						} );
+
+						var cann = brain.cannibalization || {};
+						if ( cann.level ) {
+							var closest = cann.closest && cann.closest.title ? ' Closest page: ' + cann.closest.title + '.' : '';
+							wrap.appendChild( el( 'div', 'Cannibalization risk: ' + String( cann.level ).toUpperCase() + ' (' + ( cann.score || 0 ) + '%).' + closest, 'scc-note' ) );
+						}
+
+						if ( ( brain.entities || [] ).length ) {
+							wrap.appendChild( el( 'div', 'Planned entities/topics: ' + brain.entities.slice( 0, 8 ).join( ', ' ), 'scc-note' ) );
+						}
+
+						var recs = learn.recommendations || [];
+						if ( recs.length ) {
+							wrap.appendChild( el( 'div', 'Search Console learning', 'scc-label' ) );
+							recs.forEach( function ( rec ) {
+								var box = el( 'div', null, 'scc-panel__item' );
+								box.appendChild( el( 'div', rec.title || 'Recommendation', 'scc-panel__item-h' ) );
+								box.appendChild( el( 'div', rec.reason || '', 'scc-note' ) );
+								if ( rec.data && rec.data.query ) { box.appendChild( el( 'div', 'Query: ' + rec.data.query, 'scc-note' ) ); }
+								wrap.appendChild( box );
+							} );
+						} else {
+							wrap.appendChild( el( 'p', 'No stored Search Console learning recommendations yet. They appear automatically after GSC is connected and the intelligence refresh has performance data.', 'scc-note' ) );
+						}
+
+						( tide.issues || [] ).forEach( function ( issue ) {
+							wrap.appendChild( el( 'div', ( issue.severity || 'medium' ).toUpperCase() + ': ' + ( issue.factor || '' ) + ' — ' + ( issue.note || '' ), 'scc-note' ) );
+						} );
+						if ( tide.disclaimer ) { wrap.appendChild( el( 'p', tide.disclaimer, 'scc-note' ) ); }
+						out.appendChild( wrap );
+					} )
+					.catch( function ( err ) {
+						setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
 		var optimizeBtn = document.getElementById( 'scc-panel-optimize' );
 		if ( optimizeBtn ) {
 			optimizeBtn.addEventListener( 'click', function () {
