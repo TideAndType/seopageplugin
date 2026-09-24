@@ -474,7 +474,7 @@ class SCC_Generator {
 		);
 
 		// Schema (validated, non-duplicate).
-		$has_schema = $this->maybe_attach_schema( $post_id, $entry, $body );
+		$has_schema = $this->maybe_attach_schema( $post_id, $entry, $body, $brief );
 
 		// Image recommendation (never auto-downloads copyrighted media).
 		if ( ! empty( $body['image'] ) ) {
@@ -1310,41 +1310,57 @@ class SCC_Generator {
 	 * @param array $body    Generated body.
 	 * @return bool Whether schema was attached.
 	 */
-	protected function maybe_attach_schema( $post_id, array $entry, array $body ) {
-		$type = SCC_Schema::type_for( $entry['page_type'] ?? 'article' );
+	protected function maybe_attach_schema( $post_id, array $entry, array $body, array $brief = array() ) {
+		$page_brain = (array) ( $brief['page_brain'] ?? array() );
+		$types = (array) ( $page_brain['schema_types'] ?? array() );
+		if ( empty( $types ) ) {
+			$types = array( SCC_Schema::type_for( $entry['page_type'] ?? 'article' ), 'BreadcrumbList' );
+		}
+		$types = array_values( array_unique( array_intersect( $types, SCC_Schema::ALLOWED ) ) );
 
+		$business = class_exists( 'SCC_Schema_Engine' ) ? SCC_Schema_Engine::business() : array();
+		$org_name = trim( (string) ( $business['organization_name'] ?? get_bloginfo( 'name' ) ) );
+		$author   = trim( (string) ( $business['default_author'] ?? '' ) );
+		$area     = trim( (string) ( $entry['location'] ?? ( $entry['city'] ?? '' ) ) );
+		if ( '' === $area && ! empty( $business['service_areas'] ) ) {
+			$area = implode( ', ', (array) $business['service_areas'] );
+		}
+		$url = get_permalink( $post_id );
 		$nodes = array();
 
-		if ( ! SCC_Schema::already_provided( $type ) ) {
-			$node = SCC_Schema::build(
-				$type,
-				array(
-					'name'        => $body['title'],
-					'description' => $body['meta_description'],
-					'url'         => get_permalink( $post_id ),
-					'author'      => get_bloginfo( 'name' ),
-					'provider'    => get_bloginfo( 'name' ),
-					'area'        => $entry['parent'] ?? '',
-					'date'        => current_time( 'c' ),
-				)
+		foreach ( $types as $type ) {
+			if ( SCC_Schema::already_provided( $type ) ) { continue; }
+			$data = array(
+				'name'        => (string) ( $body['title'] ?? get_the_title( $post_id ) ),
+				'description' => (string) ( $body['meta_description'] ?? '' ),
+				'url'         => $url,
+				'author'      => '' !== $author ? $author : $org_name,
+				'author_is_person' => '' !== $author,
+				'provider'    => $org_name,
+				'area'        => $area,
+				'date'        => current_time( 'c' ),
 			);
-			if ( ! is_wp_error( $node ) ) {
-				$nodes[] = $node;
+			if ( 'LocalBusiness' === $type && '' !== $org_name ) {
+				$data['name'] = $org_name;
 			}
+			if ( 'BreadcrumbList' === $type ) {
+				$data['crumbs'] = array(
+					array( 'name' => get_bloginfo( 'name' ), 'url' => home_url( '/' ) ),
+					array( 'name' => (string) ( $body['title'] ?? get_the_title( $post_id ) ), 'url' => $url ),
+				);
+			}
+			$node = SCC_Schema::build( $type, $data );
+			if ( ! is_wp_error( $node ) ) { $nodes[] = $node; }
 		}
 
-		// FAQ schema when there are FAQs and no SEO plugin already emits it.
+		// FAQ schema only when real Q&A exists and another SEO layer is not already
+		// providing it. Never create FAQ markup merely to earn structured data.
 		if ( ! empty( $body['faqs'] ) && ! SCC_Schema::already_provided( 'FAQPage' ) ) {
 			$faq_node = SCC_Schema::build( 'FAQPage', array( 'faqs' => $body['faqs'] ) );
-			if ( ! is_wp_error( $faq_node ) ) {
-				$nodes[] = $faq_node;
-			}
+			if ( ! is_wp_error( $faq_node ) ) { $nodes[] = $faq_node; }
 		}
 
-		if ( empty( $nodes ) ) {
-			return false;
-		}
-
+		if ( empty( $nodes ) ) { return false; }
 		update_post_meta( $post_id, '_scc_schema', wp_json_encode( $nodes ) );
 		return true;
 	}
