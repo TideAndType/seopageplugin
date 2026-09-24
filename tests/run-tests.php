@@ -1117,10 +1117,13 @@ assert_eq( false, SCC_Action_Queue::is_safe( 'fix_cannibalization' ), 'cannibali
 assert_eq( false, SCC_Action_Queue::is_safe( 'improve_meta' ), 'meta change is NOT auto-executable (AI + review)' );
 
 echo "\n== Outbound URL security (SSRF guard) ==\n";
-// Loopback is allowed (LM Studio runs locally); private/reserved/metadata is not.
-assert_true( true === SCC_URL::is_safe_outbound_url( 'http://localhost:1234/v1' ), 'localhost allowed' );
-assert_true( true === SCC_URL::is_safe_outbound_url( 'http://127.0.0.1:1234/v1' ), '127.0.0.1 allowed' );
-assert_true( true === SCC_URL::is_safe_outbound_url( 'http://[::1]:1234/v1' ), '::1 allowed' );
+// Loopback is blocked by default. Trusted integrations (LM Studio) must opt in.
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://localhost:1234/v1' ) ), 'localhost blocked by default' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://127.0.0.1:1234/v1' ) ), '127.0.0.1 blocked by default' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://[::1]:1234/v1' ) ), '::1 blocked by default' );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'http://localhost:1234/v1', true ), 'trusted caller can opt into localhost' );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'http://127.0.0.1:1234/v1', true ), 'trusted caller can opt into 127/8' );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'http://[::1]:1234/v1', true ), 'trusted caller can opt into ::1' );
 assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://10.0.0.5/x' ) ), 'RFC1918 10.x blocked' );
 assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://172.16.9.9/x' ) ), 'RFC1918 172.16 blocked' );
 assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'http://192.168.1.1/x' ) ), 'RFC1918 192.168 blocked' );
