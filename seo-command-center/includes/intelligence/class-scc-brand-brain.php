@@ -80,6 +80,19 @@ class SCC_Brand_Brain {
 
 	protected static function testimonials( $value ) {
 		$out = array();
+		if ( is_string( $value ) ) {
+			$lines = preg_split( '/[\r\n]+/', $value );
+			$value = array();
+			foreach ( (array) $lines as $line ) {
+				$line = trim( (string) $line );
+				if ( '' === $line ) { continue; }
+				$parts = array_map( 'trim', explode( '|', $line, 2 ) );
+				$value[] = array(
+					'quote'       => (string) ( $parts[0] ?? '' ),
+					'attribution' => (string) ( $parts[1] ?? '' ),
+				);
+			}
+		}
 		foreach ( (array) $value as $item ) {
 			if ( is_string( $item ) ) {
 				$item = array( 'quote' => $item, 'attribution' => '' );
