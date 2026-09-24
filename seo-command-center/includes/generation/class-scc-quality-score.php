@@ -33,6 +33,16 @@ class SCC_Quality_Score {
 	 * @return array {score:int, factors:array}
 	 */
 	public static function score( array $piece ) {
+		// TideOrbit 1.50 pages carry a Page Brain plan. Score those with the
+		// intent/topical/evidence model while retaining the legacy heuristic for
+		// older content and third-party callers that do not yet supply a plan.
+		if ( class_exists( 'SCC_TideScore' )
+			&& ! empty( $piece['brief'] )
+			&& ! empty( $piece['brief']['page_brain'] )
+		) {
+			return SCC_TideScore::score_generated( $piece );
+		}
+
 		$html    = (string) ( $piece['html'] ?? '' );
 		$brief   = (array) ( $piece['brief'] ?? array() );
 		$text    = wp_strip_all_tags( $html );
