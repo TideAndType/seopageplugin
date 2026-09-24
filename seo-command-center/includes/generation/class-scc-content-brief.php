@@ -1,51 +1,36 @@
 <?php
 /**
- * Content brief generator.
+ * Site-aware content brief generator.
  *
- * Produces a structured brief the user approves BEFORE any full content is
- * generated: target keyword, intent, URL, recommended length, related topics,
- * entities, questions to answer, internal-link targets, external reference
- * types, and a CTA angle. One AI call (JSON), defensively normalized.
+ * Full Brief mode runs the Page Brain first, then asks the configured AI for a
+ * structured editorial brief grounded in that plan. Quick Generate does not use
+ * this class and therefore keeps its single-AI-call behavior.
  *
  * @package SEO_Command_Center
  */
+if ( ! defined( 'ABSPATH' ) ) { exit; }
 
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
-
-/**
- * Content brief service.
- */
 class SCC_Content_Brief {
 
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
-	/**
-	 * Constructor.
-	 *
-	 * @param SCC_AI_Manager $ai AI manager.
-	 */
 	public function __construct( SCC_AI_Manager $ai ) {
 		$this->ai = $ai;
 	}
 
-	/**
-	 * Build a brief from a content-plan entry.
-	 *
-	 * @param array $entry Decoded content-plan row.
-	 * @return array|WP_Error
-	 */
 	public function generate( array $entry ) {
-		$system = 'You are an SEO content strategist creating a content brief. '
-			. 'Given a target page, produce a brief that will guide a genuinely useful, specific, original article or page — '
-			. 'never keyword-stuffed, padded, or generic. For a location page, the brief must call for real local specificity, '
-			. 'not a find-and-replace of a city name. '
-			. 'Return JSON with this shape: '
-			. '{"h1":str,"search_intent":str,"summary":str,"recommended_words":int,'
-			. '"outline":[{"heading":str,"purpose":str}],"entities":[str],"questions":[str],'
-			. '"internal_link_targets":[str],"external_reference_types":[str],"cta":str}';
+		$page_brain = class_exists( 'SCC_Page_Brain' )
+			? ( new SCC_Page_Brain( $this->ai ) )->plan( $entry, true )
+			: array();
+
+		$system = 'You are an SEO content strategist creating a people-first content brief. '
+			. 'Use the supplied Page Brain plan and known brand/site facts. Do not invent claims, statistics, testimonials, credentials, locations or services. '
+			. 'Prioritize search-intent satisfaction, topical completeness, first-party evidence, helpful examples, and natural internal links. '
+			. 'Do not optimize for keyword density or arbitrary word count. '
+			. 'Return JSON: {"h1":str,"search_intent":str,"summary":str,"recommended_words":int,'
+			. '"outline":[{"heading":str,"purpose":str,"evidence_needed":str}],"entities":[str],"questions":[str],'
+			. '"internal_link_targets":[str],"external_reference_types":[str],"cta":str}.';
 
 		$context = array(
 			'title'           => $entry['title'] ?? '',
@@ -57,6 +42,7 @@ class SCC_Content_Brief {
 			'parent'          => $entry['parent'] ?? '',
 			'target_words'    => (int) ( $entry['word_count'] ?? SCC_Settings::get( 'default_word_count', 1200 ) ),
 			'site_name'       => get_bloginfo( 'name' ),
+			'page_brain'      => $page_brain,
 		);
 
 		$response = $this->ai->complete(
@@ -65,37 +51,28 @@ class SCC_Content_Brief {
 				'messages'    => array(
 					array(
 						'role'    => 'user',
-						'content' => "Target page (JSON):\n" . wp_json_encode( $context ) . "\n\nProduce the content brief JSON now.",
+						'content' => "Planning context (JSON):
+" . wp_json_encode( $context ) . "
+
+Produce the content brief JSON now.",
 					),
 				),
 				'json'        => true,
-				'max_tokens'  => SCC_AI_Manager::token_budget( 2500 ),
-				'temperature' => 0.5,
+				'max_tokens'  => SCC_AI_Manager::token_budget( 3200 ),
+				'temperature' => 0.35,
 			),
 			'content-brief'
 		);
 
-		if ( $response->is_error() ) {
-			return $response->error;
-		}
-
+		if ( $response->is_error() ) { return $response->error; }
 		$brief = $response->json();
 		if ( ! is_array( $brief ) ) {
 			return new WP_Error( 'scc_bad_ai_output', __( 'The AI brief could not be parsed. Try again.', 'seo-command-center' ), array( 'status' => 502 ) );
 		}
-
 		return $this->normalize( $brief, $context );
 	}
 
-	/**
-	 * Normalize/sanitize a brief.
-	 *
-	 * @param array $brief   Raw brief.
-	 * @param array $context Context used to fill gaps.
-	 * @return array
-	 */
 	protected function normalize( array $brief, array $context ) {
-		$text  = array( 'SCC_Security', 'sanitize_text' );
 		$strip = function ( $items ) {
 			return array_values( array_filter( array_map( array( 'SCC_Security', 'sanitize_text' ), (array) $items ) ) );
 		};
@@ -103,31 +80,36 @@ class SCC_Content_Brief {
 		$outline = array();
 		foreach ( (array) ( $brief['outline'] ?? array() ) as $section ) {
 			$heading = SCC_Security::sanitize_text( is_array( $section ) ? ( $section['heading'] ?? '' ) : $section );
-			if ( '' === $heading ) {
-				continue;
-			}
+			if ( '' === $heading ) { continue; }
 			$outline[] = array(
-				'heading' => $heading,
-				'purpose' => SCC_Security::sanitize_text( is_array( $section ) ? ( $section['purpose'] ?? '' ) : '' ),
+				'heading'         => $heading,
+				'purpose'         => SCC_Security::sanitize_text( is_array( $section ) ? ( $section['purpose'] ?? '' ) : '' ),
+				'evidence_needed' => SCC_Security::sanitize_text( is_array( $section ) ? ( $section['evidence_needed'] ?? '' ) : '' ),
 			);
 		}
 
 		$words = (int) ( $brief['recommended_words'] ?? $context['target_words'] );
 		$words = SCC_Security::sanitize_int( $words, 300, 6000 );
+		$page_brain = (array) ( $context['page_brain'] ?? array() );
+
+		$entities = $strip( $brief['entities'] ?? array() );
+		if ( empty( $entities ) ) { $entities = $strip( $page_brain['entities'] ?? array() ); }
+		$questions = $strip( $brief['questions'] ?? array() );
+		if ( empty( $questions ) ) { $questions = $strip( $page_brain['questions_to_answer'] ?? array() ); }
 
 		return array(
-			'h1'                      => SCC_Security::sanitize_text( $brief['h1'] ?? $context['title'] ),
-			'search_intent'          => SCC_Security::sanitize_text( $brief['search_intent'] ?? $context['intent'] ),
-			'summary'                => SCC_Security::sanitize_textarea( $brief['summary'] ?? '' ),
-			'recommended_words'      => $words,
-			'outline'                => $outline,
-			'entities'               => $strip( $brief['entities'] ?? array() ),
-			'questions'              => $strip( $brief['questions'] ?? array() ),
-			'internal_link_targets'  => $strip( $brief['internal_link_targets'] ?? array() ),
-			'external_reference_types'=> $strip( $brief['external_reference_types'] ?? array() ),
-			'cta'                    => SCC_Security::sanitize_textarea( $brief['cta'] ?? '' ),
-			// Carry context forward for the generator.
-			'context'                => $context,
+			'h1'                       => SCC_Security::sanitize_text( $brief['h1'] ?? $context['title'] ),
+			'search_intent'            => SCC_Security::sanitize_text( $brief['search_intent'] ?? $context['intent'] ),
+			'summary'                  => SCC_Security::sanitize_textarea( $brief['summary'] ?? '' ),
+			'recommended_words'        => $words,
+			'outline'                  => $outline,
+			'entities'                 => $entities,
+			'questions'                => $questions,
+			'internal_link_targets'    => $strip( $brief['internal_link_targets'] ?? wp_list_pluck( (array) ( $page_brain['internal_links'] ?? array() ), 'url' ) ),
+			'external_reference_types' => $strip( $brief['external_reference_types'] ?? array() ),
+			'cta'                      => SCC_Security::sanitize_textarea( $brief['cta'] ?? ( $page_brain['conversion_goal'] ?? '' ) ),
+			'page_brain'               => $page_brain,
+			'context'                  => $context,
 		);
 	}
 }
