@@ -52,7 +52,7 @@ class SCC_Crawler {
 
 		// SSRF guard, immediately before the request: refuse private/reserved/
 		// link-local/metadata targets even if a supplied URL points at one.
-		$safe = SCC_URL::is_safe_outbound_url( $url );
+		$safe = SCC_URL::is_safe_outbound_url( $url, false );
 		if ( is_wp_error( $safe ) ) {
 			SCC_Logger::error( 'crawler', 'Blocked outbound URL: ' . $safe->get_error_message(), array( 'url' => $url ) );
 			return $safe;
@@ -62,7 +62,7 @@ class SCC_Crawler {
 			return new WP_Error( 'scc_robots', __( 'Blocked by robots.txt.', 'seo-command-center' ) );
 		}
 
-		$response = wp_remote_get(
+		$response = wp_safe_remote_get(
 			$url,
 			array(
 				'timeout'     => $timeout,
@@ -96,6 +96,11 @@ class SCC_Crawler {
 
 		// Distinguish the URL we asked for from the one we ended up at.
 		$final_url = $this->final_url( $response, $url );
+		$final_safe = SCC_URL::is_safe_outbound_url( $final_url, false );
+		if ( is_wp_error( $final_safe ) ) {
+			SCC_Logger::error( 'crawler', 'Blocked redirected URL: ' . $final_safe->get_error_message(), array( 'url' => $final_url ) );
+			return $final_safe;
+		}
 
 		$html = wp_remote_retrieve_body( $response );
 		$data = $this->parse( $html, $final_url );
@@ -332,10 +337,24 @@ class SCC_Crawler {
 		$robots_url = ( isset( $parts['scheme'] ) ? $parts['scheme'] : 'https' ) . '://' . $parts['host'] . '/robots.txt';
 		$path = isset( $parts['path'] ) ? $parts['path'] : '/';
 
+		$robots_safe = SCC_URL::is_safe_outbound_url( $robots_url, false );
+		if ( is_wp_error( $robots_safe ) ) {
+			return false;
+		}
+
 		$cache_key = 'scc_robots_' . md5( $parts['host'] );
 		$rules = get_transient( $cache_key );
 		if ( false === $rules ) {
-			$resp = wp_remote_get( $robots_url, array( 'timeout' => 10, 'user-agent' => self::USER_AGENT ) );
+			$resp = wp_safe_remote_get(
+				$robots_url,
+				array(
+					'timeout'             => 10,
+					'redirection'         => 3,
+					'sslverify'           => true,
+					'user-agent'          => self::USER_AGENT,
+					'limit_response_size' => 524288,
+				)
+			);
 			$rules = ( is_wp_error( $resp ) ) ? '' : wp_remote_retrieve_body( $resp );
 			set_transient( $cache_key, $rules, HOUR_IN_SECONDS );
 		}

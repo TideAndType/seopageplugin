@@ -93,8 +93,11 @@ class SCC_Plugin {
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
 		$this->loader->add_action( 'wp_head', $this, 'front_styles', 8 );
 
-		// Background jobs dispatcher.
+		// Background jobs dispatcher. The recurring hook provides a safety net;
+		// the kick hook is a separate near-term event so an existing hourly event
+		// never prevents newly queued work from starting promptly.
 		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
+		$this->loader->add_action( SCC_Jobs::KICK_HOOK, $this->jobs, 'run' );
 
 		// Intelligence layer: capture a daily health snapshot and run autopilot
 		// (safe, deterministic actions only) on the existing job cron.

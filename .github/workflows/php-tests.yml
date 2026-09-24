@@ -13,6 +13,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.2', '8.3']
+    name: PHP ${{ matrix.php }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +25,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: ${{ matrix.php }}
           coverage: none
 
       - name: PHP syntax check

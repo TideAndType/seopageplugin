@@ -19,6 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class SCC_Jobs {
 
 	const CRON_HOOK      = 'scc_run_jobs';
+	const KICK_HOOK      = 'scc_run_jobs_kick';
 	const PER_TICK       = 3;   // Max jobs processed per cron tick.
 	const PAUSED_OPTION  = 'scc_jobs_paused';
 	const SECRET_OPTION  = 'scc_worker_secret';
@@ -66,6 +67,7 @@ class SCC_Jobs {
 
 		if ( $queued > 0 ) {
 			self::ensure_scheduled();
+			self::spawn_worker();
 		}
 		SCC_Logger::info( 'jobs', 'Batch enqueued', array( 'queued' => $queued ) );
 		return array( 'queued' => $queued );
@@ -145,8 +147,8 @@ class SCC_Jobs {
 	 * Ensure the cron dispatcher is scheduled soon.
 	 */
 	public static function ensure_scheduled() {
-		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
-			wp_schedule_single_event( time() + 30, self::CRON_HOOK );
+		if ( ! wp_next_scheduled( self::KICK_HOOK ) ) {
+			wp_schedule_single_event( time() + 30, self::KICK_HOOK );
 		}
 	}
 
@@ -208,7 +210,7 @@ class SCC_Jobs {
 		// Reschedule if more work remains.
 		$remaining = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE status = 'queued'" ); // phpcs:ignore WordPress.DB
 		if ( $remaining > 0 && ! self::is_paused() ) {
-			wp_schedule_single_event( time() + 60, self::CRON_HOOK );
+			self::ensure_scheduled();
 		}
 	}
 
