@@ -33,3 +33,32 @@ jobs:
 
       - name: Unit tests
         run: php tests/run-tests.php
+
+  package:
+    name: Build WordPress install ZIP
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/ttgmbapp'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read plugin version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/^ \* Version:[[:space:]]*//p' seo-command-center/seo-command-center.php | head -n1 | xargs)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build WordPress install ZIP
+        shell: bash
+        run: zip -r "TideOrbit-${{ steps.version.outputs.version }}.zip" seo-command-center
+
+      - name: Upload WordPress install ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: TideOrbit-WordPress-Install-${{ steps.version.outputs.version }}
+          path: TideOrbit-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+          retention-days: 14
