@@ -59,6 +59,10 @@ class SCC_Content_Mapper {
 	 * @return array TOKEN => value (string or array).
 	 */
 	protected static function vars_for( $id, array $analysis, array $layout, array $context ) {
+		if ( class_exists( 'SCC_Page_Architect' ) ) {
+			$id = SCC_Page_Architect::base_block( $id );
+			$layout = array_map( array( 'SCC_Page_Architect', 'base_block' ), $layout );
+		}
 		switch ( $id ) {
 			case 'hero':
 				return array(
@@ -169,7 +173,12 @@ class SCC_Content_Mapper {
 				);
 
 			case 'testimonial':
-				return array( 'QUOTE' => '', 'ATTRIBUTION' => '' );
+				$testimonials = (array) ( $context['brand']['testimonials'] ?? array() );
+				$first = ! empty( $testimonials ) && is_array( $testimonials[0] ) ? $testimonials[0] : array();
+				return array(
+					'QUOTE'       => (string) ( $first['quote'] ?? '' ),
+					'ATTRIBUTION' => (string) ( $first['attribution'] ?? '' ),
+				);
 
 			case 'comparison':
 				$table = '';
@@ -198,6 +207,9 @@ class SCC_Content_Mapper {
 	 * @return string
 	 */
 	public static function body_html( array $analysis, array $layout ) {
+		if ( class_exists( 'SCC_Page_Architect' ) ) {
+			$layout = array_map( array( 'SCC_Page_Architect', 'base_block' ), $layout );
+		}
 		$html = (string) $analysis['content_html'];
 
 		// Always lift the FAQ and any appended CTA out of the prose body.

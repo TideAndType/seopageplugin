@@ -18,6 +18,9 @@ class SCC_Native_Elementor_Blocks {
 		}
 
 		$id = sanitize_key( (string) ( $block['id'] ?? '' ) );
+		if ( class_exists( 'SCC_Page_Architect' ) ) {
+			$id = SCC_Page_Architect::base_block( $id );
+		}
 		switch ( $id ) {
 			case 'hero':            return self::hero( $block );
 			case 'content-intro':   return self::intro( $block );

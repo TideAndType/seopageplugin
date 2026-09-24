@@ -2623,6 +2623,80 @@
 				.catch( function () {} );
 		}
 
+		var smartBtn = document.getElementById( 'scc-panel-smart' );
+		if ( smartBtn ) {
+			smartBtn.addEventListener( 'click', function () {
+				setStatus( status, 'Reading Page Brain, TideScore and Search Console learning…' );
+				out.innerHTML = '';
+				request( '/seo-report?post_id=' + postId, { method: 'GET' } )
+					.then( function ( res ) {
+						setStatus( status, '', 'is-ok' );
+						var d = res.data || {};
+						var tide = d.tidescore || {};
+						var brain = d.page_brain || {};
+						var learn = d.gsc_learning || {};
+
+						var wrap = el( 'div', null, 'scc-pageopt' );
+						wrap.appendChild( el( 'div', 'TideScore ' + ( tide.score == null ? '—' : tide.score + '/100' ), 'scc-panel__item-h' ) );
+
+						( tide.factors || [] ).forEach( function ( factor ) {
+							var row = el( 'div', null, 'scc-po-bar' );
+							var head = el( 'div', null, 'scc-po-bar__head' );
+							head.appendChild( el( 'span', factor.label || '' ) );
+							head.appendChild( el( 'strong', String( factor.pct == null ? 0 : factor.pct ) + '%' ) );
+							row.appendChild( head );
+							var track = el( 'div', null, 'scc-po-track' );
+							var fill = el( 'div', null, 'scc-po-fill' );
+							fill.style.width = String( factor.pct == null ? 0 : factor.pct ) + '%';
+							track.appendChild( fill );
+							row.appendChild( track );
+							if ( factor.note ) { row.appendChild( el( 'div', factor.note, 'scc-note' ) ); }
+							wrap.appendChild( row );
+						} );
+
+						var cann = brain.cannibalization || {};
+						if ( cann.level ) {
+							var closest = cann.closest && cann.closest.title ? ' Closest page: ' + cann.closest.title + '.' : '';
+							wrap.appendChild( el( 'div', 'Cannibalization risk: ' + String( cann.level ).toUpperCase() + ' (' + ( cann.score || 0 ) + '%).' + closest, 'scc-note' ) );
+						}
+
+						if ( ( brain.entities || [] ).length ) {
+							wrap.appendChild( el( 'div', 'Planned entities/topics: ' + brain.entities.slice( 0, 8 ).join( ', ' ), 'scc-note' ) );
+						}
+						var coverage = tide.topic_coverage || {};
+						if ( ( coverage.missing_topics || [] ).length ) {
+							wrap.appendChild( el( 'div', 'Missing topic coverage: ' + coverage.missing_topics.slice( 0, 8 ).join( ', ' ), 'scc-note is-bad' ) );
+						}
+						if ( ( coverage.missing_questions || [] ).length ) {
+							wrap.appendChild( el( 'div', 'Questions still weakly covered: ' + coverage.missing_questions.slice( 0, 5 ).join( ' • ' ), 'scc-note' ) );
+						}
+
+						var recs = learn.recommendations || [];
+						if ( recs.length ) {
+							wrap.appendChild( el( 'div', 'Search Console learning', 'scc-label' ) );
+							recs.forEach( function ( rec ) {
+								var box = el( 'div', null, 'scc-panel__item' );
+								box.appendChild( el( 'div', rec.title || 'Recommendation', 'scc-panel__item-h' ) );
+								box.appendChild( el( 'div', rec.reason || '', 'scc-note' ) );
+								if ( rec.data && rec.data.query ) { box.appendChild( el( 'div', 'Query: ' + rec.data.query, 'scc-note' ) ); }
+								wrap.appendChild( box );
+							} );
+						} else {
+							wrap.appendChild( el( 'p', 'No stored Search Console learning recommendations yet. They appear automatically after GSC is connected and the intelligence refresh has performance data.', 'scc-note' ) );
+						}
+
+						( tide.issues || [] ).forEach( function ( issue ) {
+							wrap.appendChild( el( 'div', ( issue.severity || 'medium' ).toUpperCase() + ': ' + ( issue.factor || '' ) + ' — ' + ( issue.note || '' ), 'scc-note' ) );
+						} );
+						if ( tide.disclaimer ) { wrap.appendChild( el( 'p', tide.disclaimer, 'scc-note' ) ); }
+						out.appendChild( wrap );
+					} )
+					.catch( function ( err ) {
+						setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
+					} );
+			} );
+		}
+
 		var optimizeBtn = document.getElementById( 'scc-panel-optimize' );
 		if ( optimizeBtn ) {
 			optimizeBtn.addEventListener( 'click', function () {
@@ -2974,6 +3048,7 @@
 		var preview = document.getElementById( 'scc-layout-preview' );
 		var msg     = document.getElementById( 'scc-layout-msg' );
 		var metaEl  = document.getElementById( 'scc-layout-meta' );
+		var criticEl= document.getElementById( 'scc-layout-critic' );
 		var applyBtn= document.getElementById( 'scc-layout-apply' );
 		var regen   = document.getElementById( 'scc-layout-regen' );
 		var aiBox   = document.getElementById( 'scc-layout-ai' );
@@ -3007,6 +3082,31 @@
 			} );
 		}
 
+		function drawCritique( critic ) {
+			if ( ! criticEl ) { return; }
+			criticEl.innerHTML = '';
+			critic = critic || {};
+			var scores = critic.scores || {};
+			var labels = {
+				visual_hierarchy: 'Hierarchy',
+				section_variety: 'Variety',
+				readability: 'Readability',
+				cta_visibility: 'CTA',
+				accessibility: 'Accessibility',
+				seo_structure: 'SEO structure'
+			};
+			Object.keys( labels ).forEach( function ( key ) {
+				if ( scores[ key ] == null ) { return; }
+				var flag = el( 'span', labels[ key ] + ': ' + scores[ key ] + '%', 'scc-flag' );
+				flag.style.marginRight = '6px';
+				criticEl.appendChild( flag );
+			} );
+			( critic.issues || [] ).forEach( function ( issue ) {
+				criticEl.appendChild( el( 'div', '• ' + ( issue.label || 'Layout' ) + ': ' + ( issue.message || '' ), 'scc-note' ) );
+			} );
+			criticEl.hidden = false;
+		}
+
 		function propose() {
 			applyBtn.disabled = true;
 			setStatus( msg, 'Analyzing content and choosing blocks…' );
@@ -3016,10 +3116,13 @@
 					blocks = ( d.blocks || [] ).map( function ( b ) { return { id: b.id, name: b.name }; } );
 					if ( metaEl ) {
 						metaEl.hidden = false;
+						var planner = d.source === 'ai_constrained_architect' ? 'AI constrained architect' :
+							d.source === 'page_architect_ai_fallback' ? 'smart rules (AI fallback)' : 'smart page architect';
 						metaEl.textContent = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) +
-							' · order by ' + ( d.source === 'ai' ? 'AI' : 'rules' ) + ( d.ai_available ? '' : ' (no AI provider configured)' );
+							' · planned by ' + planner + ( d.ai_available ? '' : ' (no AI provider configured)' );
 					}
 					setStatus( msg, 'Done.', 'is-ok' );
+					drawCritique( d.critique );
 					draw();
 				} )
 				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );

@@ -178,21 +178,28 @@ class SCC_Generator {
 		if ( ! is_array( $secondary ) ) {
 			$secondary = array();
 		}
+
+		// Fast path: deterministic site-aware planning adds no second AI call.
+		$page_brain = class_exists( 'SCC_Page_Brain' )
+			? ( new SCC_Page_Brain() )->plan( $entry, false )
+			: array();
+
 		return array(
-			'h1'                      => (string) ( $entry['title'] ?? ( $entry['primary_keyword'] ?? '' ) ),
-			'search_intent'           => (string) ( $entry['intent'] ?? 'informational' ),
-			'summary'                 => '',
-			'recommended_words'       => $words,
-			'primary_keyword'         => (string) ( $entry['primary_keyword'] ?? '' ),
-			'secondary'               => array_values( array_filter( array_map( 'strval', $secondary ) ) ),
-			'tone'                    => (string) ( $entry['tone'] ?? '' ),
-			'location'                => (string) ( $entry['location'] ?? ( $entry['city'] ?? '' ) ),
-			'outline'                 => array(),
-			'entities'                => array(),
-			'questions'               => array(),
-			'internal_link_targets'   => array(),
+			'h1'                       => (string) ( $entry['title'] ?? ( $entry['primary_keyword'] ?? '' ) ),
+			'search_intent'            => (string) ( $entry['intent'] ?? ( $page_brain['primary_intent'] ?? 'informational' ) ),
+			'summary'                  => '',
+			'recommended_words'        => $words,
+			'primary_keyword'          => (string) ( $entry['primary_keyword'] ?? '' ),
+			'secondary'                => array_values( array_filter( array_map( 'strval', $secondary ) ) ),
+			'tone'                     => (string) ( $entry['tone'] ?? '' ),
+			'location'                 => (string) ( $entry['location'] ?? ( $entry['city'] ?? '' ) ),
+			'outline'                  => array(),
+			'entities'                 => (array) ( $page_brain['entities'] ?? array() ),
+			'questions'                => (array) ( $page_brain['questions_to_answer'] ?? array() ),
+			'internal_link_targets'    => wp_list_pluck( (array) ( $page_brain['internal_links'] ?? array() ), 'url' ),
 			'external_reference_types' => array(),
-			'cta'                     => '',
+			'cta'                      => (string) ( $page_brain['conversion_goal'] ?? '' ),
+			'page_brain'               => $page_brain,
 		);
 	}
 
@@ -467,7 +474,7 @@ class SCC_Generator {
 		);
 
 		// Schema (validated, non-duplicate).
-		$has_schema = $this->maybe_attach_schema( $post_id, $entry, $body );
+		$has_schema = $this->maybe_attach_schema( $post_id, $entry, $body, $brief );
 
 		// Image recommendation (never auto-downloads copyrighted media).
 		if ( ! empty( $body['image'] ) ) {
@@ -478,11 +485,20 @@ class SCC_Generator {
 		update_post_meta( $post_id, '_scc_brief', wp_json_encode( $brief ) );
 		update_post_meta( $post_id, '_scc_generated', current_time( 'mysql' ) );
 
+		$page_brain = (array) ( $brief['page_brain'] ?? array() );
+		if ( empty( $page_brain ) && class_exists( 'SCC_Page_Brain' ) ) {
+			$page_brain = ( new SCC_Page_Brain() )->plan( $entry, false );
+		}
+		if ( ! empty( $page_brain ) && class_exists( 'SCC_Page_Brain' ) ) {
+			SCC_Page_Brain::store( $post_id, $page_brain );
+		}
+
 		// Index the new draft and compute internal-link recommendations (both
 		// directions) so they appear under Optimize > Internal Links even when the
 		// draft-time weave found no natural in-body anchor. Never fatal generation.
 		try {
 			SCC_Content_Index::index_post( $post_id );
+			if ( class_exists( 'SCC_Site_Knowledge' ) ) { SCC_Site_Knowledge::invalidate(); }
 			$link_recs = ( new SCC_Link_Engine() )->analyze( $post_id, true );
 			self::dbg( 'internal-link recommendations stored', array(
 				'outbound' => isset( $link_recs['outbound'] ) ? count( $link_recs['outbound'] ) : 0,
@@ -804,15 +820,30 @@ class SCC_Generator {
 		$location    = trim( (string) ( $brief['location'] ?? '' ) );
 		$is_local    = ( 'location' === $page_type ) || ( false !== strpos( $intent, 'local' ) ) || ( '' !== $location );
 		$commercial  = in_array( $intent, array( 'commercial', 'transactional', 'local' ), true )
-			|| in_array( $page_type, array( 'pillar', 'service', 'location' ), true );
+			|| in_array( $page_type, array( 'pillar', 'service', 'local_service', 'landing', 'location' ), true );
 		$site_name   = get_bloginfo( 'name' );
+
+		// Resolve the content target before composing the prompt. Older versions
+		// referenced $words inside the system prompt before assigning it.
+		$words = (int) ( $brief['recommended_words'] ?? 0 );
+		if ( $words < 300 ) {
+			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
+		}
+		if ( $commercial && $words < 1500 ) {
+			$words = 1500;
+		}
+		$target_words = (int) SCC_Settings::get( 'content_target_words', 0 );
+		if ( $target_words > 0 ) {
+			$words = $target_words;
+		}
 
 		$system    = self::persona_prefix()
 			. 'You are a senior SEO copywriter and subject-matter expert writing for "' . $site_name . '". '
 			. 'Produce genuinely useful, specific, original content a knowledgeable buyer would trust. '
 			// Accuracy & E-E-A-T.
-			. 'ACCURACY & E-E-A-T: write from real, practical expertise; use concrete specifics, numbers, steps and trade-offs; '
-			. 'never invent facts, statistics, prices, awards, clients or testimonials. Use current, correct terminology '
+			. 'ACCURACY & E-E-A-T: write from real, practical expertise; use concrete specifics, verified numbers when supplied, steps and trade-offs; '
+			. 'never invent facts, statistics, prices, awards, clients or testimonials. Treat page_brain.evidence_slots as the only verified business proof supplied for this page, and respect page_brain.brand_context.forbidden_claims. '
+			. 'Use current, correct terminology '
 			. '(for example "Google Business Profile", never "GMB" or "GBP"). Do NOT repeat SEO myths or folklore tactics '
 			. '(for example, do not claim that geotagging images improves rankings). '
 			// No overpromising.
@@ -875,22 +906,7 @@ class SCC_Generator {
 			. '"og_title":str,"og_description":str,'
 			. '"image":{"concept":str,"prompt":str,"alt":str,"filename":str,"placement":str}}';
 
-		// Size the token budget to the target length. Service/pillar pages get
-		// enough room for a proper 1,500-2,000 word page.
-		$words  = (int) ( $brief['recommended_words'] ?? 0 );
-		if ( $words < 300 ) {
-			$words = (int) SCC_Settings::get( 'default_word_count', 1200 );
-		}
-		if ( $commercial && $words < 1500 ) {
-			$words = 1500;
-		}
-
-		// A global target word count (Settings → Content style) overrides everything
-		// so every generation aims for exactly the length the user set.
-		$target_words = (int) SCC_Settings::get( 'content_target_words', 0 );
-		if ( $target_words > 0 ) {
-			$words = $target_words;
-		}
+		// Size the token budget to the already-resolved target length.
 		$budget = (int) min( 5200, max( 1200, round( $words * 1.7 ) + 800 ) );
 
 		// Optional override: a fixed token budget, or "unlimited" (-1). Unlimited
@@ -1294,41 +1310,57 @@ class SCC_Generator {
 	 * @param array $body    Generated body.
 	 * @return bool Whether schema was attached.
 	 */
-	protected function maybe_attach_schema( $post_id, array $entry, array $body ) {
-		$type = SCC_Schema::type_for( $entry['page_type'] ?? 'article' );
+	protected function maybe_attach_schema( $post_id, array $entry, array $body, array $brief = array() ) {
+		$page_brain = (array) ( $brief['page_brain'] ?? array() );
+		$types = (array) ( $page_brain['schema_types'] ?? array() );
+		if ( empty( $types ) ) {
+			$types = array( SCC_Schema::type_for( $entry['page_type'] ?? 'article' ), 'BreadcrumbList' );
+		}
+		$types = array_values( array_unique( array_intersect( $types, SCC_Schema::ALLOWED ) ) );
 
+		$business = class_exists( 'SCC_Schema_Engine' ) ? SCC_Schema_Engine::business() : array();
+		$org_name = trim( (string) ( $business['organization_name'] ?? get_bloginfo( 'name' ) ) );
+		$author   = trim( (string) ( $business['default_author'] ?? '' ) );
+		$area     = trim( (string) ( $entry['location'] ?? ( $entry['city'] ?? '' ) ) );
+		if ( '' === $area && ! empty( $business['service_areas'] ) ) {
+			$area = implode( ', ', (array) $business['service_areas'] );
+		}
+		$url = get_permalink( $post_id );
 		$nodes = array();
 
-		if ( ! SCC_Schema::already_provided( $type ) ) {
-			$node = SCC_Schema::build(
-				$type,
-				array(
-					'name'        => $body['title'],
-					'description' => $body['meta_description'],
-					'url'         => get_permalink( $post_id ),
-					'author'      => get_bloginfo( 'name' ),
-					'provider'    => get_bloginfo( 'name' ),
-					'area'        => $entry['parent'] ?? '',
-					'date'        => current_time( 'c' ),
-				)
+		foreach ( $types as $type ) {
+			if ( SCC_Schema::already_provided( $type ) ) { continue; }
+			$data = array(
+				'name'        => (string) ( $body['title'] ?? get_the_title( $post_id ) ),
+				'description' => (string) ( $body['meta_description'] ?? '' ),
+				'url'         => $url,
+				'author'      => '' !== $author ? $author : $org_name,
+				'author_is_person' => '' !== $author,
+				'provider'    => $org_name,
+				'area'        => $area,
+				'date'        => current_time( 'c' ),
 			);
-			if ( ! is_wp_error( $node ) ) {
-				$nodes[] = $node;
+			if ( 'LocalBusiness' === $type && '' !== $org_name ) {
+				$data['name'] = $org_name;
 			}
+			if ( 'BreadcrumbList' === $type ) {
+				$data['crumbs'] = array(
+					array( 'name' => get_bloginfo( 'name' ), 'url' => home_url( '/' ) ),
+					array( 'name' => (string) ( $body['title'] ?? get_the_title( $post_id ) ), 'url' => $url ),
+				);
+			}
+			$node = SCC_Schema::build( $type, $data );
+			if ( ! is_wp_error( $node ) ) { $nodes[] = $node; }
 		}
 
-		// FAQ schema when there are FAQs and no SEO plugin already emits it.
+		// FAQ schema only when real Q&A exists and another SEO layer is not already
+		// providing it. Never create FAQ markup merely to earn structured data.
 		if ( ! empty( $body['faqs'] ) && ! SCC_Schema::already_provided( 'FAQPage' ) ) {
 			$faq_node = SCC_Schema::build( 'FAQPage', array( 'faqs' => $body['faqs'] ) );
-			if ( ! is_wp_error( $faq_node ) ) {
-				$nodes[] = $faq_node;
-			}
+			if ( ! is_wp_error( $faq_node ) ) { $nodes[] = $faq_node; }
 		}
 
-		if ( empty( $nodes ) ) {
-			return false;
-		}
-
+		if ( empty( $nodes ) ) { return false; }
 		update_post_meta( $post_id, '_scc_schema', wp_json_encode( $nodes ) );
 		return true;
 	}

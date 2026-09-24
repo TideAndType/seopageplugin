@@ -15,6 +15,12 @@ class SCC_Block_Variant_Selector {
 
 	public static function select( $block_id, array $analysis = array(), array $context = array() ) {
 		$id = sanitize_key( (string) $block_id );
+		if ( class_exists( 'SCC_Page_Architect' ) ) {
+			$alias_variant = SCC_Page_Architect::variant_for( $id );
+			if ( '' !== $alias_variant ) {
+				return sanitize_key( $alias_variant );
+			}
+		}
 
 		$design = isset( $context['design'] ) && is_array( $context['design'] ) ? $context['design'] : array();
 		if ( isset( $design['variants'][ $id ] ) && '' !== (string) $design['variants'][ $id ] ) {

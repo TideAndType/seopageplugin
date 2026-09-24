@@ -199,6 +199,8 @@ $unsupported = SCC_Schema::build( 'HowTo', array( 'name' => 'x' ) );
 assert_true( $unsupported instanceof WP_Error, 'unsupported type rejected' );
 assert_eq( 'LocalBusiness', SCC_Schema::type_for( 'location' ), 'location -> LocalBusiness' );
 assert_eq( 'BlogPosting', SCC_Schema::type_for( 'article' ), 'article -> BlogPosting' );
+assert_eq( 'Service', SCC_Schema::type_for( 'local_service' ), 'local service -> Service fallback' );
+assert_eq( 'Service', SCC_Schema::type_for( 'landing' ), 'landing page -> Service fallback' );
 
 echo "\n== Quality score ==\n";
 $good = SCC_Quality_Score::score( array(
@@ -221,6 +223,31 @@ $poor = SCC_Quality_Score::score( array(
 	'cta'              => '',
 ) );
 assert_true( $poor['score'] < 30, 'thin content scores low (' . $poor['score'] . ')' );
+
+echo "\n== TideScore + topic coverage ==\n";
+$smart_piece = array(
+	'html' => '<h2>Local SEO strategy</h2><p>Local SEO helps a business improve Google Business Profile visibility and earn relevant local search traffic.</p>'
+		. '<h2>Process</h2><p>We start with an audit, fix local signals, then measure performance.</p>'
+		. '<p><a href="/services/">Related services</a> <a href="/guides/">Local guides</a> <a href="/contact/">Contact</a></p>'
+		. str_repeat( '<p>Useful practical guidance for local businesses.</p>', 20 ),
+	'brief' => array(
+		'page_brain' => array(
+			'primary_intent' => 'commercial',
+			'entities' => array( 'Local SEO', 'Google Business Profile', 'citation management' ),
+			'questions_to_answer' => array( 'What is local SEO?', 'What does the process look like?' ),
+			'evidence_slots' => array(),
+		),
+	),
+	'meta_title' => 'Local SEO Services for Growing Businesses',
+	'meta_description' => str_repeat( 'Helpful local SEO guidance. ', 5 ),
+	'has_schema' => true,
+	'cta' => 'Contact us',
+);
+$smart_score = SCC_Quality_Score::score( $smart_piece );
+assert_true( isset( $smart_score['topic_coverage']['missing_topics'] ), 'Page Brain generations expose explicit topic gaps' );
+assert_true( in_array( 'citation management', $smart_score['topic_coverage']['missing_topics'], true ), 'missing planned topic is named' );
+assert_true( $smart_score['score'] > 0, 'TideScore returns a diagnostic score' );
+assert_eq( 'Intent match', $smart_score['factors'][0]['label'], 'TideScore replaces keyword-density-first scoring for Page Brain content' );
 
 echo "\n== Elementor placeholder detection + replacement ==\n";
 $tree = array(
@@ -1493,6 +1520,37 @@ assert_eq( 'cta', end( $scc_v ), 'cta is moved to the end' );
 assert_eq( 1, count( array_keys( $scc_v, 'faq', true ) ), 'non-repeatable faq de-duplicated' );
 $scc_v2 = SCC_Layout_Validator::validate( array( 'content' ) );
 assert_true( in_array( 'hero', $scc_v2, true ) && ! in_array( 'cta', $scc_v2, true ), 'validator injects the required hero but does not invent a CTA' );
+
+echo "\n== Smart Page Architect aliases ==\n";
+$scc_reg_smart = SCC_Block_Registry::all();
+assert_true( isset( $scc_reg_smart['hero-service'], $scc_reg_smart['service-bento'], $scc_reg_smart['faq-accordion'], $scc_reg_smart['editorial-body'] ), 'smart visual components are registered' );
+assert_eq( 'hero', SCC_Page_Architect::base_block( 'hero-service' ), 'hero-service maps to semantic hero' );
+assert_eq( 'bento', SCC_Page_Architect::variant_for( 'service-bento' ), 'service-bento selects bento treatment' );
+
+$scc_alias_v = SCC_Layout_Validator::validate( array( 'editorial-body', 'hero-service', 'hero-split', 'cta-split' ) );
+assert_eq( 'hero-service', $scc_alias_v[0], 'smart hero alias satisfies required hero and stays first' );
+assert_true( ! in_array( 'hero', $scc_alias_v, true ), 'validator does not inject a duplicate literal hero beside an alias' );
+$scc_semantic_heroes = 0;
+foreach ( $scc_alias_v as $scc_alias_id ) {
+	if ( 'hero' === SCC_Page_Architect::base_block( $scc_alias_id ) ) { $scc_semantic_heroes++; }
+}
+assert_eq( 1, $scc_semantic_heroes, 'only one semantic hero survives alias validation' );
+assert_eq( 'cta-split', end( $scc_alias_v ), 'CTA alias stays at the end' );
+
+$scc_smart_layout = SCC_Page_Architect::layout_for_plan(
+	array( 'page_type' => 'local_service', 'primary_intent' => 'commercial' ),
+	array(
+		'services' => array( array( 'title' => 'SEO' ) ),
+		'stats' => array( array( 'value' => '10', 'label' => 'Years' ) ),
+		'process' => array( array( 'title' => 'Audit' ) ),
+		'faqs' => array( array( 'question' => 'Q?', 'answer' => 'A.' ) ),
+		'related' => array( array( 'title' => 'Guide', 'url' => '/guide/' ) ),
+		'areas' => array(),
+	)
+);
+assert_eq( 'hero-local', $scc_smart_layout[0], 'local-service architecture starts with the local hero' );
+assert_true( in_array( 'service-bento', $scc_smart_layout, true ), 'local-service architecture includes service presentation' );
+assert_true( in_array( 'faq-accordion', $scc_smart_layout, true ), 'real FAQ content earns an FAQ component' );
 
 echo "\n== Layout Engine: deterministic rule provider ==\n";
 $scc_rule = new SCC_Layout_Rule_Provider();

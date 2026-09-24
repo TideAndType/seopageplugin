@@ -99,6 +99,7 @@ class SCC_AI_Manager {
 			'keyword_strategy'   => __( 'Keyword Strategy / Topical Map', 'seo-command-center' ),
 			'content_generation' => __( 'Content Generation (pages & articles)', 'seo-command-center' ),
 			'content_brief'      => __( 'Content Briefs', 'seo-command-center' ),
+			'layout_design'      => __( 'Elementor Layout Planning', 'seo-command-center' ),
 			'meta_optimization'  => __( 'Metadata Optimization', 'seo-command-center' ),
 		);
 	}
@@ -115,6 +116,7 @@ class SCC_AI_Manager {
 			'content-generation'  => 'content_generation',
 			'regenerate-section'  => 'content_generation',
 			'content-brief'       => 'content_brief',
+			'layout-design'       => 'layout_design',
 			'meta-optimization'   => 'meta_optimization',
 		);
 		return isset( $map[ $operation ] ) ? $map[ $operation ] : '';

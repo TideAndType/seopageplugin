@@ -44,7 +44,10 @@ class SCC_Layout_Validator {
 			if ( ! $meta ) {
 				continue; // Unknown block — never render it.
 			}
-			$seen = isset( $counts[ $id ] ) ? $counts[ $id ] : 0;
+			$semantic_id = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( $id ) : $id;
+			$semantic_meta = SCC_Block_Registry::get( $semantic_id );
+			if ( $semantic_meta ) { $meta = $semantic_meta; }
+			$seen = isset( $counts[ $semantic_id ] ) ? $counts[ $semantic_id ] : 0;
 			// Non-repeatable → at most once. Repeatable → up to its max (0 = any).
 			if ( ! $meta['repeatable'] && $seen >= 1 ) {
 				continue;
@@ -52,8 +55,8 @@ class SCC_Layout_Validator {
 			if ( $meta['repeatable'] && $meta['max'] > 0 && $seen >= $meta['max'] ) {
 				continue;
 			}
-			$clean[]        = $id;
-			$counts[ $id ]  = $seen + 1;
+			$clean[] = $id;
+			$counts[ $semantic_id ] = $seen + 1;
 			if ( count( $clean ) >= self::MAX_BLOCKS ) {
 				break;
 			}
@@ -61,16 +64,53 @@ class SCC_Layout_Validator {
 
 		// Guarantee required blocks exist.
 		foreach ( SCC_Block_Registry::required_ids() as $req ) {
-			if ( ! in_array( $req, $clean, true ) ) {
+			if ( ! self::contains_semantic( $clean, $req ) ) {
 				$clean[] = $req;
 			}
 		}
 
-		// Hero always leads; CTA always closes (when present).
-		$clean = self::move_to_front( $clean, 'hero' );
-		$clean = self::move_to_end( $clean, 'cta' );
+		// Hero always leads; CTA always closes (including visual aliases).
+		$clean = self::move_semantic_to_front( $clean, 'hero' );
+		$clean = self::move_semantic_to_end( $clean, 'cta' );
 
 		return array_values( $clean );
+	}
+
+	/**
+	 * Whether a layout contains a semantic/base block or any of its aliases.
+	 *
+	 * @param string[] $list List.
+	 * @param string   $base Base block id.
+	 * @return bool
+	 */
+	protected static function contains_semantic( array $list, $base ) {
+		foreach ( $list as $id ) {
+			$semantic = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( $id ) : $id;
+			if ( $semantic === $base ) { return true; }
+		}
+		return false;
+	}
+
+	protected static function move_semantic_to_front( array $list, $base ) {
+		foreach ( $list as $i => $id ) {
+			$semantic = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( $id ) : $id;
+			if ( $semantic !== $base ) { continue; }
+			unset( $list[ $i ] );
+			array_unshift( $list, $id );
+			break;
+		}
+		return array_values( $list );
+	}
+
+	protected static function move_semantic_to_end( array $list, $base ) {
+		foreach ( $list as $i => $id ) {
+			$semantic = class_exists( 'SCC_Page_Architect' ) ? SCC_Page_Architect::base_block( $id ) : $id;
+			if ( $semantic !== $base ) { continue; }
+			unset( $list[ $i ] );
+			$list[] = $id;
+			break;
+		}
+		return array_values( $list );
 	}
 
 	/**

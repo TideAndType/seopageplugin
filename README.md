@@ -11,7 +11,7 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.42.1.** The plugin is organized around four areas —
+**Current version: 1.50.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
@@ -48,6 +48,7 @@ and the hardening + simplification passes are implemented. See
   competitor gap analysis.
 
 **Recent passes (this branch)**
+- **v1.50.0 — Smart Page Brain:** generation, SEO diagnostics, and Elementor composition now share one site-aware page plan. The Page Brain uses the content index, entity/link graphs, real brand facts, cannibalization signals, internal-link candidates, schema intent, and optional AI refinement without adding an extra AI call to Quick Generate. **Brand & Evidence Brain** settings let you supply verified services, locations, CTAs, differentiators, proof, credentials, testimonials, voice, and forbidden claims so content can use real evidence without fabricating it. **Topic Coverage + TideScore** replace keyword-density-first scoring for new smart pages with intent, topic/question coverage, metadata, internal links, evidence, schema, conversion structure, and readability diagnostics. The **Smart Page Architect** adds a controlled 60+ component/variant catalog and page-type compositions for service, local service, location, landing, and editorial pages; optional AI layout refinement may only select registered components, while the layout critic validates hierarchy, variety, readability, CTA, accessibility, and SEO structure before Elementor apply. Smart aliases continue to render as native Elementor containers/widgets, inherit site Design Intel/global styling, and reuse mapped Elementor templates. Search Console now supplies a cached post-publish learning loop for CTR, near-ranking topics, and emerging queries, surfaced alongside cannibalization and explicit content gaps in the editor's **Smart SEO** panel. Schema planning follows the Page Brain and only emits supported markup that matches visible content.
 - **v1.42.1 — Security & Runtime Hardening:** crawler/competitor fetches now block loopback by default and use safe redirect validation; LM Studio explicitly opts into local endpoints. Elementor layout apply now requires per-post access, captures a rollback snapshot, verifies every write, and restores the prior document on failure. Near-term job processing uses a dedicated cron kick hook, REST DB error suppression is restored after responses, CTA copy is never invented by the design layer, and CI covers PHP 7.4/8.2/8.3.
 - **v1.42.0 — Professional Elementor Design Engine:** the article/content engine now hands completed copy to a separate design-only contract. Visual composition no longer reads keyword, search intent, city, or page-type metadata. TideOrbit owns its Elementor widget catalog and uses runtime discovery to choose real Heading, Text Editor, Button, Image, Icon List, Accordion and Counter widgets when available. Long-form content is composed section-by-section into editorial, split-list, media-split, callout, wide and readable treatments, with responsive containers and safe fallbacks. CTAs are only rendered when supplied by the content layer; the design layer does not invent CTA copy or destinations.
 - **v1.41.0 — Native Elementor Design Engine foundation:** generated layouts began preferring real Elementor containers and core widgets over one large HTML widget, with Elementor capability discovery and cached site Design Intel.
@@ -73,7 +74,7 @@ and the hardening + simplification passes are implemented. See
   Dismiss. It never fabricates data and says plainly when a source (e.g. Search
   Console) isn't connected. Built entirely on the existing intelligence layer.
 
-Internal REST API at `/wp-json/seo-command/v1/*`; **423** passing unit tests.
+Internal REST API at `/wp-json/seo-command/v1/*`; CI validates the supported PHP matrix and the dependency-free regression suite.
 
 ## Documentation
 

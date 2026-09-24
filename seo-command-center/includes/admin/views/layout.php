@@ -86,13 +86,14 @@ $el_ok    = ! empty( $data['elementor_active'] );
 				<h2><?php esc_html_e( 'Your page structure', 'seo-command-center' ); ?></h2>
 				<span>
 					<label class="scc-toggle" title="<?php esc_attr_e( 'Use AI to choose the section order when a provider is configured', 'seo-command-center' ); ?>">
-						<input type="checkbox" id="scc-layout-ai"> <?php esc_html_e( 'Use AI', 'seo-command-center' ); ?>
+						<input type="checkbox" id="scc-layout-ai"> <?php esc_html_e( 'AI refine layout', 'seo-command-center' ); ?>
 					</label>
 					<button class="button" id="scc-layout-regen"><?php esc_html_e( 'Regenerate', 'seo-command-center' ); ?></button>
 				</span>
 			</div>
 			<span class="scc-inline-status" id="scc-layout-msg"></span>
 			<p class="scc-note" id="scc-layout-meta" hidden></p>
+			<div id="scc-layout-critic" class="scc-note" hidden></div>
 			<div id="scc-layout-preview" class="scc-layout-preview"></div>
 			<div class="scc-layout-actions">
 				<button class="button button-primary button-hero" id="scc-layout-apply" disabled><?php esc_html_e( 'Generate Elementor Page', 'seo-command-center' ); ?></button>
@@ -102,7 +103,7 @@ $el_ok    = ! empty( $data['elementor_active'] );
 
 		<details class="scc-card">
 			<summary class="scc-adv-summary"><?php esc_html_e( 'How this works', 'seo-command-center' ); ?></summary>
-			<p class="scc-note"><?php esc_html_e( 'The engine picks from a fixed library of Elementor blocks based on your content type and search intent. The AI (optional) only chooses the order — it never writes Elementor code. Blocks with no matching content are skipped, your H1/H2 structure and internal links are preserved, and the page stays fully editable in Elementor.', 'seo-command-center' ); ?></p>
+			<p class="scc-note"><?php esc_html_e( 'The Page Brain chooses from a controlled library of professional Elementor components using the page type, finished content, available proof, and conversion goal. Optional AI refinement can select and order only registered components; it never writes arbitrary Elementor code. A critic checks structure before Apply, empty components are skipped, and the page stays fully editable in Elementor.', 'seo-command-center' ); ?></p>
 		</details>
 	<?php endif; ?>
 </div>
