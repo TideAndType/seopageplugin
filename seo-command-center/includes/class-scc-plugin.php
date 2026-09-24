@@ -76,6 +76,7 @@ class SCC_Plugin {
 		// Smart component library: visual aliases stay on the controlled registry.
 		if ( class_exists( 'SCC_Page_Architect' ) ) {
 			add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
+			if ( class_exists( 'SCC_Block_Registry' ) ) { SCC_Block_Registry::flush(); }
 		}
 
 		// i18n.
