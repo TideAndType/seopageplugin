@@ -15,11 +15,12 @@ class SCC_Topic_Coverage {
 
 	public static function analyze_text( $text, array $plan ) {
 		$text = trim( wp_strip_all_tags( (string) $text ) );
-		$topics = array_values( array_unique( array_filter( array_merge(
+		$topics = array_merge(
 			(array) ( $plan['secondary_topics'] ?? array() ),
 			(array) ( $plan['entities'] ?? array() )
-		) ) ) );
-		$questions = array_values( array_unique( array_filter( (array) ( $plan['questions_to_answer'] ?? array() ) ) );
+		);
+		$topics = array_values( array_unique( array_filter( $topics ) ) );
+		$questions = array_values( array_unique( array_filter( (array) ( $plan['questions_to_answer'] ?? array() ) ) ) );
 
 		$topic_rows = array();
 		foreach ( $topics as $topic ) {
