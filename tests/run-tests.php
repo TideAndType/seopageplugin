@@ -330,6 +330,7 @@ SCC_Jobs::pause();
 assert_true( SCC_Jobs::is_paused(), 'paused after pause()' );
 SCC_Jobs::resume();
 assert_eq( false, SCC_Jobs::is_paused(), 'not paused after resume()' );
+assert_eq( 'scc_run_jobs_kick', SCC_Jobs::KICK_HOOK, 'near-term queue uses a distinct cron hook from the hourly safety net' );
 
 echo "\n== Publishing schedule date validation ==\n";
 $past = SCC_Publishing::schedule( 1, gmdate( 'Y-m-d H:i:s', time() - 3600 ) );
