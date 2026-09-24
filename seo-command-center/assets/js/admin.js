@@ -2974,6 +2974,7 @@
 		var preview = document.getElementById( 'scc-layout-preview' );
 		var msg     = document.getElementById( 'scc-layout-msg' );
 		var metaEl  = document.getElementById( 'scc-layout-meta' );
+		var criticEl= document.getElementById( 'scc-layout-critic' );
 		var applyBtn= document.getElementById( 'scc-layout-apply' );
 		var regen   = document.getElementById( 'scc-layout-regen' );
 		var aiBox   = document.getElementById( 'scc-layout-ai' );
@@ -3007,6 +3008,31 @@
 			} );
 		}
 
+		function drawCritique( critic ) {
+			if ( ! criticEl ) { return; }
+			criticEl.innerHTML = '';
+			critic = critic || {};
+			var scores = critic.scores || {};
+			var labels = {
+				visual_hierarchy: 'Hierarchy',
+				section_variety: 'Variety',
+				readability: 'Readability',
+				cta_visibility: 'CTA',
+				accessibility: 'Accessibility',
+				seo_structure: 'SEO structure'
+			};
+			Object.keys( labels ).forEach( function ( key ) {
+				if ( scores[ key ] == null ) { return; }
+				var flag = el( 'span', labels[ key ] + ': ' + scores[ key ] + '%', 'scc-flag' );
+				flag.style.marginRight = '6px';
+				criticEl.appendChild( flag );
+			} );
+			( critic.issues || [] ).forEach( function ( issue ) {
+				criticEl.appendChild( el( 'div', '• ' + ( issue.label || 'Layout' ) + ': ' + ( issue.message || '' ), 'scc-note' ) );
+			} );
+			criticEl.hidden = false;
+		}
+
 		function propose() {
 			applyBtn.disabled = true;
 			setStatus( msg, 'Analyzing content and choosing blocks…' );
@@ -3016,10 +3042,13 @@
 					blocks = ( d.blocks || [] ).map( function ( b ) { return { id: b.id, name: b.name }; } );
 					if ( metaEl ) {
 						metaEl.hidden = false;
+						var planner = d.source === 'ai_constrained_architect' ? 'AI constrained architect' :
+							d.source === 'page_architect_ai_fallback' ? 'smart rules (AI fallback)' : 'smart page architect';
 						metaEl.textContent = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) +
-							' · order by ' + ( d.source === 'ai' ? 'AI' : 'rules' ) + ( d.ai_available ? '' : ' (no AI provider configured)' );
+							' · planned by ' + planner + ( d.ai_available ? '' : ' (no AI provider configured)' );
 					}
 					setStatus( msg, 'Done.', 'is-ok' );
+					drawCritique( d.critique );
 					draw();
 				} )
 				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
