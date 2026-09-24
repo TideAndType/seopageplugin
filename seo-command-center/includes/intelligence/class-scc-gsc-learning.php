@@ -75,29 +75,44 @@ class SCC_GSC_Learning {
 	}
 
 	protected static function queries_for_url( $url, $days ) {
-		$key = 'scc_gsc_q_' . md5( untrailingslashit( $url ) . '|' . (int) $days );
+		$map = self::query_map( $days );
+		$key = untrailingslashit( $url );
+		return isset( $map[ $key ] ) ? $map[ $key ] : array();
+	}
+
+	/**
+	 * Fetch page/query data once and fan it out to every generated page.
+	 *
+	 * @param int $days Lookback days.
+	 * @return array<string,array>
+	 */
+	protected static function query_map( $days ) {
+		$key = 'scc_gsc_qmap_' . (int) $days;
 		$cached = get_transient( $key );
 		if ( is_array( $cached ) ) { return $cached; }
 
-		$rows = SCC_GSC::query( '', array( 'page', 'query' ), $days, 5000 );
-		$out = array();
+		$rows = SCC_GSC::query( '', array( 'page', 'query' ), $days, 25000 );
+		$map = array();
 		if ( ! is_wp_error( $rows ) ) {
 			foreach ( (array) $rows as $row ) {
-				$page = (string) ( $row['keys'][0] ?? '' );
-				if ( untrailingslashit( $page ) !== untrailingslashit( $url ) ) { continue; }
-				$out[] = array(
-					'query' => (string) ( $row['keys'][1] ?? '' ),
-					'clicks' => (int) ( $row['clicks'] ?? 0 ),
+				$page = untrailingslashit( (string) ( $row['keys'][0] ?? '' ) );
+				$query = (string) ( $row['keys'][1] ?? '' );
+				if ( '' === $page || '' === $query ) { continue; }
+				$map[ $page ][] = array(
+					'query'       => $query,
+					'clicks'      => (int) ( $row['clicks'] ?? 0 ),
 					'impressions' => (int) ( $row['impressions'] ?? 0 ),
-					'ctr' => round( 100 * (float) ( $row['ctr'] ?? 0 ), 2 ),
-					'position' => round( (float) ( $row['position'] ?? 0 ), 1 ),
+					'ctr'         => round( 100 * (float) ( $row['ctr'] ?? 0 ), 2 ),
+					'position'    => round( (float) ( $row['position'] ?? 0 ), 1 ),
 				);
 			}
 		}
-		usort( $out, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
-		$out = array_slice( $out, 0, 30 );
-		set_transient( $key, $out, 6 * HOUR_IN_SECONDS );
-		return $out;
+		foreach ( $map as $page => $queries ) {
+			usort( $queries, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
+			$map[ $page ] = array_slice( $queries, 0, 30 );
+		}
+		set_transient( $key, $map, 6 * HOUR_IN_SECONDS );
+		return $map;
 	}
 
 	protected static function rec( $type, $title, $reason, array $data ) {
