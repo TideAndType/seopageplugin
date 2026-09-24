@@ -2949,7 +2949,10 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function schema_settings_get() {
-		return $this->ok( array( 'settings' => SCC_Schema_Engine::business() ) );
+		return $this->ok( array(
+			'settings' => SCC_Schema_Engine::business(),
+			'brand'    => class_exists( 'SCC_Brand_Brain' ) ? SCC_Brand_Brain::profile() : array(),
+		) );
 	}
 
 	/**
@@ -2961,7 +2964,28 @@ class SCC_REST {
 	public function schema_settings_save( WP_REST_Request $request ) {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
-		return $this->ok( array( 'settings' => SCC_Schema_Engine::save_business( is_array( $params ) ? $params : array() ) ) );
+		$params = is_array( $params ) ? $params : array();
+
+		$settings = SCC_Schema_Engine::save_business( $params );
+		$brand = array();
+		if ( class_exists( 'SCC_Brand_Brain' ) ) {
+			$brand = SCC_Brand_Brain::update( array(
+				'business_name'         => $params['brand_business_name'] ?? ( $params['organization_name'] ?? '' ),
+				'voice'                 => $params['brand_voice'] ?? '',
+				'primary_cta'           => $params['brand_primary_cta'] ?? '',
+				'secondary_cta'         => $params['brand_secondary_cta'] ?? '',
+				'services'              => $params['brand_services'] ?? array(),
+				'locations'             => $params['brand_locations'] ?? ( $params['service_areas'] ?? array() ),
+				'unique_selling_points' => $params['brand_usps'] ?? array(),
+				'proof_points'          => $params['brand_proof_points'] ?? array(),
+				'testimonials'          => $params['brand_testimonials'] ?? array(),
+				'credentials'           => $params['brand_credentials'] ?? array(),
+				'forbidden_claims'      => $params['brand_forbidden_claims'] ?? array(),
+			) );
+		}
+		if ( class_exists( 'SCC_Site_Knowledge' ) ) { SCC_Site_Knowledge::invalidate(); }
+
+		return $this->ok( array( 'settings' => $settings, 'brand' => $brand ) );
 	}
 
 	/**
