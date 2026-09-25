@@ -11,7 +11,7 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.53.1.** The plugin is organized around four areas —
+**Current version: 1.53.2.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
@@ -48,6 +48,7 @@ and the hardening + simplification passes are implemented. See
   competitor gap analysis.
 
 **Recent passes (this branch)**
+- **v1.53.2 — Citation Scanner submit fix:** moves the Citation Scanner behavior into the main TideOrbit admin JavaScript so it initializes after the localized REST configuration is available, switches the scan to the canonical `seo-command/v1/citation-scan` route, and gives the form a safe Opportunities → Citations fallback URL so a JavaScript failure can no longer dump the user on a blank `wp-admin/admin.php?` page.
 - **v1.53.1 — Metadata filter warning fix:** the bulk metadata editor now normalizes the optional `filter` argument before validation, eliminating the PHP 8.x `Undefined array key "filter"` warning when the listing is loaded without an explicit filter.
 - **v1.53.0 — Technical SEO Brain:** Site Audit now includes a live rendered-site technical crawler and evidence-first diagnostics for indexability, robots directives, XML sitemap health, HTTP errors and redirects, canonicals, duplicate/missing metadata, H1 hierarchy, internal-link architecture, orphan/unreachable/deep pages, broken and redirecting internal targets, hreflang self/reciprocal annotations, malformed JSON-LD, mixed content, mobile viewport, image alt/dimension signals, and server-response outliers. Findings are grouped by severity with affected URLs, evidence, why the issue matters, and a specific remediation. A weighted **Technical SEO Health** score and category scores are diagnostic only—not a Google ranking score or Core Web Vitals field-data score. SEO Copilot can answer technical SEO questions from the saved live audit instead of generic AI guesses. Search Console remains fully website-hosted: Google redirects directly back to WordPress, with no Vercel/broker dependency.
 - **v1.52.0 — Search Console connection UX:** Search Console uses a direct Google OAuth flow that returns to the current WordPress admin. The website owner configures one Google OAuth Web application once; after that the normal flow is **Connect Google Search Console → choose account → Allow → back to TideOrbit**. Access is read-only, properties are discovered automatically, and Disconnect revokes the stored authorization. There is no TideOrbit cloud broker or external auth service.

@@ -1475,6 +1475,116 @@
 		} );
 	}
 
+	// ---- Local citation scanner ------------------------------------------
+	function bindCitationScanner() {
+		var form = document.getElementById( 'scc-citation-form' );
+		if ( ! form ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-citation-status' );
+		var btn = document.getElementById( 'scc-citation-run' );
+
+		function value( id ) {
+			var node = document.getElementById( id );
+			return node ? String( node.value || '' ).trim() : '';
+		}
+
+		function mark( value ) {
+			if ( value === true ) {
+				return '<span class="scc-badge scc-badge--ok">match</span>';
+			}
+			if ( value === false ) {
+				return '<span class="scc-badge">mismatch</span>';
+			}
+			return '<span class="scc-badge">n/a</span>';
+		}
+
+		function render( data ) {
+			var resultBox = document.getElementById( 'scc-citation-results' );
+			if ( ! resultBox || ! data ) {
+				return;
+			}
+			resultBox.style.display = 'block';
+
+			var summary = data.summary || {};
+			var score = document.getElementById( 'scc-citation-score' );
+			var found = document.getElementById( 'scc-citation-found' );
+			var inconsistent = document.getElementById( 'scc-citation-inconsistent' );
+			var missing = document.getElementById( 'scc-citation-missing' );
+			var unverified = document.getElementById( 'scc-citation-unverified' );
+			var provider = document.getElementById( 'scc-citation-provider' );
+			var methodology = document.getElementById( 'scc-citation-methodology' );
+
+			if ( score ) { score.textContent = String( data.score == null ? '—' : data.score ) + ( data.score == null ? '' : '/100' ); }
+			if ( found ) { found.textContent = String( summary.found || 0 ); }
+			if ( inconsistent ) { inconsistent.textContent = String( summary.inconsistent || 0 ); }
+			if ( missing ) { missing.textContent = String( summary.not_found || 0 ); }
+			if ( unverified ) { unverified.textContent = String( summary.unverified || 0 ); }
+			if ( provider ) { provider.textContent = data.provider ? 'Search provider: ' + data.provider : ''; }
+			if ( methodology ) { methodology.textContent = data.methodology || ''; }
+
+			var body = document.getElementById( 'scc-citation-table' );
+			if ( ! body ) {
+				return;
+			}
+			body.innerHTML = '';
+			( data.results || [] ).forEach( function ( item ) {
+				var checks = item.checks || {};
+				var tr = document.createElement( 'tr' );
+				var link = item.url
+					? '<a href="' + esc( item.url ) + '" target="_blank" rel="noopener">Open</a>'
+					: '—';
+				var statusClass = item.status === 'found'
+					? 'completed'
+					: ( item.status === 'inconsistent' ? 'failed' : ( item.status === 'not_found' ? 'in_progress' : 'snoozed' ) );
+				tr.innerHTML =
+					'<td><strong>' + esc( item.name || '' ) + '</strong><br><span class="scc-note">' + esc( item.domain || '' ) + '</span></td>' +
+					'<td><span class="scc-status scc-status--' + statusClass + '">' + esc( String( item.status || 'unverified' ).replace( '_', ' ' ) ) + '</span></td>' +
+					'<td>' + esc( item.confidence == null ? '—' : item.confidence ) + ( item.confidence == null ? '' : '%' ) + '</td>' +
+					'<td>' + mark( checks.name ) + ' ' + mark( checks.city ) + ' ' + mark( checks.phone ) + '</td>' +
+					'<td>' + link + '</td>';
+				body.appendChild( tr );
+			} );
+		}
+
+		form.addEventListener( 'submit', function ( event ) {
+			event.preventDefault();
+
+			var businessName = value( 'scc-citation-name' );
+			var city = value( 'scc-citation-city' );
+			if ( ! businessName || ! city ) {
+				setStatus( status, 'Enter the business name and city first.', 'is-error' );
+				return;
+			}
+
+			if ( btn ) { btn.disabled = true; }
+			setStatus( status, 'Scanning citations…' );
+
+			request( '/citation-scan', {
+				method: 'POST',
+				data: {
+					business_name: businessName,
+					address: value( 'scc-citation-address' ),
+					city: city,
+					state: value( 'scc-citation-state' ),
+					phone: value( 'scc-citation-phone' ),
+					website: value( 'scc-citation-website' )
+				}
+			} )
+				.then( function ( response ) {
+					var data = response && response.data ? response.data : response;
+					render( data );
+					setStatus( status, data && data.cached ? 'Loaded cached scan.' : 'Scan complete.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					setStatus( status, ( err && err.message ) || 'Citation scan failed.', 'is-error' );
+				} )
+				.then( function () {
+					if ( btn ) { btn.disabled = false; }
+				} );
+		} );
+	}
+
 	function bindCompetitor() {
 		var btn = document.getElementById( 'scc-competitor-go' );
 		if ( ! btn ) {
@@ -3080,6 +3190,7 @@
 		bindTemplates();
 		bindInternalLinks();
 		bindGscQuickWins();
+		bindCitationScanner();
 		bindCompetitor();
 		bindCompetitorGaps();
 		bindJobs();
