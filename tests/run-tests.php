@@ -1394,6 +1394,7 @@ assert_eq( 'striking', SCC_Copilot::classify( 'show me striking distance pages o
 assert_eq( 'cannibalization', SCC_Copilot::classify( 'find cannibalization' ), 'cannibalization intent' );
 assert_eq( 'links', SCC_Copilot::classify( 'find pages that need internal links' ), 'links intent' );
 assert_eq( 'metadata', SCC_Copilot::classify( 'fix my worst metadata' ), 'metadata intent' );
+assert_eq( 'technical', SCC_Copilot::classify( 'find technical SEO indexing and canonical problems' ), 'technical SEO intent' );
 assert_eq( 'create', SCC_Copilot::classify( 'give me 5 articles I should create' ), 'create intent' );
 assert_eq( 'triage', SCC_Copilot::classify( '' ), 'empty query falls back to triage' );
 assert_eq( 'triage', SCC_Copilot::classify( 'hello there' ), 'unrecognized query falls back to triage' );
@@ -1430,6 +1431,30 @@ assert_eq( array(), $ans2['missing'], 'links intent needs no external data (noth
 $ans3 = $copilot->answer( 'what should I work on this week?', $sample_opps );
 assert_eq( 4, count( $ans3['opportunities'] ), 'triage returns all opportunities (capped)' );
 assert_true( '' !== $ans3['why'], 'answer includes a why-it-matters line' );
+
+unset( $GLOBALS['scc_test_options'][ SCC_Technical_SEO::REPORT_OPTION ] );
+$ans4 = $copilot->answer( 'what technical SEO problems are stopping indexing?', $sample_opps );
+assert_eq( 'technical', $ans4['intent'], 'technical question routes to Technical SEO Brain' );
+assert_true( ! empty( $ans4['missing'] ), 'technical answer requests a live audit when none exists' );
+assert_eq( 'technical_audit', $ans4['missing'][0]['key'], 'missing technical data is named explicitly' );
+
+$GLOBALS['scc_test_options'][ SCC_Technical_SEO::REPORT_OPTION ] = array(
+	'score' => 72,
+	'issues' => array(
+		array(
+			'id' => 'published_noindex',
+			'title' => 'Published page is marked noindex',
+			'severity' => 'high',
+			'why_it_matters' => 'The page cannot remain indexed.',
+			'fix' => 'Remove noindex if indexing is intended.',
+			'examples' => array( array( 'url' => 'https://example.com/service/', 'evidence' => 'robots=noindex' ) ),
+		),
+	),
+);
+$ans5 = $copilot->answer( 'check my technical SEO', $sample_opps );
+assert_eq( 1, count( $ans5['opportunities'] ), 'technical Copilot returns saved audit evidence' );
+assert_eq( 'technical_seo', $ans5['opportunities'][0]['source'], 'technical Copilot marks findings as technical evidence' );
+assert_eq( array(), $ans5['missing'], 'technical Copilot needs no extra data after an audit exists' );
 
 echo "\n== DB schema is strict-mode safe (no zero-date defaults) ==\n";
 $db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database/class-scc-db.php' );
