@@ -18,11 +18,13 @@ $tree = isset( $data['tree'] ) ? $data['tree'] : null;
  * @param array $node Node.
  */
 $node_line = function ( $node ) {
-	$exists = ! empty( $node['exists'] );
-	$url    = isset( $node['url'] ) ? $node['url'] : '';
+	$exists         = ! empty( $node['exists'] );
+	$status         = isset( $node['status'] ) ? (string) $node['status'] : ( $exists ? 'existing' : 'new' );
+	$url            = isset( $node['url'] ) ? $node['url'] : '';
+	$page_candidate = array_key_exists( 'page_candidate', $node ) ? ! empty( $node['page_candidate'] ) : ! $exists;
 	?>
-	<div class="scc-arch-node<?php echo $exists ? ' is-existing' : ''; ?>">
-		<?php if ( ! $exists ) : ?>
+	<div class="scc-arch-node<?php echo $exists ? ' is-existing' : ''; ?><?php echo 'section' === $status ? ' is-section' : ''; ?>">
+		<?php if ( $page_candidate && ! $exists ) : ?>
 			<label class="scc-arch-pick" title="<?php esc_attr_e( 'Include this page when sending to the Content Plan', 'seo-command-center' ); ?>">
 				<input type="checkbox" class="scc-seed-pick" value="<?php echo esc_attr( $url ); ?>" checked>
 			</label>
@@ -30,12 +32,21 @@ $node_line = function ( $node ) {
 			<span class="scc-arch-pick scc-arch-pick--spacer" aria-hidden="true"></span>
 		<?php endif; ?>
 		<span class="scc-arch-title"><?php echo esc_html( $node['title'] ); ?></span>
-		<code><?php echo esc_html( $url ); ?></code>
+		<?php if ( '' !== $url ) : ?><code><?php echo esc_html( $url ); ?></code><?php endif; ?>
 		<span class="scc-flag"><?php echo esc_html( $node['intent'] ); ?></span>
-		<?php if ( $exists ) : ?>
+
+		<?php if ( 'section' === $status ) : ?>
+			<span class="scc-badge"><?php esc_html_e( 'Add to service page', 'seo-command-center' ); ?></span>
+		<?php elseif ( 'covered' === $status ) : ?>
+			<span class="scc-badge scc-badge--ok"><?php esc_html_e( 'Covered by existing', 'seo-command-center' ); ?></span>
+		<?php elseif ( $exists ) : ?>
 			<span class="scc-badge scc-badge--ok"><?php esc_html_e( 'Exists', 'seo-command-center' ); ?></span>
 		<?php else : ?>
-			<span class="scc-badge"><?php esc_html_e( 'Gap · new', 'seo-command-center' ); ?></span>
+			<span class="scc-badge"><?php esc_html_e( 'Gap · new page', 'seo-command-center' ); ?></span>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $node['rationale'] ) && in_array( $status, array( 'covered', 'section' ), true ) ) : ?>
+			<div class="scc-note" style="flex-basis:100%;margin-left:34px;"><?php echo esc_html( $node['rationale'] ); ?></div>
 		<?php endif; ?>
 	</div>
 	<?php
@@ -44,7 +55,7 @@ $node_line = function ( $node ) {
 <div class="wrap scc-wrap">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'Site Architecture', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Your topical map organized into a Pillar → Service → Location → Supporting structure. Pages you already have are marked “Exists”; the rest are candidates for your content plan.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Intent-aware architecture: TideOrbit decides whether a topic needs a new URL, is already covered by an existing page, belongs as a section on a service page, or deserves a supporting article.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<?php if ( ! $tree ) : ?>
@@ -65,7 +76,7 @@ $node_line = function ( $node ) {
 				</div>
 			</div>
 			<p class="scc-note">
-				<?php esc_html_e( 'Tick the “Gap · new” pages you want to add to your Content Plan (existing pages are never added). ', 'seo-command-center' ); ?>
+				<?php esc_html_e( 'Only true “Gap · new page” recommendations can be sent to Content Plan. Existing coverage and service-page sections are intentionally kept out of the page queue. ', 'seo-command-center' ); ?>
 				<label class="scc-arch-selectall"><input type="checkbox" id="scc-seed-selectall" checked> <?php esc_html_e( 'Select all', 'seo-command-center' ); ?></label>
 				<span id="scc-seed-count"></span>
 			</p>
@@ -78,6 +89,14 @@ $node_line = function ( $node ) {
 						<div class="scc-arch-children">
 							<?php foreach ( $pillar['children'] as $child ) : ?>
 								<?php $node_line( $child ); ?>
+							<?php endforeach; ?>
+						</div>
+					<?php endif; ?>
+					<?php if ( ! empty( $pillar['sections'] ) ) : ?>
+						<div class="scc-arch-children scc-arch-sections">
+							<div class="scc-label"><?php esc_html_e( 'Service-page sections · no new URL', 'seo-command-center' ); ?></div>
+							<?php foreach ( $pillar['sections'] as $section ) : ?>
+								<?php $node_line( $section ); ?>
 							<?php endforeach; ?>
 						</div>
 					<?php endif; ?>

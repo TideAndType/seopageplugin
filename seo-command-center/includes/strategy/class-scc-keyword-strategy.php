@@ -406,11 +406,16 @@ class SCC_Keyword_Strategy {
 			. 'path (usually nested under the pillar), an example meta title, and content_nodes (an array of '
 			. 'short specific questions/points to cover). '
 			. 'Only propose location+service pages where they would carry genuinely unique local value — '
-			. 'never propose near-duplicate doorway pages. Do not invent search volume or difficulty numbers; '
+			. 'never propose near-duplicate doorway pages. COMMERCIAL SUBTOPICS that are part of the same service '
+			. 'should normally be SECTIONS on that service page, not separate URLs. Recommend a separate commercial '
+			. 'page only when it serves a materially different buyer task/search intent that cannot be satisfied well '
+			. 'as a section of the parent service page. Informational questions may become supporting articles. '
+			. 'Do not create the same topic at a different URL merely because a cleaner/shorter slug is possible. '
+			. 'Do not invent search volume or difficulty numbers; '
 			. 'priority is your strategic judgement, not measured data. '
 			. ( '' !== $language ? ( 'Write ALL topics, keywords, titles and questions in ' . $language . '. ' ) : '' )
-			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, url} is provided. '
-			. 'For EVERY existing page, output one pillar (or subtopic) that REUSES its exact url path verbatim '
+			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, path} is provided. '
+			. 'For EVERY existing page, output one pillar (or subtopic) that REUSES its exact path verbatim '
 			. 'and sets "status":"existing" — do not invent a new slug for a page that already exists. Then ADD '
 			. 'pillars/subtopics with "status":"new" for genuine gaps. Infer the business\'s real services, '
 			. 'products and locations from the existing page titles. Never propose a near-duplicate of a page '
@@ -633,25 +638,56 @@ class SCC_Keyword_Strategy {
 		$clusters = isset( $map['clusters'] ) ? $map['clusters'] : array();
 		$seen     = array();
 
-		// Flag clusters (and their subtopics) whose URL matches a real page.
+		// Reconcile by exact URL first, then by topic/intent identity. A different
+		// slug does not make a genuinely identical service a new opportunity.
 		foreach ( $clusters as &$c ) {
-			$path = self::normalize_site_path( $c['recommended_url'] );
+			$path  = self::normalize_site_path( $c['recommended_url'] );
+			$match = null;
 			if ( isset( $by_path[ $path ] ) ) {
-				$c['status']          = 'existing';
-				$c['recommended_url'] = $path; // Use the real, exact path.
-				$seen[ $path ]        = true;
-			} elseif ( 'existing' === $c['status'] ) {
-				// Model claimed "existing" but the URL doesn't match a real page —
-				// it's really a recommendation.
+				$match = array( 'path' => $path, 'title' => $by_path[ $path ], 'match_type' => 'path', 'score' => 1.0 );
+			} else {
+				$match = self::match_existing_topic(
+					array(
+						'title'           => $c['service'] ?? '',
+						'primary_keyword' => $c['primary_keyword'] ?? '',
+						'recommended_url' => $c['recommended_url'] ?? '',
+					),
+					$pages
+				);
+			}
+
+			if ( $match ) {
+				$c['status']                 = 'existing';
+				$c['recommended_url']        = $match['path'];
+				$c['matched_existing_title'] = $match['title'];
+				$c['coverage_match']         = $match['match_type'];
+				$seen[ $match['path'] ]      = true;
+			} else {
 				$c['status'] = 'new';
 			}
+
 			if ( ! empty( $c['subtopics'] ) && is_array( $c['subtopics'] ) ) {
 				foreach ( $c['subtopics'] as &$s ) {
-					$spath = self::normalize_site_path( $s['recommended_url'] ?? '' );
+					$spath  = self::normalize_site_path( $s['recommended_url'] ?? '' );
+					$smatch = null;
 					if ( '' !== $spath && isset( $by_path[ $spath ] ) ) {
-						$s['status']          = 'existing';
-						$s['recommended_url'] = $spath;
-						$seen[ $spath ]       = true;
+						$smatch = array( 'path' => $spath, 'title' => $by_path[ $spath ], 'match_type' => 'path', 'score' => 1.0 );
+					} else {
+						$smatch = self::match_existing_topic(
+							array(
+								'title'           => $s['title'] ?? '',
+								'primary_keyword' => $s['primary_keyword'] ?? '',
+								'recommended_url' => $s['recommended_url'] ?? '',
+							),
+							$pages
+						);
+					}
+					if ( $smatch ) {
+						$s['status']                 = 'existing';
+						$s['recommended_url']        = $smatch['path'];
+						$s['matched_existing_title'] = $smatch['title'];
+						$s['coverage_match']         = $smatch['match_type'];
+						$seen[ $smatch['path'] ]      = true;
 					} else {
 						$s['status'] = 'new';
 					}
@@ -713,6 +749,114 @@ class SCC_Keyword_Strategy {
 		$map['new_count']      = $total - $existing;
 		$map['pillar_count']   = count( $clusters );
 		return $map;
+	}
+
+	/**
+	 * Find a real site page that already satisfies the same topic even when the
+	 * model suggested a different slug. Conservative by design: exact normalized
+	 * topic/leaf matches win; fuzzy matches require very high token overlap.
+	 *
+	 * @param array $node  {title,primary_keyword,recommended_url}.
+	 * @param array $pages Existing pages as {title,path}.
+	 * @return array|null Existing page + match_type + score.
+	 */
+	public static function match_existing_topic( array $node, array $pages ) {
+		$node_phrases = array_filter(
+			array_unique(
+				array(
+					self::normalize_topic_phrase( $node['title'] ?? '' ),
+					self::normalize_topic_phrase( $node['primary_keyword'] ?? '' ),
+					self::normalize_topic_phrase( self::path_leaf( $node['recommended_url'] ?? '' ) ),
+				)
+			)
+		);
+		if ( empty( $node_phrases ) ) {
+			return null;
+		}
+
+		$best = null;
+		foreach ( $pages as $page ) {
+			$path  = self::normalize_site_path( $page['path'] ?? '' );
+			$title = (string) ( $page['title'] ?? '' );
+			if ( '' === $path ) {
+				continue;
+			}
+			$page_phrases = array_filter(
+				array_unique(
+					array(
+						self::normalize_topic_phrase( $title ),
+						self::normalize_topic_phrase( self::path_leaf( $path ) ),
+					)
+				)
+			);
+
+			foreach ( $node_phrases as $left ) {
+				foreach ( $page_phrases as $right ) {
+					if ( '' === $left || '' === $right ) {
+						continue;
+					}
+					if ( $left === $right ) {
+						return array(
+							'path'       => $path,
+							'title'      => $title,
+							'match_type' => 'topic',
+							'score'      => 1.0,
+						);
+					}
+
+					$lt = array_values( array_filter( explode( ' ', $left ) ) );
+					$rt = array_values( array_filter( explode( ' ', $right ) ) );
+					if ( count( $lt ) < 2 || count( $rt ) < 2 ) {
+						continue;
+					}
+					$intersection = count( array_intersect( $lt, $rt ) );
+					$union        = count( array_unique( array_merge( $lt, $rt ) ) );
+					$jaccard      = $union ? $intersection / $union : 0.0;
+
+					// Require near identity, not containment. A topic such as
+					// "managed IT pricing" contains "managed IT" but represents a
+					// meaningfully different informational task and must not collapse
+					// into the broad service page.
+					$score = $jaccard;
+					if ( $intersection >= 2 && $score >= 0.82 && ( null === $best || $score > $best['score'] ) ) {
+						$best = array(
+							'path'       => $path,
+							'title'      => $title,
+							'match_type' => 'near_topic',
+							'score'      => $score,
+						);
+					}
+				}
+			}
+		}
+		return $best;
+	}
+
+	/**
+	 * Normalize a topic phrase for duplicate/coverage detection.
+	 *
+	 * @param string $text Topic text.
+	 * @return string
+	 */
+	public static function normalize_topic_phrase( $text ) {
+		$text = strtolower( html_entity_decode( wp_strip_all_tags( (string) $text ), ENT_QUOTES, 'UTF-8' ) );
+		$text = str_replace( array( '&', '/', '-', '_', '–', '—' ), ' ', $text );
+		$text = preg_replace( '/[^a-z0-9 ]+/', ' ', $text );
+		$text = preg_replace( '/\b(the|a|an|and|or|for|of|in|to|service|services|solution|solutions|company|page)\b/', ' ', $text );
+		return trim( preg_replace( '/\s+/', ' ', $text ) );
+	}
+
+	/**
+	 * Last slug segment as human-readable text.
+	 *
+	 * @param string $path URL/path.
+	 * @return string
+	 */
+	protected static function path_leaf( $path ) {
+		$path = (string) wp_parse_url( (string) $path, PHP_URL_PATH );
+		$parts = array_values( array_filter( explode( '/', trim( $path, '/' ) ) ) );
+		$leaf = $parts ? end( $parts ) : '';
+		return str_replace( array( '-', '_' ), ' ', (string) $leaf );
 	}
 
 	/**

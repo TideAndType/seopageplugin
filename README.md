@@ -11,7 +11,7 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.53.3.** The plugin is organized around four areas —
+**Current version: 1.54.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
@@ -48,6 +48,7 @@ and the hardening + simplification passes are implemented. See
   competitor gap analysis.
 
 **Recent passes (this branch)**
+- **v1.54.0 — Intent-aware Site Architecture:** Architecture no longer treats a different slug as proof that a new page is needed. Existing URLs are matched by exact path and conservative topic identity, so a suggestion such as `/24-7-monitoring-alerting/` is reconciled to an existing `/managed-it-services/24-7-monitoring-alerting/` page instead of becoming a duplicate gap. Commercial/transactional subtopics now default to **sections on the parent service page**, while informational subtopics remain eligible for supporting articles and local-intent topics can remain location pages. The Architecture UI separates **Service-page sections · no new URL** from true **Gap · new page** recommendations, and only real page gaps can be sent to Content Plan. The topical-map prompt and UI now follow the same consolidation-first rule.
 - **v1.53.3 — The SEO Framework support:** TideOrbit now detects The SEO Framework as an active SEO plugin, labels it correctly throughout the dashboard/API, reads its custom `_genesis_title` and `_genesis_description` values, and writes approved TideOrbit metadata back to those same TSF fields instead of incorrectly falling back to TideOrbit-owned metadata.
 - **v1.53.2 — Citation Scanner submit fix:** moves the Citation Scanner behavior into the main TideOrbit admin JavaScript so it initializes after the localized REST configuration is available, switches the scan to the canonical `seo-command/v1/citation-scan` route, and gives the form a safe Opportunities → Citations fallback URL so a JavaScript failure can no longer dump the user on a blank `wp-admin/admin.php?` page.
 - **v1.53.1 — Metadata filter warning fix:** the bulk metadata editor now normalizes the optional `filter` argument before validation, eliminating the PHP 8.x `Undefined array key "filter"` warning when the listing is loaded without an explicit filter.
