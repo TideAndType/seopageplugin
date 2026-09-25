@@ -50,7 +50,7 @@ $node_line = function ( $node ) {
 		<?php endif; ?>
 	</div>
 	<?php
-}
+};
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
