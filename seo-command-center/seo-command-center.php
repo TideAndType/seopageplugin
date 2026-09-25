@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.50.0
+ * Version:           1.51.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.50.0' );
+	define( 'SCC_VERSION', '1.51.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -146,6 +146,7 @@ require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-gsc-learning.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';
 require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-competitor-analysis.php';
+require_once SCC_PLUGIN_DIR . 'includes/local/class-scc-citation-scanner.php';
 
 require_once SCC_PLUGIN_DIR . 'includes/jobs/class-scc-jobs.php';
 require_once SCC_PLUGIN_DIR . 'includes/publishing/class-scc-publishing.php';
