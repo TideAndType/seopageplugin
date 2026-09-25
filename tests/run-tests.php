@@ -335,7 +335,14 @@ $GLOBALS['scc_test_options']['scc_credentials'] = array(
 	'dataforseo_key'    => 'pass',
 );
 assert_true( SCC_GSC::is_connected(), 'GSC connected with client+refresh token' );
+assert_eq( 'manual', SCC_GSC::connection_mode(), 'legacy OAuth credentials use manual GSC mode' );
 assert_true( SCC_DataForSEO::is_connected(), 'DataForSEO connected with login+key' );
+
+$GLOBALS['scc_test_options']['scc_credentials'] = array(
+	'gsc_broker_connection' => 'sealed-test-connection',
+);
+assert_true( SCC_GSC::is_connected(), 'GSC connected with opaque broker token' );
+assert_eq( 'broker', SCC_GSC::connection_mode(), 'opaque broker token takes broker mode' );
 
 echo "\n== Competitor topic extraction + content gaps ==\n";
 $comp = new SCC_Competitor_Analysis();
@@ -527,6 +534,10 @@ $GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'a',
 $fs2 = SCC_GSC::field_status();
 assert_true( $fs2['client_id'] && $fs2['client_secret'] && $fs2['refresh_token'], 'all fields present' );
 assert_true( SCC_GSC::is_connected(), 'connected with all three fields' );
+assert_eq( 'manual', SCC_GSC::connection_mode(), 'manual connection mode reported' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_broker_connection' => 'opaque' );
+assert_eq( 'broker', SCC_GSC::connection_mode(), 'broker connection mode reported' );
+assert_true( SCC_GSC::is_connected(), 'broker connection counts as connected without client credentials' );
 
 echo "\n== LM Studio error extraction ==\n";
 $lm2  = new SCC_LMStudio_Provider();
