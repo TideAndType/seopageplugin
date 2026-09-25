@@ -729,6 +729,7 @@ class SCC_Admin {
 		$this->view(
 			'seo-audit',
 			array(
+				'technical'            => SCC_Technical_SEO::report(),
 				'cannibalization'      => $detector->detect(),
 				'has_analysis'         => (bool) SCC_Analyzer::latest(),
 				'gsc_connected'        => SCC_GSC::is_connected(),
