@@ -812,11 +812,13 @@ class SCC_Keyword_Strategy {
 					$intersection = count( array_intersect( $lt, $rt ) );
 					$union        = count( array_unique( array_merge( $lt, $rt ) ) );
 					$jaccard      = $union ? $intersection / $union : 0.0;
-					$containment  = $intersection / max( 1, min( count( $lt ), count( $rt ) ) );
 
-					// Require near identity, not mere topical relatedness.
-					$score = max( $jaccard, ( $containment >= 0.90 && abs( count( $lt ) - count( $rt ) ) <= 1 ) ? $containment : 0.0 );
-					if ( $score >= 0.82 && ( null === $best || $score > $best['score'] ) ) {
+					// Require near identity, not containment. A topic such as
+					// "managed IT pricing" contains "managed IT" but represents a
+					// meaningfully different informational task and must not collapse
+					// into the broad service page.
+					$score = $jaccard;
+					if ( $intersection >= 2 && $score >= 0.82 && ( null === $best || $score > $best['score'] ) ) {
 						$best = array(
 							'path'       => $path,
 							'title'      => $title,
