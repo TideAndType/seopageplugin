@@ -80,6 +80,7 @@ class SCC_Admin {
 			self::SLUG . '-insights'         => array( __( 'Opportunities', 'seo-command-center' ), 'render_insights' ),
 			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
+			self::SLUG . '-citation-scanner' => array( __( 'Citation Scanner', 'seo-command-center' ), 'render_citation_scanner' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
 			self::SLUG . '-layout'           => array( __( 'Elementor Layout', 'seo-command-center' ), 'render_layout' ),
@@ -129,6 +130,7 @@ class SCC_Admin {
 					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
 					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
 					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
+					'citations'    => array( __( 'Local Citations', 'seo-command-center' ), self::SLUG . '-citation-scanner', 'render_citation_scanner' ),
 					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
 			),
@@ -631,6 +633,13 @@ class SCC_Admin {
 	 */
 	public function render_competitors() {
 		$this->view( 'competitors', array() );
+	}
+
+	/**
+	 * Local citation discovery and NAP consistency scanner.
+	 */
+	public function render_citation_scanner() {
+		$this->view( 'citation-scanner', array() );
 	}
 
 	/**
