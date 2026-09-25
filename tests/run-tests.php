@@ -785,6 +785,33 @@ assert_eq( 2, $rec['existing_count'], 'existing_count reflects real pages' );
 assert_eq( 1, $rec['new_count'], 'new_count reflects gaps' );
 assert_eq( 'existing', $rec['clusters'][0]['status'], 'existing pages sorted first' );
 
+SCC_KS_Test::$pages = array(
+	array( 'title' => '24/7 Monitoring & Alerting', 'path' => '/managed-it-services/24-7-monitoring-alerting/' ),
+);
+$semanticRaw = array(
+	'clusters' => array(
+		array(
+			'service' => '24/7 Monitoring & Alerting',
+			'location' => '',
+			'primary_keyword' => '24/7 monitoring and alerting',
+			'supporting_terms' => array(),
+			'intent' => 'commercial',
+			'recommended_url' => '/24-7-monitoring-alerting/',
+			'related' => array(),
+			'page_type' => 'service',
+			'status' => 'new',
+			'rationale' => '',
+			'subtopics' => array(),
+		),
+	),
+	'entities' => array(),
+	'notes' => '',
+);
+$semanticRec = $ks->reconcile_public( $semanticRaw );
+assert_eq( 1, count( $semanticRec['clusters'] ), 'semantic duplicate does not cause a second injected page' );
+assert_eq( 'existing', $semanticRec['clusters'][0]['status'], 'same topic at a different slug is reconciled as existing' );
+assert_eq( '/managed-it-services/24-7-monitoring-alerting/', $semanticRec['clusters'][0]['recommended_url'], 'semantic reconciliation reuses the real nested service URL' );
+
 // No real pages (brand-new site) → map returned unchanged.
 SCC_KS_Test::$pages = array();
 $rec2 = $ks->reconcile_public( $raw );
