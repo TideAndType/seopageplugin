@@ -82,6 +82,11 @@ class SCC_Plugin {
 		// i18n.
 		$this->loader->add_action( 'init', $this, 'load_textdomain' );
 
+		// Public local-citation lead tool. Embed with [tideorbit_citation_scan].
+		if ( class_exists( 'SCC_Citation_Scanner' ) ) {
+			add_shortcode( 'tideorbit_citation_scan', array( 'SCC_Citation_Scanner', 'shortcode' ) );
+		}
+
 		// DB upgrade check on admin load.
 		$this->loader->add_action( 'admin_init', $this, 'maybe_upgrade_db' );
 
