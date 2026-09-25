@@ -364,7 +364,7 @@ class SCC_GSC {
 	}
 
 	/**
-	 * Disconnect Search Console. Broker connections are revoked best-effort.
+	 * Disconnect Search Console and revoke the Google refresh token best-effort.
 	 *
 	 * @return array {ok:bool,message:string}
 	 */
