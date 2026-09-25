@@ -121,6 +121,17 @@ class SCC_Metadata {
 			return array( 'title' => '_scc_meta_title', 'description' => '_scc_meta_description' );
 		}
 
+		return self::keys_for_plugin( $plugin );
+	}
+
+	/**
+	 * Resolve title/description storage keys for a detected SEO plugin.
+	 * Kept pure so compatibility mappings are regression-testable.
+	 *
+	 * @param string $plugin SEO plugin key.
+	 * @return array {title, description}
+	 */
+	public static function keys_for_plugin( $plugin ) {
 		if ( SCC_SEO_Meta::PLUGIN_YOAST === $plugin ) {
 			return array( 'title' => '_yoast_wpseo_title', 'description' => '_yoast_wpseo_metadesc' );
 		}
