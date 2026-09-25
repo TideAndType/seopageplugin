@@ -15,7 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 	<div class="scc-columns">
 		<div class="scc-card">
 			<h2><?php esc_html_e( 'Business details', 'seo-command-center' ); ?></h2>
-			<form id="scc-citation-form">
+			<form id="scc-citation-form" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>" method="get">
+				<input type="hidden" name="page" value="seo-command-center-opportunities">
+				<input type="hidden" name="tab" value="citations">
 				<p><label><strong><?php esc_html_e( 'Business name', 'seo-command-center' ); ?></strong><br><input id="scc-citation-name" type="text" class="regular-text" required></label></p>
 				<p><label><strong><?php esc_html_e( 'Address', 'seo-command-center' ); ?></strong><br><input id="scc-citation-address" type="text" class="regular-text"></label></p>
 				<p><label><strong><?php esc_html_e( 'City', 'seo-command-center' ); ?></strong><br><input id="scc-citation-city" type="text" class="regular-text" required></label></p>
@@ -56,19 +58,3 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		</div>
 	</div>
 </div>
-<script>
-(function(){
-	var form=document.getElementById('scc-citation-form'); if(!form||typeof SCC==='undefined')return;
-	var status=document.getElementById('scc-citation-status'), btn=document.getElementById('scc-citation-run');
-	form.addEventListener('submit',function(e){e.preventDefault(); btn.disabled=true; status.textContent='Scanning…'; status.className='scc-inline-status';
-		var payload={business_name:v('scc-citation-name'),address:v('scc-citation-address'),city:v('scc-citation-city'),state:v('scc-citation-state'),phone:v('scc-citation-phone'),website:v('scc-citation-website')};
-		window.wp.apiFetch({path:'/seo-command-center/v1/citation-scan',method:'POST',data:payload}).then(function(res){render(res.data||res); status.textContent=(res.data&&res.data.cached)?'Loaded cached scan.':'Scan complete.'; status.className='scc-inline-status is-ok';}).catch(function(err){status.textContent=(err&&err.message)||'Scan failed.'; status.className='scc-inline-status is-error';}).finally(function(){btn.disabled=false;});
-	});
-	function v(id){var e=document.getElementById(id);return e?e.value:'';}
-	function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];});}
-	function mark(x){if(x===true)return '<span class="scc-badge scc-badge--ok">match</span>'; if(x===false)return '<span class="scc-badge">mismatch</span>'; return '<span class="scc-badge">n/a</span>';}
-	function render(d){document.getElementById('scc-citation-results').style.display='block';document.getElementById('scc-citation-score').textContent=d.score+'/100';document.getElementById('scc-citation-found').textContent=d.summary.found;document.getElementById('scc-citation-inconsistent').textContent=d.summary.inconsistent;document.getElementById('scc-citation-missing').textContent=d.summary.not_found;document.getElementById('scc-citation-unverified').textContent=d.summary.unverified;document.getElementById('scc-citation-provider').textContent='Search provider: '+d.provider;document.getElementById('scc-citation-methodology').textContent=d.methodology||'';
-		var body=document.getElementById('scc-citation-table');body.innerHTML='';(d.results||[]).forEach(function(x){var tr=document.createElement('tr'); var link=x.url?'<a href="'+esc(x.url)+'" target="_blank" rel="noopener">Open</a>':'—';tr.innerHTML='<td><strong>'+esc(x.name)+'</strong><br><span class="scc-note">'+esc(x.domain)+'</span></td><td><span class="scc-status scc-status--'+(x.status==='found'?'completed':x.status==='inconsistent'?'failed':x.status==='not_found'?'in_progress':'snoozed')+'">'+esc(x.status.replace('_',' '))+'</span></td><td>'+esc(x.confidence)+'%</td><td>'+mark(x.checks.name)+' '+mark(x.checks.city)+' '+mark(x.checks.phone)+'</td><td>'+link+'</td>';body.appendChild(tr);});
-	}
-})();
-</script>
