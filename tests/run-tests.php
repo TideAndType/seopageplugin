@@ -136,6 +136,10 @@ echo "\n== SEO plugin label ==\n";
 assert_eq( 'Yoast SEO', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_YOAST ), 'yoast label' );
 assert_eq( 'Rank Math', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_RANKMATH ), 'rankmath label' );
 assert_eq( 'All in One SEO', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_AIOSEO ), 'aioseo label' );
+assert_eq( 'The SEO Framework', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_TSF ), 'The SEO Framework label' );
+$tsf_keys = SCC_Metadata::keys_for_plugin( SCC_SEO_Meta::PLUGIN_TSF );
+assert_eq( '_genesis_title', $tsf_keys['title'], 'The SEO Framework title key' );
+assert_eq( '_genesis_description', $tsf_keys['description'], 'The SEO Framework description key' );
 
 echo "\n== Logger secret redaction ==\n";
 $ref = new ReflectionMethod( 'SCC_Logger', 'redact' );
@@ -1803,6 +1807,12 @@ foreach ( $scc_variant_blocks as $block ) {
 assert_true( is_array( $scc_content_block ) && ! empty( $scc_content_block['vars']['CONTENT_SECTIONS'] ), 'content mapper creates section-level design handoff data' );
 assert_eq( 'split-list', $scc_content_block['vars']['CONTENT_SECTIONS'][0]['layout'], 'section-level composition survives mapping into Elementor renderer input' );
 assert_eq( array(), SCC_Native_Elementor_Blocks::render_block( $scc_variant_blocks[0] ), 'native renderer safely declines when Elementor containers are unavailable' );
+
+echo "\n== The SEO Framework active detection ==\n";
+if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
+	define( 'THE_SEO_FRAMEWORK_VERSION', '5.1.4-test' );
+}
+assert_eq( SCC_SEO_Meta::PLUGIN_TSF, SCC_SEO_Meta::detect(), 'active The SEO Framework constant is detected' );
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";

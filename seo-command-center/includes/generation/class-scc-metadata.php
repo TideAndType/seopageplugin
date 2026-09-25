@@ -5,7 +5,7 @@
  * Writes generated metadata to the ACTIVE SEO plugin's meta keys, or to the
  * plugin's own _scc_* keys when none is active. Never overwrites an existing
  * value unless explicitly told to (overwrite=true), so it cannot clobber a
- * value a user already set in Yoast/Rank Math/AIOSEO.
+ * value a user already set in Yoast/Rank Math/AIOSEO/The SEO Framework.
  *
  * @package SEO_Command_Center
  */
@@ -121,11 +121,25 @@ class SCC_Metadata {
 			return array( 'title' => '_scc_meta_title', 'description' => '_scc_meta_description' );
 		}
 
+		return self::keys_for_plugin( $plugin );
+	}
+
+	/**
+	 * Resolve title/description storage keys for a detected SEO plugin.
+	 * Kept pure so compatibility mappings are regression-testable.
+	 *
+	 * @param string $plugin SEO plugin key.
+	 * @return array {title, description}
+	 */
+	public static function keys_for_plugin( $plugin ) {
 		if ( SCC_SEO_Meta::PLUGIN_YOAST === $plugin ) {
 			return array( 'title' => '_yoast_wpseo_title', 'description' => '_yoast_wpseo_metadesc' );
 		}
 		if ( SCC_SEO_Meta::PLUGIN_RANKMATH === $plugin ) {
 			return array( 'title' => 'rank_math_title', 'description' => 'rank_math_description' );
+		}
+		if ( SCC_SEO_Meta::PLUGIN_TSF === $plugin ) {
+			return array( 'title' => '_genesis_title', 'description' => '_genesis_description' );
 		}
 		// AIOSEO uses its own table; write to our keys for safety.
 		return array( 'title' => '_scc_meta_title', 'description' => '_scc_meta_description' );

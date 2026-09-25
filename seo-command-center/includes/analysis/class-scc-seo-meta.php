@@ -2,7 +2,7 @@
 /**
  * Detects the active SEO plugin and reads its metadata non-destructively.
  *
- * Supports Yoast SEO, Rank Math, and All in One SEO. Falls back to plugin-owned
+ * Supports Yoast SEO, Rank Math, All in One SEO, and The SEO Framework. Falls back to plugin-owned
  * meta keys when none is active. Never writes without explicit approval (writes
  * arrive in Phase 3).
  *
@@ -21,6 +21,7 @@ class SCC_SEO_Meta {
 	const PLUGIN_YOAST    = 'yoast';
 	const PLUGIN_RANKMATH = 'rankmath';
 	const PLUGIN_AIOSEO   = 'aioseo';
+	const PLUGIN_TSF      = 'the-seo-framework';
 	const PLUGIN_NONE     = 'none';
 
 	/**
@@ -37,6 +38,14 @@ class SCC_SEO_Meta {
 		}
 		if ( defined( 'AIOSEO_VERSION' ) || function_exists( 'aioseo' ) ) {
 			return self::PLUGIN_AIOSEO;
+		}
+		if (
+			defined( 'THE_SEO_FRAMEWORK_VERSION' )
+			|| defined( 'THE_SEO_FRAMEWORK_PRESENT' )
+			|| function_exists( 'tsf' )
+			|| function_exists( 'the_seo_framework' )
+		) {
+			return self::PLUGIN_TSF;
 		}
 		return self::PLUGIN_NONE;
 	}
@@ -55,6 +64,8 @@ class SCC_SEO_Meta {
 				return 'Rank Math';
 			case self::PLUGIN_AIOSEO:
 				return 'All in One SEO';
+			case self::PLUGIN_TSF:
+				return 'The SEO Framework';
 			default:
 				return __( 'None (TideOrbit will store metadata itself)', 'seo-command-center' );
 		}
@@ -74,6 +85,8 @@ class SCC_SEO_Meta {
 				return (string) get_post_meta( $post_id, 'rank_math_title', true );
 			case self::PLUGIN_AIOSEO:
 				return self::aioseo_field( $post_id, 'title' );
+			case self::PLUGIN_TSF:
+				return (string) get_post_meta( $post_id, '_genesis_title', true );
 			default:
 				return (string) get_post_meta( $post_id, '_scc_meta_title', true );
 		}
@@ -93,6 +106,8 @@ class SCC_SEO_Meta {
 				return (string) get_post_meta( $post_id, 'rank_math_description', true );
 			case self::PLUGIN_AIOSEO:
 				return self::aioseo_field( $post_id, 'description' );
+			case self::PLUGIN_TSF:
+				return (string) get_post_meta( $post_id, '_genesis_description', true );
 			default:
 				return (string) get_post_meta( $post_id, '_scc_meta_description', true );
 		}
