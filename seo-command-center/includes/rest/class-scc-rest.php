@@ -2553,13 +2553,12 @@ class SCC_REST {
 	 *
 	 * @return WP_REST_Response|WP_Error
 	 */
-	public function gsc_auth_url( WP_REST_Request $request ) {
-		$mode = 'manual' === sanitize_key( (string) $request->get_param( 'mode' ) ) ? 'manual' : 'broker';
-		$url  = SCC_GSC::auth_url( $mode );
+	public function gsc_auth_url() {
+		$url = SCC_GSC::auth_url();
 		if ( is_wp_error( $url ) ) {
 			return $url;
 		}
-		return $this->ok( array( 'url' => $url, 'mode' => $mode ) );
+		return $this->ok( array( 'url' => $url, 'mode' => 'wordpress' ) );
 	}
 
 	/**
