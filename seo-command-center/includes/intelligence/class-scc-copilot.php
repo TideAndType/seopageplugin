@@ -60,6 +60,12 @@ class SCC_Copilot {
 				'types'   => array( 'improve_meta', 'striking_distance' ),
 				'needs'   => array(),
 			),
+			'technical'       => array(
+				'label'   => __( 'Technical SEO problems', 'seo-command-center' ),
+				'cues'    => array( 'technical seo', 'indexing', 'indexability', 'crawl', 'crawlability', 'canonical', 'robots', 'sitemap', 'hreflang', 'broken link', 'redirect', 'schema error', 'structured data', 'mobile seo', 'mixed content' ),
+				'types'   => array(),
+				'needs'   => array( 'technical_audit' ),
+			),
 			'cannibalization' => array(
 				'label'   => __( 'Keyword cannibalization', 'seo-command-center' ),
 				'cues'    => array( 'cannibal', 'competing', 'compete', 'same intent', 'same keyword', 'duplicate target' ),
@@ -162,6 +168,12 @@ class SCC_Copilot {
 					'message' => __( 'Connect Google Search Console for this — it needs your real impressions, clicks and positions. Add it under Connections.', 'seo-command-center' ),
 				);
 			}
+			if ( 'technical_audit' === $need && ( ! class_exists( 'SCC_Technical_SEO' ) || ! SCC_Technical_SEO::report() ) ) {
+				$missing[] = array(
+					'key'     => 'technical_audit',
+					'message' => __( 'Run the Technical SEO Brain from Site Audit first so I can answer from a live crawl of your site.', 'seo-command-center' ),
+				);
+			}
 		}
 		return $missing;
 	}
@@ -192,13 +204,41 @@ class SCC_Copilot {
 		$intents    = self::intents();
 		$intent     = $intents[ $intent_key ];
 
-		if ( null === $opportunities ) {
-			$opportunities = class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::all() : array();
+		if ( 'technical' === $intent_key ) {
+			$report  = class_exists( 'SCC_Technical_SEO' ) ? SCC_Technical_SEO::report() : null;
+			$missing = self::missing_data( (array) $intent['needs'] );
+			$matched = array();
+			if ( is_array( $report ) ) {
+				$severity_score = array( 'critical' => 100, 'high' => 85, 'medium' => 65, 'low' => 40 );
+				foreach ( array_slice( (array) ( $report['issues'] ?? array() ), 0, 8 ) as $issue ) {
+					$severity = (string) ( $issue['severity'] ?? 'low' );
+					$example  = isset( $issue['examples'][0] ) && is_array( $issue['examples'][0] ) ? $issue['examples'][0] : array();
+					$matched[] = array(
+						'id'                 => 'technical:' . (string) ( $issue['id'] ?? sanitize_key( (string) ( $issue['title'] ?? 'issue' ) ) ),
+						'type'               => 'technical_seo',
+						'source'             => 'technical_seo',
+						'title'              => (string) ( $issue['title'] ?? __( 'Technical SEO issue', 'seo-command-center' ) ),
+						'priority'           => $severity,
+						'score'              => (int) ( $severity_score[ $severity ] ?? 40 ),
+						'expected_impact'    => in_array( $severity, array( 'critical', 'high' ), true ) ? 'high' : ( 'medium' === $severity ? 'medium' : 'low' ),
+						'effort'             => 'review',
+						'confidence'         => 95,
+						'reason'             => (string) ( $issue['why_it_matters'] ?? '' ),
+						'recommended_action' => (string) ( $issue['fix'] ?? '' ),
+						'evidence'           => (string) ( $example['evidence'] ?? '' ),
+						'url'                => (string) ( $example['url'] ?? '' ),
+						'factors'            => array(),
+					);
+				}
+			}
+		} else {
+			if ( null === $opportunities ) {
+				$opportunities = class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::all() : array();
+			}
+			$opportunities = is_array( $opportunities ) ? $opportunities : array();
+			$matched = self::filter_opportunities( $opportunities, (array) $intent['types'], 8 );
+			$missing = self::missing_data( (array) $intent['needs'] );
 		}
-		$opportunities = is_array( $opportunities ) ? $opportunities : array();
-
-		$matched = self::filter_opportunities( $opportunities, (array) $intent['types'], 8 );
-		$missing = self::missing_data( (array) $intent['needs'] );
 
 		return array(
 			'intent'        => $intent_key,
@@ -250,6 +290,7 @@ class SCC_Copilot {
 			'links'           => __( 'Internal links pass relevance and help pages get found and ranked.', 'seo-command-center' ),
 			'create'          => __( 'Filling real gaps in demand and your topical map builds authority.', 'seo-command-center' ),
 			'expand'          => __( 'Depth that matches search intent improves relevance and rankings.', 'seo-command-center' ),
+			'technical'       => __( 'Technical blockers can prevent otherwise strong pages from being crawled, indexed, consolidated, rendered, or discovered correctly.', 'seo-command-center' ),
 			'triage'          => __( 'These are the highest-value actions across your whole site, ranked by an explainable score.', 'seo-command-center' ),
 		);
 		return isset( $why[ $intent_key ] ) ? $why[ $intent_key ] : $why['triage'];
