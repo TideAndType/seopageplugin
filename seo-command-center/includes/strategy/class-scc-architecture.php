@@ -2,10 +2,13 @@
 /**
  * Site architecture engine.
  *
- * Turns a topical map into a Pillar -> Service -> Location -> Supporting tree,
- * marks which recommended URLs already exist on the site (from the latest
- * analysis), and proposes parents + internal links. Deterministic (no extra AI
- * call) so it is fast, cheap, and testable.
+ * Turns a topical map into an intent-aware Pillar -> Service/Location ->
+ * Supporting Content tree. Existing-site coverage is resolved by URL AND topic
+ * identity so a different slug never creates a duplicate-page recommendation.
+ *
+ * Commercial subtopics normally belong as sections on their parent service page;
+ * informational subtopics can become supporting articles. This keeps the site
+ * architecture useful instead of turning every keyword variation into a URL.
  *
  * @package SEO_Command_Center
  */
@@ -23,71 +26,105 @@ class SCC_Architecture {
 	 * Build an architecture tree from a topical map.
 	 *
 	 * @param array $map Normalized topical map (clusters, entities, notes).
-	 * @return array Tree: list of pillar nodes with children.
+	 * @return array Tree: list of pillar nodes with children/sections/articles.
 	 */
 	public function build( array $map ) {
-		$existing = $this->existing_paths();
+		$existing = $this->existing_pages();
 		$clusters = isset( $map['clusters'] ) ? (array) $map['clusters'] : array();
 
 		// Group by service.
 		$services = array();
 		foreach ( $clusters as $c ) {
-			$service = $c['service'] ? $c['service'] : __( 'General', 'seo-command-center' );
+			$service = ! empty( $c['service'] ) ? $c['service'] : __( 'General', 'seo-command-center' );
 			if ( ! isset( $services[ $service ] ) ) {
 				$services[ $service ] = array(
 					'children' => array(),
+					'sections' => array(),
 					'articles' => array(),
 					'seed'     => null,
 				);
 			}
-			// Prefer the reconciled status; fall back to path matching for older maps.
-			$exists = ( isset( $c['status'] ) && 'existing' === $c['status'] )
-				|| $this->path_exists( $c['recommended_url'], $existing );
+
 			$node = array(
 				'title'           => $this->node_title( $c ),
-				'primary_keyword' => $c['primary_keyword'],
-				'intent'          => $c['intent'],
-				'url'             => $c['recommended_url'],
-				'page_type'       => $c['page_type'],
-				'related'         => $c['related'],
-				'rationale'       => $c['rationale'],
-				'exists'          => $exists,
+				'primary_keyword' => (string) ( $c['primary_keyword'] ?? '' ),
+				'intent'          => (string) ( $c['intent'] ?? 'commercial' ),
+				'url'             => (string) ( $c['recommended_url'] ?? '' ),
+				'page_type'       => (string) ( $c['page_type'] ?? 'service' ),
+				'related'         => (array) ( $c['related'] ?? array() ),
+				'rationale'       => (string) ( $c['rationale'] ?? '' ),
+				'status'          => (string) ( $c['status'] ?? 'new' ),
+				'page_candidate'  => true,
 			);
-			if ( 'article' === $c['page_type'] ) {
+			$node = $this->resolve_existing( $node, $existing );
+
+			if ( 'article' === $node['page_type'] ) {
 				$services[ $service ]['articles'][] = $node;
-			} elseif ( 'location' === $c['page_type'] || ! empty( $c['location'] ) ) {
+			} elseif ( 'location' === $node['page_type'] || ! empty( $c['location'] ) ) {
 				$services[ $service ]['children'][] = $node;
 			} else {
-				// service or pillar: use as the service seed if not set.
+				// First service/pillar is the hub. Additional same-service
+				// commercial variants should usually be coverage on that hub,
+				// not another page.
 				if ( null === $services[ $service ]['seed'] ) {
 					$services[ $service ]['seed'] = $node;
+				} elseif ( ! $node['exists'] && $this->is_service_section_intent( $node['intent'] ) ) {
+					$services[ $service ]['sections'][] = $this->as_service_section( $node, $services[ $service ]['seed'] );
 				} else {
 					$services[ $service ]['children'][] = $node;
 				}
 			}
 
-			// Subtopics become supporting articles under the same pillar, so they
-			// flow into Site Architecture and the Content Plan.
+			// Subtopics are intent-aware. Informational questions/articles can
+			// earn URLs; same-service commercial variants default to sections.
 			foreach ( (array) ( $c['subtopics'] ?? array() ) as $sub ) {
 				if ( empty( $sub['title'] ) ) {
 					continue;
 				}
-				$sub_exists = ( isset( $sub['status'] ) && 'existing' === $sub['status'] )
-					|| $this->path_exists( $sub['recommended_url'] ?? '', $existing );
-				$services[ $service ]['articles'][] = array(
-					'title'           => $sub['title'],
-					'primary_keyword' => isset( $sub['primary_keyword'] ) ? $sub['primary_keyword'] : $sub['title'],
-					'intent'          => isset( $sub['intent'] ) ? $sub['intent'] : 'informational',
-					'url'             => isset( $sub['recommended_url'] ) ? $sub['recommended_url'] : '',
+				$subnode = array(
+					'title'           => (string) $sub['title'],
+					'primary_keyword' => (string) ( $sub['primary_keyword'] ?? $sub['title'] ),
+					'intent'          => (string) ( $sub['intent'] ?? 'informational' ),
+					'url'             => (string) ( $sub['recommended_url'] ?? '' ),
 					'page_type'       => 'article',
-					'related'         => isset( $sub['content_nodes'] ) ? (array) $sub['content_nodes'] : array(),
+					'related'         => (array) ( $sub['content_nodes'] ?? array() ),
 					'rationale'       => '',
-					'exists'          => $sub_exists,
+					'status'          => (string) ( $sub['status'] ?? 'new' ),
+					'page_candidate'  => true,
 				);
+				$subnode = $this->resolve_existing( $subnode, $existing );
+
+				if ( $subnode['exists'] ) {
+					// Existing commercial pages are respected as existing pages;
+					// we simply stop recommending a duplicate.
+					if ( $this->is_service_section_intent( $subnode['intent'] ) ) {
+						$subnode['page_type'] = 'service';
+						$services[ $service ]['children'][] = $subnode;
+					} elseif ( 'local' === $subnode['intent'] ) {
+						$subnode['page_type'] = 'location';
+						$services[ $service ]['children'][] = $subnode;
+					} else {
+						$services[ $service ]['articles'][] = $subnode;
+					}
+					continue;
+				}
+
+				if ( $this->is_service_section_intent( $subnode['intent'] ) ) {
+					$parent = null !== $services[ $service ]['seed'] ? $services[ $service ]['seed'] : $node;
+					$services[ $service ]['sections'][] = $this->as_service_section( $subnode, $parent );
+				} elseif ( 'local' === $subnode['intent'] ) {
+					$subnode['page_type'] = 'location';
+					$services[ $service ]['children'][] = $subnode;
+				} else {
+					$subnode['page_type'] = 'article';
+					$services[ $service ]['articles'][] = $subnode;
+				}
 			}
 		}
 
-		// Assemble tree.
+		// Assemble and de-duplicate the tree. Semantic reconciliation can cause a
+		// model's fake "new" URL and a real existing URL to resolve to the same
+		// page; only show that page once.
 		$tree = array();
 		foreach ( $services as $service_name => $group ) {
 			$seed = $group['seed'];
@@ -101,11 +138,23 @@ class SCC_Architecture {
 					'related'         => array(),
 					'rationale'       => '',
 					'exists'          => false,
+					'status'          => 'new',
+					'action'          => 'create_page',
+					'page_candidate'  => true,
 				);
+				$seed = $this->resolve_existing( $seed, $existing );
 			}
+
+			$seen = array();
+			$seed_key = $this->node_identity( $seed );
+			if ( '' !== $seed_key ) {
+				$seen[ $seed_key ] = true;
+			}
+
 			$seed['service']  = $service_name;
-			$seed['children'] = $group['children'];
-			$seed['articles'] = $group['articles'];
+			$seed['children'] = $this->dedupe_nodes( $group['children'], $seen );
+			$seed['sections'] = $this->dedupe_nodes( $group['sections'], $seen );
+			$seed['articles'] = $this->dedupe_nodes( $group['articles'], $seen );
 			$tree[] = $seed;
 		}
 
@@ -117,6 +166,134 @@ class SCC_Architecture {
 	}
 
 	/**
+	 * Resolve a node against real site pages by exact URL, then semantic topic.
+	 *
+	 * @param array $node     Architecture node.
+	 * @param array $existing Existing pages.
+	 * @return array
+	 */
+	protected function resolve_existing( array $node, array $existing ) {
+		$original_url = (string) ( $node['url'] ?? '' );
+		$path         = $this->normalize_path( $original_url );
+
+		$match = null;
+		foreach ( $existing as $page ) {
+			if ( $path && $path === $this->normalize_path( $page['path'] ?? '' ) ) {
+				$match = array(
+					'path'       => (string) $page['path'],
+					'title'      => (string) $page['title'],
+					'match_type' => 'path',
+					'score'      => 1.0,
+				);
+				break;
+			}
+		}
+		if ( ! $match && class_exists( 'SCC_Keyword_Strategy' ) ) {
+			$match = SCC_Keyword_Strategy::match_existing_topic(
+				array(
+					'title'           => $node['title'] ?? '',
+					'primary_keyword' => $node['primary_keyword'] ?? '',
+					'recommended_url' => $original_url,
+				),
+				$existing
+			);
+		}
+
+		if ( $match ) {
+			$node['exists']                 = true;
+			$node['url']                    = $match['path'];
+			$node['matched_existing_title'] = $match['title'];
+			$node['coverage_match']         = $match['match_type'];
+			$node['status']                 = 'path' === $match['match_type'] ? 'existing' : 'covered';
+			$node['action']                 = 'path' === $match['match_type'] ? 'existing' : 'use_existing';
+			$node['original_url']            = $original_url;
+			$node['page_candidate']          = false;
+			if ( 'path' !== $match['match_type'] ) {
+				$node['rationale'] = sprintf(
+					/* translators: %s: existing page title */
+					__( 'This topic is already covered by the existing page “%s”; do not create another URL for the same intent.', 'seo-command-center' ),
+					$match['title']
+				);
+			}
+			return $node;
+		}
+
+		$node['exists'] = false;
+		$node['status'] = 'new';
+		$node['action'] = 'create_page';
+		return $node;
+	}
+
+	/**
+	 * Commercial variants usually belong on the service page itself.
+	 *
+	 * @param string $intent Search intent.
+	 * @return bool
+	 */
+	protected function is_service_section_intent( $intent ) {
+		return in_array( strtolower( (string) $intent ), array( 'commercial', 'transactional', 'navigational' ), true );
+	}
+
+	/**
+	 * Convert a commercial subtopic to an on-page section recommendation.
+	 *
+	 * @param array $node   Topic node.
+	 * @param array $parent Parent service node.
+	 * @return array
+	 */
+	protected function as_service_section( array $node, array $parent ) {
+		$target = (string) ( $parent['url'] ?? '' );
+		$node['page_type']      = 'section';
+		$node['status']         = 'section';
+		$node['action']         = 'expand_existing';
+		$node['page_candidate'] = false;
+		$node['parent_url']     = $target;
+		$node['url']            = $target;
+		$node['exists']         = ! empty( $parent['exists'] );
+		$node['rationale']      = __( 'This is the same commercial service intent. Cover it as a section on the parent service page instead of creating another page.', 'seo-command-center' );
+		return $node;
+	}
+
+	/**
+	 * Remove duplicate nodes after existing-topic resolution.
+	 *
+	 * @param array $nodes Nodes.
+	 * @param array $seen  Seen identities, updated by reference.
+	 * @return array
+	 */
+	protected function dedupe_nodes( array $nodes, array &$seen ) {
+		$out = array();
+		foreach ( $nodes as $node ) {
+			$key = $this->node_identity( $node );
+			if ( '' !== $key && isset( $seen[ $key ] ) ) {
+				continue;
+			}
+			if ( '' !== $key ) {
+				$seen[ $key ] = true;
+			}
+			$out[] = $node;
+		}
+		return $out;
+	}
+
+	/**
+	 * Stable identity for de-duplication.
+	 *
+	 * @param array $node Node.
+	 * @return string
+	 */
+	protected function node_identity( array $node ) {
+		$url = $this->normalize_path( $node['url'] ?? '' );
+		if ( '' !== $url ) {
+			return 'url:' . $url;
+		}
+		$title = class_exists( 'SCC_Keyword_Strategy' )
+			? SCC_Keyword_Strategy::normalize_topic_phrase( $node['title'] ?? '' )
+			: strtolower( trim( (string) ( $node['title'] ?? '' ) ) );
+		return '' !== $title ? 'topic:' . $title : '';
+	}
+
+	/**
 	 * A human title for a cluster node.
 	 *
 	 * @param array $c Cluster.
@@ -124,40 +301,56 @@ class SCC_Architecture {
 	 */
 	protected function node_title( array $c ) {
 		if ( ! empty( $c['location'] ) ) {
-			return trim( $c['service'] . ' — ' . $c['location'] );
+			return trim( (string) ( $c['service'] ?? '' ) . ' — ' . (string) $c['location'] );
 		}
-		return $c['service'] ? $c['service'] : $c['primary_keyword'];
+		return ! empty( $c['service'] ) ? (string) $c['service'] : (string) ( $c['primary_keyword'] ?? '' );
 	}
 
 	/**
-	 * Map of existing site paths from the latest analysis.
+	 * Real existing site pages with title + normalized path. Prefer the latest
+	 * analysis, then supplement it from the live WordPress/sitemap inventory so
+	 * Architecture does not depend on a fresh analysis run.
 	 *
-	 * @return array<string,bool> Normalized path => true.
+	 * @return array<int,array{title:string,path:string}>
 	 */
-	protected function existing_paths() {
+	protected function existing_pages() {
+		$pages = array();
+		$seen  = array();
+
 		$latest = SCC_Analyzer::latest();
-		$paths  = array();
-		if ( ! $latest || empty( $latest['items'] ) ) {
-			return $paths;
-		}
-		foreach ( $latest['items'] as $item ) {
-			$path = wp_parse_url( $item['url'], PHP_URL_PATH );
-			if ( $path ) {
-				$paths[ $this->normalize_path( $path ) ] = true;
+		if ( $latest && ! empty( $latest['items'] ) ) {
+			foreach ( $latest['items'] as $item ) {
+				$path = wp_parse_url( (string) ( $item['url'] ?? '' ), PHP_URL_PATH );
+				$path = '/' . trim( (string) $path, '/' ) . '/';
+				if ( '//' === $path ) {
+					$path = '/';
+				}
+				if ( '' === trim( $path ) || isset( $seen[ $path ] ) ) {
+					continue;
+				}
+				$seen[ $path ] = true;
+				$pages[] = array(
+					'title' => (string) ( $item['title'] ?? '' ),
+					'path'  => $path,
+				);
 			}
 		}
-		return $paths;
-	}
 
-	/**
-	 * Whether a recommended path already exists.
-	 *
-	 * @param string $path     Path.
-	 * @param array  $existing Existing paths.
-	 * @return bool
-	 */
-	protected function path_exists( $path, array $existing ) {
-		return isset( $existing[ $this->normalize_path( $path ) ] );
+		if ( class_exists( 'SCC_Keyword_Strategy' ) ) {
+			foreach ( (array) SCC_Keyword_Strategy::existing_site_pages( 300 ) as $page ) {
+				$path = (string) ( $page['path'] ?? '' );
+				if ( '' === $path || isset( $seen[ $path ] ) ) {
+					continue;
+				}
+				$seen[ $path ] = true;
+				$pages[] = array(
+					'title' => (string) ( $page['title'] ?? '' ),
+					'path'  => $path,
+				);
+			}
+		}
+
+		return $pages;
 	}
 
 	/**
@@ -167,6 +360,7 @@ class SCC_Architecture {
 	 * @return string
 	 */
 	protected function normalize_path( $path ) {
+		$path = wp_parse_url( (string) $path, PHP_URL_PATH );
 		return strtolower( trim( (string) $path, '/' ) );
 	}
 }
