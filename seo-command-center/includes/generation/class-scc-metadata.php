@@ -173,7 +173,8 @@ class SCC_Metadata {
 		$post_type = isset( $args['post_type'] ) ? sanitize_key( $args['post_type'] ) : '';
 		$paged     = max( 1, (int) ( $args['paged'] ?? 1 ) );
 		$per_page  = min( 100, max( 5, (int) ( $args['per_page'] ?? 25 ) ) );
-		$filter    = in_array( ( $args['filter'] ?? 'all' ), array( 'all', 'missing', 'present' ), true ) ? $args['filter'] : 'all';
+		$filter_raw = $args['filter'] ?? 'all';
+		$filter     = in_array( $filter_raw, array( 'all', 'missing', 'present' ), true ) ? $filter_raw : 'all';
 		$include_templates = ! empty( $args['include_templates'] );
 
 		if ( $include_templates ) {
