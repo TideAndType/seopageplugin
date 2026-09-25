@@ -63,6 +63,34 @@
 		} );
 	}
 
+	// ---- Technical SEO Brain ---------------------------------------------
+	function bindTechnicalSeo() {
+		var btn = document.getElementById( 'scc-run-technical-audit' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-technical-status' );
+		var limitEl = document.getElementById( 'scc-technical-limit' );
+
+		btn.addEventListener( 'click', function () {
+			var limit = limitEl ? parseInt( limitEl.value, 10 ) : 150;
+			if ( ! limit || limit < 1 ) { limit = 150; }
+			btn.disabled = true;
+			if ( limitEl ) { limitEl.disabled = true; }
+			setStatus( status, 'Crawling live pages and checking technical SEO… this can take a while on a larger site.' );
+			request( '/technical-seo/audit', { method: 'POST', data: { limit: limit } } )
+				.then( function () {
+					setStatus( status, 'Technical audit complete. Reloading…', 'is-ok' );
+					window.location.reload();
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					if ( limitEl ) { limitEl.disabled = false; }
+					setStatus( status, ( err && err.message ) || 'Technical audit failed.', 'is-error' );
+				} );
+		} );
+	}
+
 	// ---- Settings save --------------------------------------------------
 	function bindSettings() {
 		var form = document.getElementById( 'scc-settings-form' );
@@ -328,27 +356,6 @@
 					.catch( function ( err ) {
 						gscConnect.disabled = false;
 						window.alert( ( err && err.message ) || 'Could not start Google connection.' );
-					} );
-			} );
-		}
-
-		// Advanced self-hosted OAuth connect.
-		var gscConnectManual = document.getElementById( 'scc-gsc-connect-manual' );
-		if ( gscConnectManual ) {
-			gscConnectManual.addEventListener( 'click', function () {
-				gscConnectManual.disabled = true;
-				request( '/gsc/auth-url?mode=manual', { method: 'GET' } )
-					.then( function ( res ) {
-						var url = res.data && res.data.url;
-						if ( url ) {
-							window.location.href = url;
-							return;
-						}
-						gscConnectManual.disabled = false;
-					} )
-					.catch( function ( err ) {
-						gscConnectManual.disabled = false;
-						window.alert( ( err && err.message ) || 'Save your Client ID and secret first.' );
 					} );
 			} );
 		}
@@ -1819,17 +1826,32 @@
 				return '<span class="scc-opp__factor">+' + ( parseInt( f.points, 10 ) || 0 ) + ' ' + esc( f.label ) + '</span>';
 			} ).join( '' );
 			var cap = function ( s ) { s = String( s || ''); return s.charAt( 0 ).toUpperCase() + s.slice( 1 ); };
+			var technical = op.source === 'technical_seo';
 			var meta =
 				'<div class="scc-opp__meta">' +
 					'<span>Impact: <strong>' + esc( cap( op.expected_impact ) ) + '</strong></span>' +
 					'<span>Effort: <strong>' + esc( op.effort || '' ) + '</strong></span>' +
 					'<span>Confidence: <strong>' + ( parseInt( op.confidence, 10 ) || 0 ) + '%</strong></span>' +
 				'</div>';
-			var details = ( op.recommended_action || factors )
+			var evidence = '';
+			if ( op.evidence || op.url ) {
+				evidence = '<div class="scc-opp__factors">';
+				if ( op.url ) { evidence += '<div><strong>URL:</strong> ' + esc( op.url ) + '</div>'; }
+				if ( op.evidence ) { evidence += '<div><strong>Evidence:</strong> ' + esc( op.evidence ) + '</div>'; }
+				evidence += '</div>';
+			}
+			var details = ( op.recommended_action || factors || evidence )
 				? '<details class="scc-opp__more"><summary>Details</summary>' +
 					'<div class="scc-opp__do">' + esc( op.recommended_action || '' ) + '</div>' +
+					evidence +
 					'<div class="scc-opp__factors">' + factors + '</div></details>'
 				: '';
+			var actions = technical
+				? '<div class="scc-opp__actions"><a class="button button-small" href="admin.php?page=seo-command-center-seo-audit">Open Site Audit</a></div>'
+				: '<div class="scc-opp__actions">' +
+					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
+					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
+				  '</div>';
 			wrap.innerHTML =
 				'<div class="scc-opp__score"><span class="scc-opp__num">' + ( parseInt( op.score, 10 ) || 0 ) + '</span><span class="scc-opp__den">/100</span></div>' +
 				'<div class="scc-opp__body">' +
@@ -1838,10 +1860,7 @@
 					'<p class="scc-opp__why">' + esc( op.reason ) + '</p>' +
 					meta + details +
 				'</div>' +
-				'<div class="scc-opp__actions">' +
-					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
-					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
-				'</div>';
+				actions;
 			return wrap;
 		}
 
@@ -3047,6 +3066,7 @@
 
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
+		bindTechnicalSeo();
 		bindSettings();
 		bindRouteModels();
 		bindLmStudioDetect();

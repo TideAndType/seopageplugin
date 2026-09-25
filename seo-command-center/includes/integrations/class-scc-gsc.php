@@ -2,14 +2,14 @@
 /**
  * Google Search Console integration (optional).
  *
- * Uses a one-click TideOrbit Google authorization broker by default, while
- * retaining a self-hosted OAuth client flow for advanced users. The broker keeps
- * TideOrbit's Google client secret off customer WordPress sites and returns an
- * opaque, sealed connection token rather than a reusable Google refresh token.
+ * Runs entirely inside the current WordPress site. Google OAuth redirects
+ * directly back to the TideOrbit Connections admin screen; there is no TideOrbit
+ * cloud, broker, proxy, Vercel project, or external middleware.
  *
- * Search Console access is read-only. When not connected this class reports so
- * honestly and returns no data — it never fabricates impressions, clicks, CTR,
- * positions, or properties.
+ * Google Search Console private data still requires OAuth authorization. The
+ * site owner configures one Google OAuth Web application once; after that the
+ * normal experience is a Connect Google Search Console button. Search Console
+ * access is read-only, and TideOrbit never fabricates performance data.
  *
  * @package SEO_Command_Center
  */
@@ -23,14 +23,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SCC_GSC {
 
-	const TOKEN_URL           = 'https://oauth2.googleapis.com/token';
-	const AUTH_URL            = 'https://accounts.google.com/o/oauth2/v2/auth';
-	const API_BASE            = 'https://searchconsole.googleapis.com/webmasters/v3';
-	const TOKEN_CACHE         = 'scc_gsc_access_token';
-	const SCOPE               = 'https://www.googleapis.com/auth/webmasters.readonly';
-	const STATE_KEY           = 'scc_gsc_oauth_state';
-	const BROKER_STATE_PREFIX = 'scc_gsc_broker_';
-	const DEFAULT_BROKER_BASE = 'https://auth.tideandtype.com';
+	const TOKEN_URL   = 'https://oauth2.googleapis.com/token';
+	const REVOKE_URL  = 'https://oauth2.googleapis.com/revoke';
+	const AUTH_URL    = 'https://accounts.google.com/o/oauth2/v2/auth';
+	const API_BASE    = 'https://searchconsole.googleapis.com/webmasters/v3';
+	const TOKEN_CACHE = 'scc_gsc_access_token';
+	const SCOPE       = 'https://www.googleapis.com/auth/webmasters.readonly';
+	const STATE_KEY   = 'scc_gsc_oauth_state';
 
 	/**
 	 * The OAuth redirect URI (must be added to the Google OAuth client).
@@ -53,91 +52,31 @@ class SCC_GSC {
 	}
 
 	/**
-	 * Central TideOrbit authorization broker URL.
-	 *
-	 * Filterable for staging/self-hosting without exposing it as a normal setting.
-	 *
-	 * @return string
-	 */
-	public static function broker_base() {
-		$base = (string) apply_filters( 'scc_gsc_broker_url', self::DEFAULT_BROKER_BASE );
-		return untrailingslashit( esc_url_raw( trim( $base ) ) );
-	}
-
-	/**
-	 * Whether a broker URL is configured.
-	 *
-	 * @return bool
-	 */
-	public static function broker_available() {
-		return '' !== self::broker_base();
-	}
-
-	/**
-	 * Current connection mode: broker, manual, or none.
+	 * Current connection mode.
 	 *
 	 * @return string
 	 */
 	public static function connection_mode() {
 		$c = self::creds();
-		if ( ! empty( $c['gsc_broker_connection'] ) ) {
-			return 'broker';
-		}
 		if ( ! empty( $c['gsc_client_id'] ) && ! empty( $c['gsc_client_secret'] ) && ! empty( $c['gsc_refresh_token'] ) ) {
-			return 'manual';
+			return 'wordpress';
 		}
 		return 'none';
 	}
 
 	/**
-	 * Build the recommended one-click broker authorization URL.
-	 *
-	 * The verifier remains only in WordPress. The broker receives a SHA-256
-	 * challenge and will only release the sealed connection after the callback
-	 * presents the original verifier.
+	 * Build the Google consent URL. Google redirects directly back to this
+	 * WordPress site's TideOrbit Connections admin page.
 	 *
 	 * @return string|WP_Error
 	 */
-	public static function broker_auth_url() {
-		$base = self::broker_base();
-		if ( '' === $base ) {
-			return new WP_Error( 'scc_gsc_broker_missing', __( 'The TideOrbit Google connection service is not configured.', 'seo-command-center' ) );
-		}
-
-		$state    = bin2hex( random_bytes( 24 ) );
-		$verifier = bin2hex( random_bytes( 48 ) );
-		$challenge = rtrim( strtr( base64_encode( hash( 'sha256', $verifier, true ) ), '+/', '-_' ), '=' );
-		$key       = self::BROKER_STATE_PREFIX . hash( 'sha256', $state );
-
-		set_transient(
-			$key,
-			array(
-				'state'    => $state,
-				'verifier' => $verifier,
-				'user_id'  => get_current_user_id(),
-			),
-			15 * MINUTE_IN_SECONDS
-		);
-
-		$args = array(
-			'callback'  => self::redirect_uri(),
-			'state'     => $state,
-			'challenge' => $challenge,
-			'site'      => home_url( '/' ),
-			'version'   => defined( 'SCC_VERSION' ) ? SCC_VERSION : '',
-		);
-		return $base . '/api/gsc/connect?' . http_build_query( $args, '', '&', PHP_QUERY_RFC3986 );
-	}
-
-	/**
-	 * Build the legacy/self-hosted Google consent URL.
-	 *
-	 * @return string|WP_Error
-	 */
-	public static function manual_auth_url() {
+	public static function auth_url() {
 		$c = self::creds();
 		if ( empty( $c['gsc_client_id'] ) || empty( $c['gsc_client_secret'] ) ) {
-			return new WP_Error( 'scc_no_client', __( 'Enter your OAuth Client ID and secret first, then Save.', 'seo-command-center' ) );
+			return new WP_Error(
+				'scc_no_client',
+				__( 'Complete the one-time Google app setup first: save the OAuth Client ID and Client Secret, then click Connect Google Search Console.', 'seo-command-center' )
+			);
 		}
 		$state = wp_generate_password( 32, false );
 		set_transient( self::STATE_KEY, $state, 15 * MINUTE_IN_SECONDS );
@@ -156,16 +95,6 @@ class SCC_GSC {
 	}
 
 	/**
-	 * Default connect URL — broker for one-click setup, manual when requested.
-	 *
-	 * @param string $mode Connection mode.
-	 * @return string|WP_Error
-	 */
-	public static function auth_url( $mode = 'broker' ) {
-		return 'manual' === $mode ? self::manual_auth_url() : self::broker_auth_url();
-	}
-
-	/**
 	 * Handle the OAuth callback: exchange the code for tokens and store the
 	 * refresh token. Runs on the Connections admin page.
 	 *
@@ -173,9 +102,6 @@ class SCC_GSC {
 	 */
 	public static function handle_callback() {
 		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- OAuth uses its own state token, validated below.
-		if ( isset( $_GET['scc_gsc_broker'] ) || isset( $_GET['ticket'] ) ) {
-			return self::handle_broker_callback();
-		}
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return array( 'ok' => false, 'message' => __( 'Insufficient permissions.', 'seo-command-center' ) );
 		}
@@ -224,92 +150,13 @@ class SCC_GSC {
 		update_option( 'scc_credentials', $creds, false );
 		delete_transient( self::TOKEN_CACHE );
 
-		// Auto-select the property when the account has exactly one.
-		$sites = self::sites();
-		if ( ! is_wp_error( $sites ) && 1 === count( $sites ) ) {
-			SCC_Settings::update( array( 'gsc_site_url' => $sites[0]['siteUrl'] ) );
-		}
-
-		SCC_Logger::info( 'gsc', 'OAuth connected; refresh token stored.' );
-		return array( 'ok' => true, 'message' => __( 'Google Search Console connected.', 'seo-command-center' ) );
-	}
-
-
-	/**
-	 * Complete the broker callback and store only the opaque connection token.
-	 *
-	 * @return array {ok:bool,message:string}
-	 */
-	protected static function handle_broker_callback() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return array( 'ok' => false, 'message' => __( 'Insufficient permissions.', 'seo-command-center' ) );
-		}
-
-		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- broker state is the CSRF protection.
-		$state  = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
-		$ticket = isset( $_GET['ticket'] ) ? sanitize_text_field( wp_unslash( $_GET['ticket'] ) ) : '';
-		$error  = isset( $_GET['error'] ) ? sanitize_text_field( wp_unslash( $_GET['error'] ) ) : '';
-		// phpcs:enable WordPress.Security.NonceVerification.Recommended
-
-		$key      = self::BROKER_STATE_PREFIX . hash( 'sha256', $state );
-		$expected = get_transient( $key );
-		if ( '' === $state || ! is_array( $expected ) || empty( $expected['state'] ) || ! hash_equals( (string) $expected['state'], $state ) ) {
-			return array( 'ok' => false, 'message' => __( 'Google connection security check failed. Please try connecting again.', 'seo-command-center' ) );
-		}
-		if ( (int) ( $expected['user_id'] ?? 0 ) !== get_current_user_id() ) {
-			delete_transient( $key );
-			return array( 'ok' => false, 'message' => __( 'This Google connection was started by a different WordPress user.', 'seo-command-center' ) );
-		}
-		if ( '' !== $error ) {
-			delete_transient( $key );
-			return array( 'ok' => false, 'message' => sprintf( __( 'Google connection failed: %s', 'seo-command-center' ), $error ) );
-		}
-		if ( '' === $ticket ) {
-			return array( 'ok' => false, 'message' => __( 'The Google connection did not return a completion ticket.', 'seo-command-center' ) );
-		}
-
-		$url = self::broker_base() . '/api/gsc/exchange';
-		if ( class_exists( 'SCC_URL' ) ) {
-			$safe = SCC_URL::is_safe_outbound_url( $url );
-			if ( is_wp_error( $safe ) ) {
-				return array( 'ok' => false, 'message' => $safe->get_error_message() );
-			}
-		}
-		$response = wp_remote_post(
-			$url,
-			array(
-				'timeout'   => 25,
-				'sslverify' => true,
-				'headers'   => array( 'content-type' => 'application/json' ),
-				'body'      => wp_json_encode(
-					array(
-						'ticket'   => $ticket,
-						'verifier' => (string) ( $expected['verifier'] ?? '' ),
-						'site'     => home_url( '/' ),
-					)
-				),
-			)
-		);
-		if ( is_wp_error( $response ) ) {
-			return array( 'ok' => false, 'message' => $response->get_error_message() );
-		}
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-		if ( 200 !== $code || empty( $body['connection_token'] ) ) {
-			$message = isset( $body['error'] ) ? sanitize_text_field( (string) $body['error'] ) : sprintf( 'HTTP %d', $code );
-			return array( 'ok' => false, 'message' => sprintf( __( 'TideOrbit could not finish the Google connection: %s', 'seo-command-center' ), $message ) );
-		}
-
-		delete_transient( $key );
-		$creds = self::creds();
-		$creds['gsc_broker_connection'] = self::sanitize_token( $body['connection_token'] );
-		update_option( 'scc_credentials', $creds, false );
-		delete_transient( self::TOKEN_CACHE );
-
+		// Auto-select the matching Search Console property when possible.
 		self::auto_select_property();
-		SCC_Logger::info( 'gsc', 'Connected through TideOrbit Google authorization broker.' );
+
+		SCC_Logger::info( 'gsc', 'Google Search Console connected directly through WordPress OAuth.' );
 		return array( 'ok' => true, 'message' => __( 'Google Search Console connected.', 'seo-command-center' ) );
 	}
+
 
 	/**
 	 * Pick the best accessible Search Console property for this WordPress site.
@@ -436,7 +283,7 @@ class SCC_GSC {
 		$mode   = self::connection_mode();
 		$result = array(
 			'fields'              => $fields,
-			'has_all_fields'      => 'broker' === $mode || ( $fields['client_id'] && $fields['client_secret'] && $fields['refresh_token'] ),
+			'has_all_fields'      => $fields['client_id'] && $fields['client_secret'] && $fields['refresh_token'],
 			'connected'           => 'none' !== $mode,
 			'mode'                => $mode,
 			'token_ok'            => false,
@@ -485,9 +332,6 @@ class SCC_GSC {
 		}
 
 		$c = self::creds();
-		if ( ! empty( $c['gsc_broker_connection'] ) ) {
-			return self::broker_access_token( (string) $c['gsc_broker_connection'] );
-		}
 
 		$response = wp_remote_post(
 			self::TOKEN_URL,
@@ -520,67 +364,26 @@ class SCC_GSC {
 	}
 
 	/**
-	 * Ask the TideOrbit broker for a short-lived Google access token.
-	 *
-	 * @param string $connection Opaque broker connection token.
-	 * @return string|WP_Error
-	 */
-	protected static function broker_access_token( $connection ) {
-		$url = self::broker_base() . '/api/gsc/token';
-		if ( class_exists( 'SCC_URL' ) ) {
-			$safe = SCC_URL::is_safe_outbound_url( $url );
-			if ( is_wp_error( $safe ) ) {
-				return $safe;
-			}
-		}
-		$response = wp_remote_post(
-			$url,
-			array(
-				'timeout'   => 25,
-				'sslverify' => true,
-				'headers'   => array( 'content-type' => 'application/json' ),
-				'body'      => wp_json_encode( array( 'connection_token' => $connection ) ),
-			)
-		);
-		if ( is_wp_error( $response ) ) {
-			SCC_Logger::error( 'gsc', 'Broker token transport error: ' . $response->get_error_message() );
-			return $response;
-		}
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$body = json_decode( wp_remote_retrieve_body( $response ), true );
-		if ( 200 !== $code || empty( $body['access_token'] ) ) {
-			$msg = isset( $body['error'] ) ? sanitize_text_field( (string) $body['error'] ) : sprintf( 'HTTP %d', $code );
-			return new WP_Error( 'scc_gsc_broker_token', $msg, array( 'status' => 502 ) );
-		}
-		$ttl = isset( $body['expires_in'] ) ? max( 60, (int) $body['expires_in'] - 60 ) : 3000;
-		set_transient( self::TOKEN_CACHE, $body['access_token'], $ttl );
-		return $body['access_token'];
-	}
-
-	/**
-	 * Disconnect Search Console. Broker connections are revoked best-effort.
+	 * Disconnect Search Console and revoke the Google refresh token best-effort.
 	 *
 	 * @return array {ok:bool,message:string}
 	 */
 	public static function disconnect() {
 		$c = self::creds();
-		if ( ! empty( $c['gsc_broker_connection'] ) ) {
-			$url = self::broker_base() . '/api/gsc/revoke';
-			if ( '' !== self::broker_base() ) {
-				wp_remote_post(
-					$url,
-					array(
-						'timeout'   => 15,
-						'sslverify' => true,
-						'headers'   => array( 'content-type' => 'application/json' ),
-						'body'      => wp_json_encode( array( 'connection_token' => (string) $c['gsc_broker_connection'] ) ),
-					)
-				);
-			}
-			unset( $c['gsc_broker_connection'] );
-		} else {
-			unset( $c['gsc_refresh_token'] );
+		$refresh = isset( $c['gsc_refresh_token'] ) ? (string) $c['gsc_refresh_token'] : '';
+
+		// Best-effort revoke at Google. Disconnect still succeeds locally when
+		// revocation cannot be reached; the refresh token is removed either way.
+		if ( '' !== $refresh ) {
+			wp_remote_post(
+				self::REVOKE_URL,
+				array(
+					'timeout' => 15,
+					'body'    => array( 'token' => $refresh ),
+				)
+			);
 		}
+		unset( $c['gsc_refresh_token'], $c['gsc_broker_connection'] );
 		update_option( 'scc_credentials', $c, false );
 		delete_transient( self::TOKEN_CACHE );
 		return array( 'ok' => true, 'message' => __( 'Google Search Console disconnected.', 'seo-command-center' ) );

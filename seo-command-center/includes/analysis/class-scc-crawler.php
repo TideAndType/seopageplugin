@@ -107,10 +107,18 @@ class SCC_Crawler {
 
 		// Record crawl diagnostics: the crawl URL (requested), the final URL (after
 		// redirects) and the declared canonical are three DIFFERENT things.
-		$data['crawl_url']  = $url;
-		$data['final_url']  = $final_url;
-		$data['redirected'] = ( SCC_URL::normalize_for_crawl( $url ) !== SCC_URL::normalize_for_crawl( $final_url ) );
-		$data['status']     = (int) $code;
+		$data['crawl_url']   = $url;
+		$data['final_url']   = $final_url;
+		$data['redirected']  = ( SCC_URL::normalize_for_crawl( $url ) !== SCC_URL::normalize_for_crawl( $final_url ) );
+		$data['status']      = (int) $code;
+		$data['content_type']= $ctype;
+		$data['x_robots_tag']= strtolower( trim( (string) wp_remote_retrieve_header( $response, 'x-robots-tag' ) ) );
+		if ( false !== strpos( $data['x_robots_tag'], 'noindex' ) ) {
+			$data['noindex'] = true;
+		}
+		if ( false !== strpos( $data['x_robots_tag'], 'nofollow' ) ) {
+			$data['nofollow'] = true;
+		}
 		return $data;
 	}
 
@@ -156,21 +164,37 @@ class SCC_Crawler {
 	 */
 	public function parse( $html, $url = '' ) {
 		$data = array(
-			'url'              => $url,
-			'title'           => '',
-			'meta_description' => '',
-			'canonical'       => '',
-			'canonical_resolved' => '', // Absolute canonical (canonical may be relative or point elsewhere).
-			'h1'              => array(),
-			'h2'              => array(),
-			'h3'              => array(),
-			'text_excerpt'    => '',
-			'schema_types'    => array(),
-			'images'          => 0,
-			'images_missing_alt' => 0,
-			'internal_links'  => 0,
-			'external_links'  => 0,
-			'internal_link_urls' => array(),
+			'url'                       => $url,
+			'title'                     => '',
+			'title_count'               => 0,
+			'meta_description'          => '',
+			'meta_description_count'    => 0,
+			'canonical'                 => '',
+			'canonical_count'           => 0,
+			'canonical_resolved'        => '', // Absolute canonical (canonical may be relative or point elsewhere).
+			'robots_meta'               => '',
+			'noindex'                   => false,
+			'nofollow'                  => false,
+			'hreflang'                  => array(),
+			'html_lang'                 => '',
+			'viewport'                  => '',
+			'h1'                        => array(),
+			'h2'                        => array(),
+			'h3'                        => array(),
+			'text_excerpt'              => '',
+			'word_count'                => 0,
+			'schema_types'              => array(),
+			'schema_blocks'             => 0,
+			'schema_invalid'            => 0,
+			'images'                    => 0,
+			'images_missing_alt'        => 0,
+			'images_empty_alt'          => 0,
+			'images_missing_dimensions' => 0,
+			'images_not_lazy'           => 0,
+			'mixed_content_count'       => 0,
+			'internal_links'            => 0,
+			'external_links'            => 0,
+			'internal_link_urls'        => array(),
 		);
 
 		if ( '' === trim( (string) $html ) ) {
@@ -187,17 +211,36 @@ class SCC_Crawler {
 
 		// Title.
 		$title_nodes = $xpath->query( '//title' );
+		$data['title_count'] = $title_nodes ? (int) $title_nodes->length : 0;
 		if ( $title_nodes && $title_nodes->length ) {
 			$data['title'] = trim( $title_nodes->item( 0 )->textContent );
 		}
 
-		// Meta description + canonical.
-		foreach ( $xpath->query( '//meta[@name="description"]' ) as $node ) {
-			$data['meta_description'] = trim( $node->getAttribute( 'content' ) );
-			break;
+		// Meta description, robots directives, canonical, language and viewport.
+		$desc_nodes = $xpath->query( '//meta[translate(@name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")="description"]' );
+		$data['meta_description_count'] = $desc_nodes ? (int) $desc_nodes->length : 0;
+		if ( $desc_nodes && $desc_nodes->length ) {
+			$data['meta_description'] = trim( $desc_nodes->item( 0 )->getAttribute( 'content' ) );
 		}
-		foreach ( $xpath->query( '//link[@rel="canonical"]' ) as $node ) {
-			$data['canonical'] = trim( $node->getAttribute( 'href' ) );
+
+		$robot_directives = array();
+		foreach ( $xpath->query( '//meta[@name]' ) as $node ) {
+			$name = strtolower( trim( $node->getAttribute( 'name' ) ) );
+			if ( in_array( $name, array( 'robots', 'googlebot' ), true ) ) {
+				$value = strtolower( trim( $node->getAttribute( 'content' ) ) );
+				if ( '' !== $value ) {
+					$robot_directives[] = $value;
+				}
+			}
+		}
+		$data['robots_meta'] = implode( ', ', array_unique( $robot_directives ) );
+		$data['noindex'] = false !== strpos( $data['robots_meta'], 'noindex' );
+		$data['nofollow'] = false !== strpos( $data['robots_meta'], 'nofollow' );
+
+		$canonical_nodes = $xpath->query( '//link[contains(concat(" ", normalize-space(@rel), " "), " canonical ")]' );
+		$data['canonical_count'] = $canonical_nodes ? (int) $canonical_nodes->length : 0;
+		if ( $canonical_nodes && $canonical_nodes->length ) {
+			$data['canonical'] = trim( $canonical_nodes->item( 0 )->getAttribute( 'href' ) );
 			// Resolve to an absolute URL: a canonical can be relative or point at a
 			// different page entirely, so keep it distinct from the crawl/final URL.
 			if ( '' !== $data['canonical'] && '' !== (string) $url && class_exists( 'SCC_URL' ) ) {
@@ -205,7 +248,27 @@ class SCC_Crawler {
 			} else {
 				$data['canonical_resolved'] = $data['canonical'];
 			}
-			break;
+		}
+
+		$html_nodes = $xpath->query( '//html' );
+		if ( $html_nodes && $html_nodes->length ) {
+			$data['html_lang'] = strtolower( trim( $html_nodes->item( 0 )->getAttribute( 'lang' ) ) );
+		}
+		$viewport_nodes = $xpath->query( '//meta[translate(@name,"ABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwxyz")="viewport"]' );
+		if ( $viewport_nodes && $viewport_nodes->length ) {
+			$data['viewport'] = trim( $viewport_nodes->item( 0 )->getAttribute( 'content' ) );
+		}
+
+		foreach ( $xpath->query( '//link[contains(concat(" ", normalize-space(@rel), " "), " alternate ")][@hreflang][@href]' ) as $node ) {
+			$href = trim( $node->getAttribute( 'href' ) );
+			$lang = strtolower( trim( $node->getAttribute( 'hreflang' ) ) );
+			if ( '' === $href || '' === $lang ) {
+				continue;
+			}
+			$data['hreflang'][] = array(
+				'lang' => $lang,
+				'url'  => class_exists( 'SCC_URL' ) ? SCC_URL::resolve( $url, $href ) : $href,
+			);
 		}
 
 		// Headings.
@@ -225,8 +288,10 @@ class SCC_Crawler {
 		// which extract_schema_types safely ignores).
 		$seen_blocks = array();
 		foreach ( $xpath->query( '//script[@type="application/ld+json"]' ) as $node ) {
+			$data['schema_blocks']++;
 			$raw = trim( $node->textContent );
 			if ( '' === $raw ) {
+				$data['schema_invalid']++;
 				continue;
 			}
 			$hash = md5( $raw );
@@ -236,11 +301,24 @@ class SCC_Crawler {
 			$seen_blocks[ $hash ] = true;
 			$json = json_decode( $raw, true );
 			if ( null === $json && JSON_ERROR_NONE !== json_last_error() ) {
+				$data['schema_invalid']++;
 				continue; // Malformed JSON-LD: ignore this block, keep crawling.
 			}
 			$data['schema_types'] = array_merge( $data['schema_types'], $this->extract_schema_types( $json ) );
 		}
 		$data['schema_types'] = array_values( array_unique( $data['schema_types'] ) );
+
+		// Detect mixed-content references before stripping scripts/styles for the
+		// visible-text excerpt. Otherwise insecure script/link resources disappear
+		// from the DOM before this technical check sees them.
+		if ( 'https' === strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) ) ) {
+			foreach ( $xpath->query( '//*[@src or @href]' ) as $node ) {
+				$ref = $node->hasAttribute( 'src' ) ? trim( $node->getAttribute( 'src' ) ) : trim( $node->getAttribute( 'href' ) );
+				if ( 0 === stripos( $ref, 'http://' ) ) {
+					$data['mixed_content_count']++;
+				}
+			}
+		}
 
 		// Visible body text excerpt (drop script/style/nav/header/footer noise), so
 		// callers can compare actual page CONTENT, not just headings.
@@ -253,17 +331,29 @@ class SCC_Crawler {
 		if ( $body_nodes && $body_nodes->length ) {
 			$text = preg_replace( '/\s+/', ' ', (string) $body_nodes->item( 0 )->textContent );
 			$data['text_excerpt'] = trim( mb_substr( $text, 0, 4000 ) );
+			$data['word_count'] = str_word_count( wp_strip_all_tags( $text ) );
 		}
 
 		// Images.
 		$imgs = $xpath->query( '//img' );
 		$data['images'] = $imgs ? $imgs->length : 0;
 		foreach ( $imgs as $img ) {
-			$alt = trim( $img->getAttribute( 'alt' ) );
-			if ( '' === $alt ) {
+			if ( ! $img->hasAttribute( 'alt' ) ) {
 				$data['images_missing_alt']++;
+			} elseif ( '' === trim( $img->getAttribute( 'alt' ) ) ) {
+				// Empty alt can be correct for decorative images, so track it
+				// separately and do not automatically treat it as an SEO error.
+				$data['images_empty_alt']++;
+			}
+			if ( '' === trim( $img->getAttribute( 'width' ) ) || '' === trim( $img->getAttribute( 'height' ) ) ) {
+				$data['images_missing_dimensions']++;
+			}
+			$loading = strtolower( trim( $img->getAttribute( 'loading' ) ) );
+			if ( 'lazy' !== $loading ) {
+				$data['images_not_lazy']++;
 			}
 		}
+
 
 		// Links (internal vs external relative to host).
 		$host = wp_parse_url( $url, PHP_URL_HOST );
