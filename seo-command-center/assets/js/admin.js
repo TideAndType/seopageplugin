@@ -63,6 +63,34 @@
 		} );
 	}
 
+	// ---- Technical SEO Brain ---------------------------------------------
+	function bindTechnicalSeo() {
+		var btn = document.getElementById( 'scc-run-technical-audit' );
+		if ( ! btn ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-technical-status' );
+		var limitEl = document.getElementById( 'scc-technical-limit' );
+
+		btn.addEventListener( 'click', function () {
+			var limit = limitEl ? parseInt( limitEl.value, 10 ) : 150;
+			if ( ! limit || limit < 1 ) { limit = 150; }
+			btn.disabled = true;
+			if ( limitEl ) { limitEl.disabled = true; }
+			setStatus( status, 'Crawling live pages and checking technical SEO… this can take a while on a larger site.' );
+			request( '/technical-seo/audit', { method: 'POST', data: { limit: limit } } )
+				.then( function () {
+					setStatus( status, 'Technical audit complete. Reloading…', 'is-ok' );
+					window.location.reload();
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					if ( limitEl ) { limitEl.disabled = false; }
+					setStatus( status, ( err && err.message ) || 'Technical audit failed.', 'is-error' );
+				} );
+		} );
+	}
+
 	// ---- Settings save --------------------------------------------------
 	function bindSettings() {
 		var form = document.getElementById( 'scc-settings-form' );
@@ -3047,6 +3075,7 @@
 
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
+		bindTechnicalSeo();
 		bindSettings();
 		bindRouteModels();
 		bindLmStudioDetect();
