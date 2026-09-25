@@ -163,4 +163,48 @@ class SCC_DataForSEO {
 		}
 		return array_values( array_unique( $out ) );
 	}
+
+	/**
+	 * Organic Google SERP search for citation discovery.
+	 *
+	 * @param string $query    Search query.
+	 * @param string $location DataForSEO location name.
+	 * @param string $language Language code.
+	 * @param int    $limit    Maximum organic results.
+	 * @return array|WP_Error List of {url,title,snippet}.
+	 */
+	public static function serp_search( $query, $location = 'United States', $language = 'en', $limit = 20 ) {
+		$limit = max( 1, min( 100, (int) $limit ) );
+		$result = self::post(
+			'/serp/google/organic/live/advanced',
+			array(
+				'keyword'       => SCC_Security::sanitize_text( $query ),
+				'location_name' => SCC_Security::sanitize_text( $location ),
+				'language_code' => sanitize_key( $language ),
+				'depth'         => $limit,
+			)
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$out = array();
+		foreach ( $result as $block ) {
+			foreach ( (array) ( $block['items'] ?? array() ) as $item ) {
+				if ( 'organic' !== (string) ( $item['type'] ?? '' ) || empty( $item['url'] ) ) {
+					continue;
+				}
+				$out[] = array(
+					'url'     => esc_url_raw( $item['url'] ),
+					'title'   => SCC_Security::sanitize_text( $item['title'] ?? '' ),
+					'snippet' => SCC_Security::sanitize_text( $item['description'] ?? '' ),
+				);
+				if ( count( $out ) >= $limit ) {
+					break 2;
+				}
+			}
+		}
+		return $out;
+	}
+
 }
