@@ -194,6 +194,111 @@ $tree2 = $arch->build( $map );
 assert_true( $tree2['pillars'][0]['exists'], 'existing pillar detected' );
 SCC_Analyzer::$latest = null;
 
+echo "\n== Intent-aware architecture consolidation ==\n";
+SCC_Analyzer::$latest = array(
+	'items' => array(
+		array(
+			'title' => '24/7 Monitoring & Alerting',
+			'url'   => 'https://example.com/managed-it-services/24-7-monitoring-alerting/',
+		),
+		array(
+			'title' => 'Managed IT Services',
+			'url'   => 'https://example.com/managed-it-services/',
+		),
+	),
+);
+
+$dup_map = array(
+	'clusters' => array(
+		array(
+			'service' => '24/7 Monitoring & Alerting',
+			'location' => '',
+			'primary_keyword' => '24/7 monitoring and alerting',
+			'intent' => 'commercial',
+			'recommended_url' => '/24-7-monitoring-alerting/',
+			'related' => array(),
+			'page_type' => 'service',
+			'status' => 'new',
+			'rationale' => '',
+			'subtopics' => array(
+				array(
+					'title' => '24/7 Monitoring & Alerting',
+					'primary_keyword' => '24/7 monitoring alerting',
+					'intent' => 'commercial',
+					'recommended_url' => '/managed-it-services/24-7-monitoring-alerting/',
+					'content_nodes' => array(),
+					'status' => 'existing',
+				),
+			),
+		),
+	),
+	'entities' => array(),
+	'notes' => '',
+);
+$dup_tree = $arch->build( $dup_map );
+assert_eq( 1, count( $dup_tree['pillars'] ), 'duplicate commercial topic resolves to one architecture node' );
+assert_true( $dup_tree['pillars'][0]['exists'], 'different-slug duplicate is recognized as existing coverage' );
+assert_eq( '/managed-it-services/24-7-monitoring-alerting/', $dup_tree['pillars'][0]['url'], 'architecture reuses the real existing URL instead of inventing a root URL' );
+assert_true( in_array( $dup_tree['pillars'][0]['status'], array( 'existing', 'covered' ), true ), 'duplicate is not labeled a new gap' );
+assert_eq( 0, count( $dup_tree['pillars'][0]['articles'] ), 'same commercial topic is not repeated as a supporting article' );
+
+$section_map = array(
+	'clusters' => array(
+		array(
+			'service' => 'Managed IT Services',
+			'location' => '',
+			'primary_keyword' => 'managed it services',
+			'intent' => 'commercial',
+			'recommended_url' => '/managed-it-services/',
+			'related' => array(),
+			'page_type' => 'service',
+			'status' => 'existing',
+			'rationale' => '',
+			'subtopics' => array(
+				array(
+					'title' => 'Proactive Patch Management',
+					'primary_keyword' => 'proactive patch management',
+					'intent' => 'commercial',
+					'recommended_url' => '/managed-it-services/proactive-patch-management/',
+					'content_nodes' => array( 'How patching works', 'What gets monitored' ),
+					'status' => 'new',
+				),
+				array(
+					'title' => 'How Managed IT Pricing Works',
+					'primary_keyword' => 'managed it services pricing',
+					'intent' => 'informational',
+					'recommended_url' => '/blog/managed-it-pricing/',
+					'content_nodes' => array( 'Pricing factors' ),
+					'status' => 'new',
+				),
+			),
+		),
+	),
+	'entities' => array(),
+	'notes' => '',
+);
+$section_tree = $arch->build( $section_map );
+assert_eq( 1, count( $section_tree['pillars'][0]['sections'] ), 'new commercial subtopic stays on the service page as a section' );
+assert_eq( 'section', $section_tree['pillars'][0]['sections'][0]['status'], 'commercial subtopic is explicitly marked as a section' );
+assert_eq( '/managed-it-services/', $section_tree['pillars'][0]['sections'][0]['url'], 'service section targets the parent service URL' );
+assert_eq( false, $section_tree['pillars'][0]['sections'][0]['page_candidate'], 'service section cannot be sent to Content Plan as a new page' );
+assert_eq( 1, count( $section_tree['pillars'][0]['articles'] ), 'informational subtopic remains a supporting article' );
+
+$match = SCC_Keyword_Strategy::match_existing_topic(
+	array(
+		'title' => '24/7 Monitoring & Alerting',
+		'primary_keyword' => '24/7 monitoring alerting',
+		'recommended_url' => '/24-7-monitoring-alerting/',
+	),
+	array(
+		array( 'title' => '24/7 Monitoring & Alerting', 'path' => '/managed-it-services/24-7-monitoring-alerting/' ),
+	)
+);
+assert_true( is_array( $match ), 'semantic page matcher catches same topic on a different slug' );
+assert_eq( '/managed-it-services/24-7-monitoring-alerting/', $match['path'], 'semantic matcher returns the existing page path' );
+
+SCC_Analyzer::$latest = null;
+
 echo "\n== Content plan sanitization ==\n";
 $clean = SCC_Content_Plan::sanitize( array(
 	'title'      => '  Test Page ',
