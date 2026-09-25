@@ -1808,6 +1808,12 @@ assert_true( is_array( $scc_content_block ) && ! empty( $scc_content_block['vars
 assert_eq( 'split-list', $scc_content_block['vars']['CONTENT_SECTIONS'][0]['layout'], 'section-level composition survives mapping into Elementor renderer input' );
 assert_eq( array(), SCC_Native_Elementor_Blocks::render_block( $scc_variant_blocks[0] ), 'native renderer safely declines when Elementor containers are unavailable' );
 
+echo "\n== The SEO Framework active detection ==\n";
+if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
+	define( 'THE_SEO_FRAMEWORK_VERSION', '5.1.4-test' );
+}
+assert_eq( SCC_SEO_Meta::PLUGIN_TSF, SCC_SEO_Meta::detect(), 'active The SEO Framework constant is detected' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
