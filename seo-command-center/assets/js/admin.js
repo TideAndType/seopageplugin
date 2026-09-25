@@ -360,27 +360,6 @@
 			} );
 		}
 
-		// Advanced self-hosted OAuth connect.
-		var gscConnectManual = document.getElementById( 'scc-gsc-connect-manual' );
-		if ( gscConnectManual ) {
-			gscConnectManual.addEventListener( 'click', function () {
-				gscConnectManual.disabled = true;
-				request( '/gsc/auth-url?mode=manual', { method: 'GET' } )
-					.then( function ( res ) {
-						var url = res.data && res.data.url;
-						if ( url ) {
-							window.location.href = url;
-							return;
-						}
-						gscConnectManual.disabled = false;
-					} )
-					.catch( function ( err ) {
-						gscConnectManual.disabled = false;
-						window.alert( ( err && err.message ) || 'Save your Client ID and secret first.' );
-					} );
-			} );
-		}
-
 		// GSC disconnect.
 		var gscDisconnect = document.getElementById( 'scc-gsc-disconnect' );
 		if ( gscDisconnect ) {
