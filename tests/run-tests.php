@@ -343,6 +343,13 @@ $GLOBALS['scc_test_options']['scc_credentials'] = array(
 );
 assert_true( SCC_GSC::is_connected(), 'GSC connected with opaque broker token' );
 assert_eq( 'broker', SCC_GSC::connection_mode(), 'opaque broker token takes broker mode' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array(
+	'gsc_client_id'     => 'id',
+	'gsc_client_secret' => 'secret',
+	'gsc_refresh_token' => 'refresh',
+	'dataforseo_login'  => 'user',
+	'dataforseo_key'    => 'pass',
+);
 
 echo "\n== Competitor topic extraction + content gaps ==\n";
 $comp = new SCC_Competitor_Analysis();
