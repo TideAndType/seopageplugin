@@ -167,26 +167,41 @@ foreach ( $clusters as $c ) :
 				<div class="scc-subtopics">
 					<div class="scc-label"><?php esc_html_e( 'New subtopics', 'seo-command-center' ); ?></div>
 					<?php foreach ( $new_subs as $s ) : ?>
+						<?php
+						$sintent    = isset( $s['intent'] ) ? strtolower( (string) $s['intent'] ) : 'informational';
+						$is_section = in_array( $sintent, array( 'commercial', 'transactional', 'navigational' ), true );
+						?>
 						<div class="scc-subtopic">
 							<span class="scc-subtopic__title"><?php echo esc_html( $s['title'] ); ?></span>
-							<span class="scc-badge"><?php esc_html_e( 'Gap · new', 'seo-command-center' ); ?></span>
-							<span class="scc-flag"><?php echo esc_html( $s['intent'] ); ?></span>
-							<?php if ( ! empty( $s['recommended_url'] ) ) : ?>
+							<?php if ( $is_section ) : ?>
+								<span class="scc-badge"><?php esc_html_e( 'Service-page section', 'seo-command-center' ); ?></span>
+							<?php else : ?>
+								<span class="scc-badge"><?php esc_html_e( 'Gap · new page', 'seo-command-center' ); ?></span>
+							<?php endif; ?>
+							<span class="scc-flag"><?php echo esc_html( $sintent ); ?></span>
+							<?php if ( $is_section ) : ?>
+								<?php if ( ! empty( $c['recommended_url'] ) ) : ?>
+									<code><?php echo esc_html( $c['recommended_url'] ); ?></code>
+								<?php endif; ?>
+								<span class="scc-note"><?php esc_html_e( 'Cover this on the parent service page instead of creating another URL.', 'seo-command-center' ); ?></span>
+							<?php elseif ( ! empty( $s['recommended_url'] ) ) : ?>
 								<code><?php echo esc_html( $s['recommended_url'] ); ?></code>
 							<?php endif; ?>
 							<?php if ( ! empty( $s['primary_keyword'] ) ) : ?>
 								<span class="scc-subtopic__kw"><?php echo esc_html( $s['primary_keyword'] ); ?></span>
 							<?php endif; ?>
-							<?php
-							$brief_button( array(
-								'title'           => $s['title'],
-								'url'             => isset( $s['recommended_url'] ) ? $s['recommended_url'] : '',
-								'primary_keyword' => isset( $s['primary_keyword'] ) ? $s['primary_keyword'] : $s['title'],
-								'intent'          => isset( $s['intent'] ) ? $s['intent'] : 'informational',
-								'page_type'       => 'article',
-								'secondary'       => isset( $s['content_nodes'] ) ? $s['content_nodes'] : array(),
-							) );
-							?>
+							<?php if ( ! $is_section ) : ?>
+								<?php
+								$brief_button( array(
+									'title'           => $s['title'],
+									'url'             => isset( $s['recommended_url'] ) ? $s['recommended_url'] : '',
+									'primary_keyword' => isset( $s['primary_keyword'] ) ? $s['primary_keyword'] : $s['title'],
+									'intent'          => $sintent,
+									'page_type'       => 'article',
+									'secondary'       => isset( $s['content_nodes'] ) ? $s['content_nodes'] : array(),
+								) );
+								?>
+							<?php endif; ?>
 							<?php if ( ! empty( $s['content_nodes'] ) ) : ?>
 								<ul class="scc-nodes">
 									<?php foreach ( (array) $s['content_nodes'] as $node ) : ?>
