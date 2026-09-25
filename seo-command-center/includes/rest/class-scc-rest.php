@@ -137,6 +137,32 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/technical-seo/report',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'technical_seo_report' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/technical-seo/audit',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'technical_seo_audit' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'limit' => array(
+						'sanitize_callback' => 'absint',
+						'default'           => 150,
+					),
+				),
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/usage',
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -1144,6 +1170,36 @@ class SCC_REST {
 			return $this->ok( array( 'analysis' => null ) );
 		}
 		return $this->ok( array( 'analysis' => $latest ) );
+	}
+
+	/**
+	 * GET /technical-seo/report.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function technical_seo_report() {
+		return $this->ok( array( 'report' => SCC_Technical_SEO::report() ) );
+	}
+
+	/**
+	 * POST /technical-seo/audit.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function technical_seo_audit( WP_REST_Request $request ) {
+		$limit = SCC_Security::sanitize_int( $request->get_param( 'limit' ), 1, SCC_Technical_SEO::MAX_LIMIT );
+		if ( $limit < 1 ) {
+			$limit = SCC_Technical_SEO::DEFAULT_LIMIT;
+		}
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$auditor = new SCC_Technical_SEO();
+		return $this->ok( array( 'report' => $auditor->run( array( 'limit' => $limit ) ) ) );
 	}
 
 	/**
