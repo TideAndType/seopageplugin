@@ -414,8 +414,8 @@ class SCC_Keyword_Strategy {
 			. 'Do not invent search volume or difficulty numbers; '
 			. 'priority is your strategic judgement, not measured data. '
 			. ( '' !== $language ? ( 'Write ALL topics, keywords, titles and questions in ' . $language . '. ' ) : '' )
-			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, url} is provided. '
-			. 'For EVERY existing page, output one pillar (or subtopic) that REUSES its exact url path verbatim '
+			. 'MIRROR THE REAL SITE. An "existing_site_pages" list of {title, path} is provided. '
+			. 'For EVERY existing page, output one pillar (or subtopic) that REUSES its exact path verbatim '
 			. 'and sets "status":"existing" — do not invent a new slug for a page that already exists. Then ADD '
 			. 'pillars/subtopics with "status":"new" for genuine gaps. Infer the business\'s real services, '
 			. 'products and locations from the existing page titles. Never propose a near-duplicate of a page '
