@@ -308,6 +308,18 @@ class SCC_Crawler {
 		}
 		$data['schema_types'] = array_values( array_unique( $data['schema_types'] ) );
 
+		// Detect mixed-content references before stripping scripts/styles for the
+		// visible-text excerpt. Otherwise insecure script/link resources disappear
+		// from the DOM before this technical check sees them.
+		if ( 'https' === strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) ) ) {
+			foreach ( $xpath->query( '//*[@src or @href]' ) as $node ) {
+				$ref = $node->hasAttribute( 'src' ) ? trim( $node->getAttribute( 'src' ) ) : trim( $node->getAttribute( 'href' ) );
+				if ( 0 === stripos( $ref, 'http://' ) ) {
+					$data['mixed_content_count']++;
+				}
+			}
+		}
+
 		// Visible body text excerpt (drop script/style/nav/header/footer noise), so
 		// callers can compare actual page CONTENT, not just headings.
 		foreach ( $xpath->query( '//script | //style | //noscript | //nav | //header | //footer | //form' ) as $strip ) {
@@ -342,16 +354,6 @@ class SCC_Crawler {
 			}
 		}
 
-		// HTTPS pages that request HTTP resources can trigger mixed-content
-		// blocking and create rendering/performance problems.
-		if ( 'https' === strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) ) ) {
-			foreach ( $xpath->query( '//*[@src or @href]' ) as $node ) {
-				$ref = $node->hasAttribute( 'src' ) ? trim( $node->getAttribute( 'src' ) ) : trim( $node->getAttribute( 'href' ) );
-				if ( 0 === stripos( $ref, 'http://' ) ) {
-					$data['mixed_content_count']++;
-				}
-			}
-		}
 
 		// Links (internal vs external relative to host).
 		$host = wp_parse_url( $url, PHP_URL_HOST );
