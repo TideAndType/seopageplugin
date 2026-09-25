@@ -718,6 +718,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/gsc/disconnect',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'gsc_disconnect' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/dataforseo/keywords',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -2487,12 +2497,22 @@ class SCC_REST {
 	 *
 	 * @return WP_REST_Response|WP_Error
 	 */
-	public function gsc_auth_url() {
-		$url = SCC_GSC::auth_url();
+	public function gsc_auth_url( WP_REST_Request $request ) {
+		$mode = 'manual' === sanitize_key( (string) $request->get_param( 'mode' ) ) ? 'manual' : 'broker';
+		$url  = SCC_GSC::auth_url( $mode );
 		if ( is_wp_error( $url ) ) {
 			return $url;
 		}
-		return $this->ok( array( 'url' => $url ) );
+		return $this->ok( array( 'url' => $url, 'mode' => $mode ) );
+	}
+
+	/**
+	 * POST /gsc/disconnect.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function gsc_disconnect() {
+		return $this->ok( SCC_GSC::disconnect() );
 	}
 
 	/**

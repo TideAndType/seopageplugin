@@ -1,0 +1,27 @@
+name: GSC Auth Broker
+
+on:
+  pull_request:
+    paths:
+      - 'gsc-auth-broker/**'
+      - '.github/workflows/gsc-auth-broker.yml'
+  push:
+    branches:
+      - ttgmbapp
+    paths:
+      - 'gsc-auth-broker/**'
+      - '.github/workflows/gsc-auth-broker.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Syntax check
+        run: find gsc-auth-broker -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Unit test
+        working-directory: gsc-auth-broker
+        run: npm test

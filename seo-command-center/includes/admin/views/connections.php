@@ -115,7 +115,7 @@ $field = function ( $field, $label, $hints ) {
 			?>
 		</table>
 
-		<h2><?php esc_html_e( 'Google Search Console (optional)', 'seo-command-center' ); ?></h2>
+		<h2><?php esc_html_e( 'Google Search Console', 'seo-command-center' ); ?></h2>
 
 		<?php if ( ! empty( $data['gsc_notice'] ) ) : ?>
 			<div class="notice notice-<?php echo ! empty( $data['gsc_notice']['ok'] ) ? 'success' : 'error'; ?> inline">
@@ -123,53 +123,65 @@ $field = function ( $field, $label, $hints ) {
 			</div>
 		<?php endif; ?>
 
-		<?php if ( ! empty( $data['gsc_connected'] ) ) : ?>
-			<p class="scc-ok"><strong><?php esc_html_e( '✓ Connected.', 'seo-command-center' ); ?></strong> <?php esc_html_e( 'Click Verify below to confirm data access and pick your property.', 'seo-command-center' ); ?></p>
-		<?php endif; ?>
+		<div class="scc-card" style="margin:12px 0;padding:18px;border:1px solid #dcdcde;background:#fff;">
+			<?php if ( ! empty( $data['gsc_connected'] ) ) : ?>
+				<p class="scc-ok" style="margin-top:0;"><strong><?php esc_html_e( '✓ Google Search Console connected', 'seo-command-center' ); ?></strong></p>
+				<p class="scc-note">
+					<?php
+					echo 'broker' === ( $data['gsc_mode'] ?? '' )
+						? esc_html__( 'Connected securely through TideOrbit with read-only Search Console access.', 'seo-command-center' )
+						: esc_html__( 'Connected with your self-hosted Google OAuth credentials.', 'seo-command-center' );
+					?>
+				</p>
+			<?php else : ?>
+				<p style="margin-top:0;"><strong><?php esc_html_e( 'Connect your Google account', 'seo-command-center' ); ?></strong></p>
+				<p class="scc-note"><?php esc_html_e( 'One click opens Google. Choose the account that owns this site and approve read-only Search Console access. No Client ID, Client Secret, or refresh token setup is required.', 'seo-command-center' ); ?></p>
+			<?php endif; ?>
 
-		<p class="scc-note">
-			<?php esc_html_e( 'Imports real query, impression, click, CTR and position data. Google Search Console has no simple API key — it requires a one-time OAuth setup. Follow these steps once:', 'seo-command-center' ); ?>
-		</p>
-		<ol class="scc-options">
-			<li><?php echo wp_kses_post( sprintf( /* translators: %s: URL */ __( 'In <a href="%s" target="_blank" rel="noopener">Google Cloud Console</a>, create (or pick) a project and enable the “Google Search Console API”.', 'seo-command-center' ), 'https://console.cloud.google.com/apis/library/searchconsole.googleapis.com' ) ); ?></li>
-			<li><?php esc_html_e( 'APIs & Services → Credentials → Create credentials → OAuth client ID → Application type: Web application.', 'seo-command-center' ); ?></li>
-			<li>
-				<?php esc_html_e( 'Under “Authorized redirect URIs”, add this exact URL:', 'seo-command-center' ); ?><br>
-				<code id="scc-gsc-redirect"><?php echo esc_html( isset( $data['gsc_redirect'] ) ? $data['gsc_redirect'] : '' ); ?></code>
-				<button type="button" class="button button-small" id="scc-gsc-copy-redirect"><?php esc_html_e( 'Copy', 'seo-command-center' ); ?></button>
-			</li>
-			<li><?php esc_html_e( 'Paste the Client ID and Client secret below, click “Save connections”, then click “Connect Google Search Console”.', 'seo-command-center' ); ?></li>
-		</ol>
+			<p>
+				<button type="button" class="button button-primary" id="scc-gsc-connect"><?php echo ! empty( $data['gsc_connected'] ) ? esc_html__( 'Reconnect Google', 'seo-command-center' ) : esc_html__( 'Connect Google Search Console', 'seo-command-center' ); ?></button>
+				<?php if ( ! empty( $data['gsc_connected'] ) ) : ?>
+					<button type="button" class="button" id="scc-gsc-disconnect"><?php esc_html_e( 'Disconnect', 'seo-command-center' ); ?></button>
+				<?php endif; ?>
+				<button type="button" class="button" id="scc-gsc-verify" <?php echo empty( $data['gsc_connected'] ) ? 'disabled' : ''; ?>><?php esc_html_e( 'Verify connection', 'seo-command-center' ); ?></button>
+				<span class="scc-inline-status" id="scc-gsc-verify-status"></span>
+			</p>
+		</div>
 
 		<table class="form-table" role="presentation">
-			<?php
-			$field( 'gsc_client_id', __( 'OAuth client ID', 'seo-command-center' ), $hints );
-			$field( 'gsc_client_secret', __( 'OAuth client secret', 'seo-command-center' ), $hints );
-			?>
 			<tr>
-				<th scope="row"><label for="scc-gsc-site"><?php esc_html_e( 'Property (site URL)', 'seo-command-center' ); ?></label></th>
+				<th scope="row"><label for="scc-gsc-site"><?php esc_html_e( 'Search Console property', 'seo-command-center' ); ?></label></th>
 				<td>
 					<input type="text" class="regular-text" id="scc-gsc-site" value="<?php echo esc_attr( isset( $data['gsc_site_url'] ) ? $data['gsc_site_url'] : '' ); ?>" placeholder="sc-domain:example.com  or  https://example.com/">
-					<p class="description"><?php esc_html_e( 'Set automatically after connecting when your account has one property. Otherwise click Verify and choose. Domain properties look like “sc-domain:example.com”; URL-prefix like “https://example.com/”.', 'seo-command-center' ); ?></p>
+					<p class="description"><?php esc_html_e( 'TideOrbit automatically picks the matching property when it can. Use Verify connection to see every property available to the connected Google account.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 		</table>
-
-		<p>
-			<button type="button" class="button button-primary" id="scc-gsc-connect" <?php echo empty( $data['gsc_has_client'] ) ? 'disabled' : ''; ?>><?php echo ! empty( $data['gsc_connected'] ) ? esc_html__( 'Reconnect Google Search Console', 'seo-command-center' ) : esc_html__( 'Connect Google Search Console', 'seo-command-center' ); ?></button>
-			<button type="button" class="button" id="scc-gsc-verify"><?php esc_html_e( 'Verify connection', 'seo-command-center' ); ?></button>
-			<span class="scc-inline-status" id="scc-gsc-verify-status"></span>
-		</p>
-		<?php if ( empty( $data['gsc_has_client'] ) ) : ?>
-			<p class="scc-note"><?php esc_html_e( 'Enter the Client ID + secret and Save first — then the Connect button activates.', 'seo-command-center' ); ?></p>
-		<?php endif; ?>
 		<div id="scc-gsc-verify-out"></div>
 
-		<details style="margin-top:10px;">
-			<summary class="scc-note"><?php esc_html_e( 'Advanced: paste a refresh token manually instead', 'seo-command-center' ); ?></summary>
-			<table class="form-table" role="presentation">
-				<?php $field( 'gsc_refresh_token', __( 'OAuth refresh token', 'seo-command-center' ), $hints ); ?>
-			</table>
+		<details style="margin-top:16px;">
+			<summary><strong><?php esc_html_e( 'Advanced: use your own Google OAuth app', 'seo-command-center' ); ?></strong></summary>
+			<div style="padding:12px 0 0;">
+				<p class="scc-note"><?php esc_html_e( 'Optional self-hosted mode. Use this only if you do not want TideOrbit’s one-click connection service. Google still requires OAuth for private Search Console data.', 'seo-command-center' ); ?></p>
+				<ol class="scc-options">
+					<li><?php echo wp_kses_post( sprintf( __( 'In <a href="%s" target="_blank" rel="noopener">Google Cloud Console</a>, enable the Google Search Console API and create a Web application OAuth client.', 'seo-command-center' ), 'https://console.cloud.google.com/apis/library/searchconsole.googleapis.com' ) ); ?></li>
+					<li>
+						<?php esc_html_e( 'Add this exact Authorized redirect URI:', 'seo-command-center' ); ?><br>
+						<code id="scc-gsc-redirect"><?php echo esc_html( isset( $data['gsc_redirect'] ) ? $data['gsc_redirect'] : '' ); ?></code>
+						<button type="button" class="button button-small" id="scc-gsc-copy-redirect"><?php esc_html_e( 'Copy', 'seo-command-center' ); ?></button>
+					</li>
+				</ol>
+				<table class="form-table" role="presentation">
+					<?php
+					$field( 'gsc_client_id', __( 'OAuth client ID', 'seo-command-center' ), $hints );
+					$field( 'gsc_client_secret', __( 'OAuth client secret', 'seo-command-center' ), $hints );
+					$field( 'gsc_refresh_token', __( 'OAuth refresh token (optional manual entry)', 'seo-command-center' ), $hints );
+					?>
+				</table>
+				<p>
+					<button type="button" class="button" id="scc-gsc-connect-manual" <?php echo empty( $data['gsc_has_client'] ) ? 'disabled' : ''; ?>><?php esc_html_e( 'Connect using my OAuth app', 'seo-command-center' ); ?></button>
+				</p>
+			</div>
 		</details>
 
 		<p class="submit">
