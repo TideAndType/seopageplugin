@@ -1456,6 +1456,16 @@ assert_eq( 1, count( $ans5['opportunities'] ), 'technical Copilot returns saved 
 assert_eq( 'technical_seo', $ans5['opportunities'][0]['source'], 'technical Copilot marks findings as technical evidence' );
 assert_eq( array(), $ans5['missing'], 'technical Copilot needs no extra data after an audit exists' );
 
+echo "\n== Citation scanner admin wiring ==\n";
+$citation_view_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/citation-scanner.php' );
+$citation_js_src   = file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+assert_true( false === strpos( $citation_view_src, 'seo-command-center/v1/citation-scan' ), 'citation view no longer hard-codes the obsolete REST namespace' );
+assert_true( false === strpos( $citation_view_src, '<script>' ), 'citation scanner no longer relies on an early inline script' );
+assert_true( false !== strpos( $citation_view_src, 'name="page" value="seo-command-center-opportunities"' ), 'citation form has a safe Opportunities fallback route' );
+assert_true( false !== strpos( $citation_view_src, 'name="tab" value="citations"' ), 'citation form fallback preserves the Citations tab' );
+assert_true( false !== strpos( $citation_js_src, 'function bindCitationScanner()' ), 'main admin JS binds the citation scanner' );
+assert_true( false !== strpos( $citation_js_src, "request( '/citation-scan'"), 'citation scanner uses the canonical REST helper namespace' );
+
 echo "\n== DB schema is strict-mode safe (no zero-date defaults) ==\n";
 $db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database/class-scc-db.php' );
 assert_true( false === strpos( $db_src, "0000-00-00" ), 'no 0000-00-00 date defaults (rejected by MySQL 8 / MariaDB strict mode)' );
