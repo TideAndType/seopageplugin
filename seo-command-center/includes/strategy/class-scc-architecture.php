@@ -249,7 +249,8 @@ class SCC_Architecture {
 		$node['page_candidate'] = false;
 		$node['parent_url']     = $target;
 		$node['url']            = $target;
-		$node['exists']         = ! empty( $parent['exists'] );
+		$node['parent_exists']  = ! empty( $parent['exists'] );
+		$node['exists']         = false;
 		$node['rationale']      = __( 'This is the same commercial service intent. Cover it as a section on the parent service page instead of creating another page.', 'seo-command-center' );
 		return $node;
 	}
