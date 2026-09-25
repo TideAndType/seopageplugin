@@ -1826,17 +1826,32 @@
 				return '<span class="scc-opp__factor">+' + ( parseInt( f.points, 10 ) || 0 ) + ' ' + esc( f.label ) + '</span>';
 			} ).join( '' );
 			var cap = function ( s ) { s = String( s || ''); return s.charAt( 0 ).toUpperCase() + s.slice( 1 ); };
+			var technical = op.source === 'technical_seo';
 			var meta =
 				'<div class="scc-opp__meta">' +
 					'<span>Impact: <strong>' + esc( cap( op.expected_impact ) ) + '</strong></span>' +
 					'<span>Effort: <strong>' + esc( op.effort || '' ) + '</strong></span>' +
 					'<span>Confidence: <strong>' + ( parseInt( op.confidence, 10 ) || 0 ) + '%</strong></span>' +
 				'</div>';
-			var details = ( op.recommended_action || factors )
+			var evidence = '';
+			if ( op.evidence || op.url ) {
+				evidence = '<div class="scc-opp__factors">';
+				if ( op.url ) { evidence += '<div><strong>URL:</strong> ' + esc( op.url ) + '</div>'; }
+				if ( op.evidence ) { evidence += '<div><strong>Evidence:</strong> ' + esc( op.evidence ) + '</div>'; }
+				evidence += '</div>';
+			}
+			var details = ( op.recommended_action || factors || evidence )
 				? '<details class="scc-opp__more"><summary>Details</summary>' +
 					'<div class="scc-opp__do">' + esc( op.recommended_action || '' ) + '</div>' +
+					evidence +
 					'<div class="scc-opp__factors">' + factors + '</div></details>'
 				: '';
+			var actions = technical
+				? '<div class="scc-opp__actions"><a class="button button-small" href="admin.php?page=seo-command-center-seo-audit">Open Site Audit</a></div>'
+				: '<div class="scc-opp__actions">' +
+					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
+					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
+				  '</div>';
 			wrap.innerHTML =
 				'<div class="scc-opp__score"><span class="scc-opp__num">' + ( parseInt( op.score, 10 ) || 0 ) + '</span><span class="scc-opp__den">/100</span></div>' +
 				'<div class="scc-opp__body">' +
@@ -1845,10 +1860,7 @@
 					'<p class="scc-opp__why">' + esc( op.reason ) + '</p>' +
 					meta + details +
 				'</div>' +
-				'<div class="scc-opp__actions">' +
-					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
-					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
-				'</div>';
+				actions;
 			return wrap;
 		}
 
