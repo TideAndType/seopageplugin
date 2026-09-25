@@ -136,6 +136,10 @@ echo "\n== SEO plugin label ==\n";
 assert_eq( 'Yoast SEO', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_YOAST ), 'yoast label' );
 assert_eq( 'Rank Math', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_RANKMATH ), 'rankmath label' );
 assert_eq( 'All in One SEO', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_AIOSEO ), 'aioseo label' );
+assert_eq( 'The SEO Framework', SCC_SEO_Meta::label( SCC_SEO_Meta::PLUGIN_TSF ), 'The SEO Framework label' );
+$tsf_keys = SCC_Metadata::keys_for_plugin( SCC_SEO_Meta::PLUGIN_TSF );
+assert_eq( '_genesis_title', $tsf_keys['title'], 'The SEO Framework title key' );
+assert_eq( '_genesis_description', $tsf_keys['description'], 'The SEO Framework description key' );
 
 echo "\n== Logger secret redaction ==\n";
 $ref = new ReflectionMethod( 'SCC_Logger', 'redact' );
