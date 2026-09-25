@@ -157,6 +157,7 @@ require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-intent-drift.php'
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-opportunity-engine.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-action-queue.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-optimizer.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-technical-seo.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-topic-coverage.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-tidescore.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-critic.php';
