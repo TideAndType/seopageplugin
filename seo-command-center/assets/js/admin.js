@@ -311,7 +311,7 @@
 				} );
 		} );
 
-		// GSC connect (OAuth) button.
+		// GSC one-click connect button.
 		var gscConnect = document.getElementById( 'scc-gsc-connect' );
 		if ( gscConnect ) {
 			gscConnect.addEventListener( 'click', function () {
@@ -321,25 +321,63 @@
 						var url = res.data && res.data.url;
 						if ( url ) {
 							window.location.href = url;
-						} else {
-							gscConnect.disabled = false;
+							return;
 						}
+						gscConnect.disabled = false;
 					} )
 					.catch( function ( err ) {
 						gscConnect.disabled = false;
+						window.alert( ( err && err.message ) || 'Could not start Google connection.' );
+					} );
+			} );
+		}
+
+		// Advanced self-hosted OAuth connect.
+		var gscConnectManual = document.getElementById( 'scc-gsc-connect-manual' );
+		if ( gscConnectManual ) {
+			gscConnectManual.addEventListener( 'click', function () {
+				gscConnectManual.disabled = true;
+				request( '/gsc/auth-url?mode=manual', { method: 'GET' } )
+					.then( function ( res ) {
+						var url = res.data && res.data.url;
+						if ( url ) {
+							window.location.href = url;
+							return;
+						}
+						gscConnectManual.disabled = false;
+					} )
+					.catch( function ( err ) {
+						gscConnectManual.disabled = false;
 						window.alert( ( err && err.message ) || 'Save your Client ID and secret first.' );
 					} );
 			} );
 		}
 
-		// Copy redirect URI.
+		// GSC disconnect.
+		var gscDisconnect = document.getElementById( 'scc-gsc-disconnect' );
+		if ( gscDisconnect ) {
+			gscDisconnect.addEventListener( 'click', function () {
+				if ( ! window.confirm( 'Disconnect Google Search Console from TideOrbit?' ) ) {
+					return;
+				}
+				gscDisconnect.disabled = true;
+				request( '/gsc/disconnect', { method: 'POST', data: {} } )
+					.then( function () { window.location.reload(); } )
+					.catch( function ( err ) {
+						gscDisconnect.disabled = false;
+						window.alert( ( err && err.message ) || 'Could not disconnect Search Console.' );
+					} );
+			} );
+		}
+
+		// Copy redirect URI for Advanced self-hosted mode.
 		var copyRedirect = document.getElementById( 'scc-gsc-copy-redirect' );
 		if ( copyRedirect ) {
 			copyRedirect.addEventListener( 'click', function () {
 				var codeEl = document.getElementById( 'scc-gsc-redirect' );
-				var text = codeEl ? codeEl.textContent : '';
-				if ( navigator.clipboard && text ) {
-					navigator.clipboard.writeText( text ).then( function () {
+				var copyText = codeEl ? codeEl.textContent : '';
+				if ( navigator.clipboard && copyText ) {
+					navigator.clipboard.writeText( copyText ).then( function () {
 						copyRedirect.textContent = 'Copied';
 						setTimeout( function () { copyRedirect.textContent = 'Copy'; }, 1500 );
 					} );
@@ -347,7 +385,7 @@
 			} );
 		}
 
-		// GSC verify button.
+		// GSC verify + property discovery.
 		var gscVerify = document.getElementById( 'scc-gsc-verify' );
 		if ( gscVerify ) {
 			var gscStatus = document.getElementById( 'scc-gsc-verify-status' );
@@ -360,26 +398,24 @@
 					.then( function ( res ) {
 						gscVerify.disabled = false;
 						var v = ( res.data && res.data.verify ) || {};
-						if ( ! v.has_all_fields ) {
-							setStatus( gscStatus, v.error || 'Missing OAuth fields.', 'is-error' );
+						if ( ! v.connected ) {
+							setStatus( gscStatus, v.error || 'Search Console is not connected.', 'is-error' );
 							return;
 						}
 						if ( ! v.token_ok ) {
-							setStatus( gscStatus, 'Token refresh failed: ' + ( v.error || 'unknown error' ), 'is-error' );
-							gscOut.appendChild( el( 'p', 'Google rejected the refresh token. Re-generate it for the webmasters.readonly scope and make sure the Client ID/secret belong to the same OAuth client.', 'scc-note' ) );
+							setStatus( gscStatus, 'Google connection failed: ' + ( v.error || 'unknown error' ), 'is-error' );
 							return;
 						}
-						setStatus( gscStatus, 'Connected — token works.', 'is-ok' );
+						setStatus( gscStatus, 'Connected — read-only Search Console access works.', 'is-ok' );
 						if ( ! v.properties || ! v.properties.length ) {
-							gscOut.appendChild( el( 'p', 'The token works but this Google account has no Search Console properties.', 'scc-note' ) );
+							gscOut.appendChild( el( 'p', 'The Google account is connected but it has no Search Console properties.', 'scc-note' ) );
 							return;
 						}
-						gscOut.appendChild( el( 'div', 'Verified properties this account can access:', 'scc-label' ) );
+						gscOut.appendChild( el( 'div', 'Properties this Google account can access:', 'scc-label' ) );
 						var ul = el( 'ul', null, 'scc-options' );
 						v.properties.forEach( function ( p ) {
 							var li = el( 'li' );
-							var code = el( 'code', p.siteUrl );
-							li.appendChild( code );
+							li.appendChild( el( 'code', p.siteUrl ) );
 							li.appendChild( document.createTextNode( ' (' + p.permissionLevel + ')' ) );
 							var useBtn = el( 'button', 'Use this', 'button button-small' );
 							useBtn.style.marginLeft = '8px';
@@ -392,9 +428,9 @@
 						} );
 						gscOut.appendChild( ul );
 						if ( ! v.property_matches ) {
-							gscOut.appendChild( el( 'p', '⚠ Your configured property (' + v.configured_property + ') is not in the list above. Pick one of these exact values (click “Use this”), then Save connections.', 'scc-note is-bad' ) );
+							gscOut.appendChild( el( 'p', 'Choose the property for this WordPress site above, then Save connections.', 'scc-note' ) );
 						} else {
-							gscOut.appendChild( el( 'p', '✓ Your configured property matches — Search Console data will load.', 'scc-note' ) );
+							gscOut.appendChild( el( 'p', '✓ The configured property matches and Search Console data is ready.', 'scc-note' ) );
 						}
 					} )
 					.catch( function ( err ) {
