@@ -447,6 +447,28 @@ class SCC_REST {
 			)
 		);
 
+		// Local citation scanner. Admin route is authenticated; the public route
+		// is intentionally read-like and rate-limited inside the callback so the
+		// shortcode can be used as a lead-generation tool without exposing admin data.
+		register_rest_route(
+			self::NS,
+			'/citation-scan',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'citation_scan' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/citation-scan/public',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'citation_scan_public' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+
 		// AI Elementor Layout Engine.
 		register_rest_route(
 			self::NS,
@@ -3208,6 +3230,47 @@ class SCC_REST {
 			'source'   => $selection['source'],
 			'html'     => is_wp_error( $rendered ) ? '' : $rendered['post_content'],
 		) );
+	}
+
+	/**
+	 * POST /citation-scan — authenticated local citation scan.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function citation_scan( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$params = is_array( $params ) ? $params : array();
+		$result = SCC_Citation_Scanner::scan( $params, ! empty( $params['force'] ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /citation-scan/public — public shortcode endpoint with a honeypot and
+	 * conservative transient rate limit. It does not save contact information.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function citation_scan_public( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$params = is_array( $params ) ? $params : array();
+		if ( ! empty( $params['company_url'] ) ) {
+			return $this->fail( 'citation_spam', __( 'Unable to run this scan.', 'seo-command-center' ), 400 );
+		}
+		if ( ! SCC_Citation_Scanner::public_rate_limit_ok() ) {
+			return $this->fail( 'citation_rate_limit', __( 'Scan limit reached. Please try again later.', 'seo-command-center' ), 429 );
+		}
+		$result = SCC_Citation_Scanner::scan( $params, false );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok( $result );
 	}
 
 	/**
