@@ -343,7 +343,7 @@ class SCC_Architecture {
 			}
 		}
 
-		if ( class_exists( 'SCC_Keyword_Strategy' ) ) {
+		if ( class_exists( 'SCC_Keyword_Strategy' ) && class_exists( 'WP_Query' ) ) {
 			foreach ( (array) SCC_Keyword_Strategy::existing_site_pages( 300 ) as $page ) {
 				$path = (string) ( $page['path'] ?? '' );
 				if ( '' === $path || isset( $seen[ $path ] ) ) {
