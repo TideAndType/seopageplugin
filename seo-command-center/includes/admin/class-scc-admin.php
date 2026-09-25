@@ -452,7 +452,7 @@ class SCC_Admin {
 		if ( self::SLUG . '-connections' !== $page ) {
 			return;
 		}
-		if ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) && ! isset( $_GET['ticket'] ) && ! isset( $_GET['scc_gsc_broker'] ) ) {
+		if ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) ) {
 			return;
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
@@ -485,7 +485,6 @@ class SCC_Admin {
 				'gsc_connected' => SCC_GSC::is_connected(),
 				'gsc_mode'      => SCC_GSC::connection_mode(),
 				'gsc_has_client'=> SCC_GSC::has_client(),
-				'gsc_broker'    => SCC_GSC::broker_base(),
 				'gsc_redirect'  => SCC_GSC::redirect_uri(),
 				'gsc_notice'    => is_array( $notice ) ? $notice : null,
 			)
