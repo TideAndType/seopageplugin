@@ -188,6 +188,7 @@ class SCC_Crawler {
 			'schema_invalid'            => 0,
 			'images'                    => 0,
 			'images_missing_alt'        => 0,
+			'images_empty_alt'          => 0,
 			'images_missing_dimensions' => 0,
 			'images_not_lazy'           => 0,
 			'mixed_content_count'       => 0,
@@ -325,9 +326,12 @@ class SCC_Crawler {
 		$imgs = $xpath->query( '//img' );
 		$data['images'] = $imgs ? $imgs->length : 0;
 		foreach ( $imgs as $img ) {
-			$alt = trim( $img->getAttribute( 'alt' ) );
-			if ( '' === $alt ) {
+			if ( ! $img->hasAttribute( 'alt' ) ) {
 				$data['images_missing_alt']++;
+			} elseif ( '' === trim( $img->getAttribute( 'alt' ) ) ) {
+				// Empty alt can be correct for decorative images, so track it
+				// separately and do not automatically treat it as an SEO error.
+				$data['images_empty_alt']++;
 			}
 			if ( '' === trim( $img->getAttribute( 'width' ) ) || '' === trim( $img->getAttribute( 'height' ) ) ) {
 				$data['images_missing_dimensions']++;
