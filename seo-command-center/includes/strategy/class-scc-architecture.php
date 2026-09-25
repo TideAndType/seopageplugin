@@ -283,13 +283,20 @@ class SCC_Architecture {
 	 * @return string
 	 */
 	protected function node_identity( array $node ) {
+		$title = class_exists( 'SCC_Keyword_Strategy' )
+			? SCC_Keyword_Strategy::normalize_topic_phrase( $node['title'] ?? '' )
+			: strtolower( trim( (string) ( $node['title'] ?? '' ) ) );
+
+		// Sections deliberately share the parent page URL, so their identity must
+		// be the section topic rather than the URL.
+		if ( 'section' === (string) ( $node['status'] ?? '' ) ) {
+			return '' !== $title ? 'section:' . $title : '';
+		}
+
 		$url = $this->normalize_path( $node['url'] ?? '' );
 		if ( '' !== $url ) {
 			return 'url:' . $url;
 		}
-		$title = class_exists( 'SCC_Keyword_Strategy' )
-			? SCC_Keyword_Strategy::normalize_topic_phrase( $node['title'] ?? '' )
-			: strtolower( trim( (string) ( $node['title'] ?? '' ) ) );
 		return '' !== $title ? 'topic:' . $title : '';
 	}
 
