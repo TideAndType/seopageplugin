@@ -82,6 +82,25 @@ assert_eq( 1, $parsed['internal_links'], 'internal link count' );
 assert_eq( 1, $parsed['external_links'], 'external link count' );
 assert_true( in_array( 'Article', $parsed['schema_types'], true ), 'schema type extracted' );
 
+$html_tech = '<html lang="en-US"><head><title>Tech</title><title>Duplicate</title>'
+	. '<meta name="description" content="One"><meta name="description" content="Two">'
+	. '<meta name="robots" content="noindex, nofollow"><meta name="viewport" content="width=device-width, initial-scale=1">'
+	. '<link rel="canonical" href="/tech/"><link rel="alternate" hreflang="en" href="/tech/">'
+	. '<script type="application/ld+json">{bad json}</script></head>'
+	. '<body><h1>A</h1><h1>B</h1><img src="a.jpg" alt="" width="10" height="10">'
+	. '<img src="b.jpg"><script src="http://cdn.example.com/app.js"></script></body></html>';
+$tech_parsed = $crawler->parse( $html_tech, 'https://example.com/tech/' );
+assert_eq( 2, $tech_parsed['title_count'], 'multiple title tags counted' );
+assert_eq( 2, $tech_parsed['meta_description_count'], 'multiple meta descriptions counted' );
+assert_true( $tech_parsed['noindex'] && $tech_parsed['nofollow'], 'robots noindex/nofollow parsed' );
+assert_eq( 'en-us', $tech_parsed['html_lang'], 'html language parsed' );
+assert_true( ! empty( $tech_parsed['viewport'] ), 'viewport parsed' );
+assert_eq( 1, count( $tech_parsed['hreflang'] ), 'hreflang parsed' );
+assert_eq( 1, $tech_parsed['schema_invalid'], 'malformed JSON-LD counted' );
+assert_eq( 1, $tech_parsed['images_missing_alt'], 'only missing alt attribute is an error' );
+assert_eq( 1, $tech_parsed['images_empty_alt'], 'intentional empty alt tracked separately' );
+assert_true( $tech_parsed['mixed_content_count'] >= 1, 'mixed-content references counted' );
+
 // Enriched competitor-analysis signals: h3 headings + a body-text excerpt.
 $html_rich = '<html><head><title>T</title>'
 	. '<script type="application/ld+json">{"@type":"Service"}</script></head>'
@@ -335,21 +354,8 @@ $GLOBALS['scc_test_options']['scc_credentials'] = array(
 	'dataforseo_key'    => 'pass',
 );
 assert_true( SCC_GSC::is_connected(), 'GSC connected with client+refresh token' );
-assert_eq( 'manual', SCC_GSC::connection_mode(), 'legacy OAuth credentials use manual GSC mode' );
+assert_eq( 'wordpress', SCC_GSC::connection_mode(), 'GSC authorization returns directly to WordPress' );
 assert_true( SCC_DataForSEO::is_connected(), 'DataForSEO connected with login+key' );
-
-$GLOBALS['scc_test_options']['scc_credentials'] = array(
-	'gsc_broker_connection' => 'sealed-test-connection',
-);
-assert_true( SCC_GSC::is_connected(), 'GSC connected with opaque broker token' );
-assert_eq( 'broker', SCC_GSC::connection_mode(), 'opaque broker token takes broker mode' );
-$GLOBALS['scc_test_options']['scc_credentials'] = array(
-	'gsc_client_id'     => 'id',
-	'gsc_client_secret' => 'secret',
-	'gsc_refresh_token' => 'refresh',
-	'dataforseo_login'  => 'user',
-	'dataforseo_key'    => 'pass',
-);
 
 echo "\n== Competitor topic extraction + content gaps ==\n";
 $comp = new SCC_Competitor_Analysis();
@@ -541,10 +547,10 @@ $GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'a',
 $fs2 = SCC_GSC::field_status();
 assert_true( $fs2['client_id'] && $fs2['client_secret'] && $fs2['refresh_token'], 'all fields present' );
 assert_true( SCC_GSC::is_connected(), 'connected with all three fields' );
-assert_eq( 'manual', SCC_GSC::connection_mode(), 'manual connection mode reported' );
-$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_broker_connection' => 'opaque' );
-assert_eq( 'broker', SCC_GSC::connection_mode(), 'broker connection mode reported' );
-assert_true( SCC_GSC::is_connected(), 'broker connection counts as connected without client credentials' );
+assert_eq( 'wordpress', SCC_GSC::connection_mode(), 'WordPress direct connection mode reported' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_broker_connection' => 'legacy-opaque-token' );
+assert_eq( 'none', SCC_GSC::connection_mode(), 'legacy broker token is ignored after broker removal' );
+assert_eq( false, SCC_GSC::is_connected(), 'legacy broker token cannot create a Search Console connection' );
 
 echo "\n== LM Studio error extraction ==\n";
 $lm2  = new SCC_LMStudio_Provider();
@@ -1254,6 +1260,82 @@ assert_eq( 1, count( array_keys( $dp['schema_types'], 'Article', true ) ), 'dupl
 $canon = '<html><head><link rel="canonical" href="/canonical-home"></head><body></body></html>';
 $cp = $crawler2->parse( $canon, 'https://example.com/some/deep/page' );
 assert_eq( 'https://example.com/canonical-home', $cp['canonical_resolved'], 'relative canonical resolved to absolute' );
+
+echo "\n== Technical SEO Brain evaluator ==\n";
+$tech_pages = array(
+	array(
+		'crawl_url' => 'https://example.com/',
+		'url' => 'https://example.com/',
+		'final_url' => 'https://example.com/',
+		'status' => 200,
+		'title' => 'Home',
+		'title_count' => 1,
+		'meta_description' => 'Home description',
+		'meta_description_count' => 1,
+		'canonical' => 'https://example.com/',
+		'canonical_resolved' => 'https://example.com/',
+		'canonical_count' => 1,
+		'noindex' => false,
+		'nofollow' => false,
+		'robots_meta' => '',
+		'h1' => array( 'Home' ),
+		'viewport' => 'width=device-width, initial-scale=1',
+		'schema_invalid' => 0,
+		'images_missing_alt' => 0,
+		'images_missing_dimensions' => 0,
+		'mixed_content_count' => 0,
+		'response_ms' => 250,
+		'hreflang' => array(),
+		'internal_link_urls' => array( 'https://example.com/service/', 'https://example.com/broken/' ),
+	),
+	array(
+		'crawl_url' => 'https://example.com/service/',
+		'url' => 'https://example.com/service/',
+		'final_url' => 'https://example.com/service/',
+		'status' => 200,
+		'title' => 'Home',
+		'title_count' => 1,
+		'meta_description' => '',
+		'meta_description_count' => 0,
+		'canonical' => 'https://example.com/other/',
+		'canonical_resolved' => 'https://example.com/other/',
+		'canonical_count' => 1,
+		'noindex' => true,
+		'nofollow' => false,
+		'robots_meta' => 'noindex',
+		'h1' => array(),
+		'viewport' => '',
+		'schema_invalid' => 1,
+		'images_missing_alt' => 2,
+		'images_missing_dimensions' => 1,
+		'mixed_content_count' => 1,
+		'response_ms' => 4500,
+		'hreflang' => array(),
+		'internal_link_urls' => array(),
+	),
+);
+$tech_site = array(
+	'home_url' => 'https://example.com/',
+	'https' => true,
+	'blog_public' => 1,
+	'robots_blocks_home' => false,
+	'robots_declares_sitemap' => true,
+	'sitemap_ok' => true,
+	'sitemap_urls' => array( 'https://example.com/', 'https://example.com/service/' ),
+	'link_checks' => array(
+		array( 'url' => 'https://example.com/broken/', 'status' => 404, 'location' => '' ),
+	),
+);
+$tech_report = SCC_Technical_SEO::evaluate( $tech_pages, $tech_site );
+assert_true( $tech_report['score'] < 100, 'technical problems reduce diagnostic health score' );
+$tech_ids = array_map( function ( $issue ) { return $issue['id']; }, $tech_report['issues'] );
+assert_true( in_array( 'published_noindex', $tech_ids, true ), 'published noindex detected' );
+assert_true( in_array( 'nonself_canonical', $tech_ids, true ), 'cross canonical detected' );
+assert_true( in_array( 'duplicate_titles', $tech_ids, true ), 'duplicate titles detected' );
+assert_true( in_array( 'broken_internal_link', $tech_ids, true ), 'broken internal target detected' );
+assert_true( in_array( 'missing_viewport', $tech_ids, true ), 'missing viewport detected' );
+assert_true( in_array( 'invalid_jsonld', $tech_ids, true ), 'invalid JSON-LD detected' );
+assert_true( strpos( $tech_report['disclaimer'], 'not a Google ranking score' ) !== false, 'technical score is explicitly diagnostic' );
 
 echo "\n== Generation mode (native vs template) ==\n";
 // Blog posts generate as normal native WordPress — no template required.
