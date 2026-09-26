@@ -32,6 +32,7 @@ $node_line = function ( $node, $draggable = true ) {
 		class="scc-arch-node<?php echo $exists ? ' is-existing' : ''; ?><?php echo 'section' === $status ? ' is-section' : ''; ?><?php echo $is_ignored ? ' is-ignored' : ''; ?>"
 		data-node-id="<?php echo esc_attr( $node_id ); ?>"
 		data-node-url="<?php echo esc_attr( $url ); ?>"
+		data-decision="<?php echo esc_attr( $action ); ?>"
 		<?php echo $draggable && empty( $node['is_pillar'] ) ? 'draggable="true"' : ''; ?>
 	>
 		<div class="scc-arch-node__main">
