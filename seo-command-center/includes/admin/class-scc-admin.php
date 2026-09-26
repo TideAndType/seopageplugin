@@ -650,11 +650,13 @@ class SCC_Admin {
 		$strategy = SCC_Keyword_Strategy::latest();
 		$tree     = null;
 		$brain    = null;
+		$growth   = null;
 		if ( $strategy && ! empty( $strategy['map_data'] ) ) {
 			$builder = new SCC_Architecture();
 			$base    = $builder->build( $strategy['map_data'] );
 			$brain   = ( new SCC_Architecture_Brain() )->analyze( $base );
-			$tree    = $brain['tree'];
+			$growth  = class_exists( 'SCC_SEO_Growth_Architect' ) ? SCC_SEO_Growth_Architect::build( $brain ) : null;
+			$tree    = is_array( $growth ) && ! empty( $growth['recommended_tree'] ) ? $growth['recommended_tree'] : $brain['tree'];
 		}
 		$this->view(
 			'architecture',
@@ -662,6 +664,7 @@ class SCC_Admin {
 				'strategy' => $strategy,
 				'tree'     => $tree,
 				'brain'    => $brain,
+				'growth'   => $growth,
 			)
 		);
 	}
