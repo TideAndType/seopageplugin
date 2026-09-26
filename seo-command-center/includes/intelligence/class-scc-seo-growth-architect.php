@@ -22,7 +22,7 @@ class SCC_SEO_Growth_Architect {
 	 * @param array $brain Architecture Brain report.
 	 * @return array
 	 */
-	public static function build( array $brain ) {
+	public static function build( array $brain, $aeo_report = null ) {
 		$tree = (array) ( $brain['tree'] ?? array() );
 		$roadmap = array( 'now' => array(), 'next' => array(), 'later' => array() );
 		$recommended_tree = $tree;
@@ -78,8 +78,8 @@ class SCC_SEO_Growth_Architect {
 
 		// Pull the highest-value AEO site actions into the same growth roadmap so
 		// the future architecture accounts for both classic search and AI answers.
-		if ( class_exists( 'SCC_AEO_Expert' ) ) {
-			$aeo = SCC_AEO_Expert::site_report( 60 );
+		if ( false !== $aeo_report && ( is_array( $aeo_report ) || class_exists( 'SCC_AEO_Expert' ) ) ) {
+			$aeo = is_array( $aeo_report ) ? $aeo_report : SCC_AEO_Expert::site_report( 60 );
 			foreach ( array_slice( (array) ( $aeo['recommendations'] ?? array() ), 0, 4 ) as $rec ) {
 				$phase = ( (int) ( $rec['priority'] ?? 0 ) >= 80 ) ? 'now' : 'next';
 				$roadmap[ $phase ][] = array(
