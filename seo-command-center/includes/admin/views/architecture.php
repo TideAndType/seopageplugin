@@ -27,12 +27,14 @@ $node_line = function ( $node, $draggable = true ) {
 	$node_id        = (string) ( $node['node_id'] ?? '' );
 	$has_override   = ! empty( $node['has_override'] );
 	$is_ignored     = ! empty( $node['ignored'] );
+	$can_parent     = ! in_array( (string) ( $node['page_type'] ?? '' ), array( 'article', 'section' ), true );
 	?>
 	<div
 		class="scc-arch-node<?php echo $exists ? ' is-existing' : ''; ?><?php echo 'section' === $status ? ' is-section' : ''; ?><?php echo $is_ignored ? ' is-ignored' : ''; ?>"
 		data-node-id="<?php echo esc_attr( $node_id ); ?>"
 		data-node-url="<?php echo esc_attr( $url ); ?>"
 		data-decision="<?php echo esc_attr( $action ); ?>"
+		data-can-parent="<?php echo $can_parent ? '1' : '0'; ?>"
 		<?php echo $draggable && empty( $node['is_pillar'] ) ? 'draggable="true"' : ''; ?>
 	>
 		<div class="scc-arch-node__main">
@@ -109,6 +111,41 @@ $node_line = function ( $node, $draggable = true ) {
 	</div>
 	<?php
 };
+
+$render_branch = function ( $node, $depth = 1 ) use ( &$render_branch, $node_line ) {
+	?>
+	<div class="scc-arch-branch" style="--scc-arch-depth:<?php echo esc_attr( (int) $depth ); ?>">
+		<?php $node_line( $node ); ?>
+
+		<?php if ( ! empty( $node['children'] ) ) : ?>
+			<div class="scc-arch-children">
+				<div class="scc-label"><?php esc_html_e( 'Child services / locations', 'seo-command-center' ); ?></div>
+				<?php foreach ( (array) $node['children'] as $child ) : ?>
+					<?php $render_branch( $child, $depth + 1 ); ?>
+				<?php endforeach; ?>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $node['sections'] ) ) : ?>
+			<div class="scc-arch-children scc-arch-sections">
+				<div class="scc-label"><?php esc_html_e( 'Service-page sections · no new URL', 'seo-command-center' ); ?></div>
+				<?php foreach ( (array) $node['sections'] as $section ) : ?>
+					<?php $node_line( $section ); ?>
+				<?php endforeach; ?>
+			</div>
+		<?php endif; ?>
+
+		<?php if ( ! empty( $node['articles'] ) ) : ?>
+			<div class="scc-arch-children scc-arch-articles">
+				<div class="scc-label"><?php esc_html_e( 'Supporting articles', 'seo-command-center' ); ?></div>
+				<?php foreach ( (array) $node['articles'] as $article ) : ?>
+					<?php $node_line( $article ); ?>
+				<?php endforeach; ?>
+			</div>
+		<?php endif; ?>
+	</div>
+	<?php
+};
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
@@ -174,9 +211,9 @@ $node_line = function ( $node, $draggable = true ) {
 
 						<?php if ( ! empty( $pillar['children'] ) ) : ?>
 							<div class="scc-arch-children">
-								<div class="scc-label"><?php esc_html_e( 'Child / location pages', 'seo-command-center' ); ?></div>
+								<div class="scc-label"><?php esc_html_e( 'Child services / locations', 'seo-command-center' ); ?></div>
 								<?php foreach ( $pillar['children'] as $child ) : ?>
-									<?php $node_line( $child ); ?>
+									<?php $render_branch( $child, 1 ); ?>
 								<?php endforeach; ?>
 							</div>
 						<?php endif; ?>
