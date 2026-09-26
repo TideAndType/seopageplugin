@@ -24,7 +24,7 @@ foreach ( $mappings as $m ) {
 <div class="wrap scc-wrap">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'Elementor Templates', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Map an Elementor template to each content type. When you generate that type of page, the plugin fills the template’s placeholders with your content while keeping the design intact.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Map an Elementor design source to each content type. Mapping is read-only: TideOrbit copies the design into generated content and never modifies the source page.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<?php if ( ! $active ) : ?>
@@ -53,10 +53,14 @@ foreach ( $mappings as $m ) {
 								<td>
 									<select class="scc-template-select">
 										<option value=""><?php esc_html_e( '— None —', 'seo-command-center' ); ?></option>
-										<?php foreach ( $templates as $tpl ) : ?>
+										<?php foreach ( $templates as $tpl ) :
+											$source_label = 'library' === (string) ( $tpl['source'] ?? '' )
+												? __( 'Elementor Library', 'seo-command-center' )
+												: ( ! empty( $tpl['is_live'] ) ? __( 'LIVE page — copy only', 'seo-command-center' ) : __( 'Draft page — copy only', 'seo-command-center' ) );
+										?>
 											<option value="<?php echo esc_attr( $tpl['id'] ); ?>" data-name="<?php echo esc_attr( $tpl['name'] ); ?>"
 												<?php echo ( isset( $mapped[ $ct ] ) && (int) $mapped[ $ct ]['template_id'] === (int) $tpl['id'] ) ? 'selected' : ''; ?>>
-												<?php echo esc_html( $tpl['name'] . ' (#' . $tpl['id'] . ', ' . $tpl['source'] . ')' ); ?>
+												<?php echo esc_html( $tpl['name'] . ' (#' . $tpl['id'] . ') — ' . $source_label ); ?>
 											</option>
 										<?php endforeach; ?>
 									</select>
@@ -72,6 +76,10 @@ foreach ( $mappings as $m ) {
 				</table>
 				<span class="scc-inline-status" id="scc-template-msg"></span>
 			<?php endif; ?>
+		</div>
+
+		<div class="scc-card">
+			<p class="scc-note"><strong><?php esc_html_e( 'Safety:', 'seo-command-center' ); ?></strong> <?php esc_html_e( 'A published page labeled “LIVE page — copy only” is used only as a source. Template mapping does not write to that page. Live editing happens only in the Layout Engine, where TideOrbit requires explicit confirmation and saves a restore point.', 'seo-command-center' ); ?></p>
 		</div>
 
 		<div class="scc-card">
