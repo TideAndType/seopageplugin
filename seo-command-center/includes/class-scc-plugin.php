@@ -96,6 +96,7 @@ class SCC_Plugin {
 		$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
 		$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
 		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
+		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
 
 		// REST.
 		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );

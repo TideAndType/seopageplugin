@@ -1917,6 +1917,27 @@ $st_keys = array_map( function ( $t ) { return $t[1]; }, $st_noimg );
 assert_eq( false, in_array( 'og:image', $st_keys, true ) || in_array( 'og:description', $st_keys, true ), 'empty values are skipped, never printed blank' );
 assert_true( in_array( array( 'name', 'twitter:card', 'summary' ), $st_noimg, true ), 'small Twitter card without an image' );
 
+echo "\n== SEO Doctor: one tool, no duplicates ==\n";
+$route_opps = array(
+	array( 'id' => 'c1', 'type' => 'fix_cannibalization', 'priority' => 'medium', 'score' => 60, 'title' => 'Two pages compete for “roof repair”' ),
+	array( 'id' => 'o1', 'type' => 'fix_orphan', 'priority' => 'high', 'score' => 70, 'title' => 'Orphan page' ),
+	array( 'id' => 'm1', 'type' => 'improve_meta', 'priority' => 'low', 'score' => 30, 'title' => 'Improve meta' ),
+	array( 'id' => 's1', 'type' => 'striking_distance', 'priority' => 'high', 'score' => 80, 'title' => 'Close to page 1' ),
+);
+$route_doc = SCC_SEO_Doctor::diagnose( array( 'technical' => $exp_report, 'opportunities' => $route_opps, 'gsc_connected' => true ) );
+$route_by = array();
+foreach ( $route_doc['issues'] as $i ) { $route_by[ $i['id'] ] = $i; }
+assert_eq( 'content', $route_by['opp:c1']['group'] ?? '', 'cannibalization is a Content problem, not Traffic' );
+assert_eq( 'architecture', $route_by['opp:c1']['screen'] ?? '', 'cannibalization opens Site Architecture' );
+assert_eq( false, isset( $route_by['opp:o1'] ) || isset( $route_by['opp:m1'] ), 'opportunities already reported by the crawl are not listed twice' );
+assert_eq( 'insights', $route_by['opp:s1']['screen'] ?? '', 'Search Console items open Opportunities' );
+$route_nocrawl = SCC_SEO_Doctor::diagnose( array( 'opportunities' => $route_opps ) );
+$route_nc_ids = array_map( function ( $i ) { return $i['id']; }, $route_nocrawl['issues'] );
+assert_true( in_array( 'opp:o1', $route_nc_ids, true ), 'without a crawl, orphan opportunities still show (nothing lost)' );
+$route_screens = array_unique( array_map( function ( $i ) { return $i['screen']; }, $route_doc['issues'] ) );
+assert_eq( false, in_array( 'seo-audit', $route_screens, true ), 'no issue links to the removed Site Audit screen' );
+assert_eq( 'aeo', $doc_by['aeo:oai-searchbot']['screen'], 'AI-search issues open the AEO / AI Citations screen' );
+
 echo "\n== SEO Doctor: fixed items + queue entries ==\n";
 $fixd = SCC_SEO_Doctor::without_fixed( $doc, 'tech:missing_schema', 42 );
 $fixd_ids = array_map( function ( $i ) { return $i['id']; }, $fixd['issues'] );

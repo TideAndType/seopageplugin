@@ -63,34 +63,6 @@
 		} );
 	}
 
-	// ---- Technical SEO Brain ---------------------------------------------
-	function bindTechnicalSeo() {
-		var btn = document.getElementById( 'scc-run-technical-audit' );
-		if ( ! btn ) {
-			return;
-		}
-		var status = document.getElementById( 'scc-technical-status' );
-		var limitEl = document.getElementById( 'scc-technical-limit' );
-
-		btn.addEventListener( 'click', function () {
-			var limit = limitEl ? parseInt( limitEl.value, 10 ) : 150;
-			if ( ! limit || limit < 1 ) { limit = 150; }
-			btn.disabled = true;
-			if ( limitEl ) { limitEl.disabled = true; }
-			setStatus( status, 'Crawling live pages and checking technical SEO… this can take a while on a larger site.' );
-			request( '/technical-seo/audit', { method: 'POST', data: { limit: limit } } )
-				.then( function () {
-					setStatus( status, 'Technical audit complete. Reloading…', 'is-ok' );
-					window.location.reload();
-				} )
-				.catch( function ( err ) {
-					btn.disabled = false;
-					if ( limitEl ) { limitEl.disabled = false; }
-					setStatus( status, ( err && err.message ) || 'Technical audit failed.', 'is-error' );
-				} );
-		} );
-	}
-
 	// ---- Settings save --------------------------------------------------
 	function bindSettings() {
 		var form = document.getElementById( 'scc-settings-form' );
@@ -665,7 +637,7 @@
 	}
 
 	// ---- Search Console quick wins → create Content Plan pages ----------
-	function bindGscQuickWins() {
+	function bindGscWinsPlanButtons() {
 		var table = document.getElementById( 'scc-gsc-wins-table' );
 		if ( ! table ) {
 			return;
@@ -1657,7 +1629,7 @@
 		}
 	}
 
-	// ---- SEO Audit: GSC quick wins + competitor analysis ---------------
+	// ---- GSC quick wins loader (Opportunities › Keywords) --------------
 	function bindGscQuickWins() {
 		var btn = document.getElementById( 'scc-gsc-load' );
 		if ( ! btn ) {
@@ -2100,12 +2072,30 @@
 		var boot = {};
 		try { boot = JSON.parse( dataEl.textContent || '{}' ); } catch ( e ) { boot = {}; }
 		var adminBase = boot.admin || '';
-		var state = { report: boot.report || null, area: 'all' };
+		var hashArea = ( /doctor-([a-z]+)/.exec( window.location.hash || '' ) || [] )[ 1 ];
+		var state = { report: boot.report || null, area: hashArea || 'all' };
+		if ( hashArea && root.scrollIntoView ) {
+			root.scrollIntoView();
+		}
 
 		var SEV = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 		var SOURCE_LABEL = { technical: 'Site crawl', pagespeed: 'Google PageSpeed', architecture: 'Site structure', aeo: 'AI search', opportunities: 'Search Console' };
 		var FIX_LABEL = { meta_description: 'Write description', schema: 'Add schema', social_tags: 'Turn on social tags', internal_links: 'Add internal links' };
-		var SCREEN_LABEL = { 'seo-audit': 'Site Audit', 'meta-editor': 'Meta Editor', 'internal-links': 'Internal Links', 'architecture': 'Site Architecture', 'aeo': 'AI Citations', 'action-queue': 'Action Queue' };
+		var SCREEN_LABEL = { 'meta-editor': 'Meta Editor', 'internal-links': 'Internal Links', 'architecture': 'Site Architecture', 'aeo': 'AEO / AI Citations', 'insights': 'Opportunities', 'topical-authority': 'Topical Authority', 'schema': 'Schema settings', 'keyword-strategy': 'Keywords', 'site-analysis': 'Page-by-page data', 'action-queue': 'Action Queue' };
+		// The full tool behind each area of the diagnosis — always reachable from the Doctor.
+		var AREA_TOOLS = {
+			onpage: [ 'meta-editor' ],
+			content: [ 'topical-authority', 'architecture', 'site-analysis' ],
+			links: [ 'internal-links', 'architecture' ],
+			schema: [ 'schema' ],
+			ai: [ 'aeo' ],
+			growth: [ 'insights', 'keyword-strategy' ]
+		};
+		function toolLinks( area ) {
+			return ( AREA_TOOLS[ area ] || [] ).map( function ( screen ) {
+				return '<a class="button button-small" href="' + esc( adminBase + 'seo-command-center-' + screen ) + '">Open ' + esc( SCREEN_LABEL[ screen ] || screen ) + ' →</a>';
+			} ).join( ' ' );
+		}
 
 		function esc( s ) {
 			return String( s == null ? '' : s ).replace( /[&<>"']/g, function ( c ) {
@@ -2152,7 +2142,8 @@
 			html += '</div>';
 			html += '<div class="scc-doctor__sources">' + sourcesHtml( r.sources || {} ) + '</div>';
 			if ( r.generated_at ) {
-				html += '<div class="scc-note">Last check-up: ' + esc( r.generated_at ) + '</div>';
+				html += '<div class="scc-note">Last check-up: ' + esc( r.generated_at ) +
+					( r.sources && r.sources.content && r.sources.content.available && adminBase ? ' · <a href="' + esc( adminBase + 'seo-command-center-site-analysis' ) + '">Page-by-page data</a>' : '' ) + '</div>';
 			}
 			html += '</div></div>';
 
@@ -2175,6 +2166,11 @@
 				html += '<button type="button" class="button button-small" data-doctor-queue-high="1">Add all critical &amp; high to the Action Queue (' + esc( urgent ) + ')</button>';
 			}
 			html += '</div>';
+			if ( 'all' !== state.area && ( AREA_TOOLS[ state.area ] || 'speed' === state.area ) ) {
+				html += '<div class="scc-doctor__tools">' + ( 'speed' === state.area
+					? '<span class="scc-note">Each slow page links to its full Google PageSpeed report.</span>'
+					: '<span class="scc-note">Full tool:</span> ' + toolLinks( state.area ) ) + '</div>';
+			}
 			if ( ! list.length ) {
 				var g = ( r.groups || [] ).filter( function ( x ) { return x.id === state.area; } )[ 0 ];
 				html += '<div class="scc-empty"><p>' + ( g && ! g.measured ? esc( notMeasuredHint( g.id ) ) : 'Nothing to fix here. 🎉' ) + '</p></div>';
@@ -2191,7 +2187,7 @@
 		function notMeasuredHint( area ) {
 			if ( 'speed' === area ) { return 'Page speed has not been measured yet — run a full check-up to test your key pages with Google PageSpeed.'; }
 			if ( 'growth' === area ) { return 'Connect Google Search Console (Connections) so the Doctor can spot pages losing traffic and keywords you are close to ranking for.'; }
-			if ( 'ai' === area ) { return 'AI-search readiness has not been measured yet — run a check-up.'; }
+			if ( 'ai' === area ) { return 'AI-search readiness has not been measured yet — run a check-up, or open AEO / AI Citations above to run it on its own.'; }
 			return 'This area has not been measured yet — run a full check-up.';
 		}
 
@@ -2200,6 +2196,7 @@
 			var chip = function ( ok, text ) {
 				out += '<span class="scc-src' + ( ok ? ' is-on' : '' ) + '">' + ( ok ? '✓ ' : '○ ' ) + esc( text ) + '</span>';
 			};
+			chip( s.content && s.content.available, s.content && s.content.available ? 'Content: ' + s.content.pages + ' pages read' : 'Content not read' );
 			chip( s.technical && s.technical.available, s.technical && s.technical.available ? s.technical.pages + ' pages crawled' : 'Site not crawled' );
 			chip( s.speed && s.speed.available, s.speed && s.speed.available ? 'Speed: ' + s.speed.urls + ' URLs measured' : 'Speed not measured' );
 			chip( s.ai && s.ai.available, s.ai && s.ai.available ? 'AI search: ' + s.ai.pages + ' pages' : 'AI search not measured' );
@@ -2369,7 +2366,7 @@
 		}
 
 		function merge( refresh ) {
-			setStatus( status, ( refresh ? 'Step 3 of 3: ' : '' ) + 'Putting the diagnosis together…' );
+			setStatus( status, ( refresh ? 'Step 4 of 4: ' : '' ) + 'Putting the diagnosis together…' );
 			return request( '/doctor/run', { method: 'POST', data: { refresh: !! refresh } } ).then( function ( res ) {
 				state.report = ( res && res.data && res.data.report ) || state.report;
 				render();
@@ -2380,11 +2377,18 @@
 			runBtn.addEventListener( 'click', function () {
 				setBusy( true );
 				var notes = [];
-				setStatus( status, 'Step 1 of 3: Crawling your pages and checking technical SEO… (this can take a few minutes)' );
-				request( '/technical-seo/audit', { method: 'POST', data: { limit: 150 } } )
-					.catch( function ( err ) { notes.push( 'Crawl: ' + ( ( err && err.message ) || 'failed' ) ); } )
+				var limitEl = document.getElementById( 'scc-doctor-limit' );
+				var limit = limitEl ? ( parseInt( limitEl.value, 10 ) || 150 ) : 150;
+				setStatus( status, 'Step 1 of 4: Reading your content…' );
+				request( '/analyze', { method: 'POST', data: { limit: 300, deep: false } } )
+					.catch( function ( err ) { notes.push( 'Content: ' + ( ( err && err.message ) || 'failed' ) ); } )
 					.then( function () {
-						setStatus( status, 'Step 2 of 3: Measuring real page speed with Google PageSpeed… (about 30s per page)' );
+						setStatus( status, 'Step 2 of 4: Crawling up to ' + limit + ' pages and checking technical SEO… (this can take a few minutes)' );
+						return request( '/technical-seo/audit', { method: 'POST', data: { limit: limit } } )
+							.catch( function ( err ) { notes.push( 'Crawl: ' + ( ( err && err.message ) || 'failed' ) ); } );
+					} )
+					.then( function () {
+						setStatus( status, 'Step 3 of 4: Measuring real page speed with Google PageSpeed… (about 30s per page)' );
 						return request( '/doctor/pagespeed', { method: 'POST', data: { count: 3 } } )
 							.then( function ( res ) {
 								var ps = res && res.data && res.data.pagespeed;
@@ -2520,7 +2524,7 @@
 					'<div class="scc-opp__factors">' + factors + '</div></details>'
 				: '';
 			var actions = technical
-				? '<div class="scc-opp__actions"><a class="button button-small" href="admin.php?page=seo-command-center-seo-audit">Open Site Audit</a></div>'
+				? '<div class="scc-opp__actions"><a class="button button-small" href="admin.php?page=seo-command-center#scc-doctor">Open SEO Doctor</a></div>'
 				: '<div class="scc-opp__actions">' +
 					'<button class="button button-primary button-small scc-opp-approve">Add to queue</button>' +
 					'<button class="button button-small scc-opp-dismiss">Dismiss</button>' +
@@ -3739,14 +3743,13 @@
 
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
-		bindTechnicalSeo();
 		bindSettings();
 		bindRouteModels();
 		bindLmStudioDetect();
 		bindConnections();
 		bindKeywordStrategy();
 		bindTopicBriefs();
-		bindGscQuickWins();
+		bindGscWinsPlanButtons();
 		bindSeedPlan();
 		bindArchitectureBrain();
 		bindContentPlan();

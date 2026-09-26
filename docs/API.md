@@ -97,14 +97,15 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 
 ## SEO Doctor (v1.80)
 
-One merged diagnosis of the whole site. Heavy crawls run in their own requests; `/doctor/run` only merges the latest results, so the UI can run the three steps in sequence.
+One merged diagnosis of the whole site. Heavy crawls run in their own requests; `/doctor/run` only merges the latest results, so the UI can run the four steps in sequence. The SEO Doctor replaced the separate Site Audit screen (v1.80.1); its old URL redirects to the Dashboard.
 
 | Method | Route | Purpose |
 |--------|-------|---------|
 | GET  | `/doctor/report` | Latest stored diagnosis: `score`/`grade` (null when nothing was measured), per-area grades (`measured:false` = not measured, excluded from the score), ranked `issues[]` (id, group, source, severity, title, why, fix, affected_count, examples[{url, evidence, post_id}], fix_type, screen), `sources` status. |
-| POST | `/technical-seo/audit` | Step 1 — crawl pages (now also records heading outline, Open Graph tags, post context). |
-| POST | `/doctor/pagespeed` | Step 2 — Google PageSpeed Insights for the homepage + key pages. Body: `{count?: 1–5, strategy?: mobile\|desktop}`. Field (CrUX) data preferred, lab data labelled; failures are stored as "not measured". |
-| POST | `/doctor/run` | Step 3 — merge technical, PageSpeed, architecture, AEO and Search Console opportunities into the diagnosis. Body: `{refresh?: bool}` recomputes opportunities. |
+| POST | `/analyze` | Step 1 — read site content (cannibalization, topic gaps, content opportunities). |
+| POST | `/technical-seo/audit` | Step 2 — crawl pages (`limit` 50/150/300) (now also records heading outline, Open Graph tags, post context). |
+| POST | `/doctor/pagespeed` | Step 3 — Google PageSpeed Insights for the homepage + key pages. Body: `{count?: 1–5, strategy?: mobile\|desktop}`. Field (CrUX) data preferred, lab data labelled; failures are stored as "not measured". |
+| POST | `/doctor/run` | Step 4 — merge technical, PageSpeed, architecture, AEO and Search Console opportunities into the diagnosis. Body: `{refresh?: bool}` recomputes opportunities. |
 | POST | `/doctor/fix` | Preview or apply a one-click fix. Body: `{fix: meta_description\|schema\|social_tags\|internal_links, post_id, issue_id, apply: bool}`. `apply:false` returns `{summary, before, after, details}` and writes nothing. `apply:true` checks `edit_post` (or `manage_options` for site-level fixes), records history, and removes the fixed page from the stored issue. |
 | POST | `/doctor/queue` | Add issues to the Action Queue as `doctor_review` items (never auto-run by Autopilot). Body: `{issue_id}` or `{severity: high}` for every issue at that severity or worse. |
 

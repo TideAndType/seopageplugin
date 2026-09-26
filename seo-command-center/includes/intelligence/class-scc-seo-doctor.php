@@ -75,6 +75,22 @@ class SCC_SEO_Doctor {
 		'international'      => 2,
 	);
 
+	/** Opportunity type → [Doctor area, admin screen where it is worked on]. */
+	const OPP_ROUTES = array(
+		'striking_distance'   => array( 'growth', 'insights' ),
+		'untapped_demand'     => array( 'growth', 'insights' ),
+		'content_decay'       => array( 'growth', 'insights' ),
+		'intent_drift'        => array( 'growth', 'insights' ),
+		'missing_topic'       => array( 'content', 'topical-authority' ),
+		'fix_cannibalization' => array( 'content', 'architecture' ),
+		'fix_orphan'          => array( 'links', 'internal-links' ),
+		'expand_content'      => array( 'content', 'insights' ),
+		'improve_meta'        => array( 'onpage', 'meta-editor' ),
+	);
+
+	/** Opportunity types the site crawl already reports as its own checks. */
+	const CRAWL_DUPLICATES = array( 'fix_orphan', 'expand_content', 'improve_meta' );
+
 	/** Issue id → one-click fix type (only fixes that are safe and reversible). */
 	const FIXES = array(
 		'missing_meta_description'    => 'meta_description',
@@ -120,7 +136,12 @@ class SCC_SEO_Doctor {
 			'opportunities' => null,
 			'gsc_connected' => class_exists( 'SCC_GSC' ) && SCC_GSC::is_connected(),
 			'aeo'           => null,
+			'analysis_pages'=> 0,
 		);
+		if ( class_exists( 'SCC_Analyzer' ) ) {
+			$latest = SCC_Analyzer::latest();
+			$sources['analysis_pages'] = (int) ( $latest['summary_data']['totals']['analyzed'] ?? 0 );
+		}
 
 		if ( class_exists( 'SCC_Opportunity_Engine' ) ) {
 			try {
@@ -196,8 +217,15 @@ class SCC_SEO_Doctor {
 			$issues[] = self::make( 'aeo:' . sanitize_key( (string) ( $rec['key'] ?? md5( (string) ( $rec['title'] ?? '' ) ) ) ), 'ai', 'aeo', $severity, (string) ( $rec['title'] ?? '' ), (string) ( $rec['reason'] ?? '' ), (string) ( $rec['outcome'] ?? '' ), '', $examples ? 1 : 0, $examples, '', 'aeo' );
 		}
 
-		// 5) Search Console traffic signals (decay, striking distance, cannibalization…).
+		// 5) Opportunity engine: Search Console traffic signals, cannibalization,
+		// topical gaps. Types the site crawl already reports (orphans, thin
+		// content, metadata) are skipped when a crawl exists, so nothing is listed twice.
 		foreach ( (array) $opps as $opp ) {
+			$type = (string) ( $opp['type'] ?? '' );
+			if ( $technical && in_array( $type, self::CRAWL_DUPLICATES, true ) ) {
+				continue;
+			}
+			$route = self::OPP_ROUTES[ $type ] ?? array( 'growth', 'insights' );
 			$priority = (string) ( $opp['priority'] ?? 'medium' );
 			$severity = 'critical' === $priority ? 'critical' : ( 'high' === $priority ? 'high' : ( 'low' === $priority ? 'low' : 'medium' ) );
 			$target   = (array) ( $opp['target'] ?? array() );
@@ -205,7 +233,7 @@ class SCC_SEO_Doctor {
 			if ( ! empty( $target['url'] ) || ! empty( $target['post_id'] ) ) {
 				$examples[] = array( 'url' => (string) ( $target['url'] ?? '' ), 'evidence' => '', 'post_id' => (int) ( $target['post_id'] ?? 0 ) );
 			}
-			$item = self::make( 'opp:' . (string) ( $opp['id'] ?? md5( wp_json_encode( $opp ) ) ), 'growth', 'opportunities', $severity, (string) ( $opp['title'] ?? '' ), (string) ( $opp['reason'] ?? '' ), '', (string) ( $opp['recommended_action'] ?? '' ), $examples ? 1 : 0, $examples, '', 'action-queue' );
+			$item = self::make( 'opp:' . (string) ( $opp['id'] ?? md5( wp_json_encode( $opp ) ) ), $route[0], 'opportunities', $severity, (string) ( $opp['title'] ?? '' ), (string) ( $opp['reason'] ?? '' ), '', (string) ( $opp['recommended_action'] ?? '' ), $examples ? 1 : 0, $examples, '', $route[1] );
 			$item['opportunity'] = $opp; // Kept so "Add to queue" can promote the original.
 			$item['rank']        = min( 100, (int) ( $opp['score'] ?? 0 ) );
 			$issues[] = $item;
@@ -225,7 +253,7 @@ class SCC_SEO_Doctor {
 		$measured = array(
 			'indexing' => (bool) $technical,
 			'onpage'   => (bool) $technical,
-			'content'  => (bool) $technical || (bool) $architecture,
+			'content'  => (bool) $technical || (bool) $architecture || is_array( $opps ),
 			'links'    => (bool) $technical || (bool) $architecture,
 			'speed'    => (bool) $technical || $speed_measured,
 			'schema'   => (bool) $technical,
@@ -335,6 +363,7 @@ class SCC_SEO_Doctor {
 			'counts'     => $counts,
 			'fixable'    => $fixable,
 			'sources'    => array(
+				'content'       => array( 'available' => (int) ( $sources['analysis_pages'] ?? 0 ) > 0, 'pages' => (int) ( $sources['analysis_pages'] ?? 0 ) ),
 				'technical'     => array( 'available' => (bool) $technical, 'at' => (string) ( $technical['generated_at'] ?? '' ), 'pages' => (int) ( $technical['pages'] ?? 0 ) ),
 				'speed'         => array( 'available' => $speed_measured, 'at' => (string) ( $speed['generated_at'] ?? '' ), 'urls' => (int) ( $speed['measured'] ?? 0 ) ),
 				'architecture'  => array( 'available' => (bool) $architecture, 'at' => (string) ( $architecture['generated_at'] ?? '' ) ),
@@ -363,12 +392,12 @@ class SCC_SEO_Doctor {
 				'post_id'  => (int) ( $ex['post_id'] ?? 0 ),
 			);
 		}
-		$screen = 'seo-audit';
-		if ( 'metadata' === ( $issue['category'] ?? '' ) ) {
-			$screen = 'meta-editor';
-		} elseif ( 'architecture' === ( $issue['category'] ?? '' ) ) {
-			$screen = 'internal-links';
-		}
+		$screens = array(
+			'metadata'        => 'meta-editor',
+			'architecture'    => 'internal-links',
+			'structured_data' => 'schema',
+		);
+		$screen = $screens[ (string) ( $issue['category'] ?? '' ) ] ?? '';
 		return self::make(
 			( 'pagespeed' === $source ? 'psi:' : 'tech:' ) . $id,
 			$group,
