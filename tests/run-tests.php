@@ -952,6 +952,92 @@ $moved = $brain_engine->analyze( $move_tree, array( 'index' => array(), 'gsc' =>
 assert_eq( 0, count( $moved['tree']['pillars'][0]['children'] ), 'saved parent override removes child from old service hub' );
 assert_eq( 1, count( $moved['tree']['pillars'][1]['children'] ), 'saved parent override moves child to chosen service hub' );
 
+echo "\n== SEO Growth Architect future-state roadmap ==\n";
+$growth = SCC_SEO_Growth_Architect::build(
+	$brain_report,
+	array(
+		'recommendations' => array(
+			array(
+				'key' => 'answer-ready',
+				'priority' => 91,
+				'title' => 'Build answer-ready sections',
+				'url' => 'https://example.com/managed-it-services/',
+				'reason' => 'Direct-answer structure is weak.',
+				'outcome' => 'Improve retrievability and citation readiness.',
+			),
+		),
+	)
+);
+assert_true( ! empty( $growth['recommended_tree']['pillars'][0]['growth'] ), 'future architecture annotates nodes with growth phase and priority' );
+assert_true( ! empty( $growth['roadmap']['now'] ), 'future architecture produces a prioritized do-now roadmap' );
+$growth_types = array();
+foreach ( array_merge( $growth['roadmap']['now'], $growth['roadmap']['next'], $growth['roadmap']['later'] ) as $item ) {
+	$growth_types[] = $item['type'];
+}
+assert_true( in_array( 'expand_existing', $growth_types, true ), 'weak existing coverage becomes a strengthen-existing growth action' );
+assert_true( in_array( 'aeo', $growth_types, true ), 'AEO recommendations are integrated into the SEO growth roadmap' );
+assert_true( false !== strpos( strtolower( $growth['principle'] ), 'existing url' ), 'growth principle explicitly prefers strengthening existing URLs before creating more' );
+
+echo "\n== AEO Expert citation-readiness scoring ==\n";
+$strong_aeo = SCC_AEO_Expert::analyze_signals(
+	array(
+		'word_count' => 1400,
+		'heading_count' => 8,
+		'question_headings' => 4,
+		'external_citations' => 3,
+		'has_schema' => true,
+		'has_author' => true,
+		'days_since_modified' => 30,
+		'has_first_party_proof' => true,
+		'has_clear_title' => true,
+	)
+);
+assert_true( $strong_aeo['score'] >= 85, 'clear answer structure, evidence, schema, identity and freshness produce strong AEO readiness' );
+$weak_aeo = SCC_AEO_Expert::analyze_signals(
+	array(
+		'word_count' => 100,
+		'heading_count' => 0,
+		'question_headings' => 0,
+		'external_citations' => 0,
+		'has_schema' => false,
+		'has_author' => false,
+		'days_since_modified' => 900,
+		'has_first_party_proof' => false,
+		'has_clear_title' => true,
+	)
+);
+assert_true( $weak_aeo['score'] < 50, 'thin unsupported stale page scores weak for AEO readiness' );
+assert_true( count( $weak_aeo['recommendations'] ) >= 4, 'weak AEO page receives multiple concrete improvement recommendations' );
+
+echo "\n== AEO and Elementor live-safety source guards ==\n";
+$layout_view_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/layout.php' );
+$layout_rest_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+$layout_admin_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php' );
+$elementor_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor.php' );
+$aeo_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-aeo-expert.php' );
+$brief_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/generation/class-scc-content-brief.php' );
+$generator_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/generation/class-scc-generator.php' );
+$architecture_view_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/architecture.php' );
+
+assert_true( false !== strpos( $layout_view_src, 'data-layout-panel="drafts"' ), 'Elementor picker has an explicit Drafts view' );
+assert_true( false !== strpos( $layout_view_src, 'data-layout-panel="live"' ), 'Elementor picker has a separate Live view' );
+assert_true( false !== strpos( $layout_view_src, 'Make draft copy' ), 'live pages expose a safer draft-copy path' );
+assert_true( false !== strpos( $layout_view_src, 'I understand Apply changes this published page immediately.' ), 'live layout apply requires explicit UI acknowledgement' );
+assert_true( false === strpos( $layout_admin_src, 'fall back to recent pages/posts' ), 'Layout Engine no longer silently falls back from drafts to live pages' );
+assert_true( false !== strpos( $layout_rest_src, 'live_confirmation_required' ), 'server rejects unconfirmed published-page layout writes' );
+assert_true( false !== strpos( $layout_rest_src, "'/layout/restore'" ), 'layout restore endpoint is registered' );
+assert_true( false !== strpos( $layout_rest_src, "'/layout/clone-draft'" ), 'safe draft-clone endpoint is registered' );
+assert_true( false !== strpos( $elementor_src, '_scc_layout_working_copy' ), 'Elementor helper marks safe working-copy drafts' );
+assert_true( false !== strpos( $elementor_src, 'safe_source_only' ), 'template sources expose read-only safety metadata' );
+
+assert_true( false !== strpos( $aeo_src, 'OAI-SearchBot' ), 'AEO crawler audit explicitly checks ChatGPT Search crawler access' );
+assert_true( false !== strpos( $aeo_src, 'not a promise of inclusion or citation' ), 'AEO score explicitly avoids citation guarantees' );
+assert_true( false !== strpos( $aeo_src, 'do not require special AI schema' ), 'AEO guidance rejects special-AI-schema myths' );
+assert_true( false !== strpos( $brief_src, 'Never make up a reference' ), 'AEO brief forbids invented references' );
+assert_true( false !== strpos( $generator_src, 'never invent a source, URL, study, quote or statistic' ), 'content generator forbids fabricated citations and sources' );
+assert_true( false !== strpos( $architecture_view_src, 'Recommended SEO Architecture' ), 'Architecture exposes the future-state recommended view' );
+assert_true( false !== strpos( $architecture_view_src, 'Current Site' ), 'Architecture keeps current-site view as a separate toggle' );
+
 // Real site has two pages; the AI map only mentioned one (with a wrong slug)
 // plus one genuine new idea. After reconcile: both real pages present as
 // existing (anchored to real URLs), and the new idea kept as a gap.
