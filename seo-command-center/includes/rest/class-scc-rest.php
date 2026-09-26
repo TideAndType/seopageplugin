@@ -1550,9 +1550,16 @@ class SCC_REST {
 	public function get_architecture() {
 		$report = $this->architecture_report();
 		if ( is_wp_error( $report ) ) {
-			return $this->ok( array( 'tree' => null, 'brain' => null ) );
+			return $this->ok( array( 'tree' => null, 'brain' => null, 'growth' => null ) );
 		}
-		return $this->ok( array( 'tree' => $report['tree'], 'brain' => $report ) );
+		$growth = class_exists( 'SCC_SEO_Growth_Architect' ) ? SCC_SEO_Growth_Architect::build( $report ) : null;
+		return $this->ok(
+			array(
+				'tree'   => is_array( $growth ) && ! empty( $growth['recommended_tree'] ) ? $growth['recommended_tree'] : $report['tree'],
+				'brain'  => $report,
+				'growth' => $growth,
+			)
+		);
 	}
 
 	/**
