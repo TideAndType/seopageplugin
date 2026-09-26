@@ -39,6 +39,7 @@ class SCC_Architecture_Brain {
 			$overrides = self::overrides();
 		}
 
+		$tree = self::normalize_service_hierarchy( $tree );
 		$tree = $this->enrich_tree( $tree, $context, $overrides );
 		$tree = $this->apply_parent_overrides( $tree, $overrides );
 
@@ -97,6 +98,88 @@ class SCC_Architecture_Brain {
 			'gsc_available' => $gsc_available,
 			'technical'     => class_exists( 'SCC_Technical_SEO' ) ? ( SCC_Technical_SEO::report() ?: array() ) : array(),
 		);
+	}
+
+	/**
+	 * Nest service pillars under a real ancestor service hub when their URL
+	 * structure proves the relationship. This prevents nested services from being
+	 * rendered as unrelated top-level pillars.
+	 *
+	 * Example:
+	 * /managed-it-services/
+	 * /managed-it-services/24-7-monitoring-alerting/
+	 *
+	 * The second URL becomes a child of the first. Its sections/articles remain
+	 * attached to the parent cluster so the architecture does not lose work.
+	 *
+	 * @param array $tree Base architecture tree.
+	 * @return array
+	 */
+	public static function normalize_service_hierarchy( array $tree ) {
+		$pillars = array_values( (array) ( $tree['pillars'] ?? array() ) );
+		$path_to_index = array();
+		foreach ( $pillars as $i => $pillar ) {
+			$path = self::normalize_path( $pillar['url'] ?? '' );
+			if ( '' !== $path ) {
+				$path_to_index[ $path ] = $i;
+			}
+		}
+
+		$moves = array();
+		foreach ( $pillars as $i => $pillar ) {
+			$path = self::normalize_path( $pillar['url'] ?? '' );
+			if ( '' === $path ) {
+				continue;
+			}
+			$parts = array_values( array_filter( explode( '/', $path ) ) );
+			if ( count( $parts ) < 2 ) {
+				continue;
+			}
+			// Find the nearest existing ancestor pillar, not merely the first segment.
+			for ( $depth = count( $parts ) - 1; $depth >= 1; $depth-- ) {
+				$parent_path = implode( '/', array_slice( $parts, 0, $depth ) );
+				if ( isset( $path_to_index[ $parent_path ] ) && $path_to_index[ $parent_path ] !== $i ) {
+					$intent = strtolower( (string) ( $pillar['intent'] ?? '' ) );
+					$type   = (string) ( $pillar['page_type'] ?? '' );
+					if ( in_array( $intent, array( 'commercial', 'transactional', 'local', 'navigational' ), true ) || in_array( $type, array( 'service', 'location', 'pillar' ), true ) ) {
+						$moves[] = array( 'from' => $i, 'to' => $path_to_index[ $parent_path ], 'parent_path' => $parent_path );
+					}
+					break;
+				}
+			}
+		}
+
+		if ( empty( $moves ) ) {
+			$tree['pillars'] = $pillars;
+			return $tree;
+		}
+
+		$remove = array();
+		foreach ( $moves as $move ) {
+			$child = $pillars[ $move['from'] ];
+			$child['parent_url'] = '/' . $move['parent_path'] . '/';
+			// A nested service remains a real page candidate/existing page; only its
+			// structural position changes.
+			$child['children'] = (array) ( $child['children'] ?? array() );
+
+			$parent =& $pillars[ $move['to'] ];
+			$parent['children'][] = $child;
+			// Keep supporting work visible under the owning service hub in this
+			// one-level admin tree.
+			$parent['sections'] = array_merge( (array) ( $parent['sections'] ?? array() ), (array) ( $child['sections'] ?? array() ) );
+			$parent['articles'] = array_merge( (array) ( $parent['articles'] ?? array() ), (array) ( $child['articles'] ?? array() ) );
+			unset( $parent );
+			$remove[ $move['from'] ] = true;
+		}
+
+		$out = array();
+		foreach ( $pillars as $i => $pillar ) {
+			if ( ! isset( $remove[ $i ] ) ) {
+				$out[] = $pillar;
+			}
+		}
+		$tree['pillars'] = array_values( $out );
+		return $tree;
 	}
 
 	/**
