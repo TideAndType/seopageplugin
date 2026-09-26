@@ -836,6 +836,41 @@
 			return node ? node.querySelector( '.scc-arch-action-status' ) : null;
 		}
 
+		function setArchitectureView( mode ) {
+			mode = mode === 'current' ? 'current' : 'recommended';
+			Array.prototype.forEach.call( document.querySelectorAll( '.scc-arch-view-btn' ), function ( btn ) {
+				var active = btn.getAttribute( 'data-view' ) === mode;
+				btn.classList.toggle( 'button-primary', active );
+				btn.classList.toggle( 'is-active', active );
+			} );
+			Array.prototype.forEach.call( document.querySelectorAll( '.scc-arch-node' ), function ( node ) {
+				var exists = node.getAttribute( 'data-existing' ) === '1';
+				node.classList.toggle( 'scc-arch-hidden-by-view', mode === 'current' && ! exists );
+			} );
+			Array.prototype.forEach.call( document.querySelectorAll( '.scc-arch-branch, .scc-arch-children, .scc-arch-pillar' ), function ( group ) {
+				if ( mode !== 'current' ) {
+					group.classList.remove( 'scc-arch-empty-current' );
+					return;
+				}
+				var visible = group.querySelector( '.scc-arch-node[data-existing="1"]:not(.scc-arch-hidden-by-view)' );
+				var own = group.classList.contains( 'scc-arch-pillar' ) ? group.querySelector( ':scope > .scc-arch-node[data-existing="1"]' ) : null;
+				group.classList.toggle( 'scc-arch-empty-current', ! visible && ! own );
+			} );
+			var title = document.getElementById( 'scc-arch-tree-title' );
+			var help = document.getElementById( 'scc-arch-tree-help' );
+			if ( title ) { title.textContent = mode === 'current' ? 'Current site architecture' : 'Recommended SEO site tree'; }
+			if ( help ) {
+				help.textContent = mode === 'current'
+					? 'Current Site shows only pages that exist today. Switch back to Recommended SEO Architecture to see what TideOrbit recommends adding, strengthening, consolidating or reorganizing.'
+					: 'Future-state view: new pages, pages to strengthen, supporting content and the service hierarchy TideOrbit recommends. Drag a child page, article, or section onto another service hub to change the planning hierarchy without changing live WordPress permalinks.';
+			}
+		}
+
+		Array.prototype.forEach.call( document.querySelectorAll( '.scc-arch-view-btn' ), function ( btn ) {
+			btn.addEventListener( 'click', function () { setArchitectureView( btn.getAttribute( 'data-view' ) ); } );
+		} );
+		setArchitectureView( 'recommended' );
+
 		function runNodeAction( btn, node, action, extra ) {
 			var nodeId = node ? ( node.getAttribute( 'data-node-id' ) || '' ) : '';
 			if ( ! nodeId ) { return; }
