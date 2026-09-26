@@ -78,10 +78,13 @@ class SCC_Elementor {
 		);
 		foreach ( $library as $post ) {
 			$templates[] = array(
-				'id'     => (int) $post->ID,
-				'name'   => get_the_title( $post ),
-				'type'   => (string) get_post_meta( $post->ID, '_elementor_template_type', true ),
-				'source' => 'library',
+				'id'       => (int) $post->ID,
+				'name'     => get_the_title( $post ),
+				'type'     => (string) get_post_meta( $post->ID, '_elementor_template_type', true ),
+				'source'   => 'library',
+				'status'   => (string) $post->post_status,
+				'is_live'  => false,
+				'safe_source_only' => true,
 			);
 		}
 
@@ -97,14 +100,86 @@ class SCC_Elementor {
 		);
 		foreach ( $designated as $post ) {
 			$templates[] = array(
-				'id'     => (int) $post->ID,
-				'name'   => get_the_title( $post ),
-				'type'   => 'page',
-				'source' => 'designated',
+				'id'       => (int) $post->ID,
+				'name'     => get_the_title( $post ),
+				'type'     => 'page',
+				'source'   => 'designated',
+				'status'   => (string) $post->post_status,
+				'is_live'  => 'publish' === (string) $post->post_status,
+				'safe_source_only' => true,
 			);
 		}
 
 		return $templates;
+	}
+
+	/**
+	 * Create a non-live working copy of an existing page/post for layout work.
+	 *
+	 * The original is never modified. Only the Elementor/layout meta TideOrbit
+	 * needs is copied; unrelated plugin state is intentionally left behind.
+	 *
+	 * @param int $post_id Source post id.
+	 * @return array|WP_Error
+	 */
+	public static function clone_to_draft( $post_id ) {
+		$post_id = (int) $post_id;
+		$source = get_post( $post_id );
+		if ( ! $source ) {
+			return new WP_Error( 'scc_no_source', __( 'The source page could not be found.', 'seo-command-center' ) );
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return new WP_Error( 'scc_forbidden', __( 'You cannot copy this page.', 'seo-command-center' ), array( 'status' => 403 ) );
+		}
+
+		$new_id = wp_insert_post(
+			array(
+				'post_type'    => (string) $source->post_type,
+				'post_status'  => 'draft',
+				'post_title'   => sprintf( __( '%s — TideOrbit Working Copy', 'seo-command-center' ), get_the_title( $source ) ),
+				'post_content' => (string) $source->post_content,
+				'post_excerpt' => (string) $source->post_excerpt,
+				'post_author'  => get_current_user_id(),
+			),
+			true
+		);
+		if ( is_wp_error( $new_id ) ) {
+			return $new_id;
+		}
+
+		$copy_keys = array(
+			'_elementor_data',
+			'_elementor_edit_mode',
+			'_elementor_template_type',
+			'_elementor_version',
+			'_wp_page_template',
+			'_thumbnail_id',
+			'_scc_page_brain',
+		);
+		foreach ( $copy_keys as $key ) {
+			if ( ! metadata_exists( 'post', $post_id, $key ) ) {
+				continue;
+			}
+			$value = get_post_meta( $post_id, $key, true );
+			if ( '_elementor_data' === $key && is_string( $value ) ) {
+				$value = wp_slash( $value );
+			}
+			update_post_meta( (int) $new_id, $key, $value );
+		}
+		update_post_meta( (int) $new_id, '_scc_layout_clone_of', $post_id );
+		update_post_meta( (int) $new_id, '_scc_layout_working_copy', '1' );
+
+		if ( class_exists( 'SCC_Content_Index' ) ) {
+			SCC_Content_Index::index_post( (int) $new_id );
+		}
+
+		return array(
+			'post_id'       => (int) $new_id,
+			'source_post_id'=> $post_id,
+			'edit_url'      => get_edit_post_link( (int) $new_id, 'raw' ),
+			'layout_url'    => admin_url( 'admin.php?page=seo-command-center-layout&post=' . (int) $new_id ),
+			'elementor_url' => admin_url( 'post.php?post=' . (int) $new_id . '&action=elementor' ),
+		);
 	}
 
 	/**
