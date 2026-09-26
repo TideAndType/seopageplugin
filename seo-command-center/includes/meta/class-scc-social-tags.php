@@ -26,7 +26,8 @@ class SCC_Social_Tags {
 	 */
 	public static function enabled() {
 		return (bool) SCC_Settings::get( 'output_social_tags', false )
-			&& SCC_SEO_Meta::PLUGIN_NONE === SCC_SEO_Meta::detect();
+			&& SCC_SEO_Meta::PLUGIN_NONE === SCC_SEO_Meta::detect()
+			&& ! SCC_SEO_Meta::other_seo_plugin_active();
 	}
 
 	/**
@@ -48,6 +49,18 @@ class SCC_Social_Tags {
 	}
 
 	/**
+	 * The site-wide share image used when a page has no featured image: the
+	 * theme's custom logo, else the site icon ('' when there is neither).
+	 *
+	 * @return string
+	 */
+	public static function fallback_image() {
+		$logo_id = (int) get_theme_mod( 'custom_logo' );
+		$logo    = $logo_id ? wp_get_attachment_image_url( $logo_id, 'full' ) : '';
+		return $logo ? (string) $logo : (string) get_site_icon_url( 512 );
+	}
+
+	/**
 	 * Gather the values for the current request.
 	 *
 	 * @return array
@@ -59,7 +72,7 @@ class SCC_Social_Tags {
 			'url'         => home_url( '/' ),
 			'title'       => get_bloginfo( 'name' ),
 			'description' => get_bloginfo( 'description' ),
-			'image'       => (string) get_site_icon_url( 512 ),
+			'image'       => self::fallback_image(),
 		);
 
 		if ( is_singular() ) {
@@ -75,7 +88,7 @@ class SCC_Social_Tags {
 			$context['description'] = self::first_filled(
 				get_post_meta( $post_id, '_scc_og_description', true ),
 				$current['description'] ?? '',
-				has_excerpt( $post_id ) ? get_the_excerpt( $post_id ) : wp_trim_words( wp_strip_all_tags( (string) get_post_field( 'post_content', $post_id ) ), 30, '…' )
+				has_excerpt( $post_id ) ? get_the_excerpt( $post_id ) : wp_trim_words( class_exists( 'SCC_Content_Index' ) ? SCC_Content_Index::lead_text_from_html( (string) get_post_field( 'post_content', $post_id ) ) : wp_strip_all_tags( (string) get_post_field( 'post_content', $post_id ) ), 30, '…' )
 			);
 			$thumb = get_the_post_thumbnail_url( $post_id, 'large' );
 			if ( $thumb ) {

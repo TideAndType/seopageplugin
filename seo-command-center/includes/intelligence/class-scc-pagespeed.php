@@ -60,8 +60,14 @@ class SCC_PageSpeed {
 		$strategy = 'desktop' === $strategy ? 'desktop' : 'mobile';
 
 		$results = array();
+		$local   = self::is_local_url( home_url( '/' ) );
 		foreach ( self::pick_urls( $count ) as $target ) {
-			$results[] = $this->measure( $target['url'], $strategy ) + array( 'post_id' => (int) $target['post_id'] );
+			// Google's servers cannot load a site on a local/dev address, so don't
+			// spend quota on a request that can only fail — say why instead.
+			$result    = $local
+				? self::unmeasured( $target['url'], sprintf( __( 'PageSpeed can’t test this site: it runs at a local address (%s) that Google’s servers can’t reach. Run this check on the live site.', 'seo-command-center' ), (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) ) )
+				: $this->measure( $target['url'], $strategy );
+			$results[] = $result + array( 'post_id' => (int) $target['post_id'] );
 		}
 
 		$report = self::build_report( $results, $strategy );
@@ -72,6 +78,33 @@ class SCC_PageSpeed {
 			SCC_Logger::info( 'pagespeed', 'PageSpeed check completed.', array( 'urls' => count( $results ), 'score' => $report['score'] ) );
 		}
 		return $report;
+	}
+
+	/**
+	 * Whether a URL is on a local/development address the public internet can't
+	 * reach (localhost, a private or loopback IP, or a dev-only domain such as
+	 * .local or .test). Pure — unit-tested; no DNS lookup.
+	 *
+	 * @param string $url URL.
+	 * @return bool
+	 */
+	public static function is_local_url( $url ) {
+		$host = strtolower( trim( (string) wp_parse_url( (string) $url, PHP_URL_HOST ), '[].' ) );
+		if ( '' === $host ) {
+			return false;
+		}
+		if ( class_exists( 'SCC_URL' ) && SCC_URL::is_localhost_name( $host ) ) {
+			return true;
+		}
+		if ( filter_var( $host, FILTER_VALIDATE_IP ) ) {
+			return class_exists( 'SCC_URL' ) && 'public' !== SCC_URL::ip_category( $host );
+		}
+		foreach ( array( '.local', '.test', '.localhost', '.invalid', '.example', '.internal', '.lan', '.home.arpa' ) as $tld ) {
+			if ( substr( $host, -strlen( $tld ) ) === $tld ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

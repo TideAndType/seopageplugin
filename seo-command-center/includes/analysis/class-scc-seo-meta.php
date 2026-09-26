@@ -51,6 +51,17 @@ class SCC_SEO_Meta {
 	}
 
 	/**
+	 * Whether an SEO plugin TideOrbit doesn't read from (SEOPress, Slim SEO,
+	 * Squirrly, SmartCrawl) is active. Such a plugin prints its own title and
+	 * meta tags, so TideOrbit must not print a second set.
+	 *
+	 * @return bool
+	 */
+	public static function other_seo_plugin_active() {
+		return defined( 'SEOPRESS_VERSION' ) || defined( 'SLIM_SEO_VER' ) || defined( 'SQ_VERSION' ) || defined( 'WDS_VERSION' );
+	}
+
+	/**
 	 * Human label for the detected plugin.
 	 *
 	 * @param string $plugin Plugin key.

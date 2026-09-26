@@ -116,7 +116,8 @@ One merged diagnosis of the whole site. Heavy crawls run in their own requests; 
 - `401`/`403` — missing capability or nonce.
 - `400` — validation failure (message names the field).
 - `402` — monthly AI budget exceeded (from `SCC_AI_Manager`).
-- `502` — upstream AI/API transport error (after fallback attempted).
+- `404` — missing resource (e.g. `PUT /templates/native/{id}` or `POST /templates/native/clone` with an unknown template id).
+- `502` — upstream AI/API transport error (after fallback attempted). The message names the provider that failed and, when the primary provider has no key, says so.
 - All errors are logged (redacted) via `SCC_Logger`; responses never leak keys
   or stack traces.
 

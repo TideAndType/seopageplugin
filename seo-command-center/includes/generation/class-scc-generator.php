@@ -634,7 +634,7 @@ class SCC_Generator {
 		if ( 0 === SCC_Content_Index::count() ) {
 			SCC_Content_Index::reindex_all( 500 );
 		}
-		$rows = SCC_Content_Index::all( 3000 );
+		$rows = SCC_Content_Index::live_rows( SCC_Content_Index::all( 3000 ) );
 		if ( empty( $rows ) ) {
 			return array();
 		}

@@ -49,7 +49,44 @@ class SCC_Content_Index {
 			}
 		}
 
-		return trim( wp_strip_all_tags( $content ) );
+		return self::html_to_text( $content );
+	}
+
+	/**
+	 * HTML to readable text. Block-level boundaries become spaces first, so
+	 * markup written without whitespace between elements (page builders,
+	 * programmatic content) doesn't glue words together ("BeachWhat we fix").
+	 * Shortcodes are dropped. Pure — unit-tested.
+	 *
+	 * @param string $html HTML.
+	 * @return string
+	 */
+	public static function html_to_text( $html ) {
+		$html = (string) $html;
+		if ( function_exists( 'strip_shortcodes' ) ) {
+			$html = strip_shortcodes( $html );
+		}
+		$html = preg_replace( '#<br\s*/?>|</(?:p|div|h[1-6]|li|dt|dd|td|th|tr|table|ul|ol|blockquote|pre|figure|figcaption|section|article|header|footer|aside|nav|main)\s*>#i', '$0 ', $html );
+		return trim( preg_replace( '/[ \t]{2,}/', ' ', wp_strip_all_tags( $html ) ) );
+	}
+
+	/**
+	 * The page's prose — its paragraphs, without headings, menus or buttons —
+	 * for summaries such as a meta or social description. Falls back to all
+	 * text when the page has too few paragraphs. Pure — unit-tested.
+	 *
+	 * @param string $html HTML.
+	 * @return string
+	 */
+	public static function lead_text_from_html( $html ) {
+		$html = (string) $html;
+		if ( preg_match_all( '#<p\b[^>]*>(.*?)</p>#is', $html, $m ) ) {
+			$text = trim( preg_replace( '/\s+/u', ' ', self::html_to_text( implode( ' ', $m[1] ) ) ) );
+			if ( strlen( $text ) >= 50 ) {
+				return $text;
+			}
+		}
+		return trim( preg_replace( '/\s+/u', ' ', self::html_to_text( $html ) ) );
 	}
 
 	/**
@@ -331,6 +368,26 @@ class SCC_Content_Index {
 		$limit = SCC_Security::sanitize_int( $limit, 1, 10000 );
 		$rows  = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM {$table} LIMIT %d", $limit ), ARRAY_A ); // phpcs:ignore WordPress.DB
 		return $rows ? array_map( array( __CLASS__, 'decode' ), $rows ) : array();
+	}
+
+	/**
+	 * Keep only rows for posts visitors can actually open. Drafts, pending and
+	 * private posts stay in the index (so they get suggestions while being
+	 * written) but must never be offered as a link target — their URL is a
+	 * 404 for everyone who isn't logged in.
+	 *
+	 * @param array $rows Decoded index rows.
+	 * @return array
+	 */
+	public static function live_rows( array $rows ) {
+		return array_values(
+			array_filter(
+				$rows,
+				function ( $row ) {
+					return 'publish' === get_post_status( (int) ( $row['post_id'] ?? 0 ) );
+				}
+			)
+		);
 	}
 
 	/**

@@ -337,6 +337,41 @@ class SCC_Crawler {
 			}
 		}
 
+		// Links (internal vs external relative to host). Read before the nav/header/
+		// footer strip below: menu links are real links, and without them every page
+		// reached only from the menu looked orphaned in the audit's link graph.
+		$host = wp_parse_url( $url, PHP_URL_HOST );
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$scheme = $scheme ? $scheme : 'https';
+		$link_seen = array();
+		foreach ( $xpath->query( '//a[@href]' ) as $a ) {
+			$href = trim( (string) $a->getAttribute( 'href' ) );
+			if ( '' === $href || 0 === strpos( $href, '#' ) || 0 === stripos( $href, 'mailto:' ) || 0 === stripos( $href, 'tel:' ) || 0 === stripos( $href, 'javascript:' ) ) {
+				continue;
+			}
+			$link_host = wp_parse_url( $href, PHP_URL_HOST );
+			if ( ! $link_host || ( $host && $link_host === $host ) ) {
+				$data['internal_links']++;
+				// Resolve the reference against the page URL (RFC 3986), then reduce
+				// it to a stable crawl identity (fragment + tracking params dropped)
+				// so the same page is not queued many times.
+				$abs = ( '' !== (string) $url && class_exists( 'SCC_URL' ) )
+					? SCC_URL::normalize_for_crawl( SCC_URL::resolve( $url, $href ) )
+					: ( $link_host ? $href : ( $scheme . '://' . $host . '/' . ltrim( $href, '/' ) ) );
+				if ( '' === $abs ) {
+					continue;
+				}
+				$path = (string) wp_parse_url( $abs, PHP_URL_PATH );
+				if ( '' !== $path && '/' !== $path && ! preg_match( '/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js|mp4|mp3|avi|mov|exe|dmg|woff2?|ttf)$/i', $path ) && ! isset( $link_seen[ $abs ] ) ) {
+					$link_seen[ $abs ]            = true;
+					$data['internal_link_urls'][] = $abs;
+				}
+			} else {
+				$data['external_links']++;
+			}
+		}
+		$data['internal_link_urls'] = array_slice( $data['internal_link_urls'], 0, 200 );
+
 		// Visible body text excerpt (drop script/style/nav/header/footer noise), so
 		// callers can compare actual page CONTENT, not just headings.
 		foreach ( $xpath->query( '//script | //style | //noscript | //nav | //header | //footer | //form' ) as $strip ) {
@@ -370,40 +405,6 @@ class SCC_Crawler {
 				$data['images_not_lazy']++;
 			}
 		}
-
-
-		// Links (internal vs external relative to host).
-		$host = wp_parse_url( $url, PHP_URL_HOST );
-		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
-		$scheme = $scheme ? $scheme : 'https';
-		$link_seen = array();
-		foreach ( $xpath->query( '//a[@href]' ) as $a ) {
-			$href = trim( (string) $a->getAttribute( 'href' ) );
-			if ( '' === $href || 0 === strpos( $href, '#' ) || 0 === stripos( $href, 'mailto:' ) || 0 === stripos( $href, 'tel:' ) || 0 === stripos( $href, 'javascript:' ) ) {
-				continue;
-			}
-			$link_host = wp_parse_url( $href, PHP_URL_HOST );
-			if ( ! $link_host || ( $host && $link_host === $host ) ) {
-				$data['internal_links']++;
-				// Resolve the reference against the page URL (RFC 3986), then reduce
-				// it to a stable crawl identity (fragment + tracking params dropped)
-				// so the same page is not queued many times.
-				$abs = ( '' !== (string) $url && class_exists( 'SCC_URL' ) )
-					? SCC_URL::normalize_for_crawl( SCC_URL::resolve( $url, $href ) )
-					: ( $link_host ? $href : ( $scheme . '://' . $host . '/' . ltrim( $href, '/' ) ) );
-				if ( '' === $abs ) {
-					continue;
-				}
-				$path = (string) wp_parse_url( $abs, PHP_URL_PATH );
-				if ( '' !== $path && '/' !== $path && ! preg_match( '/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js|mp4|mp3|avi|mov|exe|dmg|woff2?|ttf)$/i', $path ) && ! isset( $link_seen[ $abs ] ) ) {
-					$link_seen[ $abs ]            = true;
-					$data['internal_link_urls'][] = $abs;
-				}
-			} else {
-				$data['external_links']++;
-			}
-		}
-		$data['internal_link_urls'] = array_slice( $data['internal_link_urls'], 0, 60 );
 
 		return $data;
 	}

@@ -687,8 +687,21 @@ class SCC_Technical_SEO {
 				}
 			}
 		}
+		// The link graph is only as good as the pages that were actually read.
+		// A page that failed to load contributes no links, so without these
+		// guards a blocked crawl (firewall, password, bot protection) would
+		// report every page as orphaned and unreachable.
+		$fetched = array();
+		foreach ( $url_map as $key => $page ) {
+			if ( empty( $page['fetch_error'] ) && (int) ( $page['status'] ?? 200 ) < 400 ) {
+				$fetched[ $key ] = true;
+			}
+		}
+		$home_read     = isset( $fetched[ $home ] );
+		$graph_trusted = count( $url_map ) > 0 && count( $fetched ) / count( $url_map ) >= 0.8; // Most pages must have been read.
+
 		$depth = array();
-		if ( isset( $url_map[ $home ] ) ) {
+		if ( $home_read ) {
 			$depth[ $home ] = 0;
 			$queue = array( $home );
 			while ( $queue ) {
@@ -704,15 +717,15 @@ class SCC_Technical_SEO {
 		}
 		foreach ( $url_map as $key => $page ) {
 			$url = (string) ( $page['crawl_url'] ?? $page['url'] ?? $key );
-			if ( $key === $home ) {
-				continue;
+			if ( $key === $home || ! isset( $fetched[ $key ] ) ) {
+				continue; // Unreadable pages are already reported as unreachable URLs.
 			}
-			if ( 0 === (int) ( $incoming[ $key ] ?? 0 ) ) {
+			if ( $graph_trusted && 0 === (int) ( $incoming[ $key ] ?? 0 ) ) {
 				$add( 'orphan_page', 'architecture', 'high', 'Page has no discovered internal links pointing to it', $url, '0 incoming links in the audited page graph', 'Orphaned pages are harder for users and crawlers to discover and receive no internal link context.', 'Link to the page naturally from a relevant hub, service, category or supporting article.' );
 			}
 			if ( isset( $depth[ $key ] ) && $depth[ $key ] > 3 ) {
 				$add( 'deep_click_depth', 'architecture', $depth[ $key ] > 5 ? 'high' : 'medium', 'Important page is deep in the internal-link graph', $url, 'Minimum discovered click depth: ' . $depth[ $key ], 'Very deep pages can be harder to discover and signal weaker architectural importance.', 'Add relevant links from higher-level hubs or nearby authoritative pages.' );
-			} elseif ( ! isset( $depth[ $key ] ) ) {
+			} elseif ( $home_read && $graph_trusted && ! isset( $depth[ $key ] ) ) {
 				$add( 'unreachable_from_home', 'architecture', 'high', 'Page was not reachable from the homepage link graph', $url, 'No crawl path from the audited homepage to this URL.', 'Pages disconnected from the normal navigation/link graph are difficult to discover organically.', 'Create a logical internal-link path from a crawlable hub or navigation structure.' );
 			}
 		}
@@ -738,16 +751,28 @@ class SCC_Technical_SEO {
 			}
 		}
 
-		// Real HTTP checks for a bounded sample of linked internal targets.
+		// Real HTTP checks for a bounded sample of linked internal targets. The
+		// evidence names the page(s) holding the link, which is what gets edited.
+		$linked_from = array();
+		foreach ( $url_map as $key => $page ) {
+			foreach ( (array) ( $page['internal_link_urls'] ?? array() ) as $target ) {
+				$tkey = SCC_URL::normalize_for_crawl( (string) $target );
+				if ( '' !== $tkey && count( $linked_from[ $tkey ] ?? array() ) < 3 ) {
+					$linked_from[ $tkey ][] = (string) wp_parse_url( (string) ( $page['crawl_url'] ?? $page['url'] ?? $key ), PHP_URL_PATH );
+				}
+			}
+		}
 		foreach ( (array) ( $site['link_checks'] ?? array() ) as $check ) {
 			$status = (int) ( $check['status'] ?? 0 );
 			$url = (string) ( $check['url'] ?? '' );
+			$sources = array_values( array_unique( array_filter( $linked_from[ SCC_URL::normalize_for_crawl( $url ) ] ?? array() ) ) );
+			$from    = $sources ? ' · linked from ' . implode( ', ', $sources ) : '';
 			if ( 404 === $status || 410 === $status ) {
-				$add( 'broken_internal_link', 'architecture', 'high', 'Broken internal link detected', $url, 'HTTP ' . $status, 'Broken internal links waste crawl paths and frustrate users.', 'Update or remove links to this URL, or restore/redirect the missing destination.', 'site' );
+				$add( 'broken_internal_link', 'architecture', 'high', 'Broken internal link detected', $url, 'HTTP ' . $status . $from, 'Broken internal links waste crawl paths and frustrate users.', 'Update or remove links to this URL, or restore/redirect the missing destination.', 'site' );
 			} elseif ( $status >= 500 ) {
-				$add( 'internal_link_server_error', 'architecture', 'high', 'Internal link points to a server error', $url, 'HTTP ' . $status, 'Internal links should lead to healthy, usable destinations.', 'Fix the destination server error before continuing to link to it.', 'site' );
+				$add( 'internal_link_server_error', 'architecture', 'high', 'Internal link points to a server error', $url, 'HTTP ' . $status . $from, 'Internal links should lead to healthy, usable destinations.', 'Fix the destination server error before continuing to link to it.', 'site' );
 			} elseif ( $status >= 300 && $status < 400 ) {
-				$add( 'internal_link_redirect', 'architecture', 'medium', 'Internal links pass through redirects', $url, 'HTTP ' . $status . ( ! empty( $check['location'] ) ? ' → ' . $check['location'] : '' ), 'Internal redirect hops add latency and waste crawl budget at scale.', 'Update internal links to point directly at the final canonical URL.', 'site' );
+				$add( 'internal_link_redirect', 'architecture', 'medium', 'Internal links pass through redirects', $url, 'HTTP ' . $status . ( ! empty( $check['location'] ) ? ' → ' . $check['location'] : '' ) . $from, 'Internal redirect hops add latency and waste crawl budget at scale.', 'Update internal links to point directly at the final canonical URL.', 'site' );
 			} elseif ( 0 === $status && ! empty( $check['error'] ) ) {
 				$add( 'internal_link_unverifiable', 'crawlability', 'low', 'Some internal links could not be verified', $url, (string) $check['error'], 'An audit transport error does not prove the URL is broken, but it needs a manual check.', 'Open the URL directly and confirm it returns the intended response.', 'site' );
 			}

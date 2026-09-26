@@ -91,7 +91,11 @@ class SCC_Doctor_Fixer {
 	protected function meta_description( $post_id, $apply ) {
 		$post    = get_post( $post_id );
 		$current = SCC_Metadata::current( $post_id );
-		$text    = class_exists( 'SCC_Content_Index' ) ? SCC_Content_Index::get_plain_text( $post ) : wp_strip_all_tags( (string) $post->post_content );
+		// Summarise the page's paragraphs — not its headings — so the draft reads as a sentence.
+		$text    = class_exists( 'SCC_Content_Index' ) ? SCC_Content_Index::lead_text_from_html( (string) $post->post_content ) : wp_strip_all_tags( (string) $post->post_content );
+		if ( class_exists( 'SCC_Content_Index' ) && strlen( $text ) < 50 ) {
+			$text = SCC_Content_Index::get_plain_text( $post ); // Page-builder content lives outside post_content.
+		}
 		$draft   = self::draft_description( $text, (string) $post->post_excerpt );
 
 		if ( '' === $draft ) {
@@ -151,7 +155,14 @@ class SCC_Doctor_Fixer {
 			'after'   => implode( ', ', $types ),
 			'details' => array_merge(
 				array( __( 'Validated before saving and recorded in change history (revertible).', 'seo-command-center' ) ),
-				array_map( 'strval', (array) ( $generated['warnings'] ?? array() ) )
+				array_map( 'strval', (array) ( $generated['warnings'] ?? array() ) ),
+				array_map(
+					function ( $reason ) {
+						/* translators: %s: schema type and why it failed validation */
+						return sprintf( __( 'Skipped — %s Complete your business details under Schema settings to include it.', 'seo-command-center' ), (string) $reason );
+					},
+					(array) ( $generated['invalid'] ?? array() )
+				)
 			),
 		);
 		if ( ! $apply ) {
@@ -187,6 +198,22 @@ class SCC_Doctor_Fixer {
 				array( 'status' => 409 )
 			);
 		}
+		$has_fallback = '' !== SCC_Social_Tags::fallback_image();
+		$no_image     = __( 'Pages without a featured image will still have no og:image: the site has no logo or site icon to fall back on. Add one under Appearance → Customize → Site Identity, or set featured images.', 'seo-command-center' );
+		if ( SCC_Settings::get( 'output_social_tags', false ) ) {
+			// Already on — the remaining gap is an image, which a setting can't create.
+			return new WP_Error(
+				'scc_social_already_on',
+				__( 'Social sharing tags are already on.', 'seo-command-center' ) . ' ' . ( $has_fallback
+					? __( 'Run a new check-up to confirm they are detected.', 'seo-command-center' )
+					: $no_image ),
+				array( 'status' => 409 )
+			);
+		}
+		$details = array( __( 'Turn it off again any time under Settings → “Social sharing tags”.', 'seo-command-center' ) );
+		if ( ! $has_fallback ) {
+			$details[] = $no_image;
+		}
 		$result = array(
 			'type'    => 'social_tags',
 			'post_id' => 0,
@@ -194,7 +221,7 @@ class SCC_Doctor_Fixer {
 			'summary' => __( 'Output og:title, og:description, og:image, og:url and a Twitter card on every public page, using each page’s SEO title, meta description and featured image.', 'seo-command-center' ),
 			'before'  => __( 'Off', 'seo-command-center' ),
 			'after'   => __( 'On', 'seo-command-center' ),
-			'details' => array( __( 'Turn it off again any time under Settings → “Social sharing tags”.', 'seo-command-center' ) ),
+			'details' => $details,
 		);
 		if ( ! $apply ) {
 			return $result;

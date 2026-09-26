@@ -272,22 +272,52 @@ class SCC_AI_Manager {
 			// Sharpen the message so the user knows which provider rejected the
 			// request and what to do next (the raw "invalid x-api-key" is opaque).
 			$failed = ! empty( $tried ) ? $tried[0] : $primary;
-			$labels = array(
-				'claude'   => 'Anthropic Claude',
-				'openai'   => 'OpenAI',
-				'gemini'   => 'Google Gemini',
-				'lmstudio' => 'LM Studio',
-			);
-			$name = isset( $labels[ $failed ] ) ? $labels[ $failed ] : $failed;
-			$msg  = $last->error->get_error_message();
-			$hint = sprintf(
-				/* translators: 1: provider name, 2: original error message */
-				__( 'Your primary AI provider (%1$s) failed: %2$s — Under Settings → AI, set “Primary provider” to a provider you have connected (for example LM Studio), or fix that provider’s key under API Connections.', 'seo-command-center' ),
-				$name,
-				$msg
-			);
-			$last->error = new WP_Error( $last->error->get_error_code(), $hint, $last->error->get_error_data() );
+			$hint   = self::failure_message( $primary, $failed, in_array( $primary, $configured, true ), $last->error->get_error_message() );
+			$data   = $last->error->get_error_data();
+			if ( ! is_array( $data ) || empty( $data['status'] ) ) {
+				// The AI service failed, not WordPress — 502, not a generic 500.
+				$data = array_merge( is_array( $data ) ? $data : array(), array( 'status' => 502 ) );
+			}
+			$last->error = new WP_Error( $last->error->get_error_code(), $hint, $data );
 		}
 		return $last;
+	}
+
+	/**
+	 * Explain a failed completion. Names the provider that actually failed and,
+	 * when the primary provider was skipped for having no key, says so instead
+	 * of blaming the fallback that happened to be tried. Pure — unit-tested.
+	 *
+	 * @param string $primary            Primary provider id.
+	 * @param string $failed             Provider whose error is being reported.
+	 * @param bool   $primary_configured Whether the primary provider had a key.
+	 * @param string $error              That provider's error message.
+	 * @return string
+	 */
+	public static function failure_message( $primary, $failed, $primary_configured, $error ) {
+		$labels = array(
+			'claude'   => 'Anthropic Claude',
+			'openai'   => 'OpenAI',
+			'gemini'   => 'Google Gemini',
+			'lmstudio' => 'LM Studio',
+		);
+		$primary_name = isset( $labels[ $primary ] ) ? $labels[ $primary ] : $primary;
+		$failed_name  = isset( $labels[ $failed ] ) ? $labels[ $failed ] : $failed;
+
+		if ( ! $primary_configured && $failed !== $primary ) {
+			return sprintf(
+				/* translators: 1: primary provider name, 2: fallback provider name, 3: its error message */
+				__( 'No API key is set for your primary AI provider (%1$s), so %2$s was tried instead and failed: %3$s — Add your %1$s API key under API Connections, or under Settings → AI set “Primary provider” to a provider you have connected.', 'seo-command-center' ),
+				$primary_name,
+				$failed_name,
+				$error
+			);
+		}
+		return sprintf(
+			/* translators: 1: provider name, 2: original error message */
+			__( 'Your primary AI provider (%1$s) failed: %2$s — Under Settings → AI, set “Primary provider” to a provider you have connected (for example LM Studio), or fix that provider’s key under API Connections.', 'seo-command-center' ),
+			$failed_name,
+			$error
+		);
 	}
 }

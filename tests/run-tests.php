@@ -2476,6 +2476,135 @@ assert_eq( 1, preg_match_all( '/^\tfunction bindGscQuickWins\(/m', $admin_js ), 
 preg_match_all( '/^\tfunction (\w+)\s*\(/m', $admin_js, $admin_fns );
 assert_eq( array(), array_values( array_unique( array_diff_assoc( $admin_fns[1], array_unique( $admin_fns[1] ) ) ) ), 'no duplicate top-level function names in admin.js (a later one silently replaces the earlier)' );
 
+echo "\n== Live bug hunt regressions (1.81.1) ==\n";
+// A crawl that cannot read most pages must not call every page orphaned/unreachable.
+$fail_site  = array( 'home_url' => 'https://example.com/', 'https' => true, 'blog_public' => 1, 'sitemap_ok' => true, 'robots_declares_sitemap' => true, 'sitemap_urls' => array(), 'link_checks' => array() );
+$fail_page  = function ( $path, $extra = array() ) {
+	$url = 'https://example.com' . $path;
+	return array_merge( array( 'url' => $url, 'crawl_url' => $url, 'status' => 200, 'title' => 'T ' . $path, 'title_count' => 1, 'meta_description' => 'D', 'meta_description_count' => 1, 'canonical' => $url, 'canonical_count' => 1, 'h1' => array( 'H' ), 'viewport' => 'x', 'hreflang' => array(), 'internal_link_urls' => array() ), $extra );
+};
+$fail_ids = function ( $report ) { return array_map( function ( $i ) { return $i['id']; }, $report['issues'] ); };
+$blocked  = SCC_Technical_SEO::evaluate(
+	array(
+		$fail_page( '/', array( 'status' => 0, 'fetch_error' => 'Blocked outbound URL' ) ),
+		$fail_page( '/a/', array( 'status' => 0, 'fetch_error' => 'Blocked outbound URL' ) ),
+		$fail_page( '/b/', array( 'status' => 0, 'fetch_error' => 'Blocked outbound URL' ) ),
+	),
+	$fail_site
+);
+$blocked_ids = $fail_ids( $blocked );
+assert_true( in_array( 'published_url_unreachable', $blocked_ids, true ), 'pages that could not be fetched are reported as unreachable URLs' );
+assert_eq( array(), array_values( array_intersect( $blocked_ids, array( 'orphan_page', 'unreachable_from_home' ) ) ), 'a failed crawl does not flag every page as orphaned or unreachable from home' );
+$mostly_failed = SCC_Technical_SEO::evaluate(
+	array(
+		$fail_page( '/', array( 'internal_link_urls' => array() ) ),
+		$fail_page( '/a/', array( 'status' => 0, 'fetch_error' => 'timeout' ) ),
+		$fail_page( '/b/', array( 'status' => 0, 'fetch_error' => 'timeout' ) ),
+		$fail_page( '/c/' ),
+	),
+	$fail_site
+);
+assert_eq( array(), array_values( array_intersect( $fail_ids( $mostly_failed ), array( 'orphan_page', 'unreachable_from_home' ) ) ), 'with half the pages unread, the link graph is not trusted for orphan checks' );
+$healthy = SCC_Technical_SEO::evaluate(
+	array( $fail_page( '/', array( 'internal_link_urls' => array( 'https://example.com/a/' ) ) ), $fail_page( '/a/', array( 'internal_link_urls' => array( 'https://example.com/' ) ) ), $fail_page( '/lonely/' ) ),
+	$fail_site
+);
+assert_true( in_array( 'orphan_page', $fail_ids( $healthy ), true ), 'a real orphan is still flagged when the crawl succeeded' );
+assert_true( in_array( 'unreachable_from_home', $fail_ids( $healthy ), true ), 'a real unreachable page is still flagged when the crawl succeeded' );
+
+// The site's own host may resolve to a private/loopback address (local dev, Docker) — the audit must still crawl it.
+add_filter( 'scc_resolve_host_ips', function ( $ips, $host ) {
+	if ( 'example.com' === $host ) { return array( '10.0.0.9' ); }
+	if ( 'other.test' === $host ) { return array( '10.0.0.9' ); }
+	return $ips;
+}, 10, 2 );
+assert_true( true === SCC_URL::is_safe_outbound_url( 'https://example.com/services/' ), 'own site host on a private address is crawlable' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'https://example.com:6379/' ) ), 'own host on another port stays blocked' );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'https://other.test/' ) ), 'other hosts on private addresses stay blocked' );
+remove_all_filters( 'scc_resolve_host_ips' );
+add_filter( 'scc_resolve_host_ips', function ( $ips, $host ) { return 'example.com' === $host ? array( '169.254.169.254' ) : $ips; }, 10, 2 );
+assert_true( is_wp_error( SCC_URL::is_safe_outbound_url( 'https://example.com/' ) ), 'own host resolving to the metadata address is still blocked' );
+remove_all_filters( 'scc_resolve_host_ips' );
+assert_true( SCC_URL::is_site_host( 'EXAMPLE.com' ), 'site host match is case-insensitive' );
+assert_eq( false, SCC_URL::is_site_host( 'example.com.evil.test' ), 'lookalike host is not the site' );
+
+// LM Studio: resend only after a mid-response drop; fail fast when the server is simply unreachable.
+$lm = function ( $m ) { return SCC_LMStudio_Provider::is_transient_transport_error( $m ); };
+assert_true( $lm( 'cURL error 56: OpenSSL SSL_read: unexpected eof while reading' ), 'cURL 56 (tunnel drop) is retried' );
+assert_true( $lm( 'cURL error 52: Empty reply from server' ), 'cURL 52 (empty reply) is retried' );
+assert_true( $lm( 'cURL error 18: transfer closed with outstanding read data remaining' ), 'cURL 18 (partial transfer) is retried' );
+assert_eq( false, $lm( 'cURL error 7: Failed to connect to localhost port 1234: Connection refused' ), 'connection refused fails fast' );
+assert_eq( false, $lm( 'cURL error 6: Could not resolve host: lm.example.test' ), 'unknown host fails fast' );
+assert_eq( false, $lm( 'cURL error 28: Operation timed out after 300000 milliseconds' ), 'a timeout is not resent (it would repeat the whole wait)' );
+assert_eq( false, $lm( 'cURL error 60: SSL certificate problem: self signed certificate' ), 'TLS failure fails fast' );
+assert_eq( false, $lm( 'Connection refused' ), 'non-cURL refused message fails fast' );
+
+// AI manager: blame the right provider.
+$ai_msg = SCC_AI_Manager::failure_message( 'claude', 'lmstudio', false, 'Could not connect' );
+assert_true( false !== strpos( $ai_msg, 'No API key is set for your primary AI provider (Anthropic Claude)' ), 'unconfigured primary is named as missing a key' );
+assert_true( false !== strpos( $ai_msg, 'LM Studio was tried instead' ), 'the fallback that actually failed is named' );
+$ai_msg2 = SCC_AI_Manager::failure_message( 'openai', 'openai', true, 'invalid key' );
+assert_true( 0 === strpos( $ai_msg2, 'Your primary AI provider (OpenAI) failed: invalid key' ), 'a configured primary that failed is reported as such' );
+
+// Drafts stay indexed (they get suggestions while being written) but are never offered as link targets.
+if ( ! function_exists( 'get_post_status' ) ) {
+	function get_post_status( $post_id ) {
+		return $GLOBALS['scc_test_post_status'][ (int) $post_id ] ?? false;
+	}
+}
+$GLOBALS['scc_test_post_status'] = array( 1 => 'publish', 2 => 'draft', 3 => 'private', 4 => 'publish' );
+$live = SCC_Content_Index::live_rows( array( array( 'post_id' => 1 ), array( 'post_id' => 2 ), array( 'post_id' => 3 ), array( 'post_id' => 4 ), array( 'post_id' => 99 ) ) );
+assert_eq( array( 1, 4 ), array_map( function ( $r ) { return $r['post_id']; }, $live ), 'only published pages are offered as internal-link targets' );
+$link_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/links/class-scc-link-engine.php' ) . (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/generation/class-scc-generator.php' );
+assert_eq( 0, preg_match( '/\$(others|rows)\s*=\s*SCC_Content_Index::all\( 3000 \);/', $link_src ), 'link suggestions and article generation never read unfiltered index rows as targets' );
+
+// Menu, header and footer links are real links: pages reached only from the menu are not orphans.
+$nav_parsed = ( new SCC_Crawler() )->parse( '<html><body><header><nav><a href="/services/">Services</a></nav></header><main><p>Body text here.</p><a href="/about/">About</a></main><footer><a href="https://example.com/contact/">Contact</a></footer></body></html>', 'https://example.com/' );
+assert_eq( array( 'https://example.com/services/', 'https://example.com/about/', 'https://example.com/contact/' ), $nav_parsed['internal_link_urls'], 'crawler keeps menu, content and footer links for the link graph' );
+assert_eq( false, strpos( (string) $nav_parsed['text_excerpt'], 'Services' ), 'menu text is still left out of the page body text' );
+
+// A broken link must say which page holds it — that is the page to edit.
+$bl_site = $fail_site;
+$bl_site['link_checks'] = array( array( 'url' => 'https://example.com/gone/', 'status' => 404 ) );
+$bl = SCC_Technical_SEO::evaluate( array( $fail_page( '/', array( 'internal_link_urls' => array( 'https://example.com/a/', 'https://example.com/gone/' ) ) ), $fail_page( '/a/', array( 'internal_link_urls' => array( 'https://example.com/' ) ) ) ), $bl_site );
+$bl_issue = null;
+foreach ( $bl['issues'] as $i ) { if ( 'broken_internal_link' === $i['id'] ) { $bl_issue = $i; } }
+assert_true( is_array( $bl_issue ) && false !== strpos( $bl_issue['examples'][0]['evidence'], 'linked from /' ), 'broken internal link evidence names the page that links to it' );
+
+// PageSpeed: a local/dev site can't be reached by Google — say so instead of spending quota.
+assert_true( SCC_PageSpeed::is_local_url( 'http://127.0.0.1:8899/' ), 'loopback site is local' );
+assert_true( SCC_PageSpeed::is_local_url( 'http://192.168.1.20/' ), 'private-IP site is local' );
+assert_true( SCC_PageSpeed::is_local_url( 'http://mysite.local/' ), '.local dev domain is local' );
+assert_true( SCC_PageSpeed::is_local_url( 'https://localhost/' ), 'localhost is local' );
+assert_eq( false, SCC_PageSpeed::is_local_url( 'https://example.com/' ), 'public domain is not local' );
+assert_eq( false, SCC_PageSpeed::is_local_url( 'https://93.184.216.34/' ), 'public IP is not local' );
+
+// Markup with no whitespace between elements must not glue words together.
+assert_eq( 'Roof Repair in Daytona Beach What we fix Leaks We repair roofs.', preg_replace( '/\s+/', ' ', SCC_Content_Index::html_to_text( '<h1>Roof Repair in Daytona Beach</h1><h2>What we fix</h2><h4>Leaks</h4><p>We repair roofs.</p>' ) ), 'block boundaries become spaces when HTML has no whitespace' );
+assert_eq( 'Line one Line two', preg_replace( '/\s+/', ' ', SCC_Content_Index::html_to_text( 'Line one<br/>Line two' ) ), '<br> becomes a space' );
+assert_eq( 'We repair and replace residential roofs across Daytona Beach. Our crew handles leaks.', SCC_Content_Index::lead_text_from_html( '<h1>Roof Repair</h1><h2>What we fix</h2><p>We repair and replace residential roofs across Daytona Beach.</p><p>Our crew handles leaks.</p>' ), 'descriptions are drawn from paragraphs, not headings' );
+assert_eq( 'Roof Replacement Short page.', SCC_Content_Index::lead_text_from_html( '<h1>Roof Replacement</h1><p>Short page.</p>' ), 'too little paragraph text falls back to all text' );
+assert_eq( '', SCC_Doctor_Fixer::draft_description( SCC_Content_Index::lead_text_from_html( '<h1>Roof Replacement</h1><p>Short page.</p>' ) ), 'a near-empty page gets no invented description' );
+
+// Without an SEO plugin, the description TideOrbit saves must actually reach the page.
+assert_eq( '<meta name="description" content="We fix roofs &amp; gutters." />', SCC_Meta_Tags::description_tag( "  We fix roofs\n & gutters. " ), 'saved description prints as an escaped meta description tag' );
+assert_eq( '', SCC_Meta_Tags::description_tag( '   ' ), 'no tag when nothing is saved' );
+$plugin_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/class-scc-plugin.php' );
+assert_true( false !== strpos( $plugin_src, "array( 'SCC_Meta_Tags', 'output' )" ) && false !== strpos( $plugin_src, "'pre_get_document_title', array( 'SCC_Meta_Tags', 'document_title' )" ), 'meta description and SEO title are hooked into the front end' );
+
+// Homepage schema fix must add what the audit expects there (Organization), without a Home › Home breadcrumb.
+require_once __DIR__ . '/../seo-command-center/includes/schema/class-scc-schema-engine.php'; // Loaded late: earlier tests rely on it being absent.
+assert_eq( array( 'WebPage', 'Organization' ), SCC_Schema_Engine::front_page_types( array( 'WebPage', 'BreadcrumbList' ) ), 'front page gets Organization schema and no breadcrumb' );
+assert_eq( 1, count( SCC_Schema_Engine::dedupe_crumbs( array( array( 'name' => 'Home', 'url' => 'https://example.com/' ), array( 'name' => 'Home', 'url' => 'https://example.com' ) ) ) ), 'a crumb repeating the previous URL is dropped' );
+assert_eq( 2, count( SCC_Schema_Engine::dedupe_crumbs( array( array( 'name' => 'Home', 'url' => 'https://example.com/' ), array( 'name' => 'Roofs', 'url' => 'https://example.com/roofs/' ) ) ) ), 'a normal trail is kept' );
+
+// Missing templates / Google app are client errors, not server errors.
+$rest_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+assert_true( 1 === preg_match( "/function templates_version.*?'not_found'.*?404/s", $rest_src ), 'saving a version of a missing template returns 404' );
+assert_true( 1 === preg_match( "/function templates_clone.*?'missing_id'.*?400.*?'not_found'.*?404/s", $rest_src ), 'cloning without / with a bad template id returns 400 / 404' );
+$gsc_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php' );
+assert_true( 1 === preg_match( "/'scc_no_client',[^;]*'status' => 400/s", $gsc_src ), 'Search Console auth URL without the Google app set up returns 400' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -104,6 +104,9 @@ class SCC_Plugin {
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
 		add_action( 'wp_head', array( 'SCC_Social_Tags', 'output' ), 5 );
+		// With no SEO plugin, print the SEO title/description TideOrbit saved.
+		add_action( 'wp_head', array( 'SCC_Meta_Tags', 'output' ), 1 );
+		add_filter( 'pre_get_document_title', array( 'SCC_Meta_Tags', 'document_title' ), 20 );
 		$this->loader->add_action( 'wp_head', $this, 'front_styles', 8 );
 
 		// Background jobs dispatcher. The recurring hook provides a safety net;

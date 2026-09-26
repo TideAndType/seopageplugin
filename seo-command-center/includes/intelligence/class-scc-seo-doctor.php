@@ -395,7 +395,7 @@ class SCC_SEO_Doctor {
 		foreach ( (array) ( $aeo['recommendations'] ?? array() ) as $rec ) {
 			$priority = (int) ( $rec['priority'] ?? 0 );
 			$severity = $priority >= 95 ? 'critical' : ( $priority >= 85 ? 'high' : ( $priority >= 72 ? 'medium' : 'low' ) );
-			$examples = ! empty( $rec['url'] ) ? array( array( 'url' => (string) $rec['url'], 'evidence' => '', 'post_id' => 0 ) ) : array();
+			$examples = ! empty( $rec['url'] ) ? array( array( 'url' => (string) $rec['url'], 'evidence' => '', 'post_id' => (int) ( $rec['post_id'] ?? 0 ) ) ) : array();
 			$issues[] = self::make( 'aeo:' . sanitize_key( (string) ( $rec['key'] ?? md5( (string) ( $rec['title'] ?? '' ) ) ) ), 'ai', 'aeo', $severity, (string) ( $rec['title'] ?? '' ), (string) ( $rec['reason'] ?? '' ), (string) ( $rec['outcome'] ?? '' ), '', $examples ? 1 : 0, $examples, '', 'aeo' );
 		}
 
@@ -582,6 +582,10 @@ class SCC_SEO_Doctor {
 			'structured_data' => 'schema',
 		);
 		$screen = $screens[ (string) ( $issue['category'] ?? '' ) ] ?? '';
+		$fix    = self::FIXES[ $id ] ?? '';
+		if ( 'social_tags' === $fix && class_exists( 'SCC_Settings' ) && SCC_Settings::get( 'output_social_tags', false ) ) {
+			$fix = ''; // Already on: what's left is a missing image, which one click can't add.
+		}
 		return self::make(
 			( 'pagespeed' === $source ? 'psi:' : 'tech:' ) . $id,
 			$group,
@@ -593,7 +597,7 @@ class SCC_SEO_Doctor {
 			(string) ( $issue['fix'] ?? '' ),
 			(int) ( $issue['affected_count'] ?? count( $examples ) ),
 			$examples,
-			self::FIXES[ $id ] ?? '',
+			$fix,
 			$screen,
 			'site' === ( $issue['scope'] ?? 'page' ) ? 'site' : 'page'
 		);

@@ -3808,6 +3808,9 @@ class SCC_REST {
 	public function templates_version( WP_REST_Request $request ) {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
+		if ( ! SCC_Template_Store::get( (int) $request->get_param( 'id' ) ) ) {
+			return $this->fail( 'not_found', __( 'Template not found.', 'seo-command-center' ), 404 );
+		}
 		$id     = SCC_Template_Store::update_as_new_version( (int) $request->get_param( 'id' ), is_array( $params ) ? $params : array() );
 		if ( ! $id ) {
 			return $this->fail( 'version_failed', __( 'Could not save a new version.', 'seo-command-center' ), 500 );
@@ -3835,7 +3838,14 @@ class SCC_REST {
 	public function templates_clone( WP_REST_Request $request ) {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : array();
-		$id     = SCC_Template_Store::clone_template( (int) ( $params['id'] ?? 0 ), (string) ( $params['name'] ?? '' ) );
+		$source = (int) ( $params['id'] ?? 0 );
+		if ( $source <= 0 ) {
+			return $this->fail( 'missing_id', __( 'Choose a template to clone.', 'seo-command-center' ), 400 );
+		}
+		if ( ! SCC_Template_Store::get( $source ) ) {
+			return $this->fail( 'not_found', __( 'Template not found.', 'seo-command-center' ), 404 );
+		}
+		$id     = SCC_Template_Store::clone_template( $source, (string) ( $params['name'] ?? '' ) );
 		if ( ! $id ) {
 			return $this->fail( 'clone_failed', __( 'Could not clone the template.', 'seo-command-center' ), 500 );
 		}
