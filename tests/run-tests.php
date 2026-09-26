@@ -2438,6 +2438,14 @@ if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
 }
 assert_eq( SCC_SEO_Meta::PLUGIN_TSF, SCC_SEO_Meta::detect(), 'active The SEO Framework constant is detected' );
 
+echo "\n== Admin JS: shared helpers ==\n";
+$admin_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+// Regression: the Citation Scanner called esc() without defining it ("esc is not defined").
+assert_true( 1 === preg_match( '/^\tfunction esc\( s \) \{/m', $admin_js ), 'admin.js defines a shared top-level esc() for every screen' );
+assert_eq( 1, preg_match_all( '/^\tfunction bindGscQuickWins\(/m', $admin_js ), 'no two top-level functions share a name (bindGscQuickWins)' );
+preg_match_all( '/^\tfunction (\w+)\s*\(/m', $admin_js, $admin_fns );
+assert_eq( array(), array_values( array_unique( array_diff_assoc( $admin_fns[1], array_unique( $admin_fns[1] ) ) ) ), 'no duplicate top-level function names in admin.js (a later one silently replaces the earlier)' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

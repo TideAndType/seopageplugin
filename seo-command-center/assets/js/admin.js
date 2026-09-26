@@ -34,6 +34,14 @@
 		}
 	}
 
+	// Shared HTML escaper for any screen that builds markup from API data.
+	// (Some screens keep a local copy; this guarantees one always exists.)
+	function esc( s ) {
+		return String( s == null ? '' : s ).replace( /[&<>"']/g, function ( c ) {
+			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ c ];
+		} );
+	}
+
 	function request( path, options ) {
 		options = options || {};
 		options.path = '/seo-command/v1' + path;
