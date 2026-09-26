@@ -31,6 +31,9 @@ jobs:
       - name: PHP syntax check
         run: find seo-command-center tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
+      - name: Admin JavaScript syntax check
+        run: node --check seo-command-center/assets/js/admin.js
+
       - name: Unit tests
         run: php tests/run-tests.php
 
