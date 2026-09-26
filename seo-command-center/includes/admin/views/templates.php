@@ -138,11 +138,15 @@ foreach ( $templates as $t ) {
 		<?php if ( empty( $data['elementor_active'] ) ) : ?>
 			<p class="scc-note"><?php esc_html_e( 'Elementor is not active. The plugin works fully without it using the Gutenberg and native WordPress renderers.', 'seo-command-center' ); ?></p>
 		<?php else : ?>
-			<p class="scc-note"><?php esc_html_e( 'Register an existing Elementor page (built with Elementor Free) as a template. Generation duplicates its design into a new page and fills placeholders — the original is never modified. No Elementor Pro or Theme Builder required.', 'seo-command-center' ); ?></p>
+			<p class="scc-note"><?php esc_html_e( 'Register an Elementor Library item, draft page, or published page as a design source. Import is read-only: generation duplicates the design into a new page and the source is never modified. Published sources are labeled LIVE so there is no ambiguity.', 'seo-command-center' ); ?></p>
 			<p>
 				<select id="scc-el-source">
-					<?php foreach ( (array) $data['elementor_sources'] as $src ) : ?>
-						<option value="<?php echo esc_attr( $src['id'] ); ?>"><?php echo esc_html( $src['name'] . ' (#' . $src['id'] . ')' ); ?></option>
+					<?php foreach ( (array) $data['elementor_sources'] as $src ) :
+						$source_label = 'library' === (string) ( $src['source'] ?? '' )
+							? __( 'Elementor Library', 'seo-command-center' )
+							: ( ! empty( $src['is_live'] ) ? __( 'LIVE page — copy only', 'seo-command-center' ) : __( 'Draft page — copy only', 'seo-command-center' ) );
+					?>
+						<option value="<?php echo esc_attr( $src['id'] ); ?>"><?php echo esc_html( $src['name'] . ' (#' . $src['id'] . ') — ' . $source_label ); ?></option>
 					<?php endforeach; ?>
 				</select>
 				<select id="scc-el-type">
