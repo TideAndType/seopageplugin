@@ -649,15 +649,19 @@ class SCC_Admin {
 	public function render_architecture() {
 		$strategy = SCC_Keyword_Strategy::latest();
 		$tree     = null;
+		$brain    = null;
 		if ( $strategy && ! empty( $strategy['map_data'] ) ) {
 			$builder = new SCC_Architecture();
-			$tree    = $builder->build( $strategy['map_data'] );
+			$base    = $builder->build( $strategy['map_data'] );
+			$brain   = ( new SCC_Architecture_Brain() )->analyze( $base );
+			$tree    = $brain['tree'];
 		}
 		$this->view(
 			'architecture',
 			array(
 				'strategy' => $strategy,
 				'tree'     => $tree,
+				'brain'    => $brain,
 			)
 		);
 	}
