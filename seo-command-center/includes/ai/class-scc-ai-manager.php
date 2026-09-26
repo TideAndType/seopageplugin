@@ -246,6 +246,17 @@ class SCC_AI_Manager {
 				// Use the forced model only for the routed primary provider.
 				$req['model'] = ( $pid === $primary && '' !== $forced_model ) ? $forced_model : $this->model_for( $pid );
 			}
+
+			// LM Studio is local inference and must never inherit a per-step output
+			// ceiling from callers. Resumable generation already keeps each request
+			// short enough for the transport; limiting tokens again can truncate the
+			// outline or a section before the model naturally finishes. LM Studio's
+			// OpenAI-compatible API treats -1 as unlimited, so force that value for
+			// every LM Studio operation regardless of any step-specific budget.
+			if ( 'lmstudio' === $pid ) {
+				$req['max_tokens'] = -1;
+			}
+
 			$response = $provider->complete( $req );
 			SCC_AI_Usage::record( $response, $operation );
 			if ( ! $response->is_error() ) {
