@@ -196,6 +196,17 @@ class SCC_Generator {
 			'outline'                  => array(),
 			'entities'                 => (array) ( $page_brain['entities'] ?? array() ),
 			'questions'                => (array) ( $page_brain['questions_to_answer'] ?? array() ),
+			'answer_targets'           => array_map(
+				function ( $q ) {
+					return array(
+						'question'    => (string) $q,
+						'answer_goal' => __( 'Answer directly in the opening sentence, then explain the useful detail and caveats.', 'seo-command-center' ),
+					);
+				},
+				(array) ( $page_brain['questions_to_answer'] ?? array() )
+			),
+			'citation_requirements'    => array(),
+			'entity_statements'        => (array) ( $page_brain['entities'] ?? array() ),
 			'internal_link_targets'    => wp_list_pluck( (array) ( $page_brain['internal_links'] ?? array() ), 'url' ),
 			'external_reference_types' => array(),
 			'cta'                      => (string) ( $page_brain['conversion_goal'] ?? '' ),
@@ -845,7 +856,12 @@ class SCC_Generator {
 			. 'never invent facts, statistics, prices, awards, clients or testimonials. Treat page_brain.evidence_slots as the only verified business proof supplied for this page, and respect page_brain.brand_context.forbidden_claims. '
 			. 'Use current, correct terminology '
 			. '(for example "Google Business Profile", never "GMB" or "GBP"). Do NOT repeat SEO myths or folklore tactics '
-			. '(for example, do not claim that geotagging images improves rankings). '
+			. '(for example, do not claim that geotagging images improves rankings). '			// AEO / AI citation readiness.
+			. 'AEO / AI-CITATION READINESS: write so a search or answer system can retrieve the correct passage without losing context. '
+			. 'For questions in answer_targets or the brief, give the direct answer first, then expand with nuance, steps, evidence and limitations. '
+			. 'Make important organization, service, location and product entities explicit rather than relying on vague pronouns. '
+			. 'When citation_requirements identifies a claim needing support, either use verified evidence already supplied in the brief/page_brain or phrase the claim conservatively; never invent a source, URL, study, quote or statistic. '
+			. 'Use external references only when real source material is actually supplied. Do not fabricate citations. Do not claim that FAQ schema, llms.txt, special AI markup, keyword repetition or any formatting guarantees inclusion in ChatGPT, Google AI features, Gemini, Perplexity or Copilot. '
 			// No overpromising.
 			. 'NO OVERPROMISING: never promise or imply guaranteed results, number-one rankings, or "undeniable authority", and '
 			. 'do not phrase anything as a guarantee. Instead describe how the work builds stronger signals of relevance, trust '
