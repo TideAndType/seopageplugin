@@ -116,8 +116,9 @@ class SCC_Keyword_Strategy {
 	/**
 	 * Real search-demand signals from Google Search Console (when connected):
 	 * the site's top queries by impressions, plus "quick win" queries where the
-	 * site already ranks on page 1-2 (positions 4-20) — strong candidates for
-	 * dedicated pages. These are MEASURED numbers, so they may be shown as-is.
+	 * site already ranks on page 1-2 (positions 4-20). These are optimization
+	 * signals first, not automatic new-page recommendations. These are MEASURED
+	 * numbers, so they may be shown as-is.
 	 *
 	 * @return array {connected:bool, top_queries:array, quick_wins:array}
 	 */
@@ -420,13 +421,12 @@ class SCC_Keyword_Strategy {
 			. 'pillars/subtopics with "status":"new" for genuine gaps. Infer the business\'s real services, '
 			. 'products and locations from the existing page titles. Never propose a near-duplicate of a page '
 			. 'that already exists. '
-			. 'USE REAL SEARCH DEMAND. If "gsc_top_queries" (real Google Search Console queries with impressions, '
-			. 'clicks and average position) and "gsc_quick_wins" (queries already ranking on page 1-2 without a '
-			. 'dedicated page) are provided, ground your keywords and NEW suggestions in them: add new '
-			. 'pillars/subtopics targeting the highest-impression queries the site has no page for, and mark '
-			. 'quick-win topics "high" priority. If "gsc_untapped" (queries with real impressions but almost no '
-			. 'clicks — demand the site is seen for but does not win) is provided, propose NEW pages that directly '
-			. 'answer those searches. Prefer the real query phrasing for primary keywords where natural. '
+			. 'USE REAL SEARCH DEMAND. If "gsc_top_queries", "gsc_quick_wins", or "gsc_untapped" are provided, '
+			. 'treat them as evidence of demand, NOT proof that a new URL is needed. EXISTING-PAGE-FIRST: before '
+			. 'proposing any GSC-driven new page, check the supplied existing_site_pages for a page that can satisfy '
+			. 'the same intent. Prefer expanding that existing page. Only propose a NEW URL when the query represents '
+			. 'a materially different user task/search intent that the existing page should not absorb. Mark strong '
+			. 'measured opportunities high priority and prefer real query phrasing where natural. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
 			. '"intent":str,"recommended_url":str,"meta_title":str,"priority":"high|medium|low","related":[str],'
