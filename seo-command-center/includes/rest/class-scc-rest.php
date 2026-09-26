@@ -284,6 +284,36 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/architecture/expansion/generate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_expansion_generate' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture/expansion/apply',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_expansion_apply' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture/expansion/rollback',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_expansion_rollback' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/content-plan',
 			array(
 				array(
@@ -1605,6 +1635,78 @@ class SCC_REST {
 		}
 
 		return $this->fail( 'bad_action', __( 'Unknown architecture action.', 'seo-command-center' ), 400 );
+	}
+
+	/**
+	 * Generate a reviewable section draft for an existing-page expansion.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_expansion_generate( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$node_id = sanitize_text_field( (string) ( $params['node_id'] ?? '' ) );
+
+		$report = $this->architecture_report();
+		if ( is_wp_error( $report ) ) {
+			return $report;
+		}
+		$node = SCC_Architecture_Brain::find_node( $report, $node_id );
+		if ( ! $node ) {
+			return $this->fail( 'missing_node', __( 'That architecture recommendation is no longer present.', 'seo-command-center' ), 404 );
+		}
+		if ( 'expand_existing' !== (string) ( $node['decision']['action'] ?? '' ) || empty( $node['post_id'] ) ) {
+			return $this->fail( 'not_expandable', __( 'This recommendation is not an existing-page expansion.', 'seo-command-center' ), 409 );
+		}
+
+		$service = new SCC_Architecture_Expansion( $this->ai );
+		$draft   = $service->generate( $node );
+		if ( is_wp_error( $draft ) ) {
+			return $draft;
+		}
+		return $this->ok( array( 'draft' => $draft ) );
+	}
+
+	/**
+	 * Apply an approved Architecture expansion draft.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_expansion_apply( WP_REST_Request $request ) {
+		$params   = $request->get_json_params();
+		$params   = is_array( $params ) ? $params : $request->get_params();
+		$post_id  = absint( $params['post_id'] ?? 0 );
+		$draft_id = sanitize_text_field( (string) ( $params['draft_id'] ?? '' ) );
+		if ( $post_id <= 0 || '' === $draft_id ) {
+			return $this->fail( 'bad_expansion', __( 'A page and section draft are required.', 'seo-command-center' ), 400 );
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot edit this page.', 'seo-command-center' ), 403 );
+		}
+		$result = SCC_Architecture_Expansion::apply( $post_id, $draft_id );
+		return is_wp_error( $result ) ? $result : $this->ok( $result );
+	}
+
+	/**
+	 * Restore the page from the last Architecture expansion backup.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_expansion_rollback( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = absint( $params['post_id'] ?? 0 );
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'bad_expansion', __( 'A page is required.', 'seo-command-center' ), 400 );
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot edit this page.', 'seo-command-center' ), 403 );
+		}
+		$result = SCC_Architecture_Expansion::rollback( $post_id );
+		return is_wp_error( $result ) ? $result : $this->ok( $result );
 	}
 
 	/**
