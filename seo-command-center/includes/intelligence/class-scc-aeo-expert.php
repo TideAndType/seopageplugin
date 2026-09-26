@@ -31,6 +31,9 @@ class SCC_AEO_Expert {
 		$crawl = self::crawlability();
 		$pages = array();
 
+		if ( class_exists( 'SCC_Content_Index' ) && class_exists( 'WP_Query' ) && 0 === SCC_Content_Index::count() ) {
+			SCC_Content_Index::reindex_all( max( 100, $limit * 3 ) );
+		}
 		if ( class_exists( 'SCC_Content_Index' ) ) {
 			foreach ( SCC_Content_Index::all( max( 100, $limit * 3 ) ) as $row ) {
 				if ( count( $pages ) >= $limit ) {
