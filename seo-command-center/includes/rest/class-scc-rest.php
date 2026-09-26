@@ -457,6 +457,17 @@ class SCC_REST {
 			'callback'            => array( $this, 'ai_visibility' ),
 			'permission_callback' => $perm,
 		) );
+		register_rest_route( self::NS, '/aeo', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'aeo_report' ),
+			'permission_callback' => $perm,
+		) );
+		register_rest_route( self::NS, '/aeo/page/(?P<id>\d+)', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'aeo_page' ),
+			'permission_callback' => $perm,
+			'args'                => array( 'id' => array( 'sanitize_callback' => 'absint', 'required' => true ) ),
+		) );
 		register_rest_route( self::NS, '/actions', array(
 			array(
 				'methods'             => WP_REST_Server::READABLE,
@@ -561,6 +572,25 @@ class SCC_REST {
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'layout_apply' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/layout/restore',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'layout_restore' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/layout/clone-draft',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'layout_clone_draft' ),
 				'permission_callback' => $perm,
 			)
 		);
@@ -2049,6 +2079,29 @@ class SCC_REST {
 	}
 
 	/**
+	 * GET /aeo — measurable AEO / AI citation readiness.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function aeo_report() {
+		return $this->ok( SCC_AEO_Expert::site_report( 80 ) );
+	}
+
+	/**
+	 * GET /aeo/page/{id} — page-level AEO readiness.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function aeo_page( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'id' );
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot view this page.', 'seo-command-center' ), 403 );
+		}
+		return $this->ok( SCC_AEO_Expert::page_report( $post_id ) );
+	}
+
+	/**
 	 * GET /page/{id}/optimize — the per-page SEO scorecard + prioritized fixes.
 	 *
 	 * @param WP_REST_Request $request Request.
@@ -2342,12 +2395,88 @@ class SCC_REST {
 		if ( $guard ) {
 			return $guard;
 		}
+		$is_live = 'publish' === (string) get_post_status( $post_id );
+		$confirm_live = ! empty( $params['confirm_live'] );
+		if ( $is_live && ! $confirm_live ) {
+			return $this->fail(
+				'live_confirmation_required',
+				__( 'This is a published page. Confirm the live-page warning or make a draft working copy instead.', 'seo-command-center' ),
+				409
+			);
+		}
 		$service = new SCC_Layout_Service( $this->ai );
 		$result  = $service->apply( $post_id, $layout );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
 		return $this->ok( $result );
+	}
+
+	/**
+	 * POST /layout/restore — restore the last TideOrbit Elementor/page snapshot.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function layout_restore( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
+		}
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) {
+			return $guard;
+		}
+		if ( ! class_exists( 'SCC_Block_Elementor_Renderer' ) ) {
+			return $this->fail( 'no_renderer', __( 'The Elementor restore service is unavailable.', 'seo-command-center' ), 500 );
+		}
+		$result = SCC_Block_Elementor_Renderer::restore_last_backup( $post_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		if ( class_exists( 'SCC_Content_Index' ) ) {
+			SCC_Content_Index::index_post( $post_id );
+		}
+		if ( class_exists( 'SCC_Site_Knowledge' ) ) {
+			SCC_Site_Knowledge::invalidate();
+		}
+		return $this->ok(
+			array(
+				'post_id' => $post_id,
+				'message' => __( 'The previous TideOrbit layout snapshot was restored.', 'seo-command-center' ),
+			)
+		);
+	}
+
+	/**
+	 * POST /layout/clone-draft — make a safe draft working copy of a page.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function layout_clone_draft( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'no_post', __( 'A source post id is required.', 'seo-command-center' ), 400 );
+		}
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) {
+			return $guard;
+		}
+		$result = SCC_Elementor::clone_to_draft( $post_id );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		return $this->ok(
+			array_merge(
+				$result,
+				array( 'message' => __( 'Safe draft working copy created. The live source was not changed.', 'seo-command-center' ) )
+			)
+		);
 	}
 
 	/**
