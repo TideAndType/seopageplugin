@@ -86,7 +86,8 @@ $node_line = function ( $node, $draggable = true ) {
 					<button type="button" class="button button-small scc-arch-action" data-action="add_to_plan"><?php esc_html_e( 'Add to Content Plan', 'seo-command-center' ); ?></button>
 				<?php endif; ?>
 				<?php if ( 'expand_existing' === $action ) : ?>
-					<button type="button" class="button button-primary button-small scc-arch-action" data-action="queue_expand"><?php esc_html_e( 'Queue page expansion', 'seo-command-center' ); ?></button>
+					<button type="button" class="button button-primary button-small scc-arch-draft-generate"><?php esc_html_e( 'Draft missing section', 'seo-command-center' ); ?></button>
+					<button type="button" class="button button-small scc-arch-action" data-action="queue_expand"><?php esc_html_e( 'Queue review', 'seo-command-center' ); ?></button>
 				<?php endif; ?>
 				<?php if ( ! empty( $node['edit_url'] ) ) : ?>
 					<a class="button button-small" href="<?php echo esc_url( $node['edit_url'] ); ?>"><?php esc_html_e( 'Edit page', 'seo-command-center' ); ?></a>
@@ -102,6 +103,9 @@ $node_line = function ( $node, $draggable = true ) {
 				<span class="scc-inline-status scc-arch-action-status"></span>
 			</div>
 		</div>
+		<?php if ( 'expand_existing' === $action ) : ?>
+			<div class="scc-arch-draft" hidden></div>
+		<?php endif; ?>
 	</div>
 	<?php
 };
