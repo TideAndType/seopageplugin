@@ -636,46 +636,113 @@ class SCC_Architecture_Brain {
 	 * @return array
 	 */
 	protected function apply_parent_overrides( array $tree, array $overrides ) {
-		$parents = array();
-		foreach ( (array) ( $tree['pillars'] ?? array() ) as $i => $pillar ) {
-			$parents[ self::normalize_path( $pillar['url'] ?? '' ) ] = $i;
-		}
+		foreach ( $overrides as $node_id => $override ) {
+			$target = isset( $override['parent_url'] ) ? self::normalize_path( $override['parent_url'] ) : '';
+			if ( '' === $target ) {
+				continue;
+			}
 
-		$moves = array();
-		foreach ( (array) ( $tree['pillars'] ?? array() ) as $pi => $pillar ) {
-			foreach ( array( 'children', 'sections', 'articles' ) as $bucket ) {
-				foreach ( (array) ( $pillar[ $bucket ] ?? array() ) as $ni => $node ) {
-					$id = (string) ( $node['node_id'] ?? '' );
-					$target = isset( $overrides[ $id ]['parent_url'] ) ? self::normalize_path( $overrides[ $id ]['parent_url'] ) : '';
-					if ( '' !== $target && isset( $parents[ $target ] ) && $parents[ $target ] !== $pi ) {
-						$moves[] = array( 'from' => $pi, 'bucket' => $bucket, 'index' => $ni, 'to' => $parents[ $target ], 'node' => $node );
+			$before  = $tree;
+			$removed = null;
+			foreach ( $tree['pillars'] as &$pillar ) {
+				if ( self::remove_descendant_by_id( $pillar, (string) $node_id, $removed ) ) {
+					break;
+				}
+			}
+			unset( $pillar );
+
+			if ( ! is_array( $removed ) ) {
+				continue; // Pillars themselves are intentionally not re-parented here.
+			}
+			if ( self::node_contains_path( $removed, $target ) ) {
+				$tree = $before; // Prevent a cycle: parent cannot be its descendant.
+				continue;
+			}
+
+			$inserted = false;
+			foreach ( $tree['pillars'] as &$pillar ) {
+				if ( self::append_to_parent_path( $pillar, $target, $removed ) ) {
+					$inserted = true;
+					break;
+				}
+			}
+			unset( $pillar );
+
+			if ( ! $inserted ) {
+				$tree = $before;
+			}
+		}
+		return $tree;
+	}
+
+	/**
+	 * Remove one non-pillar descendant from a recursive architecture branch.
+	 *
+	 * @param array       $node Branch, by reference.
+	 * @param string      $node_id Stable node id.
+	 * @param array|null &$removed Removed node.
+	 * @return bool
+	 */
+	protected static function remove_descendant_by_id( array &$node, $node_id, &$removed ) {
+		foreach ( array( 'children', 'sections', 'articles' ) as $bucket ) {
+			foreach ( (array) ( $node[ $bucket ] ?? array() ) as $i => $child ) {
+				if ( (string) ( $child['node_id'] ?? '' ) === $node_id ) {
+					$removed = $child;
+					unset( $node[ $bucket ][ $i ] );
+					$node[ $bucket ] = array_values( $node[ $bucket ] );
+					return true;
+				}
+				if ( 'children' === $bucket && ! empty( $child['children'] ) ) {
+					$copy = $node[ $bucket ][ $i ];
+					if ( self::remove_descendant_by_id( $copy, $node_id, $removed ) ) {
+						$node[ $bucket ][ $i ] = $copy;
+						return true;
 					}
 				}
 			}
 		}
-		if ( empty( $moves ) ) {
-			return $tree;
-		}
+		return false;
+	}
 
-		// Remove in reverse source order.
-		usort( $moves, function ( $a, $b ) {
-			return ( $b['from'] <=> $a['from'] ) ?: ( $b['index'] <=> $a['index'] );
-		} );
-		foreach ( $moves as $m ) {
-			unset( $tree['pillars'][ $m['from'] ][ $m['bucket'] ][ $m['index'] ] );
+	/**
+	 * Append a node beneath the requested service/location parent.
+	 */
+	protected static function append_to_parent_path( array &$node, $target_path, array $child ) {
+		$path = self::normalize_path( $node['url'] ?? '' );
+		$type = (string) ( $node['page_type'] ?? '' );
+		$can_parent = ! in_array( $type, array( 'article', 'section' ), true );
+		if ( $can_parent && $path === $target_path ) {
+			$child['parent_url'] = self::normalize_display_path( $node['url'] ?? '' );
+			$bucket = 'article' === (string) ( $child['page_type'] ?? '' )
+				? 'articles'
+				: ( 'section' === (string) ( $child['status'] ?? '' ) ? 'sections' : 'children' );
+			$node[ $bucket ] = (array) ( $node[ $bucket ] ?? array() );
+			$node[ $bucket ][] = $child;
+			return true;
 		}
-		foreach ( $tree['pillars'] as &$pillar ) {
-			foreach ( array( 'children', 'sections', 'articles' ) as $bucket ) {
-				$pillar[ $bucket ] = array_values( (array) ( $pillar[ $bucket ] ?? array() ) );
+		foreach ( (array) ( $node['children'] ?? array() ) as $i => $nested ) {
+			$copy = $node['children'][ $i ];
+			if ( self::append_to_parent_path( $copy, $target_path, $child ) ) {
+				$node['children'][ $i ] = $copy;
+				return true;
 			}
 		}
-		unset( $pillar );
+		return false;
+	}
 
-		foreach ( $moves as $m ) {
-			$bucket = (string) ( $m['node']['page_type'] ?? '' ) === 'article' ? 'articles' : ( (string) ( $m['node']['status'] ?? '' ) === 'section' ? 'sections' : 'children' );
-			$tree['pillars'][ $m['to'] ][ $bucket ][] = $m['node'];
+	/**
+	 * Whether a branch contains a URL path (cycle protection).
+	 */
+	protected static function node_contains_path( array $node, $target_path ) {
+		if ( self::normalize_path( $node['url'] ?? '' ) === $target_path ) {
+			return true;
 		}
-		return $tree;
+		foreach ( (array) ( $node['children'] ?? array() ) as $child ) {
+			if ( self::node_contains_path( $child, $target_path ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
