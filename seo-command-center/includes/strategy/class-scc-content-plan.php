@@ -172,8 +172,8 @@ class SCC_Content_Plan {
 	 * @return int 1 if created, 0 otherwise.
 	 */
 	protected static function maybe_add_node( array $node, $parent, $words, $allow = null ) {
-		if ( ! empty( $node['exists'] ) ) {
-			return 0; // Don't re-recommend pages that already exist.
+		if ( ! empty( $node['exists'] ) || ( array_key_exists( 'page_candidate', $node ) && empty( $node['page_candidate'] ) ) ) {
+			return 0; // Existing/covered/section/ignored topics are not new pages.
 		}
 		if ( is_array( $allow ) && ! isset( $allow[ (string) ( $node['url'] ?? '' ) ] ) ) {
 			return 0; // Not in the user's selection.

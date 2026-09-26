@@ -175,6 +175,108 @@ class SCC_Block_Elementor_Renderer {
 	}
 
 	/**
+	 * Append one reviewed content section to an existing Elementor document
+	 * without rebuilding or replacing the rest of the page.
+	 *
+	 * Uses the same verified backup/rollback path as full layout application.
+	 *
+	 * @param int    $post_id Post id.
+	 * @param string $heading Section heading.
+	 * @param string $html Section HTML.
+	 * @return true|WP_Error
+	 */
+	public static function append_content_section( $post_id, $heading, $html ) {
+		$post_id = (int) $post_id;
+		if ( ! get_post( $post_id ) ) {
+			return new WP_Error( 'scc_no_post', __( 'Target page not found.', 'seo-command-center' ) );
+		}
+		if ( ! class_exists( 'SCC_Elementor' ) || ! SCC_Elementor::is_active() || ! SCC_Elementor::is_elementor_post( $post_id ) ) {
+			return new WP_Error( 'scc_not_elementor', __( 'This page is not currently built with Elementor.', 'seo-command-center' ) );
+		}
+
+		$heading = sanitize_text_field( (string) $heading );
+		$html    = wp_kses_post( (string) $html );
+		if ( '' === trim( $heading ) || '' === trim( wp_strip_all_tags( $html ) ) ) {
+			return new WP_Error( 'scc_empty_section', __( 'The section draft is empty.', 'seo-command-center' ) );
+		}
+
+		$built = self::render(
+			array(
+				array(
+					'id'    => 'content',
+					'empty' => false,
+					'vars'  => array(
+						'CONTENT_SECTIONS' => array(
+							array(
+								'heading' => $heading,
+								'html'    => $html,
+								'layout'  => 'editorial',
+								'surface' => 'plain',
+							),
+						),
+					),
+				)
+			)
+		);
+		if ( empty( $built['elementor'] ) ) {
+			return new WP_Error( 'scc_empty_section_layout', __( 'Elementor could not render this section with the installed capabilities.', 'seo-command-center' ) );
+		}
+
+		$existing = SCC_Elementor::get_data( $post_id );
+		if ( ! is_array( $existing ) ) {
+			return new WP_Error( 'scc_bad_elementor_data', __( 'The existing Elementor document could not be read safely.', 'seo-command-center' ) );
+		}
+		$new_tree = array_merge( $existing, $built['elementor'] );
+		$json = wp_json_encode( $new_tree );
+		if ( ! is_string( $json ) || '' === $json ) {
+			return new WP_Error( 'scc_elementor_encode', __( 'Could not encode the expanded Elementor page.', 'seo-command-center' ) );
+		}
+
+		$snapshot = self::snapshot_post( $post_id );
+		if ( ! self::update_meta_verified( $post_id, '_scc_elementor_backup', $snapshot, $snapshot ) ) {
+			return new WP_Error( 'scc_backup_failed', __( 'Could not create a rollback snapshot, so the page was left unchanged.', 'seo-command-center' ) );
+		}
+		if ( function_exists( 'wp_save_post_revision' ) ) {
+			wp_save_post_revision( $post_id );
+		}
+
+		if ( ! self::update_meta_verified( $post_id, '_elementor_data', wp_slash( $json ), $json ) ) {
+			self::restore_snapshot( $post_id, $snapshot );
+			return new WP_Error( 'scc_elementor_write', __( 'Could not append the section. The previous page was restored.', 'seo-command-center' ) );
+		}
+
+		$post = get_post( $post_id );
+		$native = $post ? (string) $post->post_content : '';
+		$native .= "\n<!-- TideOrbit architecture expansion -->\n" . $built['html'];
+		$updated = wp_update_post( array( 'ID' => $post_id, 'post_content' => $native ), true );
+		if ( is_wp_error( $updated ) || ! $updated ) {
+			self::restore_snapshot( $post_id, $snapshot );
+			return new WP_Error( 'scc_post_update', __( 'Could not update the crawlable page content. The previous page was restored.', 'seo-command-center' ) );
+		}
+
+		if ( class_exists( '\\Elementor\\Plugin' ) && isset( \Elementor\Plugin::$instance->files_manager ) ) {
+			\Elementor\Plugin::$instance->files_manager->clear_cache();
+		}
+		return true;
+	}
+
+	/**
+	 * Restore the last TideOrbit Elementor snapshot.
+	 *
+	 * @param int $post_id Post id.
+	 * @return true|WP_Error
+	 */
+	public static function restore_last_backup( $post_id ) {
+		$post_id = (int) $post_id;
+		$snapshot = get_post_meta( $post_id, '_scc_elementor_backup', true );
+		if ( ! is_array( $snapshot ) || empty( $snapshot['created_at'] ) ) {
+			return new WP_Error( 'scc_no_backup', __( 'No TideOrbit Elementor backup is available for this page.', 'seo-command-center' ) );
+		}
+		self::restore_snapshot( $post_id, $snapshot );
+		return true;
+	}
+
+	/**
 	 * Capture the page fields TideOrbit mutates during an Elementor apply.
 	 *
 	 * @param int $post_id Post id.

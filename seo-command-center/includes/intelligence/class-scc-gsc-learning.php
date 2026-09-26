@@ -74,6 +74,20 @@ class SCC_GSC_Learning {
 		update_option( self::LAST_RUN, time(), false );
 	}
 
+	/**
+	 * Cached Search Console queries grouped by page URL.
+	 *
+	 * Public so site-level systems such as the Architecture Brain can decide
+	 * whether Google is already associating a topic with an existing page.
+	 *
+	 * @param int $days Lookback days.
+	 * @return array<string,array>
+	 */
+	public static function page_query_map( $days = 90 ) {
+		$days = max( 7, min( 180, (int) $days ) );
+		return self::query_map( $days );
+	}
+
 	protected static function queries_for_url( $url, $days ) {
 		$map = self::query_map( $days );
 		$key = untrailingslashit( $url );

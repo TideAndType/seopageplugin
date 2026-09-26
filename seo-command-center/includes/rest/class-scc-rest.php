@@ -264,6 +264,56 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/architecture/action',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_action' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture/merge-action',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_merge_action' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture/expansion/generate',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_expansion_generate' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture/expansion/apply',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_expansion_apply' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
+			'/architecture/expansion/rollback',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'architecture_expansion_rollback' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/content-plan',
 			array(
 				array(
@@ -1468,12 +1518,245 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function get_architecture() {
+		$report = $this->architecture_report();
+		if ( is_wp_error( $report ) ) {
+			return $this->ok( array( 'tree' => null, 'brain' => null ) );
+		}
+		return $this->ok( array( 'tree' => $report['tree'], 'brain' => $report ) );
+	}
+
+	/**
+	 * Build the latest evidence-backed Architecture Brain report.
+	 *
+	 * @return array|WP_Error
+	 */
+	protected function architecture_report() {
 		$strategy = SCC_Keyword_Strategy::latest();
 		if ( ! $strategy || empty( $strategy['map_data'] ) ) {
-			return $this->ok( array( 'tree' => null ) );
+			return new WP_Error( 'scc_no_strategy', __( 'Generate a keyword strategy first.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 		$builder = new SCC_Architecture();
-		return $this->ok( array( 'tree' => $builder->build( $strategy['map_data'] ) ) );
+		$base    = $builder->build( $strategy['map_data'] );
+		return ( new SCC_Architecture_Brain() )->analyze( $base );
+	}
+
+	/**
+	 * Architecture Action Center.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_action( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$action  = sanitize_key( (string) ( $params['action'] ?? '' ) );
+		$node_id = sanitize_text_field( (string) ( $params['node_id'] ?? '' ) );
+
+		if ( '' === $node_id ) {
+			return $this->fail( 'missing_node', __( 'Architecture node is required.', 'seo-command-center' ), 400 );
+		}
+
+		if ( 'restore' === $action ) {
+			SCC_Architecture_Brain::clear_override( $node_id );
+			$report = $this->architecture_report();
+			return is_wp_error( $report ) ? $report : $this->ok( array( 'message' => __( 'Architecture preference restored.', 'seo-command-center' ), 'brain' => $report ) );
+		}
+
+		if ( 'ignore' === $action || 'mark_covered' === $action || 'reparent' === $action ) {
+			$changes = array();
+			if ( 'ignore' === $action ) {
+				$changes['ignored'] = true;
+			}
+			if ( 'mark_covered' === $action ) {
+				$changes['covered'] = true;
+			}
+			if ( 'reparent' === $action ) {
+				$parent = SCC_Architecture_Brain::normalize_display_path( (string) ( $params['parent_url'] ?? '' ) );
+				if ( '/' === $parent ) {
+					return $this->fail( 'bad_parent', __( 'Choose a valid service hub as the new parent.', 'seo-command-center' ), 400 );
+				}
+				$changes['parent_url'] = $parent;
+			}
+			SCC_Architecture_Brain::save_override( $node_id, $changes );
+			$report = $this->architecture_report();
+			return is_wp_error( $report ) ? $report : $this->ok( array( 'message' => __( 'Architecture preference saved.', 'seo-command-center' ), 'brain' => $report ) );
+		}
+
+		$report = $this->architecture_report();
+		if ( is_wp_error( $report ) ) {
+			return $report;
+		}
+		$node = SCC_Architecture_Brain::find_node( $report, $node_id );
+		if ( ! $node ) {
+			return $this->fail( 'missing_node', __( 'That architecture recommendation is no longer present. Refresh the page and try again.', 'seo-command-center' ), 404 );
+		}
+
+		if ( 'add_to_plan' === $action ) {
+			if ( empty( $node['page_candidate'] ) || ! in_array( (string) ( $node['decision']['action'] ?? '' ), array( 'create_page', 'create_article', 'create_location' ), true ) ) {
+				return $this->fail( 'not_new_page', __( 'This topic belongs on an existing page and should not be created as another URL.', 'seo-command-center' ), 409 );
+			}
+			$id = SCC_Content_Plan::create(
+				array(
+					'title'           => $node['title'] ?? '',
+					'url'             => $node['url'] ?? '',
+					'primary_keyword' => $node['primary_keyword'] ?? '',
+					'secondary'       => $node['related'] ?? array(),
+					'intent'          => $node['intent'] ?? '',
+					'page_type'       => $node['page_type'] ?? 'service',
+					'priority'        => 'medium',
+					'status'          => 'recommended',
+				)
+			);
+			if ( ! $id ) {
+				return $this->fail( 'plan_failed', __( 'Could not add this page to Content Plan.', 'seo-command-center' ), 500 );
+			}
+			return $this->ok( array( 'message' => __( 'Added to Content Plan.', 'seo-command-center' ), 'plan_id' => $id ) );
+		}
+
+		if ( 'queue_expand' === $action ) {
+			$opp = array(
+				'id'                 => 'architecture:expand:' . $node_id,
+				'action_type'        => 'architecture_expand',
+				'type'               => 'architecture_expand',
+				'title'              => sprintf( __( 'Expand %s', 'seo-command-center' ), (string) ( $node['title'] ?? '' ) ),
+				'target'             => array( 'post_id' => (int) ( $node['post_id'] ?? 0 ), 'url' => (string) ( $node['url'] ?? '' ), 'topic' => (string) ( $node['title'] ?? '' ) ),
+				'score'              => 84,
+				'confidence'         => (int) ( $node['decision']['confidence'] ?? 90 ),
+				'priority'           => 'high',
+				'reason'             => (string) ( $node['decision']['reason'] ?? '' ),
+				'expected_impact'    => 'medium',
+				'effort'             => 'review',
+				'risk'               => 'low',
+				'source'             => 'architecture_brain',
+				'recommended_action' => sprintf( __( 'Expand the existing page with the missing coverage: %s', 'seo-command-center' ), implode( ', ', (array) ( $node['coverage']['missing'] ?? array() ) ) ),
+			);
+			$id = SCC_Action_Queue::promote( $opp, 'new' );
+			return $id ? $this->ok( array( 'message' => __( 'Page expansion added to Action Queue.', 'seo-command-center' ), 'action_id' => $id ) ) : $this->fail( 'queue_failed', __( 'Could not add the expansion to Action Queue.', 'seo-command-center' ), 500 );
+		}
+
+		return $this->fail( 'bad_action', __( 'Unknown architecture action.', 'seo-command-center' ), 400 );
+	}
+
+	/**
+	 * Generate a reviewable section draft for an existing-page expansion.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_expansion_generate( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$node_id = sanitize_text_field( (string) ( $params['node_id'] ?? '' ) );
+
+		$report = $this->architecture_report();
+		if ( is_wp_error( $report ) ) {
+			return $report;
+		}
+		$node = SCC_Architecture_Brain::find_node( $report, $node_id );
+		if ( ! $node ) {
+			return $this->fail( 'missing_node', __( 'That architecture recommendation is no longer present.', 'seo-command-center' ), 404 );
+		}
+		if ( 'expand_existing' !== (string) ( $node['decision']['action'] ?? '' ) || empty( $node['post_id'] ) ) {
+			return $this->fail( 'not_expandable', __( 'This recommendation is not an existing-page expansion.', 'seo-command-center' ), 409 );
+		}
+
+		$service = new SCC_Architecture_Expansion( $this->ai );
+		$draft   = $service->generate( $node );
+		if ( is_wp_error( $draft ) ) {
+			return $draft;
+		}
+		return $this->ok( array( 'draft' => $draft ) );
+	}
+
+	/**
+	 * Apply an approved Architecture expansion draft.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_expansion_apply( WP_REST_Request $request ) {
+		$params   = $request->get_json_params();
+		$params   = is_array( $params ) ? $params : $request->get_params();
+		$post_id  = absint( $params['post_id'] ?? 0 );
+		$draft_id = sanitize_text_field( (string) ( $params['draft_id'] ?? '' ) );
+		if ( $post_id <= 0 || '' === $draft_id ) {
+			return $this->fail( 'bad_expansion', __( 'A page and section draft are required.', 'seo-command-center' ), 400 );
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot edit this page.', 'seo-command-center' ), 403 );
+		}
+		$result = SCC_Architecture_Expansion::apply( $post_id, $draft_id );
+		return is_wp_error( $result ) ? $result : $this->ok( $result );
+	}
+
+	/**
+	 * Restore the page from the last Architecture expansion backup.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_expansion_rollback( WP_REST_Request $request ) {
+		$params  = $request->get_json_params();
+		$params  = is_array( $params ) ? $params : $request->get_params();
+		$post_id = absint( $params['post_id'] ?? 0 );
+		if ( $post_id <= 0 ) {
+			return $this->fail( 'bad_expansion', __( 'A page is required.', 'seo-command-center' ), 400 );
+		}
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return $this->fail( 'forbidden', __( 'You cannot edit this page.', 'seo-command-center' ), 403 );
+		}
+		$result = SCC_Architecture_Expansion::rollback( $post_id );
+		return is_wp_error( $result ) ? $result : $this->ok( $result );
+	}
+
+	/**
+	 * Promote a consolidation plan to Action Queue for human review.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function architecture_merge_action( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$merge_id = sanitize_text_field( (string) ( $params['merge_id'] ?? '' ) );
+		$report = $this->architecture_report();
+		if ( is_wp_error( $report ) ) {
+			return $report;
+		}
+		$match = null;
+		foreach ( (array) ( $report['consolidation'] ?? array() ) as $candidate ) {
+			if ( (string) ( $candidate['id'] ?? '' ) === $merge_id ) {
+				$match = $candidate;
+				break;
+			}
+		}
+		if ( ! $match ) {
+			return $this->fail( 'missing_merge', __( 'That consolidation recommendation is no longer present.', 'seo-command-center' ), 404 );
+		}
+
+		$opp = array(
+			'id'                 => 'architecture:' . $merge_id,
+			'action_type'        => 'architecture_merge',
+			'type'               => 'architecture_merge',
+			'title'              => sprintf( __( 'Review consolidation: %1$s → %2$s', 'seo-command-center' ), $match['merge_title'], $match['keep_title'] ),
+			'target'             => array(
+				'keep_post_id'  => (int) $match['keep_post_id'],
+				'keep_url'      => $match['keep_url'],
+				'merge_post_id' => (int) $match['merge_post_id'],
+				'merge_url'     => $match['merge_url'],
+			),
+			'score'              => (int) $match['similarity'],
+			'confidence'         => min( 95, (int) $match['similarity'] ),
+			'priority'           => (int) $match['similarity'] >= 85 ? 'high' : 'medium',
+			'reason'             => $match['reason'],
+			'expected_impact'    => 'medium',
+			'effort'             => 'review',
+			'risk'               => 'high',
+			'source'             => 'architecture_brain',
+			'recommended_action' => implode( ' ', (array) $match['recommended_steps'] ),
+		);
+		$id = SCC_Action_Queue::promote( $opp, 'new' );
+		return $id ? $this->ok( array( 'message' => __( 'Consolidation review added to Action Queue. TideOrbit will not merge or redirect automatically.', 'seo-command-center' ), 'action_id' => $id ) ) : $this->fail( 'queue_failed', __( 'Could not add the consolidation review to Action Queue.', 'seo-command-center' ), 500 );
 	}
 
 	/**
@@ -1523,8 +1806,9 @@ class SCC_REST {
 		}
 
 		$builder = new SCC_Architecture();
-		$tree    = $builder->build( $strategy['map_data'] );
-		$created = SCC_Content_Plan::seed_from_architecture( $tree, $only );
+		$base    = $builder->build( $strategy['map_data'] );
+		$brain   = ( new SCC_Architecture_Brain() )->analyze( $base );
+		$created = SCC_Content_Plan::seed_from_architecture( $brain['tree'], $only );
 		return $this->ok( array( 'created' => $created, 'entries' => SCC_Content_Plan::all() ) );
 	}
 
