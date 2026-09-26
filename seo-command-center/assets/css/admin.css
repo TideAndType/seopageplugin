@@ -655,3 +655,9 @@
   .scc-arch-node__actions { max-width:none; justify-content:flex-start; }
   .scc-arch-children { margin-left:10px; padding-left:10px; }
 }
+
+.scc-arch-draft { margin:10px 0 4px 34px; padding:14px; border:1px solid #8c8f94; border-radius:7px; background:#fcfcfc; }
+.scc-arch-draft__head { margin-bottom:8px; }
+.scc-arch-draft h3 { margin:5px 0 8px; font-size:17px; }
+.scc-arch-draft__body { max-width:850px; line-height:1.55; }
+.scc-arch-draft__actions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:12px; }
