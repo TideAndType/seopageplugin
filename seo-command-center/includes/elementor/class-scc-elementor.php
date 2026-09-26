@@ -92,6 +92,7 @@ class SCC_Elementor {
 		$designated = get_posts(
 			array(
 				'post_type'      => array( 'page', 'post' ),
+				'post_status'    => array( 'publish', 'draft', 'pending', 'private', 'future' ),
 				'posts_per_page' => 100,
 				'no_found_rows'  => true,
 				'meta_key'       => '_scc_is_seo_template', // phpcs:ignore WordPress.DB.SlowDBQuery
