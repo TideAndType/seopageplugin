@@ -751,9 +751,10 @@
 		if ( gapsOnly ) {
 			var wrap = gapsOnly.closest( '.scc-wrap' ) || document.body;
 			var applyGaps = function ( on ) {
-				// 1) Individual existing rows.
+				// 1) Hide recommendations that require no structural work.
 				Array.prototype.forEach.call( wrap.querySelectorAll( '.scc-arch-node' ), function ( n ) {
-					n.style.display = ( on && n.classList.contains( 'is-existing' ) ) ? 'none' : '';
+					var decision = n.getAttribute( 'data-decision' ) || '';
+					n.style.display = ( on && ( decision === 'keep' || decision === 'ignore' ) ) ? 'none' : '';
 				} );
 				var hasVisibleNode = function ( container ) {
 					return Array.prototype.some.call( container.querySelectorAll( '.scc-arch-node' ), function ( n ) {
@@ -820,6 +821,115 @@
 					btn.disabled = false;
 					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
 				} );
+		} );
+	}
+
+	// ---- SEO Architecture Brain actions ---------------------------------
+	function bindArchitectureBrain() {
+		var tree = document.querySelector( '.scc-arch-tree' );
+		var globalStatus = document.getElementById( 'scc-arch-global-status' );
+		if ( ! tree && ! document.querySelector( '.scc-arch-merge-action' ) ) {
+			return;
+		}
+
+		function nodeStatus( node ) {
+			return node ? node.querySelector( '.scc-arch-action-status' ) : null;
+		}
+
+		function runNodeAction( btn, node, action, extra ) {
+			var nodeId = node ? ( node.getAttribute( 'data-node-id' ) || '' ) : '';
+			if ( ! nodeId ) { return; }
+			btn.disabled = true;
+			var status = nodeStatus( node );
+			setStatus( status, 'Saving…' );
+			var data = { action: action, node_id: nodeId };
+			Object.keys( extra || {} ).forEach( function ( key ) { data[ key ] = extra[ key ]; } );
+
+			request( '/architecture/action', { method: 'POST', data: data } )
+				.then( function ( res ) {
+					var message = ( res.data && res.data.message ) || 'Saved.';
+					setStatus( status, message, 'is-ok' );
+					if ( action === 'ignore' || action === 'mark_covered' || action === 'restore' || action === 'reparent' ) {
+						window.location.reload();
+					} else {
+						btn.disabled = false;
+					}
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || 'Could not save architecture action.', 'is-error' );
+				} );
+		}
+
+		if ( tree ) {
+			tree.addEventListener( 'click', function ( event ) {
+				var btn = event.target.closest ? event.target.closest( '.scc-arch-action' ) : null;
+				if ( ! btn ) { return; }
+				var node = btn.closest( '.scc-arch-node' );
+				var action = btn.getAttribute( 'data-action' ) || '';
+				runNodeAction( btn, node, action, {} );
+			} );
+
+			var dragging = null;
+			Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-node[draggable="true"]' ), function ( node ) {
+				node.addEventListener( 'dragstart', function ( event ) {
+					dragging = node;
+					node.classList.add( 'is-dragging' );
+					if ( event.dataTransfer ) {
+						event.dataTransfer.effectAllowed = 'move';
+						event.dataTransfer.setData( 'text/plain', node.getAttribute( 'data-node-id' ) || '' );
+					}
+				} );
+				node.addEventListener( 'dragend', function () {
+					node.classList.remove( 'is-dragging' );
+					dragging = null;
+					Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-pillar' ), function ( p ) { p.classList.remove( 'is-drop-target' ); } );
+				} );
+			} );
+
+			Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-pillar' ), function ( pillar ) {
+				pillar.addEventListener( 'dragover', function ( event ) {
+					if ( ! dragging ) { return; }
+					event.preventDefault();
+					pillar.classList.add( 'is-drop-target' );
+				} );
+				pillar.addEventListener( 'dragleave', function () { pillar.classList.remove( 'is-drop-target' ); } );
+				pillar.addEventListener( 'drop', function ( event ) {
+					event.preventDefault();
+					pillar.classList.remove( 'is-drop-target' );
+					if ( ! dragging ) { return; }
+					var parentUrl = pillar.getAttribute( 'data-parent-url' ) || '';
+					var nodeId = dragging.getAttribute( 'data-node-id' ) || '';
+					if ( ! parentUrl || ! nodeId ) { return; }
+					setStatus( globalStatus, 'Moving item to the new service hub…' );
+					request( '/architecture/action', { method: 'POST', data: { action: 'reparent', node_id: nodeId, parent_url: parentUrl } } )
+						.then( function () {
+							setStatus( globalStatus, 'Parent updated. Reloading…', 'is-ok' );
+							window.location.reload();
+						} )
+						.catch( function ( err ) { setStatus( globalStatus, ( err && err.message ) || 'Could not change parent.', 'is-error' ); } );
+				} );
+			} );
+		}
+
+		Array.prototype.forEach.call( document.querySelectorAll( '.scc-arch-merge-action' ), function ( btn ) {
+			btn.addEventListener( 'click', function () {
+				var row = btn.closest( '.scc-arch-merge' );
+				var mergeId = row ? ( row.getAttribute( 'data-merge-id' ) || '' ) : '';
+				var status = row ? row.querySelector( '.scc-inline-status' ) : null;
+				if ( ! mergeId ) { return; }
+				btn.disabled = true;
+				setStatus( status, 'Adding review…' );
+				request( '/architecture/merge-action', { method: 'POST', data: { merge_id: mergeId } } )
+					.then( function ( res ) {
+						setStatus( status, ( res.data && res.data.message ) || 'Added to Action Queue.', 'is-ok' );
+						btn.textContent = 'Queued ✓';
+					} )
+					.catch( function ( err ) {
+						btn.disabled = false;
+						setStatus( status, ( err && err.message ) || 'Could not queue consolidation review.', 'is-error' );
+					} );
+			} );
 		} );
 	}
 
@@ -3185,6 +3295,7 @@
 		bindTopicBriefs();
 		bindGscQuickWins();
 		bindSeedPlan();
+		bindArchitectureBrain();
 		bindContentPlan();
 		bindGenerate();
 		bindTemplates();
