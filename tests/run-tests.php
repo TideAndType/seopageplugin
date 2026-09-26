@@ -895,11 +895,34 @@ assert_true( ! empty( $merge_plan[0]['recommended_steps'] ), 'consolidation plan
 $health = SCC_Architecture_Brain::health( $brain_report['tree'], $merge_plan, array(
 	'issues' => array(
 		array( 'id' => 'orphan_page', 'affected_count' => 1 ),
+		array( 'id' => 'deep_click_depth', 'affected_count' => 2 ),
 	),
 ) );
 assert_true( $health['score'] < 100, 'architecture health penalizes merge/coverage/orphan problems' );
 assert_eq( 1, $health['stats']['merge_candidates'], 'architecture health counts consolidation candidates' );
 assert_eq( 1, $health['stats']['orphans'], 'architecture health consumes technical orphan evidence' );
+assert_eq( 2, $health['stats']['deep_pages'], 'architecture health consumes technical click-depth evidence' );
+
+$nested_tree = array(
+	'pillars' => array(
+		array(
+			'title' => 'Managed IT Services', 'url' => '/managed-it-services/', 'intent' => 'commercial', 'page_type' => 'service',
+			'children' => array(), 'sections' => array(), 'articles' => array(),
+		),
+		array(
+			'title' => '24/7 Monitoring', 'url' => '/managed-it-services/24-7-monitoring/', 'intent' => 'commercial', 'page_type' => 'service',
+			'children' => array(), 'sections' => array(), 'articles' => array(),
+		),
+		array(
+			'title' => 'Alert Escalation', 'url' => '/managed-it-services/24-7-monitoring/alert-escalation/', 'intent' => 'commercial', 'page_type' => 'service',
+			'children' => array(), 'sections' => array(), 'articles' => array(),
+		),
+	),
+);
+$nested_normalized = SCC_Architecture_Brain::normalize_service_hierarchy( $nested_tree );
+assert_eq( 1, count( $nested_normalized['pillars'] ), 'nested service URLs collapse into one top-level service hub' );
+assert_eq( '24/7 Monitoring', $nested_normalized['pillars'][0]['children'][0]['title'], 'nested service becomes a child of its real URL ancestor' );
+assert_eq( 'Alert Escalation', $nested_normalized['pillars'][0]['children'][0]['children'][0]['title'], 'deep service hierarchy remains recursive instead of flattening' );
 
 $move_tree = array(
 	'pillars' => array(
@@ -1774,6 +1797,20 @@ assert_true( false !== strpos( $citation_view_src, 'name="page" value="seo-comma
 assert_true( false !== strpos( $citation_view_src, 'name="tab" value="citations"' ), 'citation form fallback preserves the Citations tab' );
 assert_true( false !== strpos( $citation_js_src, 'function bindCitationScanner()' ), 'main admin JS binds the citation scanner' );
 assert_true( false !== strpos( $citation_js_src, "request( '/citation-scan'"), 'citation scanner uses the canonical REST helper namespace' );
+
+echo "\n== Architecture Brain action and expansion wiring ==\n";
+$arch_view_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/architecture.php' );
+$arch_rest_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+$arch_expand_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-architecture-expansion.php' );
+$arch_renderer_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-elementor-renderer.php' );
+assert_true( false !== strpos( $arch_view_src, 'Draft missing section' ), 'Architecture UI exposes existing-page section drafting' );
+assert_true( false !== strpos( $arch_view_src, 'Queue consolidation review' ), 'Architecture UI exposes non-destructive consolidation review' );
+assert_true( false !== strpos( $arch_rest_src, '/architecture/expansion/generate' ), 'Architecture REST exposes section draft generation' );
+assert_true( false !== strpos( $arch_rest_src, '/architecture/expansion/apply' ), 'Architecture REST requires a separate explicit apply action' );
+assert_true( false !== strpos( $arch_rest_src, '/architecture/expansion/rollback' ), 'Architecture REST exposes rollback after expansion' );
+assert_true( false !== strpos( $arch_expand_src, 'Never invent testimonials' ), 'Architecture section drafts explicitly forbid invented proof/claims' );
+assert_true( false !== strpos( $arch_renderer_src, '_scc_elementor_backup' ), 'Elementor expansion writer preserves a rollback snapshot' );
+assert_true( false === strpos( $arch_expand_src, 'wp_redirect(' ), 'Architecture expansion never creates redirects automatically' );
 
 echo "\n== DB schema is strict-mode safe (no zero-date defaults) ==\n";
 $db_src = file_get_contents( __DIR__ . '/../seo-command-center/includes/database/class-scc-db.php' );
