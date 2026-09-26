@@ -571,6 +571,7 @@ class SCC_Architecture_Brain {
 			'empty_hubs'      => 0,
 			'merge_candidates'=> count( $consolidation ),
 			'orphans'         => 0,
+			'deep_pages'      => 0,
 		);
 
 		foreach ( (array) ( $tree['pillars'] ?? array() ) as $pillar ) {
@@ -581,14 +582,19 @@ class SCC_Architecture_Brain {
 		}
 
 		foreach ( (array) ( $technical['issues'] ?? array() ) as $issue ) {
-			if ( in_array( (string) ( $issue['id'] ?? '' ), array( 'orphan_page', 'unreachable_from_home' ), true ) ) {
+			$id = (string) ( $issue['id'] ?? '' );
+			if ( in_array( $id, array( 'orphan_page', 'unreachable_from_home' ), true ) ) {
 				$stats['orphans'] += (int) ( $issue['affected_count'] ?? 0 );
+			}
+			if ( 'deep_click_depth' === $id ) {
+				$stats['deep_pages'] += (int) ( $issue['affected_count'] ?? 0 );
 			}
 		}
 
 		$penalty = min( 28, 12 * $stats['merge_candidates'] )
 			+ min( 22, 4 * $stats['weak_coverage'] )
 			+ min( 18, 5 * $stats['orphans'] )
+			+ min( 10, 2 * $stats['deep_pages'] )
 			+ min( 12, 4 * $stats['empty_hubs'] )
 			+ min( 12, 2 * $stats['expand_existing'] );
 		$score = max( 0, 100 - $penalty );
