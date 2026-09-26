@@ -863,6 +863,82 @@
 
 		if ( tree ) {
 			tree.addEventListener( 'click', function ( event ) {
+				var draftBtn = event.target.closest ? event.target.closest( '.scc-arch-draft-generate' ) : null;
+				if ( draftBtn ) {
+					var draftNode = draftBtn.closest( '.scc-arch-node' );
+					var draftNodeId = draftNode ? ( draftNode.getAttribute( 'data-node-id' ) || '' ) : '';
+					var draftBox = draftNode ? draftNode.querySelector( '.scc-arch-draft' ) : null;
+					if ( ! draftNodeId || ! draftBox ) { return; }
+					draftBtn.disabled = true;
+					draftBtn.textContent = 'Drafting…';
+					request( '/architecture/expansion/generate', { method: 'POST', data: { node_id: draftNodeId } } )
+						.then( function ( res ) {
+							var draft = res.data && res.data.draft ? res.data.draft : null;
+							if ( ! draft ) { throw new Error( 'No section draft was returned.' ); }
+							draftBox.hidden = false;
+							draftBox.innerHTML = '';
+							var head = el( 'div', null, 'scc-arch-draft__head' );
+							head.appendChild( el( 'strong', 'Review section draft' ) );
+							if ( draft.provider || draft.model ) {
+								head.appendChild( el( 'span', ' · ' + [ draft.provider, draft.model ].filter( Boolean ).join( ' / ' ), 'scc-note' ) );
+							}
+							draftBox.appendChild( head );
+							draftBox.appendChild( el( 'h3', draft.heading || '' ) );
+							var body = el( 'div', null, 'scc-arch-draft__body' );
+							body.innerHTML = draft.html || '';
+							draftBox.appendChild( body );
+							var controls = el( 'div', null, 'scc-arch-draft__actions' );
+							var apply = el( 'button', 'Apply to page', 'button button-primary button-small' );
+							apply.type = 'button';
+							var discard = el( 'button', 'Discard preview', 'button button-small' );
+							discard.type = 'button';
+							var draftStatus = el( 'span', '', 'scc-inline-status' );
+							controls.appendChild( apply );
+							controls.appendChild( discard );
+							controls.appendChild( draftStatus );
+							draftBox.appendChild( controls );
+							discard.addEventListener( 'click', function () { draftBox.hidden = true; draftBox.innerHTML = ''; } );
+							apply.addEventListener( 'click', function () {
+								if ( ! window.confirm( 'Apply this reviewed section to the existing page? TideOrbit will create a recovery point first.' ) ) { return; }
+								apply.disabled = true;
+								setStatus( draftStatus, 'Applying with backup…' );
+								request( '/architecture/expansion/apply', { method: 'POST', data: { post_id: draft.post_id, draft_id: draft.id } } )
+									.then( function ( result ) {
+										setStatus( draftStatus, ( result.data && result.data.message ) || 'Section added.', 'is-ok' );
+										apply.textContent = 'Applied ✓';
+										var rollback = el( 'button', 'Undo last expansion', 'button button-small' );
+										rollback.type = 'button';
+										controls.insertBefore( rollback, draftStatus );
+										rollback.addEventListener( 'click', function () {
+											if ( ! window.confirm( 'Restore the page from TideOrbit’s last expansion backup?' ) ) { return; }
+											rollback.disabled = true;
+											setStatus( draftStatus, 'Restoring…' );
+											request( '/architecture/expansion/rollback', { method: 'POST', data: { post_id: draft.post_id } } )
+												.then( function ( rr ) {
+													setStatus( draftStatus, ( rr.data && rr.data.message ) || 'Previous version restored.', 'is-ok' );
+													rollback.textContent = 'Restored ✓';
+												} )
+												.catch( function ( err ) {
+													rollback.disabled = false;
+													setStatus( draftStatus, ( err && err.message ) || 'Could not restore backup.', 'is-error' );
+												} );
+										} );
+									} )
+									.catch( function ( err ) {
+										apply.disabled = false;
+										setStatus( draftStatus, ( err && err.message ) || 'Could not apply section.', 'is-error' );
+									} );
+							} );
+						} )
+						.catch( function ( err ) {
+							draftBtn.disabled = false;
+							draftBtn.textContent = 'Draft missing section';
+							setStatus( nodeStatus( draftNode ), ( err && err.message ) || 'Could not generate section draft.', 'is-error' );
+						} );
+					return;
+				}
+
+
 				var btn = event.target.closest ? event.target.closest( '.scc-arch-action' ) : null;
 				if ( ! btn ) { return; }
 				var node = btn.closest( '.scc-arch-node' );
