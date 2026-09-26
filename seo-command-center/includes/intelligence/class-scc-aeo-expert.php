@@ -459,7 +459,7 @@ class SCC_AEO_Expert {
 	protected static function external_links( $html ) {
 		$out = array();
 		$home_host = strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) );
-		if ( preg_match_all( '/<a\s[^>]*href=("|')(.*?)\1[^>]*>/is', (string) $html, $m, PREG_SET_ORDER ) ) {
+		if ( preg_match_all( '/<a\s[^>]*href=("|\')(.*?)\1[^>]*>/is', (string) $html, $m, PREG_SET_ORDER ) ) {
 			foreach ( $m as $match ) {
 				$url = esc_url_raw( html_entity_decode( (string) $match[2] ) );
 				$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
