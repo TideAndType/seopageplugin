@@ -14,6 +14,8 @@ $tree  = isset( $data['tree'] ) && is_array( $data['tree'] ) ? $data['tree'] : n
 $brain = isset( $data['brain'] ) && is_array( $data['brain'] ) ? $data['brain'] : null;
 $health = $brain ? (array) ( $brain['health'] ?? array() ) : array();
 $merges = $brain ? (array) ( $brain['consolidation'] ?? array() ) : array();
+$growth = isset( $data['growth'] ) && is_array( $data['growth'] ) ? $data['growth'] : array();
+$roadmap = (array) ( $growth['roadmap'] ?? array( 'now' => array(), 'next' => array(), 'later' => array() ) );
 
 $node_line = function ( $node, $draggable = true ) {
 	$exists         = ! empty( $node['exists'] );
@@ -28,12 +30,15 @@ $node_line = function ( $node, $draggable = true ) {
 	$has_override   = ! empty( $node['has_override'] );
 	$is_ignored     = ! empty( $node['ignored'] );
 	$can_parent     = ! in_array( (string) ( $node['page_type'] ?? '' ), array( 'article', 'section' ), true );
+	$growth_meta    = (array) ( $node['growth'] ?? array() );
 	?>
 	<div
 		class="scc-arch-node<?php echo $exists ? ' is-existing' : ''; ?><?php echo 'section' === $status ? ' is-section' : ''; ?><?php echo $is_ignored ? ' is-ignored' : ''; ?>"
 		data-node-id="<?php echo esc_attr( $node_id ); ?>"
 		data-node-url="<?php echo esc_attr( $url ); ?>"
 		data-decision="<?php echo esc_attr( $action ); ?>"
+		data-existing="<?php echo $exists ? '1' : '0'; ?>"
+		data-growth-phase="<?php echo esc_attr( $growth_meta['phase'] ?? '' ); ?>"
 		data-can-parent="<?php echo $can_parent ? '1' : '0'; ?>"
 		<?php echo $draggable && empty( $node['is_pillar'] ) ? 'draggable="true"' : ''; ?>
 	>
@@ -52,6 +57,9 @@ $node_line = function ( $node, $draggable = true ) {
 					<span class="scc-flag"><?php echo esc_html( $node['intent'] ?? '' ); ?></span>
 					<?php if ( ! empty( $decision['label'] ) ) : ?>
 						<span class="scc-badge<?php echo in_array( $action, array( 'keep', 'expand_existing' ), true ) ? ' scc-badge--ok' : ''; ?>"><?php echo esc_html( $decision['label'] ); ?></span>
+					<?php endif; ?>
+					<?php if ( ! empty( $growth_meta['label'] ) && 'Keep' !== (string) $growth_meta['label'] ) : ?>
+						<span class="scc-flag scc-arch-growth-phase"><?php echo esc_html( strtoupper( (string) ( $growth_meta['phase'] ?? '' ) ) . ' · ' . (string) $growth_meta['label'] ); ?></span>
 					<?php endif; ?>
 					<?php if ( ! empty( $decision['confidence'] ) ) : ?>
 						<span class="scc-note"><?php echo esc_html( (int) $decision['confidence'] ); ?>% <?php esc_html_e( 'confidence', 'seo-command-center' ); ?></span>
@@ -160,6 +168,61 @@ $render_branch = function ( $node, $depth = 1 ) use ( &$render_branch, $node_lin
 			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-keyword-strategy' ) ); ?>"><?php esc_html_e( 'Go to Keyword Strategy', 'seo-command-center' ); ?></a>
 		</div>
 	<?php else : ?>
+		<div class="scc-card scc-arch-mode-card">
+			<div class="scc-card__head">
+				<div>
+					<h2><?php esc_html_e( 'What should the site become?', 'seo-command-center' ); ?></h2>
+					<p class="scc-note"><?php esc_html_e( 'Recommended SEO Architecture is the future-state blueprint TideOrbit believes will best cover your important search intents without unnecessary pages. Current Site shows only URLs that exist today.', 'seo-command-center' ); ?></p>
+				</div>
+				<div class="scc-segmented" role="group" aria-label="<?php esc_attr_e( 'Architecture view', 'seo-command-center' ); ?>">
+					<button type="button" class="button button-primary scc-arch-view-btn is-active" data-view="recommended"><?php esc_html_e( 'Recommended SEO Architecture', 'seo-command-center' ); ?></button>
+					<button type="button" class="button scc-arch-view-btn" data-view="current"><?php esc_html_e( 'Current Site', 'seo-command-center' ); ?></button>
+				</div>
+			</div>
+			<p class="scc-arch-principle"><?php echo esc_html( $growth['principle'] ?? __( 'Strengthen an existing URL before creating another one.', 'seo-command-center' ) ); ?></p>
+		</div>
+
+		<?php if ( ! empty( $growth ) ) : ?>
+			<div class="scc-card scc-growth-roadmap">
+				<div class="scc-card__head">
+					<div>
+						<h2><?php esc_html_e( 'SEO Growth Roadmap', 'seo-command-center' ); ?></h2>
+						<p class="scc-note"><?php esc_html_e( 'This is the action plan for improving the architecture—not a mirror of the site you already have.', 'seo-command-center' ); ?></p>
+					</div>
+				</div>
+				<div class="scc-growth-roadmap__cols">
+					<?php
+					$phase_labels = array(
+						'now'   => __( 'Do now', 'seo-command-center' ),
+						'next'  => __( 'Do next', 'seo-command-center' ),
+						'later' => __( 'Later / monitor', 'seo-command-center' ),
+					);
+					foreach ( $phase_labels as $phase => $label ) :
+						$items = (array) ( $roadmap[ $phase ] ?? array() );
+					?>
+						<section class="scc-growth-phase scc-growth-phase--<?php echo esc_attr( $phase ); ?>">
+							<h3><?php echo esc_html( $label ); ?> <span class="scc-badge"><?php echo esc_html( count( $items ) ); ?></span></h3>
+							<?php if ( empty( $items ) ) : ?>
+								<p class="scc-note"><?php esc_html_e( 'No priority work in this phase.', 'seo-command-center' ); ?></p>
+							<?php else : ?>
+								<?php foreach ( array_slice( $items, 0, 10 ) as $item ) : ?>
+									<article class="scc-growth-item">
+										<div class="scc-growth-item__top">
+											<strong><?php echo esc_html( $item['title'] ?? '' ); ?></strong>
+											<span class="scc-flag"><?php echo esc_html( (int) ( $item['priority'] ?? 0 ) ); ?> <?php esc_html_e( 'priority', 'seo-command-center' ); ?></span>
+										</div>
+										<?php if ( ! empty( $item['url'] ) ) : ?><code><?php echo esc_html( $item['url'] ); ?></code><?php endif; ?>
+										<?php if ( ! empty( $item['reason'] ) ) : ?><p class="scc-note"><?php echo esc_html( $item['reason'] ); ?></p><?php endif; ?>
+										<?php if ( ! empty( $item['outcome'] ) ) : ?><p class="scc-growth-outcome"><strong><?php esc_html_e( 'SEO goal:', 'seo-command-center' ); ?></strong> <?php echo esc_html( $item['outcome'] ); ?></p><?php endif; ?>
+									</article>
+								<?php endforeach; ?>
+							<?php endif; ?>
+						</section>
+					<?php endforeach; ?>
+				</div>
+			</div>
+		<?php endif; ?>
+
 		<div class="scc-card scc-arch-health">
 			<div class="scc-card__head">
 				<div>
@@ -187,8 +250,8 @@ $render_branch = function ( $node, $depth = 1 ) use ( &$render_branch, $node_lin
 		<div class="scc-card">
 			<div class="scc-card__head">
 				<div>
-					<h2><?php esc_html_e( 'Recommended site tree', 'seo-command-center' ); ?></h2>
-					<p class="scc-note"><?php esc_html_e( 'Drag a child page, article, or section onto another service hub to change its parent. TideOrbit saves your architecture preference without changing WordPress permalinks.', 'seo-command-center' ); ?></p>
+					<h2 id="scc-arch-tree-title"><?php esc_html_e( 'Recommended SEO site tree', 'seo-command-center' ); ?></h2>
+					<p class="scc-note" id="scc-arch-tree-help"><?php esc_html_e( 'Future-state view: new pages, pages to strengthen, supporting content and the service hierarchy TideOrbit recommends. Drag a child page, article, or section onto another service hub to change the planning hierarchy without changing live WordPress permalinks.', 'seo-command-center' ); ?></p>
 				</div>
 				<div>
 					<label class="scc-toggle" title="<?php esc_attr_e( 'Hide pages that need no structural work.', 'seo-command-center' ); ?>">
