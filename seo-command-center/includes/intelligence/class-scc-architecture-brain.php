@@ -173,7 +173,8 @@ class SCC_Architecture_Brain {
 
 		// A new node can still be better handled by an existing page when GSC is
 		// already strongly associating that topic with the page.
-		if ( empty( $node['exists'] ) && 'section' !== (string) ( $node['status'] ?? '' ) && ! empty( $node['gsc']['best_existing_url'] ) && (int) $node['gsc']['impressions'] >= 20 ) {
+		$distinct_info = 'informational' === strtolower( (string) ( $node['intent'] ?? '' ) ) || 'article' === (string) ( $node['page_type'] ?? '' );
+		if ( empty( $node['exists'] ) && ! $distinct_info && 'section' !== (string) ( $node['status'] ?? '' ) && ! empty( $node['gsc']['best_existing_url'] ) && (int) $node['gsc']['impressions'] >= 20 ) {
 			$node['original_url']   = (string) ( $node['url'] ?? '' );
 			$node['url']            = $node['gsc']['best_existing_url'];
 			$node['status']         = 'gsc_covered';
