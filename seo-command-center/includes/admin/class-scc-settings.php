@@ -63,6 +63,7 @@ class SCC_Settings {
 			'content_persona_custom'   => 'textarea',
 			'visual_presentation'      => 'bool',
 			'layout_auto_build'        => 'bool',
+			'output_social_tags'       => 'bool',
 			'layout_design_preset'     => 'text',
 			'route_keyword_strategy_provider'   => 'provider_or_empty',
 			'route_keyword_strategy_model'      => 'text',
@@ -155,7 +156,7 @@ class SCC_Settings {
 			$creds = array();
 		}
 
-		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token' );
+		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token', 'pagespeed_key' );
 		foreach ( $fields as $field ) {
 			if ( ! array_key_exists( $field, $input ) ) {
 				continue;
@@ -181,7 +182,7 @@ class SCC_Settings {
 	 */
 	public static function credential_hints() {
 		$creds  = get_option( 'scc_credentials', array() );
-		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token' );
+		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token', 'pagespeed_key' );
 		$out    = array();
 		foreach ( $fields as $field ) {
 			$value = isset( $creds[ $field ] ) ? (string) $creds[ $field ] : '';

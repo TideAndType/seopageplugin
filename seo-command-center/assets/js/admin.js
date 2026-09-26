@@ -2086,6 +2086,338 @@
 	}
 
 	// ---- Intelligence layer: "What should I do next?" -----------------
+	// ---- SEO Doctor ------------------------------------------------------
+	function bindDoctor() {
+		var root = document.getElementById( 'scc-doctor' );
+		var body = document.getElementById( 'scc-doctor-body' );
+		var dataEl = document.getElementById( 'scc-doctor-data' );
+		if ( ! root || ! body || ! dataEl ) {
+			return;
+		}
+		var status = document.getElementById( 'scc-doctor-status' );
+		var runBtn = document.getElementById( 'scc-doctor-run' );
+		var refreshBtn = document.getElementById( 'scc-doctor-refresh' );
+		var boot = {};
+		try { boot = JSON.parse( dataEl.textContent || '{}' ); } catch ( e ) { boot = {}; }
+		var adminBase = boot.admin || '';
+		var state = { report: boot.report || null, area: 'all' };
+
+		var SEV = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+		var SOURCE_LABEL = { technical: 'Site crawl', pagespeed: 'Google PageSpeed', architecture: 'Site structure', aeo: 'AI search', opportunities: 'Search Console' };
+		var FIX_LABEL = { meta_description: 'Write description', schema: 'Add schema', social_tags: 'Turn on social tags', internal_links: 'Add internal links' };
+		var SCREEN_LABEL = { 'seo-audit': 'Site Audit', 'meta-editor': 'Meta Editor', 'internal-links': 'Internal Links', 'architecture': 'Site Architecture', 'aeo': 'AI Citations', 'action-queue': 'Action Queue' };
+
+		function esc( s ) {
+			return String( s == null ? '' : s ).replace( /[&<>"']/g, function ( c ) {
+				return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ c ];
+			} );
+		}
+		function safeUrl( u ) {
+			u = String( u || '' );
+			return /^https?:\/\//i.test( u ) ? u : '';
+		}
+		function gradeClass( g ) {
+			return g ? 'scc-grade--' + String( g ).toLowerCase() : 'scc-grade--na';
+		}
+
+		function render() {
+			var r = state.report;
+			if ( ! r ) {
+				return; // Server-rendered empty state stays.
+			}
+			if ( refreshBtn ) { refreshBtn.disabled = false; }
+			if ( runBtn ) { runBtn.textContent = 'Run full check-up'; }
+			var html = '';
+
+			// Summary.
+			var score = r.score;
+			var counts = r.counts || {};
+			html += '<div class="scc-doctor__summary">';
+			html += '<div class="scc-doctor__score ' + gradeClass( r.grade ) + '">' +
+				( score == null ? '<span class="scc-doctor__num">—</span>' : '<span class="scc-doctor__num">' + esc( score ) + '</span><span class="scc-doctor__den">/100</span>' ) +
+				'<span class="scc-doctor__grade">' + esc( r.grade || '' ) + '</span></div>';
+			html += '<div class="scc-doctor__verdict"><strong>' + esc( r.label || '' ) + '</strong>';
+			html += '<div class="scc-doctor__counts">';
+			[ 'critical', 'high', 'medium', 'low' ].forEach( function ( k ) {
+				if ( counts[ k ] ) {
+					html += '<span class="scc-sev scc-sev--' + k + '">' + esc( counts[ k ] ) + ' ' + SEV[ k ].toLowerCase() + '</span>';
+				}
+			} );
+			if ( ! ( r.issues || [] ).length ) {
+				html += '<span class="scc-sev scc-sev--ok">No problems found in the measured areas</span>';
+			}
+			if ( r.fixable ) {
+				html += '<span class="scc-doctor__fixable">⚡ ' + esc( r.fixable ) + ' can be fixed in one click</span>';
+			}
+			html += '</div>';
+			html += '<div class="scc-doctor__sources">' + sourcesHtml( r.sources || {} ) + '</div>';
+			if ( r.generated_at ) {
+				html += '<div class="scc-note">Last check-up: ' + esc( r.generated_at ) + '</div>';
+			}
+			html += '</div></div>';
+
+			// Area grades (click to filter).
+			html += '<div class="scc-doctor__areas">';
+			html += '<button type="button" class="scc-area' + ( 'all' === state.area ? ' is-active' : '' ) + '" data-area="all"><span class="scc-area__label">All areas</span><span class="scc-area__meta">' + esc( ( r.issues || [] ).length ) + ' issues</span></button>';
+			( r.groups || [] ).forEach( function ( g ) {
+				html += '<button type="button" class="scc-area' + ( state.area === g.id ? ' is-active' : '' ) + '" data-area="' + esc( g.id ) + '">' +
+					'<span class="scc-area__grade ' + gradeClass( g.grade ) + '">' + esc( g.measured ? g.grade : '–' ) + '</span>' +
+					'<span class="scc-area__label">' + esc( g.label ) + '</span>' +
+					'<span class="scc-area__meta">' + ( g.measured ? esc( g.issues ) + ( 1 === g.issues ? ' issue' : ' issues' ) : 'Not measured' ) + '</span></button>';
+			} );
+			html += '</div>';
+
+			// Issue list.
+			var list = ( r.issues || [] ).filter( function ( i ) { return 'all' === state.area || i.group === state.area; } );
+			var urgent = ( r.issues || [] ).filter( function ( i ) { return 'critical' === i.severity || 'high' === i.severity; } ).length;
+			html += '<div class="scc-doctor__listhead"><strong>' + esc( list.length ) + ' ' + ( 1 === list.length ? 'problem' : 'problems' ) + '</strong>';
+			if ( urgent ) {
+				html += '<button type="button" class="button button-small" data-doctor-queue-high="1">Add all critical &amp; high to the Action Queue (' + esc( urgent ) + ')</button>';
+			}
+			html += '</div>';
+			if ( ! list.length ) {
+				var g = ( r.groups || [] ).filter( function ( x ) { return x.id === state.area; } )[ 0 ];
+				html += '<div class="scc-empty"><p>' + ( g && ! g.measured ? esc( notMeasuredHint( g.id ) ) : 'Nothing to fix here. 🎉' ) + '</p></div>';
+			}
+			html += '<div class="scc-doctor__list">';
+			list.forEach( function ( issue, idx ) { html += issueHtml( issue, idx ); } );
+			html += '</div>';
+			if ( r.disclaimer ) {
+				html += '<p class="scc-note scc-doctor__disclaimer">' + esc( r.disclaimer ) + '</p>';
+			}
+			body.innerHTML = html;
+		}
+
+		function notMeasuredHint( area ) {
+			if ( 'speed' === area ) { return 'Page speed has not been measured yet — run a full check-up to test your key pages with Google PageSpeed.'; }
+			if ( 'growth' === area ) { return 'Connect Google Search Console (Connections) so the Doctor can spot pages losing traffic and keywords you are close to ranking for.'; }
+			if ( 'ai' === area ) { return 'AI-search readiness has not been measured yet — run a check-up.'; }
+			return 'This area has not been measured yet — run a full check-up.';
+		}
+
+		function sourcesHtml( s ) {
+			var out = '';
+			var chip = function ( ok, text ) {
+				out += '<span class="scc-src' + ( ok ? ' is-on' : '' ) + '">' + ( ok ? '✓ ' : '○ ' ) + esc( text ) + '</span>';
+			};
+			chip( s.technical && s.technical.available, s.technical && s.technical.available ? s.technical.pages + ' pages crawled' : 'Site not crawled' );
+			chip( s.speed && s.speed.available, s.speed && s.speed.available ? 'Speed: ' + s.speed.urls + ' URLs measured' : 'Speed not measured' );
+			chip( s.ai && s.ai.available, s.ai && s.ai.available ? 'AI search: ' + s.ai.pages + ' pages' : 'AI search not measured' );
+			chip( s.architecture && s.architecture.available, s.architecture && s.architecture.available ? 'Site structure mapped' : 'Structure not mapped' );
+			chip( s.growth && s.growth.available, s.growth && s.growth.gsc_connected ? 'Search Console connected' : 'Search Console not connected' );
+			return out;
+		}
+
+		function issueHtml( issue, idx ) {
+			var pages = issue.affected_count > 1 ? issue.affected_count + ' pages' : ( 'site' === issue.scope ? 'Site-wide' : ( issue.affected_count === 1 ? '1 page' : '' ) );
+			var h = '<div class="scc-issue scc-issue--' + esc( issue.severity ) + '" data-issue="' + esc( issue.id ) + '">';
+			h += '<div class="scc-issue__row">';
+			h += '<span class="scc-sev scc-sev--' + esc( issue.severity ) + '">' + esc( SEV[ issue.severity ] || issue.severity ) + '</span>';
+			h += '<button type="button" class="scc-issue__title" aria-expanded="false" data-toggle-issue="' + idx + '">' + esc( issue.title ) + '</button>';
+			if ( pages ) { h += '<span class="scc-issue__pages">' + esc( pages ) + '</span>'; }
+			if ( issue.fix_type ) { h += '<span class="scc-issue__quick" title="One-click fix available">⚡</span>'; }
+			h += '</div>';
+			h += '<div class="scc-issue__detail" hidden>';
+			if ( issue.what ) { h += '<p>' + esc( issue.what ) + '</p>'; }
+			if ( issue.why ) { h += '<p><strong>Why it matters:</strong> ' + esc( issue.why ) + '</p>'; }
+			if ( issue.fix ) { h += '<p><strong>How to fix:</strong> ' + esc( issue.fix ) + '</p>'; }
+
+			var examples = issue.examples || [];
+			var siteFix = issue.fix_type && 'social_tags' === issue.fix_type;
+			if ( examples.length ) {
+				h += '<ul class="scc-issue__examples">';
+				examples.forEach( function ( ex ) {
+					var url = safeUrl( ex.url );
+					h += '<li>';
+					if ( url ) {
+						h += '<a href="' + esc( url ) + '" target="_blank" rel="noopener">' + esc( url.replace( /^https?:\/\/[^/]+/, '' ) || '/' ) + '</a>';
+					}
+					if ( ex.evidence ) { h += ' <span class="scc-note">— ' + esc( ex.evidence ) + '</span>'; }
+					if ( 'pagespeed' === issue.source && url ) {
+						h += ' <a class="scc-note" href="https://pagespeed.web.dev/report?url=' + encodeURIComponent( url ) + '" target="_blank" rel="noopener">Open in PageSpeed Insights ↗</a>';
+					}
+					if ( issue.fix_type && ! siteFix && ex.post_id ) {
+						h += ' <button type="button" class="button button-small scc-fix" data-fix="' + esc( issue.fix_type ) + '" data-post="' + esc( ex.post_id ) + '">' + esc( FIX_LABEL[ issue.fix_type ] || 'Fix' ) + '</button>';
+					}
+					h += '<div class="scc-fix-preview" hidden></div>';
+					h += '</li>';
+				} );
+				h += '</ul>';
+				if ( issue.affected_count > examples.length ) {
+					h += '<p class="scc-note">…and ' + esc( issue.affected_count - examples.length ) + ' more. The full list is in ' + esc( SCREEN_LABEL[ issue.screen ] || 'its screen' ) + '.</p>';
+				}
+			}
+			h += '<div class="scc-issue__actions">';
+			if ( siteFix ) {
+				h += '<button type="button" class="button button-primary button-small scc-fix" data-fix="social_tags" data-post="0">' + esc( FIX_LABEL.social_tags ) + '</button>';
+			}
+			h += '<button type="button" class="button button-small" data-doctor-queue="' + esc( issue.id ) + '">Add to Action Queue</button>';
+			if ( issue.screen && adminBase ) {
+				h += '<a class="button button-small" href="' + esc( adminBase + 'seo-command-center-' + issue.screen ) + '">Open ' + esc( SCREEN_LABEL[ issue.screen ] || 'screen' ) + '</a>';
+			}
+			h += '<span class="scc-note">Source: ' + esc( SOURCE_LABEL[ issue.source ] || issue.source ) + '</span>';
+			if ( siteFix ) { h += '<div class="scc-fix-preview" hidden></div>'; }
+			h += '</div>';
+			h += '</div></div>';
+			return h;
+		}
+
+		// Preview → Apply. Nothing is written until Apply is clicked.
+		function preview( btn ) {
+			var issueEl = btn.closest( '[data-issue]' );
+			var box = btn.parentNode.querySelector( '.scc-fix-preview' );
+			var fix = btn.getAttribute( 'data-fix' );
+			var postId = parseInt( btn.getAttribute( 'data-post' ), 10 ) || 0;
+			btn.disabled = true;
+			box.hidden = false;
+			box.className = 'scc-fix-preview scc-loading';
+			box.textContent = 'Working out the exact change…';
+			request( '/doctor/fix', { method: 'POST', data: { fix: fix, post_id: postId, issue_id: issueEl.getAttribute( 'data-issue' ), apply: false } } )
+				.then( function ( res ) {
+					var p = ( res && res.data && res.data.result ) || {};
+					var h = '<p><strong>This will:</strong> ' + esc( p.summary ) + '</p>';
+					if ( p.before || p.after ) {
+						h += '<div class="scc-fix-diff">';
+						if ( p.before ) { h += '<div><span class="scc-note">Now:</span> ' + esc( p.before ) + '</div>'; }
+						if ( p.after ) { h += '<div><span class="scc-note">After:</span> <strong>' + esc( p.after ) + '</strong></div>'; }
+						h += '</div>';
+					}
+					( p.details || [] ).forEach( function ( d ) { h += '<div class="scc-note">• ' + esc( d ) + '</div>'; } );
+					h += '<p><button type="button" class="button button-primary button-small scc-fix-apply">Apply fix</button> <button type="button" class="button button-small scc-fix-cancel">Cancel</button></p>';
+					box.className = 'scc-fix-preview';
+					box.innerHTML = h;
+					box.querySelector( '.scc-fix-cancel' ).addEventListener( 'click', function () { box.hidden = true; btn.disabled = false; } );
+					box.querySelector( '.scc-fix-apply' ).addEventListener( 'click', function ( e ) {
+						e.target.disabled = true;
+						apply( fix, postId, issueEl.getAttribute( 'data-issue' ), box, btn );
+					} );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					box.className = 'scc-fix-preview is-error';
+					box.textContent = ( err && err.message ) || 'This fix could not be prepared.';
+				} );
+		}
+
+		function apply( fix, postId, issueId, box, btn ) {
+			box.className = 'scc-fix-preview scc-loading';
+			box.textContent = 'Applying…';
+			request( '/doctor/fix', { method: 'POST', data: { fix: fix, post_id: postId, issue_id: issueId, apply: true } } )
+				.then( function ( res ) {
+					var d = ( res && res.data ) || {};
+					setStatus( status, '✓ ' + ( ( d.result && d.result.summary ) || 'Fixed.' ) + ' The next check-up will confirm it.', 'is-ok' );
+					if ( d.report ) {
+						state.report = d.report;
+						render();
+					} else {
+						box.className = 'scc-fix-preview is-ok';
+						box.textContent = '✓ Done.';
+					}
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					box.className = 'scc-fix-preview is-error';
+					box.textContent = ( err && err.message ) || 'The fix could not be applied.';
+				} );
+		}
+
+		function queue( data, btn ) {
+			btn.disabled = true;
+			request( '/doctor/queue', { method: 'POST', data: data } )
+				.then( function ( res ) {
+					var n = ( res && res.data && res.data.queued ) || 0;
+					btn.textContent = '✓ Added (' + n + ')';
+					setStatus( status, n + ' item(s) added to the Action Queue.', 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || 'Could not add to the queue.', 'is-error' );
+				} );
+		}
+
+		body.addEventListener( 'click', function ( e ) {
+			var t = e.target;
+			var area = t.closest( '[data-area]' );
+			if ( area ) {
+				state.area = area.getAttribute( 'data-area' );
+				render();
+				return;
+			}
+			var toggle = t.closest( '[data-toggle-issue]' );
+			if ( toggle ) {
+				var detail = toggle.closest( '.scc-issue' ).querySelector( '.scc-issue__detail' );
+				detail.hidden = ! detail.hidden;
+				toggle.setAttribute( 'aria-expanded', detail.hidden ? 'false' : 'true' );
+				return;
+			}
+			if ( t.classList.contains( 'scc-fix' ) ) {
+				preview( t );
+				return;
+			}
+			if ( t.hasAttribute( 'data-doctor-queue' ) ) {
+				queue( { issue_id: t.getAttribute( 'data-doctor-queue' ) }, t );
+				return;
+			}
+			if ( t.hasAttribute( 'data-doctor-queue-high' ) ) {
+				queue( { severity: 'high' }, t );
+			}
+		} );
+
+		function setBusy( busy ) {
+			if ( runBtn ) { runBtn.disabled = busy; }
+			if ( refreshBtn ) { refreshBtn.disabled = busy || ! state.report; }
+		}
+
+		function merge( refresh ) {
+			setStatus( status, ( refresh ? 'Step 3 of 3: ' : '' ) + 'Putting the diagnosis together…' );
+			return request( '/doctor/run', { method: 'POST', data: { refresh: !! refresh } } ).then( function ( res ) {
+				state.report = ( res && res.data && res.data.report ) || state.report;
+				render();
+			} );
+		}
+
+		if ( runBtn ) {
+			runBtn.addEventListener( 'click', function () {
+				setBusy( true );
+				var notes = [];
+				setStatus( status, 'Step 1 of 3: Crawling your pages and checking technical SEO… (this can take a few minutes)' );
+				request( '/technical-seo/audit', { method: 'POST', data: { limit: 150 } } )
+					.catch( function ( err ) { notes.push( 'Crawl: ' + ( ( err && err.message ) || 'failed' ) ); } )
+					.then( function () {
+						setStatus( status, 'Step 2 of 3: Measuring real page speed with Google PageSpeed… (about 30s per page)' );
+						return request( '/doctor/pagespeed', { method: 'POST', data: { count: 3 } } )
+							.then( function ( res ) {
+								var ps = res && res.data && res.data.pagespeed;
+								if ( ps && ! ps.measured ) {
+									var first = ( ps.results || [] ).filter( function ( x ) { return x.error; } )[ 0 ];
+									notes.push( 'Speed not measured' + ( first ? ': ' + first.error : '' ) );
+								}
+							} )
+							.catch( function ( err ) { notes.push( 'Speed: ' + ( ( err && err.message ) || 'failed' ) ); } );
+					} )
+					.then( function () { return merge( true ); } )
+					.then( function () {
+						setBusy( false );
+						setStatus( status, notes.length ? 'Check-up finished, with notes — ' + notes.join( ' · ' ) : '✓ Check-up complete.', notes.length ? '' : 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						setBusy( false );
+						setStatus( status, ( err && err.message ) || 'The check-up could not finish.', 'is-error' );
+					} );
+			} );
+		}
+		if ( refreshBtn ) {
+			refreshBtn.addEventListener( 'click', function () {
+				setBusy( true );
+				merge( false )
+					.then( function () { setBusy( false ); setStatus( status, '✓ Refreshed from the latest results.', 'is-ok' ); } )
+					.catch( function ( err ) { setBusy( false ); setStatus( status, ( err && err.message ) || 'Refresh failed.', 'is-error' ); } );
+			} );
+		}
+
+		render();
+	}
+
 	function bindOpportunities() {
 		// Present on both the Dashboard ("What should I do next?") and the
 		// dedicated Action Queue screen.
@@ -3430,6 +3762,7 @@
 		bindSeoPanel();
 		bindSchemaSettings();
 		bindNativeTemplates();
+		bindDoctor();
 		bindOpportunities();
 		bindCopilot();
 		bindActionQueue();

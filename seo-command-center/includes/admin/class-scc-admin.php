@@ -410,6 +410,7 @@ class SCC_Admin {
 				'elementor'     => defined( 'ELEMENTOR_VERSION' ),
 				'usage'         => SCC_AI_Usage::month_summary(),
 				'opportunities' => $opportunities,
+				'doctor'        => class_exists( 'SCC_SEO_Doctor' ) ? SCC_SEO_Doctor::report() : null,
 			)
 		);
 	}

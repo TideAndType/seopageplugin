@@ -145,6 +145,67 @@ class SCC_REST {
 			)
 		);
 
+		// SEO Doctor — one merged diagnosis, previewable one-click fixes, queueing.
+		register_rest_route(
+			self::NS,
+			'/doctor/report',
+			array(
+				'methods'             => WP_REST_Server::READABLE,
+				'callback'            => array( $this, 'doctor_report' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/doctor/run',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'doctor_run' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/doctor/pagespeed',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'doctor_pagespeed' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'count'    => array( 'sanitize_callback' => 'absint', 'default' => 3 ),
+					'strategy' => array( 'sanitize_callback' => 'sanitize_key', 'default' => 'mobile' ),
+				),
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/doctor/fix',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'doctor_fix' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'fix'      => array( 'required' => true, 'sanitize_callback' => 'sanitize_key' ),
+					'post_id'  => array( 'sanitize_callback' => 'absint', 'default' => 0 ),
+					'issue_id' => array( 'sanitize_callback' => 'sanitize_text_field', 'default' => '' ),
+					'apply'    => array( 'default' => false ),
+				),
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/doctor/queue',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'doctor_queue' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'issue_id' => array( 'sanitize_callback' => 'sanitize_text_field', 'default' => '' ),
+					'severity' => array( 'sanitize_callback' => 'sanitize_key', 'default' => '' ),
+				),
+			)
+		);
+
 		register_rest_route(
 			self::NS,
 			'/technical-seo/audit',
@@ -1280,6 +1341,107 @@ class SCC_REST {
 		}
 		$auditor = new SCC_Technical_SEO();
 		return $this->ok( array( 'report' => $auditor->run( array( 'limit' => $limit ) ) ) );
+	}
+
+	/**
+	 * GET /doctor/report.
+	 *
+	 * @return WP_REST_Response
+	 */
+	public function doctor_report() {
+		return $this->ok( array( 'report' => SCC_SEO_Doctor::report() ) );
+	}
+
+	/**
+	 * POST /doctor/run — merge the latest results of every engine.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function doctor_run( WP_REST_Request $request ) {
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 300 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$refresh = SCC_Security::sanitize_bool( $request->get_param( 'refresh' ) );
+		return $this->ok( array( 'report' => SCC_SEO_Doctor::run( $refresh ) ) );
+	}
+
+	/**
+	 * POST /doctor/pagespeed — measure real speed / Core Web Vitals.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function doctor_pagespeed( WP_REST_Request $request ) {
+		if ( function_exists( 'ignore_user_abort' ) ) {
+			@ignore_user_abort( true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		if ( function_exists( 'set_time_limit' ) ) {
+			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
+		$count    = SCC_Security::sanitize_int( $request->get_param( 'count' ), 1, SCC_PageSpeed::MAX_URLS );
+		$strategy = 'desktop' === $request->get_param( 'strategy' ) ? 'desktop' : 'mobile';
+		$runner   = new SCC_PageSpeed();
+		return $this->ok( array( 'pagespeed' => $runner->run( max( 1, $count ), $strategy ) ) );
+	}
+
+	/**
+	 * POST /doctor/fix — preview (apply=false) or apply a one-click fix.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function doctor_fix( WP_REST_Request $request ) {
+		$fix      = (string) $request->get_param( 'fix' );
+		$post_id  = (int) $request->get_param( 'post_id' );
+		$issue_id = (string) $request->get_param( 'issue_id' );
+		$apply    = SCC_Security::sanitize_bool( $request->get_param( 'apply' ) );
+
+		$fixer  = new SCC_Doctor_Fixer( $this->ai );
+		$result = $fixer->run( $fix, $post_id, $apply );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		$report = null;
+		if ( $apply && '' !== $issue_id ) {
+			$report = SCC_SEO_Doctor::mark_fixed( $issue_id, in_array( $fix, SCC_Doctor_Fixer::SITE_TYPES, true ) ? 0 : $post_id );
+			SCC_Logger::info( 'seo-doctor', 'One-click fix applied.', array( 'fix' => $fix, 'post_id' => $post_id, 'issue' => $issue_id ) );
+		}
+		return $this->ok( array( 'result' => $result, 'report' => $report ) );
+	}
+
+	/**
+	 * POST /doctor/queue — add one issue (issue_id) or every issue at a severity
+	 * or worse (severity=high) to the Action Queue as review items.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function doctor_queue( WP_REST_Request $request ) {
+		$report = SCC_SEO_Doctor::report();
+		if ( ! $report ) {
+			return $this->fail( 'no_report', __( 'Run the SEO Doctor first.', 'seo-command-center' ), 404 );
+		}
+		$issue_id = (string) $request->get_param( 'issue_id' );
+		$severity = (string) $request->get_param( 'severity' );
+		$levels   = array( 'critical' => 4, 'high' => 3, 'medium' => 2, 'low' => 1 );
+
+		$queued = 0;
+		foreach ( (array) $report['issues'] as $issue ) {
+			$match = '' !== $issue_id
+				? (string) $issue['id'] === $issue_id
+				: ( isset( $levels[ $severity ] ) && ( $levels[ $issue['severity'] ] ?? 0 ) >= $levels[ $severity ] );
+			if ( ! $match ) {
+				continue;
+			}
+			if ( SCC_Action_Queue::promote( SCC_SEO_Doctor::queue_item( $issue ) ) ) {
+				$queued++;
+			}
+		}
+		if ( 0 === $queued ) {
+			return $this->fail( 'nothing_queued', __( 'Nothing matched to add to the queue.', 'seo-command-center' ), 404 );
+		}
+		return $this->ok( array( 'queued' => $queued ) );
 	}
 
 	/**

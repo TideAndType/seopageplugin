@@ -102,6 +102,7 @@ class SCC_Plugin {
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
+		add_action( 'wp_head', array( 'SCC_Social_Tags', 'output' ), 5 );
 		$this->loader->add_action( 'wp_head', $this, 'front_styles', 8 );
 
 		// Background jobs dispatcher. The recurring hook provides a safety net;

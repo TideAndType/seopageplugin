@@ -181,6 +181,8 @@ class SCC_Crawler {
 			'h1'                        => array(),
 			'h2'                        => array(),
 			'h3'                        => array(),
+			'heading_outline'           => array(), // Ordered heading levels (1–6) in document order.
+			'og'                        => array(), // Open Graph / Twitter card tags found (lowercased property => content).
 			'text_excerpt'              => '',
 			'word_count'                => 0,
 			'schema_types'              => array(),
@@ -280,6 +282,21 @@ class SCC_Crawler {
 		}
 		foreach ( $xpath->query( '//h3' ) as $node ) {
 			$data['h3'][] = trim( $node->textContent );
+		}
+		// Full heading outline in document order (an XPath union returns nodes in
+		// document order), used to spot skipped levels such as H2 → H4.
+		foreach ( $xpath->query( '//h1 | //h2 | //h3 | //h4 | //h5 | //h6' ) as $node ) {
+			if ( '' !== trim( $node->textContent ) ) {
+				$data['heading_outline'][] = (int) substr( strtolower( $node->nodeName ), 1 );
+			}
+		}
+
+		// Open Graph + Twitter card tags (social sharing previews).
+		foreach ( $xpath->query( '//meta[@property or @name]' ) as $node ) {
+			$key = strtolower( trim( $node->hasAttribute( 'property' ) ? $node->getAttribute( 'property' ) : $node->getAttribute( 'name' ) ) );
+			if ( ( 0 === strpos( $key, 'og:' ) || 0 === strpos( $key, 'twitter:' ) ) && ! isset( $data['og'][ $key ] ) ) {
+				$data['og'][ $key ] = trim( (string) $node->getAttribute( 'content' ) );
+			}
 		}
 
 		// JSON-LD schema types (BEFORE stripping scripts below, so we keep them).
@@ -400,6 +417,14 @@ class SCC_Crawler {
 	protected function extract_schema_types( $json ) {
 		$types = array();
 		if ( ! is_array( $json ) ) {
+			return $types;
+		}
+		// A JSON-LD block may be a plain list of nodes rather than a single node
+		// or an @graph wrapper.
+		if ( array_values( $json ) === $json ) {
+			foreach ( $json as $item ) {
+				$types = array_merge( $types, $this->extract_schema_types( $item ) );
+			}
 			return $types;
 		}
 		if ( isset( $json['@type'] ) ) {

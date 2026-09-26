@@ -1755,6 +1755,181 @@ assert_true( in_array( 'missing_viewport', $tech_ids, true ), 'missing viewport 
 assert_true( in_array( 'invalid_jsonld', $tech_ids, true ), 'invalid JSON-LD detected' );
 assert_true( strpos( $tech_report['disclaimer'], 'not a Google ranking score' ) !== false, 'technical score is explicitly diagnostic' );
 
+echo "\n== Technical SEO: expert checks (schema, thin, headings, keyword, social) ==\n";
+$exp_pages = array(
+	array(
+		'url' => 'https://example.com/', 'crawl_url' => 'https://example.com/', 'final_url' => 'https://example.com/',
+		'status' => 200, 'title' => 'Acme Roofing', 'title_count' => 1, 'meta_description' => 'Home', 'meta_description_count' => 1,
+		'canonical' => 'https://example.com/', 'canonical_resolved' => 'https://example.com/', 'canonical_count' => 1,
+		'h1' => array( 'Acme' ), 'heading_outline' => array( 1, 2 ), 'viewport' => 'width=device-width', 'word_count' => 40,
+		'schema_types' => array( 'WebSite' ), 'og' => array( 'og:title' => 'A', 'og:description' => 'B', 'og:image' => 'C' ),
+		'hreflang' => array(), 'internal_link_urls' => array( 'https://example.com/roof-repair/' ),
+		'post_id' => 1, 'is_home' => true, 'post_type' => 'page', 'target_keyword' => '', 'expected_schema' => array( 'Organization' ),
+	),
+	array(
+		'url' => 'https://example.com/roof-repair/', 'crawl_url' => 'https://example.com/roof-repair/', 'final_url' => 'https://example.com/roof-repair/',
+		'status' => 200, 'title' => 'Our Services', 'title_count' => 1, 'meta_description' => 'We fix roofs', 'meta_description_count' => 1,
+		'canonical' => 'https://example.com/roof-repair/', 'canonical_resolved' => 'https://example.com/roof-repair/', 'canonical_count' => 1,
+		'h1' => array( 'Welcome' ), 'heading_outline' => array( 1, 2, 4 ), 'viewport' => 'width=device-width', 'word_count' => 80,
+		'schema_types' => array( 'WebPage' ), 'og' => array( 'og:title' => 'Roofs' ),
+		'hreflang' => array(), 'internal_link_urls' => array( 'https://example.com/' ),
+		'post_id' => 42, 'is_home' => false, 'post_type' => 'page', 'target_keyword' => 'roof repair', 'expected_schema' => array( 'Service' ),
+	),
+);
+$exp_site = array( 'home_url' => 'https://example.com/', 'https' => true, 'blog_public' => 1, 'sitemap_ok' => true, 'robots_declares_sitemap' => true, 'sitemap_urls' => array( 'https://example.com/', 'https://example.com/roof-repair/' ), 'link_checks' => array() );
+$exp_report = SCC_Technical_SEO::evaluate( $exp_pages, $exp_site );
+$exp_by = array();
+foreach ( $exp_report['issues'] as $issue ) { $exp_by[ $issue['id'] ] = $issue; }
+assert_true( isset( $exp_by['missing_schema'] ), 'service page without Service schema is flagged' );
+assert_eq( 1, $exp_by['missing_schema']['affected_count'] ?? 0, 'homepage WebSite schema satisfies Organization (no false positive)' );
+assert_true( isset( $exp_by['thin_content'] ) && 'medium' === $exp_by['thin_content']['severity'], 'page under 100 words is thin (medium)' );
+assert_eq( 1, $exp_by['thin_content']['affected_count'] ?? 0, 'homepage is never judged as thin content' );
+assert_true( isset( $exp_by['heading_level_skip'] ), 'H2 -> H4 heading skip detected' );
+assert_true( isset( $exp_by['keyword_missing_title'] ), 'target keyword missing from title detected' );
+assert_true( isset( $exp_by['keyword_missing_h1'] ), 'target keyword missing from H1 detected' );
+assert_true( isset( $exp_by['missing_social_tags'] ) && 1 === $exp_by['missing_social_tags']['affected_count'], 'missing og:description/og:image flagged only where absent' );
+assert_eq( 42, $exp_by['missing_schema']['examples'][0]['post_id'] ?? 0, 'issue examples carry the post id for one-click fixes' );
+$exp_cat_ids = array_map( function ( $c ) { return $c['id']; }, $exp_report['categories'] );
+assert_true( in_array( 'content', $exp_cat_ids, true ) && in_array( 'social', $exp_cat_ids, true ), 'content + social categories are scored' );
+// Old stored reports / pages without the new fields must not produce new issues.
+$legacy_report = SCC_Technical_SEO::evaluate( array( array( 'url' => 'https://example.com/', 'crawl_url' => 'https://example.com/', 'status' => 200, 'title' => 'T', 'title_count' => 1, 'meta_description' => 'D', 'meta_description_count' => 1, 'canonical' => 'https://example.com/', 'canonical_count' => 1, 'h1' => array( 'T' ), 'viewport' => 'x', 'hreflang' => array(), 'internal_link_urls' => array() ) ), $exp_site );
+$legacy_ids = array_map( function ( $i ) { return $i['id']; }, $legacy_report['issues'] );
+assert_eq( array(), array_values( array_intersect( $legacy_ids, array( 'missing_schema', 'thin_content', 'heading_level_skip', 'keyword_missing_title', 'missing_social_tags' ) ) ), 'pages without new crawl fields raise no new-check issues' );
+assert_true( SCC_Technical_SEO::keyword_in( 'drone video', 'Videos shot by drone' ), 'keyword match tolerates order and plurals' );
+assert_eq( false, SCC_Technical_SEO::keyword_in( 'roof repair', 'Our Services' ), 'absent keyword not matched' );
+
+echo "\n== Crawler: heading outline, social tags, JSON-LD lists ==\n";
+$exp_crawler = new SCC_Crawler();
+$exp_parsed = $exp_crawler->parse( '<html><head><meta property="og:title" content="Hi"><meta name="twitter:card" content="summary"><script type="application/ld+json">[{"@type":"Organization"},{"@type":"WebSite"}]</script></head><body><h1>A</h1><h2>B</h2><h4>C</h4><p>x</p></body></html>', 'https://example.com/' );
+assert_eq( array( 1, 2, 4 ), $exp_parsed['heading_outline'], 'heading outline recorded in document order' );
+assert_eq( 'Hi', $exp_parsed['og']['og:title'] ?? '', 'og:title captured' );
+assert_eq( 'summary', $exp_parsed['og']['twitter:card'] ?? '', 'twitter:card captured' );
+assert_true( in_array( 'Organization', $exp_parsed['schema_types'], true ) && in_array( 'WebSite', $exp_parsed['schema_types'], true ), 'JSON-LD array of nodes yields all types' );
+
+echo "\n== PageSpeed / Core Web Vitals ==\n";
+$psi_json = array(
+	'loadingExperience' => array(
+		'id' => 'https://example.com/',
+		'overall_category' => 'SLOW',
+		'metrics' => array(
+			'LARGEST_CONTENTFUL_PAINT_MS' => array( 'percentile' => 4600 ),
+			'CUMULATIVE_LAYOUT_SHIFT_SCORE' => array( 'percentile' => 5 ),
+			'INTERACTION_TO_NEXT_PAINT' => array( 'percentile' => 320 ),
+		),
+	),
+	'lighthouseResult' => array(
+		'categories' => array( 'performance' => array( 'score' => 0.41 ) ),
+		'audits' => array(
+			'largest-contentful-paint' => array( 'numericValue' => 5200.4 ),
+			'cumulative-layout-shift' => array( 'numericValue' => 0.02 ),
+			'total-blocking-time' => array( 'numericValue' => 900 ),
+			'first-contentful-paint' => array( 'numericValue' => 2100 ),
+		),
+	),
+);
+$psi = SCC_PageSpeed::parse_result( $psi_json );
+assert_eq( 41, $psi['performance'], 'performance score read from Lighthouse (0-1 -> 0-100)' );
+assert_eq( 4600, $psi['field']['lcp_ms'], 'field LCP read from CrUX percentile' );
+assert_eq( 0.05, $psi['field']['cls'], 'CrUX CLS percentile converted from x100' );
+assert_eq( 900, $psi['lab']['tbt_ms'], 'lab TBT captured' );
+$psi_fallback = SCC_PageSpeed::parse_result( array( 'loadingExperience' => array( 'origin_fallback' => true, 'metrics' => array( 'LARGEST_CONTENTFUL_PAINT_MS' => array( 'percentile' => 9000 ) ) ) ) );
+assert_eq( null, $psi_fallback['field'], 'origin-wide fallback data is never attributed to the page' );
+assert_eq( 'poor', SCC_PageSpeed::rate( 'lcp_ms', 4600 ), 'LCP over 4s rated poor' );
+assert_eq( 'needs_improvement', SCC_PageSpeed::rate( 'inp_ms', 320 ), 'INP 320ms needs improvement' );
+assert_eq( 'good', SCC_PageSpeed::rate( 'cls', 0.05 ), 'CLS 0.05 is good' );
+$psi_report = SCC_PageSpeed::build_report( array(
+	array( 'url' => 'https://example.com/', 'post_id' => 7, 'ok' => true, 'error' => '' ) + $psi,
+	array( 'url' => 'https://example.com/x/', 'post_id' => 8, 'ok' => false, 'error' => 'quota', 'performance' => null, 'field' => null, 'lab' => null ),
+) );
+$psi_ids = array();
+foreach ( $psi_report['issues'] as $i ) { $psi_ids[ $i['id'] ] = $i; }
+assert_true( isset( $psi_ids['slow_lcp'] ) && 'high' === $psi_ids['slow_lcp']['severity'], 'poor field LCP becomes a high-severity issue' );
+assert_true( false !== strpos( $psi_ids['slow_lcp']['examples'][0]['evidence'], 'real Chrome users' ), 'evidence says the number comes from real users' );
+assert_true( isset( $psi_ids['slow_interaction'] ) && 'medium' === $psi_ids['slow_interaction']['severity'], 'field INP preferred over lab TBT' );
+assert_eq( false, isset( $psi_ids['layout_shift'] ), 'good CLS raises no issue' );
+assert_eq( 1, $psi_report['measured'], 'unmeasured URL is not counted as measured' );
+assert_eq( 41, $psi_report['score'], 'score averages only measured URLs' );
+assert_eq( null, SCC_PageSpeed::build_report( array() )['score'], 'no measurements => score is null, not invented' );
+
+echo "\n== SEO Doctor: merged diagnosis ==\n";
+$doc_empty = SCC_SEO_Doctor::diagnose( array() );
+assert_eq( null, $doc_empty['score'], 'nothing measured => no score (not invented)' );
+$doc_unmeasured = array_filter( $doc_empty['groups'], function ( $g ) { return ! $g['measured'] && null === $g['grade']; } );
+assert_eq( count( SCC_SEO_Doctor::GROUPS ), count( $doc_unmeasured ), 'every area reads "not measured" when no engine has run' );
+
+$doc = SCC_SEO_Doctor::diagnose( array(
+	'technical'    => $exp_report,
+	'speed'        => $psi_report,
+	'architecture' => array( 'health' => array( 'score' => 70, 'stats' => array( 'merge_candidates' => 2, 'empty_hubs' => 0, 'weak_coverage' => 0 ) ) ),
+	'aeo'          => array( 'score' => 50, 'pages_analyzed' => 3, 'recommendations' => array( array( 'key' => 'oai-searchbot', 'priority' => 96, 'title' => 'Allow OAI-SearchBot', 'reason' => 'Blocked', 'outcome' => 'Eligible', 'url' => '' ) ) ),
+	'opportunities' => array( array( 'id' => 'decay-9', 'priority' => 'high', 'score' => 88, 'title' => 'Traffic dropping on /x/', 'reason' => 'Clicks down 40%', 'target' => array( 'post_id' => 9, 'url' => 'https://example.com/x/' ) ) ),
+	'gsc_connected' => true,
+) );
+$doc_by = array();
+foreach ( $doc['issues'] as $i ) { $doc_by[ $i['id'] ] = $i; }
+assert_true( isset( $doc_by['tech:missing_schema'], $doc_by['psi:slow_lcp'], $doc_by['arch:merge'], $doc_by['aeo:oai-searchbot'], $doc_by['opp:decay-9'] ), 'technical, speed, architecture, AI and traffic issues all merged' );
+assert_eq( 'critical', $doc['issues'][0]['severity'], 'worst issue ranked first' );
+assert_eq( 'schema', $doc_by['tech:missing_schema']['fix_type'], 'missing schema offers the one-click schema fix' );
+assert_eq( 'social_tags', $doc_by['tech:missing_social_tags']['fix_type'], 'missing social tags offers the social-tags fix' );
+assert_eq( '', $doc_by['tech:thin_content']['fix_type'], 'content problems are never auto-rewritten' );
+assert_eq( 'speed', $doc_by['psi:slow_lcp']['group'], 'Core Web Vitals land in the Speed area' );
+assert_eq( 42, $doc_by['tech:missing_schema']['examples'][0]['post_id'], 'post ids flow through to the Doctor' );
+assert_true( isset( $doc_by['opp:decay-9']['opportunity'] ), 'traffic items keep the original opportunity for Add-to-queue' );
+$doc_expected = SCC_SEO_Doctor::cap( (int) round( ( $exp_report['score'] * 45 + 41 * 20 + 50 * 15 + 70 * 20 ) / 100 ), 'critical' );
+assert_eq( $doc_expected, $doc['score'], 'health score = weighted blend of measured engines only' );
+$doc_no_speed = SCC_SEO_Doctor::diagnose( array( 'technical' => $exp_report, 'speed' => array( 'measured' => 0, 'score' => null, 'issues' => array() ) ) );
+assert_eq( SCC_SEO_Doctor::cap( $exp_report['score'], 'medium' ), $doc_no_speed['score'], 'unmeasured PageSpeed is excluded from the score' );
+$doc_growth = array_values( array_filter( $doc_no_speed['groups'], function ( $g ) { return 'growth' === $g['id']; } ) );
+assert_eq( false, $doc_growth[0]['measured'], 'traffic area not measured without Search Console' );
+$doc_cat = array();
+foreach ( $exp_report['categories'] as $c ) { $doc_cat[ $c['id'] ] = $c['score']; }
+$doc_idx_expected = (int) round( ( $doc_cat['indexability'] * 20 + $doc_cat['crawlability'] * 15 + $doc_cat['canonicalization'] * 12 + $doc_cat['international'] * 2 ) / 49 );
+$doc_groups = array();
+foreach ( $doc['groups'] as $g ) { $doc_groups[ $g['id'] ] = $g; }
+assert_eq( $doc_idx_expected, $doc_groups['indexing']['score'], 'area score = weighted engine category scores (consistent with the headline)' );
+$doc_speed_expected = (int) round( ( $doc_cat['mobile_performance'] * 8 + 41 * 24 ) / 32 );
+assert_eq( $doc_speed_expected, $doc_groups['speed']['score'], 'speed area blends the crawl with real PageSpeed' );
+assert_eq( 49, SCC_SEO_Doctor::cap( 95, 'critical' ), 'a critical problem caps the grade at failing' );
+assert_eq( 79, SCC_SEO_Doctor::cap( 95, 'high' ), 'a high-severity problem rules out an A or B' );
+assert_eq( 95, SCC_SEO_Doctor::cap( 95, 'low' ), 'low issues do not cap the grade' );
+assert_eq( 'A', SCC_SEO_Doctor::grade( 93 ), 'grade A at 90+' );
+assert_eq( 'F', SCC_SEO_Doctor::grade( 41 ), 'grade F under 60' );
+
+echo "\n== SEO Doctor: one-click fix helpers ==\n";
+$fx_text = 'We repair and replace residential roofs across Daytona Beach. Our licensed crew handles leaks, storm damage and full re-roofs. Most repairs are finished in a single day. Call for a free inspection today and get a written quote.';
+$fx_desc = SCC_Doctor_Fixer::draft_description( $fx_text );
+assert_true( strlen( $fx_desc ) <= 160 && strlen( $fx_desc ) >= 70, 'drafted description is a snippet-sized length' );
+assert_true( 0 === strpos( $fx_desc, 'We repair and replace residential roofs' ), 'description is drawn from the page’s own words' );
+assert_eq( '.', substr( $fx_desc, -1 ), 'description ends on a whole sentence when possible' );
+assert_eq( 'A hand-written excerpt that clearly summarises this page for searchers.', SCC_Doctor_Fixer::draft_description( $fx_text, 'A hand-written excerpt that clearly summarises this page for searchers.' ), 'a written excerpt is preferred' );
+assert_eq( '', SCC_Doctor_Fixer::draft_description( 'Contact us.' ), 'too little copy => no description invented' );
+$fx_long = SCC_Doctor_Fixer::draft_description( str_repeat( 'roofing ', 60 ) );
+assert_true( strlen( $fx_long ) <= 160 && '…' === mb_substr( $fx_long, -1 ), 'run-on text is cut at a word boundary with an ellipsis' );
+
+$st = SCC_Social_Tags::build( array( 'site_name' => 'Acme', 'type' => 'article', 'url' => 'https://example.com/a/', 'title' => 'Roof Repair', 'description' => 'Fast fixes', 'image' => 'https://example.com/i.jpg' ) );
+$st_map = array();
+foreach ( $st as $tag ) { $st_map[ $tag[1] ] = $tag; }
+assert_eq( 'Roof Repair', $st_map['og:title'][2] ?? '', 'og:title from page title' );
+assert_eq( 'property', $st_map['og:image'][0] ?? '', 'og:* tags use the property attribute' );
+assert_eq( 'summary_large_image', $st_map['twitter:card'][2] ?? '', 'large Twitter card when an image exists' );
+$st_noimg = SCC_Social_Tags::build( array( 'title' => 'T', 'description' => '', 'image' => '' ) );
+$st_keys = array_map( function ( $t ) { return $t[1]; }, $st_noimg );
+assert_eq( false, in_array( 'og:image', $st_keys, true ) || in_array( 'og:description', $st_keys, true ), 'empty values are skipped, never printed blank' );
+assert_true( in_array( array( 'name', 'twitter:card', 'summary' ), $st_noimg, true ), 'small Twitter card without an image' );
+
+echo "\n== SEO Doctor: fixed items + queue entries ==\n";
+$fixd = SCC_SEO_Doctor::without_fixed( $doc, 'tech:missing_schema', 42 );
+$fixd_ids = array_map( function ( $i ) { return $i['id']; }, $fixd['issues'] );
+assert_eq( false, in_array( 'tech:missing_schema', $fixd_ids, true ), 'issue disappears once its only page is fixed' );
+assert_eq( count( $doc['issues'] ) - 1, count( $fixd['issues'] ), 'other issues are untouched' );
+$fixd_site = SCC_SEO_Doctor::without_fixed( $doc, 'tech:missing_social_tags', 0 );
+assert_eq( false, in_array( 'tech:missing_social_tags', array_map( function ( $i ) { return $i['id']; }, $fixd_site['issues'] ), true ), 'site-level fix clears the whole issue' );
+$q = SCC_SEO_Doctor::queue_item( $doc_by['tech:missing_schema'] );
+assert_eq( 'doctor_review', $q['action_type'], 'queued Doctor items are review items' );
+assert_eq( false, SCC_Action_Queue::is_safe( $q['action_type'] ), 'queued Doctor items are never auto-run by Autopilot' );
+assert_eq( 42, $q['target']['post_id'], 'queue item targets the affected page' );
+assert_eq( 'decay-9', SCC_SEO_Doctor::queue_item( $doc_by['opp:decay-9'] )['id'], 'traffic items queue as their original opportunity' );
+
 echo "\n== Generation mode (native vs template) ==\n";
 // Blog posts generate as normal native WordPress — no template required.
 assert_true( SCC_Generator::is_native_mode( 'article' ), 'article is native mode' );

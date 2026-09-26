@@ -38,6 +38,36 @@ $t = function ( $totals, $key ) {
 		<span class="scc-chip"><?php esc_html_e( 'AI spend (mo.):', 'seo-command-center' ); ?> <strong>$<?php echo esc_html( number_format( (float) ( $usage['cost'] ?? 0 ), 2 ) ); ?></strong></span>
 	</div>
 
+	<?php
+	// SEO Doctor — the single "what's wrong with my site" answer. Rendered by
+	// admin.js from the stored diagnosis (embedded below) so fixes and re-runs
+	// update it in place without a reload.
+	$doctor = isset( $data['doctor'] ) && is_array( $data['doctor'] ) ? $data['doctor'] : null;
+	?>
+	<div class="scc-card scc-doctor" id="scc-doctor">
+		<div class="scc-card__head">
+			<div>
+				<h2><?php esc_html_e( 'SEO Doctor', 'seo-command-center' ); ?></h2>
+				<p class="scc-note" style="margin:2px 0 0;"><?php esc_html_e( 'Everything wrong with your site, worst first — with what to do about it.', 'seo-command-center' ); ?></p>
+			</div>
+			<span class="scc-doctor__actions">
+				<button class="button" id="scc-doctor-refresh" <?php disabled( ! $doctor ); ?>><?php esc_html_e( 'Quick refresh', 'seo-command-center' ); ?></button>
+				<button class="button button-primary" id="scc-doctor-run"><?php echo $doctor ? esc_html__( 'Run full check-up', 'seo-command-center' ) : esc_html__( 'Run my first check-up', 'seo-command-center' ); ?></button>
+			</span>
+		</div>
+		<span class="scc-inline-status" id="scc-doctor-status" aria-live="polite"></span>
+		<div id="scc-doctor-body">
+			<?php if ( ! $doctor ) : ?>
+				<div class="scc-empty">
+					<div class="scc-empty__icon" aria-hidden="true">🩺</div>
+					<h2><?php esc_html_e( 'Get a full diagnosis of your site', 'seo-command-center' ); ?></h2>
+					<p><?php esc_html_e( 'The check-up crawls your pages, measures real page speed with Google, and combines it with your content, links, AI-search readiness and Search Console data into one ranked list of problems — each with how to fix it, and a one-click fix where it is safe. It takes a few minutes on a larger site.', 'seo-command-center' ); ?></p>
+				</div>
+			<?php endif; ?>
+		</div>
+		<script type="application/json" id="scc-doctor-data"><?php echo wp_json_encode( array( 'report' => $doctor, 'admin' => admin_url( 'admin.php?page=' ) ) ); ?></script>
+	</div>
+
 	<?php if ( $latest ) : ?>
 		<?php
 		// Compact overview — the numbers that answer "what's happening?" at a glance.
