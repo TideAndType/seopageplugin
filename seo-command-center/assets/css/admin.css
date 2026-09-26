@@ -682,3 +682,13 @@
 @media (max-width: 960px) {
   .scc-growth-roadmap__cols { grid-template-columns:1fr; }
 }
+
+
+/* AEO / AI Citations */
+.scc-aeo-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
+.scc-aeo-action { border:1px solid #dcdcde; border-radius:8px; padding:12px; background:#fff; }
+.scc-aeo-action p:last-child { margin-bottom:0; }
+.scc-aeo-guidance { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+.scc-aeo-guidance article { border:1px solid #dcdcde; border-radius:8px; padding:12px; background:#f9f9f9; }
+.scc-aeo-guidance h3 { margin-top:0; }
+.scc-badge--warn { background:#fcf0f1; color:#8a2424; border-color:#d63638; }
