@@ -154,20 +154,23 @@ class SCC_Architecture_Brain {
 			return $tree;
 		}
 
+		// Deepest nodes move first so a child-of-child is attached before its
+		// parent is copied into the next ancestor.
+		usort(
+			$moves,
+			function ( $a, $b ) {
+				return substr_count( $b['parent_path'], '/' ) <=> substr_count( $a['parent_path'], '/' );
+			}
+		);
+
 		$remove = array();
 		foreach ( $moves as $move ) {
 			$child = $pillars[ $move['from'] ];
 			$child['parent_url'] = '/' . $move['parent_path'] . '/';
-			// A nested service remains a real page candidate/existing page; only its
-			// structural position changes.
 			$child['children'] = (array) ( $child['children'] ?? array() );
 
 			$parent =& $pillars[ $move['to'] ];
 			$parent['children'][] = $child;
-			// Keep supporting work visible under the owning service hub in this
-			// one-level admin tree.
-			$parent['sections'] = array_merge( (array) ( $parent['sections'] ?? array() ), (array) ( $child['sections'] ?? array() ) );
-			$parent['articles'] = array_merge( (array) ( $parent['articles'] ?? array() ), (array) ( $child['articles'] ?? array() ) );
 			unset( $parent );
 			$remove[ $move['from'] ] = true;
 		}
@@ -199,17 +202,34 @@ class SCC_Architecture_Brain {
 			}
 		}
 
-		foreach ( (array) ( $tree['pillars'] ?? array() ) as $pi => $pillar ) {
-			$tree['pillars'][ $pi ] = $this->enrich_node( $pillar, $context, $index_by_path, $overrides, true );
-			foreach ( array( 'children', 'sections', 'articles' ) as $bucket ) {
-				$out = array();
-				foreach ( (array) ( $pillar[ $bucket ] ?? array() ) as $node ) {
-					$out[] = $this->enrich_node( $node, $context, $index_by_path, $overrides, false );
-				}
-				$tree['pillars'][ $pi ][ $bucket ] = $out;
-			}
+		$out = array();
+		foreach ( (array) ( $tree['pillars'] ?? array() ) as $pillar ) {
+			$out[] = $this->enrich_branch( $pillar, $context, $index_by_path, $overrides, true );
 		}
+		$tree['pillars'] = $out;
 		return $tree;
+	}
+
+	/**
+	 * Recursively enrich a service/page branch.
+	 */
+	protected function enrich_branch( array $node, array $context, array $index_by_path, array $overrides, $is_pillar = false ) {
+		$node = $this->enrich_node( $node, $context, $index_by_path, $overrides, $is_pillar );
+
+		$children = array();
+		foreach ( (array) ( $node['children'] ?? array() ) as $child ) {
+			$children[] = $this->enrich_branch( $child, $context, $index_by_path, $overrides, false );
+		}
+		$node['children'] = $children;
+
+		foreach ( array( 'sections', 'articles' ) as $bucket ) {
+			$out = array();
+			foreach ( (array) ( $node[ $bucket ] ?? array() ) as $item ) {
+				$out[] = $this->enrich_node( $item, $context, $index_by_path, $overrides, false );
+			}
+			$node[ $bucket ] = $out;
+		}
+		return $node;
 	}
 
 	/**
@@ -557,18 +577,7 @@ class SCC_Architecture_Brain {
 			if ( empty( $pillar['children'] ) && empty( $pillar['sections'] ) && empty( $pillar['articles'] ) ) {
 				$stats['empty_hubs']++;
 			}
-			foreach ( array_merge( array( $pillar ), (array) ( $pillar['children'] ?? array() ), (array) ( $pillar['sections'] ?? array() ), (array) ( $pillar['articles'] ?? array() ) ) as $node ) {
-				$action = (string) ( $node['decision']['action'] ?? '' );
-				if ( in_array( $action, array( 'create_page', 'create_article', 'create_location' ), true ) ) {
-					$stats['new_pages']++;
-				}
-				if ( 'expand_existing' === $action ) {
-					$stats['expand_existing']++;
-				}
-				if ( 'weak' === (string) ( $node['coverage']['level'] ?? '' ) ) {
-					$stats['weak_coverage']++;
-				}
-			}
+			self::accumulate_health_node( $pillar, $stats );
 		}
 
 		foreach ( (array) ( $technical['issues'] ?? array() ) as $issue ) {
@@ -589,6 +598,34 @@ class SCC_Architecture_Brain {
 			'stats' => $stats,
 			'label' => $score >= 85 ? __( 'Strong', 'seo-command-center' ) : ( $score >= 65 ? __( 'Needs refinement', 'seo-command-center' ) : __( 'Needs restructuring', 'seo-command-center' ) ),
 		);
+	}
+
+	/**
+	 * Recursively accumulate architecture-health node counts.
+	 *
+	 * @param array $node Node.
+	 * @param array $stats Mutable stats.
+	 * @return void
+	 */
+	protected static function accumulate_health_node( array $node, array &$stats ) {
+		$action = (string) ( $node['decision']['action'] ?? '' );
+		if ( in_array( $action, array( 'create_page', 'create_article', 'create_location' ), true ) ) {
+			$stats['new_pages']++;
+		}
+		if ( 'expand_existing' === $action ) {
+			$stats['expand_existing']++;
+		}
+		if ( 'weak' === (string) ( $node['coverage']['level'] ?? '' ) ) {
+			$stats['weak_coverage']++;
+		}
+		foreach ( (array) ( $node['children'] ?? array() ) as $child ) {
+			self::accumulate_health_node( $child, $stats );
+		}
+		foreach ( array( 'sections', 'articles' ) as $bucket ) {
+			foreach ( (array) ( $node[ $bucket ] ?? array() ) as $child ) {
+				self::accumulate_health_node( $child, $stats );
+			}
+		}
 	}
 
 	/**
@@ -700,9 +737,26 @@ class SCC_Architecture_Brain {
 	 */
 	public static function find_node( array $report, $node_id ) {
 		foreach ( (array) ( $report['tree']['pillars'] ?? array() ) as $pillar ) {
-			foreach ( array_merge( array( $pillar ), (array) ( $pillar['children'] ?? array() ), (array) ( $pillar['sections'] ?? array() ), (array) ( $pillar['articles'] ?? array() ) ) as $node ) {
-				if ( (string) ( $node['node_id'] ?? '' ) === (string) $node_id ) {
-					return $node;
+			$found = self::find_node_branch( $pillar, $node_id );
+			if ( $found ) {
+				return $found;
+			}
+		}
+		return null;
+	}
+
+	protected static function find_node_branch( array $node, $node_id ) {
+		if ( (string) ( $node['node_id'] ?? '' ) === (string) $node_id ) {
+			return $node;
+		}
+		foreach ( (array) ( $node['children'] ?? array() ) as $child ) {
+			$found = self::find_node_branch( $child, $node_id );
+			if ( $found ) { return $found; }
+		}
+		foreach ( array( 'sections', 'articles' ) as $bucket ) {
+			foreach ( (array) ( $node[ $bucket ] ?? array() ) as $child ) {
+				if ( (string) ( $child['node_id'] ?? '' ) === (string) $node_id ) {
+					return $child;
 				}
 			}
 		}
