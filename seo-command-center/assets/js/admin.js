@@ -3443,35 +3443,82 @@
 	function bindLayoutEngine() {
 		var root = document.getElementById( 'scc-layout' );
 		if ( ! root ) { return; }
-		var postId  = parseInt( root.getAttribute( 'data-post' ), 10 ) || 0;
+
+		var postId = parseInt( root.getAttribute( 'data-post' ), 10 ) || 0;
+		var isLive = root.getAttribute( 'data-live' ) === '1';
+		var pickerMsg = document.getElementById( 'scc-layout-picker-msg' );
+
+		function cloneDraft( sourceId, button, statusEl ) {
+			if ( ! sourceId ) { return; }
+			if ( button ) { button.disabled = true; }
+			setStatus( statusEl, 'Creating safe draft copy…' );
+			request( '/layout/clone-draft', { method: 'POST', data: { post_id: sourceId } } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					setStatus( statusEl, d.message || 'Draft working copy created.', 'is-ok' );
+					if ( d.layout_url ) { window.location.href = d.layout_url; }
+				} )
+				.catch( function ( err ) {
+					if ( button ) { button.disabled = false; }
+					setStatus( statusEl, ( err && err.message ) || 'Could not create a draft copy.', 'is-error' );
+				} );
+		}
+
+		// Picker mode: Drafts are the default; Live is an explicit separate view.
+		Array.prototype.forEach.call( document.querySelectorAll( '#scc-layout-picker-toggle [data-layout-list]' ), function ( btn ) {
+			btn.addEventListener( 'click', function () {
+				var wanted = btn.getAttribute( 'data-layout-list' );
+				Array.prototype.forEach.call( document.querySelectorAll( '#scc-layout-picker-toggle [data-layout-list]' ), function ( b ) {
+					var active = b === btn;
+					b.classList.toggle( 'button-primary', active );
+					b.classList.toggle( 'is-active', active );
+				} );
+				Array.prototype.forEach.call( document.querySelectorAll( '[data-layout-panel]' ), function ( panel ) {
+					panel.hidden = panel.getAttribute( 'data-layout-panel' ) !== wanted;
+				} );
+			} );
+		} );
+		Array.prototype.forEach.call( document.querySelectorAll( '.scc-layout-clone-picker' ), function ( btn ) {
+			btn.addEventListener( 'click', function () {
+				cloneDraft( parseInt( btn.getAttribute( 'data-post' ), 10 ) || 0, btn, pickerMsg );
+			} );
+		} );
+
+		if ( postId <= 0 ) { return; }
+
 		var preview = document.getElementById( 'scc-layout-preview' );
-		var msg     = document.getElementById( 'scc-layout-msg' );
-		var metaEl  = document.getElementById( 'scc-layout-meta' );
-		var criticEl= document.getElementById( 'scc-layout-critic' );
-		var applyBtn= document.getElementById( 'scc-layout-apply' );
-		var regen   = document.getElementById( 'scc-layout-regen' );
-		var aiBox   = document.getElementById( 'scc-layout-ai' );
-		if ( ! preview || postId <= 0 ) { return; }
+		var msg = document.getElementById( 'scc-layout-msg' );
+		var metaEl = document.getElementById( 'scc-layout-meta' );
+		var criticEl = document.getElementById( 'scc-layout-critic' );
+		var applyBtn = document.getElementById( 'scc-layout-apply' );
+		var regen = document.getElementById( 'scc-layout-regen' );
+		var aiBox = document.getElementById( 'scc-layout-ai' );
+		var confirmLive = document.getElementById( 'scc-layout-confirm-live' );
+		var restoreBtn = document.getElementById( 'scc-layout-restore' );
+		var cloneBtn = document.getElementById( 'scc-layout-clone-draft' );
+		var safetyMsg = document.getElementById( 'scc-layout-safety-msg' );
+		if ( ! preview || ! applyBtn ) { return; }
 
 		var blocks = []; // [{id, name}]
 
-		function esc( s ) { var d = document.createElement( 'div' ); d.textContent = ( s == null ? '' : String( s ) ); return d.innerHTML; }
+		function updateApplyState() {
+			applyBtn.disabled = ! blocks.length || ( isLive && ( ! confirmLive || ! confirmLive.checked ) );
+		}
 
 		function draw() {
 			preview.innerHTML = '';
 			if ( ! blocks.length ) {
 				preview.appendChild( el( 'p', 'No blocks — try Regenerate.', 'scc-note' ) );
-				applyBtn.disabled = true;
+				updateApplyState();
 				return;
 			}
-			applyBtn.disabled = false;
 			blocks.forEach( function ( b, i ) {
 				var row = el( 'div', null, 'scc-lblock' );
 				row.appendChild( el( 'span', b.name, 'scc-lblock__name' ) );
 				var ctl = el( 'span', null, 'scc-lblock__ctl' );
-				var up = el( 'button', '↑', 'button button-small' ); up.title = 'Move up'; up.disabled = ( i === 0 );
-				var dn = el( 'button', '↓', 'button button-small' ); dn.title = 'Move down'; dn.disabled = ( i === blocks.length - 1 );
-				var rm = el( 'button', '✕', 'button button-small' ); rm.title = 'Remove';
+				var up = el( 'button', '↑', 'button button-small' ); up.type = 'button'; up.title = 'Move up'; up.disabled = ( i === 0 );
+				var dn = el( 'button', '↓', 'button button-small' ); dn.type = 'button'; dn.title = 'Move down'; dn.disabled = ( i === blocks.length - 1 );
+				var rm = el( 'button', '✕', 'button button-small' ); rm.type = 'button'; rm.title = 'Remove';
 				up.addEventListener( 'click', function () { if ( i > 0 ) { var t = blocks[ i - 1 ]; blocks[ i - 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
 				dn.addEventListener( 'click', function () { if ( i < blocks.length - 1 ) { var t = blocks[ i + 1 ]; blocks[ i + 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
 				rm.addEventListener( 'click', function () { blocks.splice( i, 1 ); draw(); } );
@@ -3479,6 +3526,7 @@
 				row.appendChild( ctl );
 				preview.appendChild( row );
 			} );
+			updateApplyState();
 		}
 
 		function drawCritique( critic ) {
@@ -3507,7 +3555,8 @@
 		}
 
 		function propose() {
-			applyBtn.disabled = true;
+			blocks = [];
+			updateApplyState();
 			setStatus( msg, 'Analyzing content and choosing blocks…' );
 			request( '/layout/propose', { method: 'POST', data: { post_id: postId, use_ai: aiBox && aiBox.checked } } )
 				.then( function ( res ) {
@@ -3520,35 +3569,75 @@
 						metaEl.textContent = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) +
 							' · planned by ' + planner + ( d.ai_available ? '' : ' (no AI provider configured)' );
 					}
-					setStatus( msg, 'Done.', 'is-ok' );
+					setStatus( msg, isLive ? 'Preview ready. Live Apply remains locked until you confirm the warning.' : 'Done.', 'is-ok' );
 					drawCritique( d.critique );
 					draw();
 				} )
-				.catch( function ( err ) { setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' ); } );
+				.catch( function ( err ) {
+					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
+					updateApplyState();
+				} );
+		}
+
+		function restore() {
+			if ( ! window.confirm( 'Restore this page from the last TideOrbit layout backup? Current layout changes made after that backup will be replaced.' ) ) { return; }
+			if ( restoreBtn ) { restoreBtn.disabled = true; }
+			setStatus( safetyMsg, 'Restoring previous layout…' );
+			request( '/layout/restore', { method: 'POST', data: { post_id: postId } } )
+				.then( function ( res ) {
+					setStatus( safetyMsg, ( res.data && res.data.message ) || 'Previous layout restored. Reloading…', 'is-ok' );
+					window.location.reload();
+				} )
+				.catch( function ( err ) {
+					if ( restoreBtn ) { restoreBtn.disabled = false; }
+					setStatus( safetyMsg, ( err && err.message ) || 'Could not restore the previous layout.', 'is-error' );
+				} );
 		}
 
 		function apply() {
 			var applyMsg = document.getElementById( 'scc-layout-apply-msg' );
+			if ( isLive && ( ! confirmLive || ! confirmLive.checked ) ) {
+				setStatus( applyMsg, 'Confirm the live-page warning first, or make a draft copy.', 'is-error' );
+				return;
+			}
+			if ( isLive && ! window.confirm( 'This will change the published page visitors see. TideOrbit will save a restore point first. Apply to the LIVE page?' ) ) {
+				return;
+			}
 			applyBtn.disabled = true;
-			setStatus( applyMsg, 'Building your Elementor page…' );
-			request( '/layout/apply', { method: 'POST', data: { post_id: postId, layout: blocks.map( function ( b ) { return b.id; } ) } } )
+			setStatus( applyMsg, isLive ? 'Saving restore point and updating LIVE page…' : 'Building your Elementor layout…' );
+			request( '/layout/apply', {
+				method: 'POST',
+				data: {
+					post_id: postId,
+					layout: blocks.map( function ( b ) { return b.id; } ),
+					confirm_live: isLive && !! ( confirmLive && confirmLive.checked )
+				}
+			} )
 				.then( function ( res ) {
 					var d = res.data || {};
-					setStatus( applyMsg, 'Done.', 'is-ok' );
+					setStatus( applyMsg, isLive ? 'Live page updated. Restore point saved.' : 'Layout created. Restore point saved.', 'is-ok' );
 					preview.innerHTML = '';
 					var ok = el( 'div', null, 'scc-empty' );
 					ok.appendChild( el( 'div', '✅', 'scc-empty__icon' ) );
-					ok.appendChild( el( 'h2', 'Elementor page created' ) );
-					ok.appendChild( el( 'p', 'The layout was applied. Open it in Elementor to fine-tune, or edit the draft.', 'scc-note' ) );
+					ok.appendChild( el( 'h2', isLive ? 'Live Elementor page updated' : 'Elementor layout created' ) );
+					ok.appendChild( el( 'p', 'TideOrbit saved the previous state before applying this layout.', 'scc-note' ) );
 					if ( d.elementor_url ) { var e = el( 'a', 'Edit in Elementor', 'button button-primary' ); e.href = d.elementor_url; ok.appendChild( e ); }
-					if ( d.edit_url ) { var ed = el( 'a', ' Edit draft', 'button' ); ed.href = d.edit_url; ok.appendChild( document.createTextNode( ' ' ) ); ok.appendChild( ed ); }
+					if ( d.edit_url ) { var ed = el( 'a', isLive ? ' Edit page' : ' Edit draft', 'button' ); ed.href = d.edit_url; ok.appendChild( document.createTextNode( ' ' ) ); ok.appendChild( ed ); }
+					var undo = el( 'button', 'Restore previous layout', 'button' ); undo.type = 'button'; undo.style.marginLeft = '6px'; undo.addEventListener( 'click', restore ); ok.appendChild( undo );
 					preview.appendChild( ok );
 				} )
-				.catch( function ( err ) { setStatus( applyMsg, ( err && err.message ) || i18n.error, 'is-error' ); applyBtn.disabled = false; } );
+				.catch( function ( err ) {
+					setStatus( applyMsg, ( err && err.message ) || i18n.error, 'is-error' );
+					updateApplyState();
+				} );
 		}
 
+		if ( confirmLive ) { confirmLive.addEventListener( 'change', updateApplyState ); }
+		if ( cloneBtn ) { cloneBtn.addEventListener( 'click', function () { cloneDraft( postId, cloneBtn, safetyMsg ); } ); }
+		if ( restoreBtn ) { restoreBtn.addEventListener( 'click', restore ); }
 		if ( regen ) { regen.addEventListener( 'click', propose ); }
 		if ( applyBtn ) { applyBtn.addEventListener( 'click', apply ); }
 		propose();
+
 	}
 } )();
