@@ -178,6 +178,8 @@ $render_branch = function ( $node, $depth = 1 ) use ( &$render_branch, $node_lin
 				<div><strong><?php echo esc_html( (int) ( $stats['weak_coverage'] ?? 0 ) ); ?></strong><span><?php esc_html_e( 'weak coverage', 'seo-command-center' ); ?></span></div>
 				<div><strong><?php echo esc_html( (int) ( $stats['merge_candidates'] ?? 0 ) ); ?></strong><span><?php esc_html_e( 'merge reviews', 'seo-command-center' ); ?></span></div>
 				<div><strong><?php echo esc_html( (int) ( $stats['orphans'] ?? 0 ) ); ?></strong><span><?php esc_html_e( 'orphan/unreachable', 'seo-command-center' ); ?></span></div>
+				<div><strong><?php echo esc_html( (int) ( $stats['deep_pages'] ?? 0 ) ); ?></strong><span><?php esc_html_e( 'deep pages', 'seo-command-center' ); ?></span></div>
+				<div><strong><?php echo esc_html( (int) ( $stats['empty_hubs'] ?? 0 ) ); ?></strong><span><?php esc_html_e( 'unsupported hubs', 'seo-command-center' ); ?></span></div>
 				<div><strong><?php echo esc_html( (int) ( $stats['service_hubs'] ?? 0 ) ); ?></strong><span><?php esc_html_e( 'service hubs', 'seo-command-center' ); ?></span></div>
 			</div>
 		</div>
