@@ -641,6 +641,7 @@ assert_eq( 'from:lmstudio', $resp3->content, 'route override sends keyword-strat
 
 echo "\n== Keyword strategy: mirror the real site ==\n";
 require_once __DIR__ . '/../seo-command-center/includes/strategy/class-scc-keyword-strategy.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-architecture-brain.php';
 
 class SCC_KS_Test extends SCC_Keyword_Strategy {
 	public static $pages = array();
@@ -755,6 +756,178 @@ assert_true( is_array( $match ), 'semantic page matcher catches same topic on a 
 assert_eq( '/managed-it-services/24-7-monitoring-alerting/', $match['path'], 'semantic matcher returns the existing page path' );
 
 SCC_Analyzer::$latest = null;
+
+echo "\n== SEO Architecture Brain ==\n";
+$brain_engine = new SCC_Architecture_Brain();
+
+$brain_tree = array(
+	'pillars' => array(
+		array(
+			'title' => 'Managed IT Services',
+			'primary_keyword' => 'managed IT services',
+			'intent' => 'commercial',
+			'url' => '/managed-it-services/',
+			'page_type' => 'service',
+			'status' => 'existing',
+			'exists' => true,
+			'page_candidate' => false,
+			'related' => array( '24/7 monitoring', 'help desk' ),
+			'children' => array(),
+			'sections' => array(
+				array(
+					'title' => 'Proactive Patch Management',
+					'primary_keyword' => 'proactive patch management',
+					'intent' => 'commercial',
+					'url' => '/managed-it-services/',
+					'parent_url' => '/managed-it-services/',
+					'page_type' => 'section',
+					'status' => 'section',
+					'exists' => false,
+					'page_candidate' => false,
+					'related' => array( 'patching endpoints', 'update management' ),
+				),
+			),
+			'articles' => array(
+				array(
+					'title' => 'How Managed IT Pricing Works',
+					'primary_keyword' => 'managed IT pricing',
+					'intent' => 'informational',
+					'url' => '/blog/managed-it-pricing/',
+					'page_type' => 'article',
+					'status' => 'new',
+					'exists' => false,
+					'page_candidate' => true,
+					'related' => array( 'pricing factors' ),
+				),
+			),
+		),
+	),
+	'existing' => 1,
+	'notes' => '',
+);
+$managed_row = array(
+	'post_id' => 10,
+	'url' => 'https://example.com/managed-it-services/',
+	'title' => 'Managed IT Services',
+	'primary_keyword' => 'managed IT services',
+	'intent' => 'commercial',
+	'tokens' => SCC_Content_Index::tokenize( 'managed technology services monitoring help desk proactive support business systems' ),
+	'headings' => array( 'Managed IT Services', '24/7 Monitoring', 'Help Desk' ),
+	'anchors' => array(),
+	'outbound' => array(),
+);
+$brain_context = array(
+	'index' => array( $managed_row ),
+	'gsc' => array(
+		'https://example.com/managed-it-services' => array(
+			array( 'query' => 'managed it services', 'impressions' => 120, 'clicks' => 12, 'position' => 6.2 ),
+			array( 'query' => 'managed it pricing', 'impressions' => 40, 'clicks' => 1, 'position' => 13.0 ),
+		),
+	),
+	'gsc_available' => true,
+	'technical' => array(),
+);
+$brain_report = $brain_engine->analyze( $brain_tree, $brain_context, array() );
+$brain_pillar = $brain_report['tree']['pillars'][0];
+assert_eq( 'keep', $brain_pillar['decision']['action'], 'well-covered existing hub stays as the keeper' );
+assert_eq( 'expand_existing', $brain_pillar['sections'][0]['decision']['action'], 'commercial service subtopic expands the existing hub' );
+assert_true( $brain_pillar['sections'][0]['coverage']['score'] < 75, 'missing service coverage is measured from real indexed content' );
+assert_eq( 'create_article', $brain_pillar['articles'][0]['decision']['action'], 'distinct informational pricing intent remains a supporting article despite GSC overlap' );
+assert_true( ! empty( $brain_pillar['articles'][0]['gsc']['impressions'] ), 'GSC evidence is attached to the article decision' );
+
+$gsc_new_tree = array(
+	'pillars' => array(
+		array(
+			'title' => '24/7 Monitoring & Alerting',
+			'primary_keyword' => '24/7 monitoring alerting',
+			'intent' => 'commercial',
+			'url' => '/24-7-monitoring-alerting/',
+			'page_type' => 'service',
+			'status' => 'new',
+			'exists' => false,
+			'page_candidate' => true,
+			'related' => array( 'monitoring alerts' ),
+			'children' => array(),
+			'sections' => array(),
+			'articles' => array(),
+		),
+	),
+);
+$gsc_context = $brain_context;
+$gsc_context['gsc']['https://example.com/managed-it-services'] = array(
+	array( 'query' => '24 7 monitoring alerting', 'impressions' => 90, 'clicks' => 6, 'position' => 8.0 ),
+);
+$gsc_report = $brain_engine->analyze( $gsc_new_tree, $gsc_context, array() );
+$gsc_node = $gsc_report['tree']['pillars'][0];
+assert_eq( 'expand_existing', $gsc_node['decision']['action'], 'GSC already associating a commercial topic with an existing page prevents another URL' );
+assert_eq( false, $gsc_node['page_candidate'], 'GSC-covered commercial topic is removed from the new-page queue' );
+assert_true( false !== strpos( $gsc_node['url'], 'managed-it-services' ), 'GSC-covered topic targets the existing page' );
+
+$dupe_rows = array(
+	array(
+		'post_id' => 21,
+		'url' => 'https://example.com/network-security/',
+		'title' => 'Network Security Services',
+		'primary_keyword' => 'network security services',
+		'intent' => 'commercial',
+		'tokens' => SCC_Content_Index::tokenize( 'network security services firewall monitoring threat protection business cybersecurity' ),
+		'headings' => array( 'Network Security Services' ),
+		'anchors' => array(),
+		'outbound' => array(),
+	),
+	array(
+		'post_id' => 22,
+		'url' => 'https://example.com/services/network-security/',
+		'title' => 'Network Security Services',
+		'primary_keyword' => 'network security services',
+		'intent' => 'commercial',
+		'tokens' => SCC_Content_Index::tokenize( 'network security services firewall monitoring threat protection business cybersecurity' ),
+		'headings' => array( 'Network Security Services' ),
+		'anchors' => array(),
+		'outbound' => array(),
+	),
+);
+$merge_plan = SCC_Architecture_Brain::consolidation_plan( $dupe_rows, array() );
+assert_eq( 1, count( $merge_plan ), 'near-identical existing pages create one consolidation review' );
+assert_true( $merge_plan[0]['similarity'] >= 80, 'consolidation plan exposes high overlap evidence' );
+assert_true( ! empty( $merge_plan[0]['recommended_steps'] ), 'consolidation plan includes safe human-review steps' );
+
+$health = SCC_Architecture_Brain::health( $brain_report['tree'], $merge_plan, array(
+	'issues' => array(
+		array( 'id' => 'orphan_page', 'affected_count' => 1 ),
+	),
+) );
+assert_true( $health['score'] < 100, 'architecture health penalizes merge/coverage/orphan problems' );
+assert_eq( 1, $health['stats']['merge_candidates'], 'architecture health counts consolidation candidates' );
+assert_eq( 1, $health['stats']['orphans'], 'architecture health consumes technical orphan evidence' );
+
+$move_tree = array(
+	'pillars' => array(
+		array(
+			'title' => 'Managed IT Services', 'primary_keyword' => 'managed IT services', 'intent' => 'commercial',
+			'url' => '/managed-it-services/', 'page_type' => 'service', 'status' => 'new', 'exists' => false, 'page_candidate' => true,
+			'related' => array(),
+			'children' => array(
+				array(
+					'title' => 'Cloud Backup', 'primary_keyword' => 'cloud backup', 'intent' => 'commercial',
+					'url' => '/cloud-backup/', 'page_type' => 'service', 'status' => 'new', 'exists' => false, 'page_candidate' => true, 'related' => array(),
+				),
+			),
+			'sections' => array(), 'articles' => array(),
+		),
+		array(
+			'title' => 'Cloud Services', 'primary_keyword' => 'cloud services', 'intent' => 'commercial',
+			'url' => '/cloud-services/', 'page_type' => 'service', 'status' => 'new', 'exists' => false, 'page_candidate' => true,
+			'related' => array(), 'children' => array(), 'sections' => array(), 'articles' => array(),
+		),
+	),
+);
+$child_id = SCC_Architecture_Brain::node_id( $move_tree['pillars'][0]['children'][0] );
+$moved = $brain_engine->analyze( $move_tree, array( 'index' => array(), 'gsc' => array(), 'gsc_available' => false, 'technical' => array() ), array(
+	$child_id => array( 'parent_url' => '/cloud-services/' ),
+) );
+assert_eq( 0, count( $moved['tree']['pillars'][0]['children'] ), 'saved parent override removes child from old service hub' );
+assert_eq( 1, count( $moved['tree']['pillars'][1]['children'] ), 'saved parent override moves child to chosen service hub' );
 
 // Real site has two pages; the AI map only mentioned one (with a wrong slug)
 // plus one genuine new idea. After reconcile: both real pages present as
