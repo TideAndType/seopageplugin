@@ -2081,7 +2081,7 @@
 		try { boot = JSON.parse( dataEl.textContent || '{}' ); } catch ( e ) { boot = {}; }
 		var adminBase = boot.admin || '';
 		var hashArea = ( /doctor-([a-z]+)/.exec( window.location.hash || '' ) || [] )[ 1 ];
-		var state = { report: boot.report || null, area: hashArea || 'all' };
+		var state = { report: boot.report || null, area: hashArea && 'ignored' !== hashArea ? hashArea : 'all', view: 'ignored' === hashArea ? 'ignored' : 'problems' };
 		if ( hashArea && root.scrollIntoView ) {
 			root.scrollIntoView();
 		}
@@ -2155,6 +2155,21 @@
 			}
 			html += '</div></div>';
 
+			// Problems / Ignored tabs.
+			var ignored = r.ignored || [];
+			html += '<div class="scc-doctor__tabs" role="tablist">' +
+				'<button type="button" role="tab" class="scc-doctor__tab' + ( 'problems' === state.view ? ' is-active' : '' ) + '" aria-selected="' + ( 'problems' === state.view ) + '" data-view="problems">Problems (' + esc( ( r.issues || [] ).length ) + ')</button>' +
+				'<button type="button" role="tab" class="scc-doctor__tab' + ( 'ignored' === state.view ? ' is-active' : '' ) + '" aria-selected="' + ( 'ignored' === state.view ) + '" data-view="ignored">Ignored (' + esc( ignored.length ) + ')</button>' +
+				'</div>';
+			if ( 'ignored' === state.view ) {
+				html += ignoredHtml( ignored );
+				if ( r.disclaimer ) {
+					html += '<p class="scc-note scc-doctor__disclaimer">' + esc( r.disclaimer ) + '</p>';
+				}
+				body.innerHTML = html;
+				return;
+			}
+
 			// Area grades (click to filter).
 			html += '<div class="scc-doctor__areas">';
 			html += '<button type="button" class="scc-area' + ( 'all' === state.area ? ' is-active' : '' ) + '" data-area="all"><span class="scc-area__label">All areas</span><span class="scc-area__meta">' + esc( ( r.issues || [] ).length ) + ' issues</span></button>';
@@ -2190,6 +2205,27 @@
 				html += '<p class="scc-note scc-doctor__disclaimer">' + esc( r.disclaimer ) + '</p>';
 			}
 			body.innerHTML = html;
+		}
+
+		function ignoredHtml( list ) {
+			if ( ! list.length ) {
+				return '<div class="scc-empty"><p>Nothing is ignored. Use <strong>Ignore</strong> on any problem — or on one page of it — to hide it. It stays hidden on every check-up until you undo it here.</p></div>';
+			}
+			var h = '<p class="scc-note">These stay hidden on every check-up until you undo them. Ignored site-crawl problems also stop counting toward your score.</p><div class="scc-doctor__list">';
+			list.slice().reverse().forEach( function ( it ) {
+				var url = safeUrl( it.url );
+				var where = 'page' === it.scope
+					? ( url ? '<a href="' + esc( url ) + '" target="_blank" rel="noopener">' + esc( it.page || url.replace( /^https?:\/\/[^/]+/, '' ) || '/' ) + '</a>' : esc( it.page || 'One page' ) )
+					: 'All pages';
+				h += '<div class="scc-issue scc-issue--ignored"><div class="scc-issue__row">' +
+					( it.severity ? '<span class="scc-sev scc-sev--' + esc( it.severity ) + '">' + esc( SEV[ it.severity ] || it.severity ) + '</span>' : '' ) +
+					'<span class="scc-issue__title scc-issue__title--static">' + esc( it.title ) + '</span>' +
+					'<span class="scc-issue__pages">' + where + '</span>' +
+					'<span class="scc-note">Ignored ' + esc( String( it.at || '' ).slice( 0, 10 ) ) + '</span>' +
+					'<button type="button" class="button button-small" data-doctor-unignore="' + esc( it.key ) + '">Undo</button>' +
+					'</div></div>';
+			} );
+			return h + '</div>';
 		}
 
 		function notMeasuredHint( area ) {
@@ -2244,6 +2280,9 @@
 					if ( issue.fix_type && ! siteFix && ex.post_id ) {
 						h += ' <button type="button" class="button button-small scc-fix" data-fix="' + esc( issue.fix_type ) + '" data-post="' + esc( ex.post_id ) + '">' + esc( FIX_LABEL[ issue.fix_type ] || 'Fix' ) + '</button>';
 					}
+					if ( ex.post_id || url ) {
+						h += ' <button type="button" class="button-link scc-ignore-page" data-doctor-ignore="' + esc( issue.id ) + '" data-post="' + esc( ex.post_id || 0 ) + '" data-url="' + esc( ex.post_id ? '' : url ) + '" title="Hide this problem for this page only">Ignore page</button>';
+					}
 					h += '<div class="scc-fix-preview" hidden></div>';
 					h += '</li>';
 				} );
@@ -2257,6 +2296,7 @@
 				h += '<button type="button" class="button button-primary button-small scc-fix" data-fix="social_tags" data-post="0">' + esc( FIX_LABEL.social_tags ) + '</button>';
 			}
 			h += '<button type="button" class="button button-small" data-doctor-queue="' + esc( issue.id ) + '">Add to Action Queue</button>';
+			h += '<button type="button" class="button button-small" data-doctor-ignore="' + esc( issue.id ) + '" data-post="0" data-url="" title="Hide this problem on every page until you undo it">Ignore</button>';
 			if ( issue.screen && adminBase ) {
 				h += '<a class="button button-small" href="' + esc( adminBase + 'seo-command-center-' + issue.screen ) + '">Open ' + esc( SCREEN_LABEL[ issue.screen ] || 'screen' ) + '</a>';
 			}
@@ -2365,8 +2405,41 @@
 			}
 			if ( t.hasAttribute( 'data-doctor-queue-high' ) ) {
 				queue( { severity: 'high' }, t );
+				return;
+			}
+			var tab = t.closest( '[data-view]' );
+			if ( tab ) {
+				state.view = tab.getAttribute( 'data-view' );
+				render();
+				return;
+			}
+			if ( t.hasAttribute( 'data-doctor-ignore' ) ) {
+				var onePage = ( parseInt( t.getAttribute( 'data-post' ), 10 ) || 0 ) > 0 || !! t.getAttribute( 'data-url' );
+				hideAndSave( '/doctor/ignore', { issue_id: t.getAttribute( 'data-doctor-ignore' ), post_id: parseInt( t.getAttribute( 'data-post' ), 10 ) || 0, url: t.getAttribute( 'data-url' ) || '' }, t,
+					onePage ? 'Ignored for that page.' : 'Ignored on all pages.' );
+				return;
+			}
+			if ( t.hasAttribute( 'data-doctor-unignore' ) ) {
+				hideAndSave( '/doctor/unignore', { key: t.getAttribute( 'data-doctor-unignore' ) }, t, 'Restored — it is back in Problems.' );
 			}
 		} );
+
+		function hideAndSave( path, data, btn, message ) {
+			btn.disabled = true;
+			request( path, { method: 'POST', data: data } )
+				.then( function ( res ) {
+					var rep = res && res.data && res.data.report;
+					if ( rep ) {
+						state.report = rep;
+						render();
+					}
+					setStatus( status, '✓ ' + message + ( '/doctor/ignore' === path ? ' Undo any time in the Ignored tab.' : '' ), 'is-ok' );
+				} )
+				.catch( function ( err ) {
+					btn.disabled = false;
+					setStatus( status, ( err && err.message ) || 'Could not save that.', 'is-error' );
+				} );
+		}
 
 		function setBusy( busy ) {
 			if ( runBtn ) { runBtn.disabled = busy; }

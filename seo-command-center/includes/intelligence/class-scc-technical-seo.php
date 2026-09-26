@@ -94,6 +94,9 @@ class SCC_Technical_SEO {
 		);
 
 		foreach ( (array) $query->posts as $post_id ) {
+			if ( class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_seo_excluded( $post_id ) ) {
+				continue; // Template or owner-set noindex: not an SEO target.
+			}
 			$url = get_permalink( $post_id );
 			if ( ! $url ) {
 				continue;
@@ -763,6 +766,29 @@ class SCC_Technical_SEO {
 			}
 		);
 
+		$scored = self::score_issues( $issues, count( $pages ) );
+
+		return array(
+			'score'      => $scored['score'],
+			'pages'      => count( $pages ),
+			'issues'     => $issues,
+			'counts'     => $scored['counts'],
+			'categories' => $scored['categories'],
+			'disclaimer' => 'Technical SEO Health is a TideOrbit diagnostic based on the audited URLs and observable technical signals. It is not a Google ranking score or a Core Web Vitals field-data score.',
+		);
+	}
+
+	/**
+	 * Score a set of technical issues: per-category health (each issue weighted
+	 * by severity and the share of audited pages it affects) and the overall
+	 * weighted score. Pure — also used to re-score after issues are ignored.
+	 *
+	 * @param array $issues     Issues (id, category, severity, affected_count, scope).
+	 * @param int   $page_count Pages audited.
+	 * @return array {score, categories, counts}
+	 */
+	public static function score_issues( array $issues, $page_count ) {
+		$count = max( 1, (int) $page_count );
 		$category_defs = array(
 			'indexability'       => array( 'label' => 'Indexability', 'weight' => 20 ),
 			'crawlability'       => array( 'label' => 'Crawlability', 'weight' => 15 ),
@@ -813,11 +839,8 @@ class SCC_Technical_SEO {
 
 		return array(
 			'score'      => $weights ? (int) round( $weighted / $weights ) : 100,
-			'pages'      => count( $pages ),
-			'issues'     => $issues,
-			'counts'     => $counts,
 			'categories' => $categories,
-			'disclaimer' => 'Technical SEO Health is a TideOrbit diagnostic based on the audited URLs and observable technical signals. It is not a Google ranking score or a Core Web Vitals field-data score.',
+			'counts'     => $counts,
 		);
 	}
 

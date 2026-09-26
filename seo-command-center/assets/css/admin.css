@@ -801,3 +801,16 @@
 }
 .scc-doctor__actions select { height: 30px; }
 .scc-doctor__tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0 0 10px; padding: 8px 10px; background: var(--scc-surface-2); border-radius: var(--scc-radius-sm); }
+.scc-doctor__tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--scc-border); margin: 0 0 14px; }
+.scc-doctor__tab {
+	background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 12px;
+	font: inherit; font-weight: 600; color: var(--scc-muted); cursor: pointer;
+}
+.scc-doctor__tab:hover { color: var(--scc-ink); }
+.scc-doctor__tab.is-active { color: var(--scc-brand); border-bottom-color: var(--scc-brand); }
+.scc-doctor__tab:focus-visible { outline: none; box-shadow: var(--scc-ring); border-radius: 4px; }
+.scc-issue--ignored { border-left-color: var(--scc-border); opacity: .92; }
+.scc-issue__title--static { cursor: default; }
+.scc-issue__title--static::after { content: none; }
+.scc-ignore-page { font-size: 12px; color: var(--scc-muted) !important; margin-left: 4px; }
+.scc-ignore-page:hover { color: var(--scc-danger) !important; }

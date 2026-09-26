@@ -194,6 +194,32 @@ class SCC_REST {
 		);
 		register_rest_route(
 			self::NS,
+			'/doctor/ignore',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'doctor_ignore' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'issue_id' => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+					'post_id'  => array( 'sanitize_callback' => 'absint', 'default' => 0 ),
+					'url'      => array( 'sanitize_callback' => 'esc_url_raw', 'default' => '' ),
+				),
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/doctor/unignore',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'doctor_unignore' ),
+				'permission_callback' => $perm,
+				'args'                => array(
+					'key' => array( 'required' => true, 'sanitize_callback' => 'sanitize_text_field' ),
+				),
+			)
+		);
+		register_rest_route(
+			self::NS,
 			'/doctor/queue',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1408,6 +1434,31 @@ class SCC_REST {
 			SCC_Logger::info( 'seo-doctor', 'One-click fix applied.', array( 'fix' => $fix, 'post_id' => $post_id, 'issue' => $issue_id ) );
 		}
 		return $this->ok( array( 'result' => $result, 'report' => $report ) );
+	}
+
+	/**
+	 * POST /doctor/ignore — hide a problem (everywhere, or on one page) until undone.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function doctor_ignore( WP_REST_Request $request ) {
+		$issue_id = (string) $request->get_param( 'issue_id' );
+		if ( '' === $issue_id ) {
+			return $this->fail( 'bad_issue', __( 'Nothing to ignore.', 'seo-command-center' ), 400 );
+		}
+		$report = SCC_SEO_Doctor::ignore( $issue_id, (int) $request->get_param( 'post_id' ), (string) $request->get_param( 'url' ) );
+		return $this->ok( array( 'report' => $report ) );
+	}
+
+	/**
+	 * POST /doctor/unignore — undo an ignore.
+	 *
+	 * @param WP_REST_Request $request Request.
+	 * @return WP_REST_Response
+	 */
+	public function doctor_unignore( WP_REST_Request $request ) {
+		return $this->ok( array( 'report' => SCC_SEO_Doctor::unignore( (string) $request->get_param( 'key' ) ) ) );
 	}
 
 	/**

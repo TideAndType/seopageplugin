@@ -107,6 +107,8 @@ One merged diagnosis of the whole site. Heavy crawls run in their own requests; 
 | POST | `/doctor/pagespeed` | Step 3 — Google PageSpeed Insights for the homepage + key pages. Body: `{count?: 1–5, strategy?: mobile\|desktop}`. Field (CrUX) data preferred, lab data labelled; failures are stored as "not measured". |
 | POST | `/doctor/run` | Step 4 — merge technical, PageSpeed, architecture, AEO and Search Console opportunities into the diagnosis. Body: `{refresh?: bool}` recomputes opportunities. |
 | POST | `/doctor/fix` | Preview or apply a one-click fix. Body: `{fix: meta_description\|schema\|social_tags\|internal_links, post_id, issue_id, apply: bool}`. `apply:false` returns `{summary, before, after, details}` and writes nothing. `apply:true` checks `edit_post` (or `manage_options` for site-level fixes), records history, and removes the fixed page from the stored issue. |
+| POST | `/doctor/ignore` | Remember an ignore. Body: `{issue_id, post_id?, url?}` — no page = the whole problem. Re-diagnoses from the stored engine results and returns the report (with `ignored[]`). |
+| POST | `/doctor/unignore` | Undo an ignore. Body: `{key}` (from `report.ignored[].key`). Returns the report. |
 | POST | `/doctor/queue` | Add issues to the Action Queue as `doctor_review` items (never auto-run by Autopilot). Body: `{issue_id}` or `{severity: high}` for every issue at that severity or worse. |
 
 ## Error handling

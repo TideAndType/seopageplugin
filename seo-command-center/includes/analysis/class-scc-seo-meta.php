@@ -114,6 +114,114 @@ class SCC_SEO_Meta {
 	}
 
 	/**
+	 * Whether the site owner has deliberately set this post to noindex in their
+	 * SEO plugin (per post, or via that plugin's default for the post type).
+	 * Such pages are kept out of every TideOrbit suggestion.
+	 *
+	 * @param int $post_id Post id.
+	 * @return bool
+	 */
+	public static function is_noindex( $post_id ) {
+		$post_id = (int) $post_id;
+		if ( $post_id <= 0 ) {
+			return false;
+		}
+		$plugin    = self::detect();
+		$post_type = (string) get_post_type( $post_id );
+		$meta      = array();
+		$defaults  = array();
+
+		switch ( $plugin ) {
+			case self::PLUGIN_YOAST:
+				$meta['yoast']    = (string) get_post_meta( $post_id, '_yoast_wpseo_meta-robots-noindex', true );
+				$titles           = get_option( 'wpseo_titles', array() );
+				$defaults['yoast'] = is_array( $titles ) && ! empty( $titles[ 'noindex-' . $post_type ] );
+				break;
+			case self::PLUGIN_RANKMATH:
+				$meta['rankmath'] = get_post_meta( $post_id, 'rank_math_robots', true );
+				$titles           = get_option( 'rank-math-options-titles', array() );
+				if ( is_array( $titles ) && 'on' === ( $titles[ 'pt_' . $post_type . '_custom_robots' ] ?? '' ) ) {
+					$defaults['rankmath'] = (array) ( $titles[ 'pt_' . $post_type . '_robots' ] ?? array() );
+				}
+				break;
+			case self::PLUGIN_AIOSEO:
+				$meta['aioseo'] = self::aioseo_robots( $post_id );
+				break;
+			case self::PLUGIN_TSF:
+				$meta['tsf'] = (string) get_post_meta( $post_id, '_genesis_noindex', true );
+				break;
+		}
+
+		$noindex = self::noindex_from( $plugin, $meta, $defaults );
+		return (bool) apply_filters( 'scc_is_noindex', $noindex, $post_id, $plugin );
+	}
+
+	/**
+	 * Decide noindex from raw SEO-plugin values. Pure — unit-tested.
+	 *
+	 * Yoast: meta '1' = noindex, '2' = index, '' = post-type default.
+	 * Rank Math: robots array on the post, else the post-type default robots
+	 * (only when that type uses custom robots).
+	 * AIOSEO: row {robots_default, robots_noindex}; the default flag means "use
+	 * the global setting", which is treated as indexable.
+	 * The SEO Framework: _genesis_noindex '1'.
+	 *
+	 * @param string $plugin   PLUGIN_* constant.
+	 * @param array  $meta     Raw per-post values.
+	 * @param array  $defaults Post-type defaults.
+	 * @return bool
+	 */
+	public static function noindex_from( $plugin, array $meta, array $defaults = array() ) {
+		switch ( $plugin ) {
+			case self::PLUGIN_YOAST:
+				$value = (string) ( $meta['yoast'] ?? '' );
+				if ( '1' === $value ) {
+					return true;
+				}
+				if ( '2' === $value ) {
+					return false;
+				}
+				return ! empty( $defaults['yoast'] );
+			case self::PLUGIN_RANKMATH:
+				$robots = $meta['rankmath'] ?? array();
+				if ( is_string( $robots ) ) {
+					$robots = array_filter( array_map( 'trim', explode( ',', $robots ) ) );
+				}
+				if ( empty( $robots ) ) {
+					$robots = (array) ( $defaults['rankmath'] ?? array() );
+				}
+				return in_array( 'noindex', (array) $robots, true );
+			case self::PLUGIN_AIOSEO:
+				$row = (array) ( $meta['aioseo'] ?? array() );
+				return empty( $row['robots_default'] ) && ! empty( $row['robots_noindex'] );
+			case self::PLUGIN_TSF:
+				return '1' === (string) ( $meta['tsf'] ?? '' );
+		}
+		return false;
+	}
+
+	/**
+	 * AIOSEO robots settings for a post (read-only).
+	 *
+	 * @param int $post_id Post id.
+	 * @return array {robots_default, robots_noindex}
+	 */
+	protected static function aioseo_robots( $post_id ) {
+		global $wpdb;
+		static $has_table = null;
+		$table = $wpdb->prefix . 'aioseo_posts';
+		if ( null === $has_table ) {
+			// Checked once per request — this runs for every page during an analysis.
+			$has_table = ( $table === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) ); // phpcs:ignore WordPress.DB
+		}
+		if ( ! $has_table ) {
+			return array();
+		}
+		$row = $wpdb->get_row( $wpdb->prepare( "SELECT robots_default, robots_noindex FROM {$table} WHERE post_id = %d", (int) $post_id ), ARRAY_A ); // phpcs:ignore WordPress.DB
+		return is_array( $row ) ? $row : array();
+	}
+
+	/**
 	 * Read an AIOSEO field from its custom table (read-only).
 	 *
 	 * @param int    $post_id Post id.

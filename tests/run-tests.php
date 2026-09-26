@@ -1939,12 +1939,29 @@ assert_eq( false, in_array( 'seo-audit', $route_screens, true ), 'no issue links
 assert_eq( 'aeo', $doc_by['aeo:oai-searchbot']['screen'], 'AI-search issues open the AEO / AI Citations screen' );
 
 echo "\n== SEO Doctor: fixed items + queue entries ==\n";
-$fixd = SCC_SEO_Doctor::without_fixed( $doc, 'tech:missing_schema', 42 );
-$fixd_ids = array_map( function ( $i ) { return $i['id']; }, $fixd['issues'] );
-assert_eq( false, in_array( 'tech:missing_schema', $fixd_ids, true ), 'issue disappears once its only page is fixed' );
-assert_eq( count( $doc['issues'] ) - 1, count( $fixd['issues'] ), 'other issues are untouched' );
-$fixd_site = SCC_SEO_Doctor::without_fixed( $doc, 'tech:missing_social_tags', 0 );
-assert_eq( false, in_array( 'tech:missing_social_tags', array_map( function ( $i ) { return $i['id']; }, $fixd_site['issues'] ), true ), 'site-level fix clears the whole issue' );
+$hide = function ( $issue_id, $post_id = 0 ) { return array( 'key' => SCC_SEO_Doctor::hide_key( $issue_id, $post_id ), 'issue_id' => $issue_id ); };
+$fixd = SCC_SEO_Doctor::apply_ignores( $doc['issues'], array( $hide( 'tech:missing_schema', 42 ) ) );
+$fixd_ids = array_map( function ( $i ) { return $i['id']; }, $fixd );
+assert_eq( false, in_array( 'tech:missing_schema', $fixd_ids, true ), 'issue disappears once its only page is hidden' );
+assert_eq( count( $doc['issues'] ) - 1, count( $fixd ), 'other issues are untouched' );
+$fixd_site = SCC_SEO_Doctor::apply_ignores( $doc['issues'], array( $hide( 'tech:missing_social_tags' ) ) );
+assert_eq( false, in_array( 'tech:missing_social_tags', array_map( function ( $i ) { return $i['id']; }, $fixd_site ), true ), 'ignoring a whole problem hides it on every page' );
+
+echo "\n== SEO Doctor: Ignore (remembered) ==\n";
+assert_eq( 'tech:thin_content|p42', SCC_SEO_Doctor::hide_key( 'tech:thin_content', 42 ), 'page-level ignore key uses the post id' );
+assert_eq( 'tech:thin_content|*', SCC_SEO_Doctor::hide_key( 'tech:thin_content' ), 'problem-level ignore key covers every page' );
+$ign_sources = array( 'technical' => $exp_report );
+$ign_before  = SCC_SEO_Doctor::diagnose( $ign_sources );
+$ign_after   = SCC_SEO_Doctor::diagnose( $ign_sources + array( 'ignored' => array( $hide( 'tech:missing_schema', 42 ), $hide( 'tech:heading_level_skip' ) ) ) );
+$ign_ids = array_map( function ( $i ) { return $i['id']; }, $ign_after['issues'] );
+assert_eq( false, in_array( 'tech:missing_schema', $ign_ids, true ) || in_array( 'tech:heading_level_skip', $ign_ids, true ), 'ignored problems are hidden from the list' );
+assert_true( $ign_after['score'] >= $ign_before['score'], 'ignored technical problems stop counting against the score' );
+$ign_tech = SCC_Technical_SEO::score_issues( $exp_report['issues'], $exp_report['pages'] );
+assert_eq( $exp_report['score'], $ign_tech['score'], 'score_issues() reproduces the audit score exactly' );
+$ign_page = SCC_SEO_Doctor::apply_ignores( array( array( 'id' => 'tech:thin_content', 'affected_count' => 3, 'examples' => array( array( 'post_id' => 1 ), array( 'post_id' => 2 ), array( 'post_id' => 3 ) ) ) ), array( $hide( 'tech:thin_content', 2 ) ) );
+assert_eq( 2, $ign_page[0]['affected_count'], 'ignoring one page leaves the problem on the other pages' );
+assert_eq( array( 1, 3 ), array_map( function ( $e ) { return $e['post_id']; }, $ign_page[0]['examples'] ), 'only the ignored page is removed' );
+
 $q = SCC_SEO_Doctor::queue_item( $doc_by['tech:missing_schema'] );
 assert_eq( 'doctor_review', $q['action_type'], 'queued Doctor items are review items' );
 assert_eq( false, SCC_Action_Queue::is_safe( $q['action_type'] ), 'queued Doctor items are never auto-run by Autopilot' );
@@ -2437,6 +2454,19 @@ if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
 	define( 'THE_SEO_FRAMEWORK_VERSION', '5.1.4-test' );
 }
 assert_eq( SCC_SEO_Meta::PLUGIN_TSF, SCC_SEO_Meta::detect(), 'active The SEO Framework constant is detected' );
+
+echo "\n== Noindex / template pages are left out of suggestions ==\n";
+$ni = function ( $plugin, $meta, $defaults = array() ) { return SCC_SEO_Meta::noindex_from( $plugin, $meta, $defaults ); };
+assert_true( $ni( SCC_SEO_Meta::PLUGIN_YOAST, array( 'yoast' => '1' ) ), 'Yoast: post set to noindex' );
+assert_eq( false, $ni( SCC_SEO_Meta::PLUGIN_YOAST, array( 'yoast' => '2' ), array( 'yoast' => true ) ), 'Yoast: explicit index beats a noindex post-type default' );
+assert_true( $ni( SCC_SEO_Meta::PLUGIN_YOAST, array( 'yoast' => '' ), array( 'yoast' => true ) ), 'Yoast: post-type default noindex applies when the post has no setting' );
+assert_true( $ni( SCC_SEO_Meta::PLUGIN_RANKMATH, array( 'rankmath' => array( 'noindex', 'nofollow' ) ) ), 'Rank Math: robots array with noindex' );
+assert_true( $ni( SCC_SEO_Meta::PLUGIN_RANKMATH, array( 'rankmath' => '' ), array( 'rankmath' => array( 'noindex' ) ) ), 'Rank Math: post-type default robots' );
+assert_eq( false, $ni( SCC_SEO_Meta::PLUGIN_RANKMATH, array( 'rankmath' => array( 'index' ) ), array( 'rankmath' => array( 'noindex' ) ) ), 'Rank Math: post override beats default' );
+assert_true( $ni( SCC_SEO_Meta::PLUGIN_AIOSEO, array( 'aioseo' => array( 'robots_default' => 0, 'robots_noindex' => 1 ) ) ), 'AIOSEO: custom robots noindex' );
+assert_eq( false, $ni( SCC_SEO_Meta::PLUGIN_AIOSEO, array( 'aioseo' => array( 'robots_default' => 1, 'robots_noindex' => 1 ) ) ), 'AIOSEO: "use default" is not treated as noindex' );
+assert_true( $ni( SCC_SEO_Meta::PLUGIN_TSF, array( 'tsf' => '1' ) ), 'The SEO Framework: noindex flag' );
+assert_eq( false, $ni( SCC_SEO_Meta::PLUGIN_NONE, array() ), 'no SEO plugin: nothing is treated as noindex' );
 
 echo "\n== Admin JS: shared helpers ==\n";
 $admin_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );

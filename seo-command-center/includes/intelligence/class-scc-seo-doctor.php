@@ -28,7 +28,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SCC_SEO_Doctor {
 
-	const REPORT_OPTION = 'scc_seo_doctor_report';
+	const REPORT_OPTION  = 'scc_seo_doctor_report';
+	const SOURCES_OPTION = 'scc_seo_doctor_sources'; // Last engine results, so ignore/undo can re-diagnose without re-crawling.
+	const IGNORE_OPTION  = 'scc_seo_doctor_ignored'; // Remembered until undone.
+	const FIXED_OPTION   = 'scc_seo_doctor_fixed';   // One-click fixes awaiting the next check-up.
 
 	/** Areas, in display order. */
 	const GROUPS = array(
@@ -158,12 +161,179 @@ class SCC_SEO_Doctor {
 			}
 		}
 
-		$report = self::diagnose( $sources );
-		$report['generated_at'] = current_time( 'mysql' );
-		update_option( self::REPORT_OPTION, $report, false );
+		update_option( self::SOURCES_OPTION, $sources, false );
+		delete_option( self::FIXED_OPTION ); // The fresh results re-verify earlier fixes.
+		$report = self::rebuild( current_time( 'mysql' ) );
 
 		SCC_Logger::info( 'seo-doctor', 'SEO Doctor diagnosis completed.', array( 'score' => $report['score'], 'issues' => count( $report['issues'] ) ) );
 		return $report;
+	}
+
+	/**
+	 * Re-diagnose from the last engine results with the current ignore/fixed
+	 * lists applied, and store it. Used after ignore, undo and one-click fixes.
+	 *
+	 * @param string $generated_at Timestamp to record ('' keeps the previous one).
+	 * @return array|null
+	 */
+	public static function rebuild( $generated_at = '' ) {
+		$previous = self::report();
+		$sources  = get_option( self::SOURCES_OPTION, null );
+		$hidden   = array_merge( array_values( self::ignores() ), array_values( self::fixed() ) );
+
+		if ( is_array( $sources ) ) {
+			$report = self::diagnose( $sources + array( 'ignored' => $hidden ) );
+		} elseif ( $previous ) {
+			// Diagnosis made before snapshots existed: filter it as-is.
+			$report = $previous;
+			$report['issues'] = self::apply_ignores( (array) $previous['issues'], $hidden );
+		} else {
+			return null;
+		}
+		$report['ignored']      = array_values( self::ignores() );
+		$report['generated_at'] = '' !== $generated_at ? $generated_at : (string) ( $previous['generated_at'] ?? '' );
+		update_option( self::REPORT_OPTION, $report, false );
+		return $report;
+	}
+
+	/**
+	 * Remembered ignores, keyed.
+	 *
+	 * @return array
+	 */
+	public static function ignores() {
+		$list = get_option( self::IGNORE_OPTION, array() );
+		return is_array( $list ) ? $list : array();
+	}
+
+	/**
+	 * Fixes applied since the last check-up.
+	 *
+	 * @return array
+	 */
+	public static function fixed() {
+		$list = get_option( self::FIXED_OPTION, array() );
+		return is_array( $list ) ? $list : array();
+	}
+
+	/**
+	 * Stable key for hiding an issue on one page (or everywhere).
+	 *
+	 * @param string $issue_id Issue id.
+	 * @param int    $post_id  Page (0 = none).
+	 * @param string $url      Page URL when there is no post id.
+	 * @return string
+	 */
+	public static function hide_key( $issue_id, $post_id = 0, $url = '' ) {
+		if ( (int) $post_id > 0 ) {
+			return $issue_id . '|p' . (int) $post_id;
+		}
+		if ( '' !== (string) $url ) {
+			return $issue_id . '|u' . md5( (string) $url );
+		}
+		return $issue_id . '|*';
+	}
+
+	/**
+	 * Remember an ignore and re-diagnose.
+	 *
+	 * @param string $issue_id Issue id.
+	 * @param int    $post_id  One page (0 with no url = the whole problem).
+	 * @param string $url      One page by URL.
+	 * @return array|null Report.
+	 */
+	public static function ignore( $issue_id, $post_id = 0, $url = '' ) {
+		$issue_id = (string) $issue_id;
+		$issue    = self::find_issue( $issue_id );
+		$key      = self::hide_key( $issue_id, $post_id, $url );
+		$page     = '';
+		if ( (int) $post_id > 0 ) {
+			$page = get_the_title( (int) $post_id );
+			$url  = '' !== $url ? $url : (string) get_permalink( (int) $post_id );
+		}
+		$list         = self::ignores();
+		$list[ $key ] = array(
+			'key'      => $key,
+			'issue_id' => $issue_id,
+			'title'    => $issue ? (string) $issue['title'] : $issue_id,
+			'severity' => $issue ? (string) $issue['severity'] : '',
+			'group'    => $issue ? (string) $issue['group'] : '',
+			'post_id'  => (int) $post_id,
+			'url'      => (string) $url,
+			'page'     => (string) $page,
+			'scope'    => ( (int) $post_id > 0 || '' !== (string) $url ) ? 'page' : 'issue',
+			'at'       => current_time( 'mysql' ),
+		);
+		update_option( self::IGNORE_OPTION, $list, false );
+		return self::rebuild();
+	}
+
+	/**
+	 * Forget an ignore and re-diagnose.
+	 *
+	 * @param string $key Ignore key.
+	 * @return array|null Report.
+	 */
+	public static function unignore( $key ) {
+		$list = self::ignores();
+		unset( $list[ (string) $key ] );
+		update_option( self::IGNORE_OPTION, $list, false );
+		return self::rebuild();
+	}
+
+	/**
+	 * Hide issues / pages listed in $hidden. Pure.
+	 *
+	 * @param array $issues Issues (id, examples[], affected_count).
+	 * @param array $hidden Entries with issue_id + key (see hide_key()).
+	 * @param string $prefix Prefix to add to issue ids before matching ('tech:' for raw technical issues).
+	 * @return array
+	 */
+	public static function apply_ignores( array $issues, array $hidden, $prefix = '' ) {
+		if ( ! $hidden ) {
+			return $issues;
+		}
+		$whole = array();
+		$pages = array();
+		foreach ( $hidden as $entry ) {
+			$key = (string) ( $entry['key'] ?? '' );
+			$id  = (string) ( $entry['issue_id'] ?? '' );
+			if ( '' === $id ) {
+				continue;
+			}
+			if ( '|*' === substr( $key, -2 ) ) {
+				$whole[ $id ] = true;
+			} else {
+				$pages[ $key ] = true;
+			}
+		}
+		$out = array();
+		foreach ( $issues as $issue ) {
+			$id = $prefix . (string) ( $issue['id'] ?? '' );
+			if ( isset( $whole[ $id ] ) ) {
+				continue;
+			}
+			$examples = (array) ( $issue['examples'] ?? array() );
+			$kept     = array();
+			$removed  = 0;
+			foreach ( $examples as $ex ) {
+				$k = self::hide_key( $id, (int) ( $ex['post_id'] ?? 0 ), (string) ( $ex['url'] ?? '' ) );
+				if ( isset( $pages[ $k ] ) ) {
+					$removed++;
+					continue;
+				}
+				$kept[] = $ex;
+			}
+			if ( $removed ) {
+				$issue['examples']       = $kept;
+				$issue['affected_count'] = max( 0, (int) ( $issue['affected_count'] ?? 0 ) - $removed );
+				if ( $issue['affected_count'] <= 0 ) {
+					continue;
+				}
+			}
+			$out[] = $issue;
+		}
+		return $out;
 	}
 
 	/**
@@ -179,6 +349,18 @@ class SCC_SEO_Doctor {
 		$aeo          = is_array( $sources['aeo'] ?? null ) ? $sources['aeo'] : null;
 		$opps         = is_array( $sources['opportunities'] ?? null ) ? $sources['opportunities'] : null;
 		$gsc          = ! empty( $sources['gsc_connected'] );
+		$hidden       = is_array( $sources['ignored'] ?? null ) ? $sources['ignored'] : array();
+
+		// Ignored / already-fixed technical items no longer count against the score.
+		if ( $technical && $hidden ) {
+			$kept = self::apply_ignores( (array) ( $technical['issues'] ?? array() ), $hidden, 'tech:' );
+			if ( count( $kept ) !== count( (array) ( $technical['issues'] ?? array() ) ) || wp_json_encode( $kept ) !== wp_json_encode( $technical['issues'] ?? array() ) ) {
+				$rescored                = SCC_Technical_SEO::score_issues( $kept, (int) ( $technical['pages'] ?? 0 ) );
+				$technical['issues']     = $kept;
+				$technical['score']      = $rescored['score'];
+				$technical['categories'] = $rescored['categories'];
+			}
+		}
 
 		$issues = array();
 
@@ -238,6 +420,8 @@ class SCC_SEO_Doctor {
 			$item['rank']        = min( 100, (int) ( $opp['score'] ?? 0 ) );
 			$issues[] = $item;
 		}
+
+		$issues = self::apply_ignores( $issues, $hidden );
 
 		// Rank: severity first, then how many pages are affected / opportunity score.
 		$sev_rank = array( 'critical' => 4, 'high' => 3, 'medium' => 2, 'low' => 1 );
@@ -520,61 +704,19 @@ class SCC_SEO_Doctor {
 	}
 
 	/**
-	 * After a one-click fix, drop the fixed page from its issue (or the whole
-	 * issue for a site-level fix) so the list reflects reality until the next
-	 * check-up re-verifies it. Pure transform + store.
+	 * After a one-click fix, hide the fixed page (or the whole issue for a
+	 * site-level fix) until the next check-up re-verifies it.
 	 *
 	 * @param string $issue_id Issue id.
 	 * @param int    $post_id  Fixed page (0 = the whole issue).
 	 * @return array|null Updated report.
 	 */
 	public static function mark_fixed( $issue_id, $post_id = 0 ) {
-		$report = self::report();
-		if ( ! $report ) {
-			return null;
-		}
-		$report = self::without_fixed( $report, $issue_id, $post_id );
-		update_option( self::REPORT_OPTION, $report, false );
-		return $report;
-	}
-
-	/**
-	 * Remove a fixed page (or a whole issue) from a report. Pure.
-	 *
-	 * @param array  $report   Report.
-	 * @param string $issue_id Issue id.
-	 * @param int    $post_id  Page (0 = whole issue).
-	 * @return array
-	 */
-	public static function without_fixed( array $report, $issue_id, $post_id = 0 ) {
-		$post_id = (int) $post_id;
-		$kept    = array();
-		foreach ( (array) ( $report['issues'] ?? array() ) as $issue ) {
-			if ( (string) $issue['id'] !== (string) $issue_id ) {
-				$kept[] = $issue;
-				continue;
-			}
-			if ( $post_id <= 0 ) {
-				continue; // Whole issue resolved.
-			}
-			$before = count( (array) $issue['examples'] );
-			$issue['examples'] = array_values(
-				array_filter(
-					(array) $issue['examples'],
-					function ( $ex ) use ( $post_id ) {
-						return (int) ( $ex['post_id'] ?? 0 ) !== $post_id;
-					}
-				)
-			);
-			$removed = $before - count( $issue['examples'] );
-			$issue['affected_count'] = max( 0, (int) $issue['affected_count'] - max( 1, $removed ) );
-			if ( $issue['affected_count'] > 0 ) {
-				$kept[] = $issue;
-			}
-		}
-		$report['issues'] = $kept;
-		$report['fixed']  = (int) ( $report['fixed'] ?? 0 ) + 1;
-		return $report;
+		$key          = self::hide_key( (string) $issue_id, (int) $post_id );
+		$list         = self::fixed();
+		$list[ $key ] = array( 'key' => $key, 'issue_id' => (string) $issue_id, 'post_id' => (int) $post_id );
+		update_option( self::FIXED_OPTION, $list, false );
+		return self::rebuild();
 	}
 
 	/**

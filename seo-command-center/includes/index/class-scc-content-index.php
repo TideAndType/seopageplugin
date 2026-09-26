@@ -203,6 +203,11 @@ class SCC_Content_Index {
 			self::remove( $post->ID );
 			return false;
 		}
+		// Templates and pages the owner set to noindex are not SEO targets.
+		if ( class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_seo_excluded( $post ) ) {
+			self::remove( $post->ID );
+			return false;
+		}
 
 		$text     = self::get_plain_text( $post );
 		$tokens   = self::tokenize( $post->post_title . ' ' . $text );

@@ -102,6 +102,9 @@ class SCC_PageSpeed {
 			)
 		);
 		foreach ( (array) $query->posts as $post_id ) {
+			if ( class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_seo_excluded( $post_id ) ) {
+				continue;
+			}
 			$link = get_permalink( $post_id );
 			if ( $link ) {
 				$urls[] = array( 'url' => $link, 'post_id' => (int) $post_id );
