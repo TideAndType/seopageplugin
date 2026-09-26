@@ -104,10 +104,7 @@ class SCC_Content_Index {
 	 */
 	protected static function extract_headings( $post ) {
 		$headings = array();
-		if ( '' === trim( (string) $post->post_content ) ) {
-			return $headings;
-		}
-		if ( preg_match_all( '/<h[1-4][^>]*>(.*?)<\/h[1-4]>/is', $post->post_content, $m ) ) {
+		if ( '' !== trim( (string) $post->post_content ) && preg_match_all( '/<h[1-4][^>]*>(.*?)<\/h[1-4]>/is', $post->post_content, $m ) ) {
 			foreach ( $m[1] as $h ) {
 				$h = trim( wp_strip_all_tags( $h ) );
 				if ( '' !== $h ) {
@@ -115,7 +112,43 @@ class SCC_Content_Index {
 				}
 			}
 		}
+
+		// Elementor pages often keep their real heading structure in
+		// _elementor_data while post_content is empty or only a fallback.
+		if ( class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_elementor_post( $post->ID ) ) {
+			$data = SCC_Elementor::get_data( $post->ID );
+			if ( is_array( $data ) ) {
+				$headings = array_merge( $headings, self::collect_elementor_headings( $data ) );
+			}
+		}
+
+		$headings = array_values( array_unique( array_filter( array_map( 'trim', $headings ) ) ) );
 		return array_slice( $headings, 0, 40 );
+	}
+
+	/**
+	 * Recursively collect native Elementor heading-widget text.
+	 *
+	 * @param array $elements Elementor elements.
+	 * @return string[]
+	 */
+	protected static function collect_elementor_headings( array $elements ) {
+		$out = array();
+		foreach ( $elements as $el ) {
+			if ( ! is_array( $el ) ) {
+				continue;
+			}
+			if ( 'heading' === (string) ( $el['widgetType'] ?? '' ) && ! empty( $el['settings']['title'] ) ) {
+				$title = trim( wp_strip_all_tags( (string) $el['settings']['title'] ) );
+				if ( '' !== $title ) {
+					$out[] = $title;
+				}
+			}
+			if ( ! empty( $el['elements'] ) && is_array( $el['elements'] ) ) {
+				$out = array_merge( $out, self::collect_elementor_headings( $el['elements'] ) );
+			}
+		}
+		return $out;
 	}
 
 	/**
