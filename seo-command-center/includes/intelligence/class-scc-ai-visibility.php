@@ -71,7 +71,7 @@ class SCC_AI_Visibility {
 		return array(
 			'connected'   => $any_connected,
 			'providers'   => $providers,
-			'readiness'   => class_exists( 'SCC_AEO_Expert' ) ? SCC_AEO_Expert::site_report( 40 ) : self::citation_readiness(),
+			'readiness'   => self::citation_readiness(),
 			'disclaimer'  => __( 'Measured AI citation visibility requires a real monitoring/provider integration. TideOrbit never estimates citation counts or implies that an AEO readiness score guarantees inclusion in an AI answer.', 'seo-command-center' ),
 		);
 	}
