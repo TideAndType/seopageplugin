@@ -959,24 +959,34 @@
 				node.addEventListener( 'dragend', function () {
 					node.classList.remove( 'is-dragging' );
 					dragging = null;
-					Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-pillar' ), function ( p ) { p.classList.remove( 'is-drop-target' ); } );
+					Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-node[data-can-parent="1"]' ), function ( p ) { p.classList.remove( 'is-drop-target' ); } );
 				} );
 			} );
 
-			Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-pillar' ), function ( pillar ) {
-				pillar.addEventListener( 'dragover', function ( event ) {
-					if ( ! dragging ) { return; }
+			// Every service/location node can be a hierarchy parent, including nested hubs.
+			Array.prototype.forEach.call( tree.querySelectorAll( '.scc-arch-node[data-can-parent="1"]' ), function ( target ) {
+				target.addEventListener( 'dragover', function ( event ) {
+					if ( ! dragging || target === dragging ) { return; }
+					var parentUrl = target.getAttribute( 'data-node-url' ) || '';
+					var dragUrl = dragging.getAttribute( 'data-node-url' ) || '';
+					var normParent = parentUrl.replace( /^\/+|\/+$/g, '' );
+					var normDrag = dragUrl.replace( /^\/+|\/+$/g, '' );
+					// No self-parenting and no moving a parent beneath its own descendant.
+					if ( ! normParent || normParent === normDrag || ( normDrag && normParent.indexOf( normDrag + '/' ) === 0 ) ) { return; }
 					event.preventDefault();
-					pillar.classList.add( 'is-drop-target' );
+					target.classList.add( 'is-drop-target' );
 				} );
-				pillar.addEventListener( 'dragleave', function () { pillar.classList.remove( 'is-drop-target' ); } );
-				pillar.addEventListener( 'drop', function ( event ) {
+				target.addEventListener( 'dragleave', function () { target.classList.remove( 'is-drop-target' ); } );
+				target.addEventListener( 'drop', function ( event ) {
 					event.preventDefault();
-					pillar.classList.remove( 'is-drop-target' );
-					if ( ! dragging ) { return; }
-					var parentUrl = pillar.getAttribute( 'data-parent-url' ) || '';
+					target.classList.remove( 'is-drop-target' );
+					if ( ! dragging || target === dragging ) { return; }
+					var parentUrl = target.getAttribute( 'data-node-url' ) || '';
 					var nodeId = dragging.getAttribute( 'data-node-id' ) || '';
-					if ( ! parentUrl || ! nodeId ) { return; }
+					var dragUrl = dragging.getAttribute( 'data-node-url' ) || '';
+					var normParent = parentUrl.replace( /^\/+|\/+$/g, '' );
+					var normDrag = dragUrl.replace( /^\/+|\/+$/g, '' );
+					if ( ! parentUrl || ! nodeId || normParent === normDrag || ( normDrag && normParent.indexOf( normDrag + '/' ) === 0 ) ) { return; }
 					setStatus( globalStatus, 'Moving item to the new service hub…' );
 					request( '/architecture/action', { method: 'POST', data: { action: 'reparent', node_id: nodeId, parent_url: parentUrl } } )
 						.then( function () {
