@@ -156,6 +156,8 @@ class SCC_Elementor {
 			'_wp_page_template',
 			'_thumbnail_id',
 			'_scc_page_brain',
+			'_scc_content_type',
+			'_scc_search_intent',
 		);
 		foreach ( $copy_keys as $key ) {
 			if ( ! metadata_exists( 'post', $post_id, $key ) ) {
