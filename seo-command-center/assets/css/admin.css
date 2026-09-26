@@ -692,3 +692,14 @@
 .scc-aeo-guidance article { border:1px solid #dcdcde; border-radius:8px; padding:12px; background:#f9f9f9; }
 .scc-aeo-guidance h3 { margin-top:0; }
 .scc-badge--warn { background:#fcf0f1; color:#8a2424; border-color:#d63638; }
+
+
+/* Elementor live/draft safety */
+.scc-layout-list[hidden] { display:none !important; }
+.scc-layout-live-guard { border-left:4px solid #d63638; }
+.scc-layout-working-copy { border-left:4px solid #00a32a; }
+.scc-layout-restore-card { border-left:4px solid #72aee6; }
+.scc-layout-live-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0; }
+.scc-layout-live-confirm { display:block; margin:12px 0 4px; padding:12px; background:#fcf0f1; border:1px solid #d63638; border-radius:6px; }
+.scc-layout-live-confirm input { margin-right:6px; }
+.scc-live-warning { margin:0 0 12px !important; }
