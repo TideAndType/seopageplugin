@@ -72,7 +72,7 @@ class SCC_AI_Visibility {
 			'connected'   => $any_connected,
 			'providers'   => $providers,
 			'readiness'   => self::citation_readiness(),
-			'disclaimer'  => __( 'AI-answer visibility requires a monitoring integration. Until one is connected, no visibility numbers are shown — the readiness factors below are what you can improve today.', 'seo-command-center' ),
+			'disclaimer'  => __( 'Measured AI citation visibility requires a real monitoring/provider integration. TideOrbit never estimates citation counts or implies that an AEO readiness score guarantees inclusion in an AI answer.', 'seo-command-center' ),
 		);
 	}
 
@@ -102,14 +102,14 @@ class SCC_AI_Visibility {
 			'label' => __( 'Structured data (schema) coverage', 'seo-command-center' ),
 			'known' => null !== $schema_pct,
 			'pct'   => (int) $schema_pct,
-			'hint'  => __( 'Schema helps AI engines extract facts confidently.', 'seo-command-center' ),
+			'hint'  => __( 'Use accurate structured data that matches visible page content; it clarifies entities but does not guarantee AI citations.', 'seo-command-center' ),
 		);
 		$factors[] = array(
 			'key'   => 'direct_answers',
 			'label' => __( 'Direct answers & FAQs', 'seo-command-center' ),
 			'known' => false,
 			'pct'   => 0,
-			'hint'  => __( 'Pages that answer questions concisely (with FAQ schema) are cited more often.', 'seo-command-center' ),
+			'hint'  => __( 'Use concise answer-first sections under descriptive headings. Do not create thin FAQ content or add markup solely to target AI systems.', 'seo-command-center' ),
 		);
 		$factors[] = array(
 			'key'   => 'entity_clarity',

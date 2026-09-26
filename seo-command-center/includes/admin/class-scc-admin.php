@@ -81,6 +81,7 @@ class SCC_Admin {
 			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-citation-scanner' => array( __( 'Citation Scanner', 'seo-command-center' ), 'render_citation_scanner' ),
+			self::SLUG . '-aeo'              => array( __( 'AEO / AI Citations', 'seo-command-center' ), 'render_aeo' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
 			self::SLUG . '-layout'           => array( __( 'Elementor Layout', 'seo-command-center' ), 'render_layout' ),
@@ -131,6 +132,7 @@ class SCC_Admin {
 					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
 					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
 					'citations'    => array( __( 'Local Citations', 'seo-command-center' ), self::SLUG . '-citation-scanner', 'render_citation_scanner' ),
+					'aeo'          => array( __( 'AEO / AI Citations', 'seo-command-center' ), self::SLUG . '-aeo', 'render_aeo' ),
 					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
 			),
@@ -519,55 +521,81 @@ class SCC_Admin {
 		$post_id = isset( $_GET['post'] ) ? (int) $_GET['post'] : 0;
 		$post    = $post_id ? get_post( $post_id ) : null;
 
-		// When no post is chosen, offer a picker. Prefer TideOrbit-generated
-		// drafts; if none are found, fall back to recent pages/posts so there is
-		// always something to select. Covers custom post types too.
-		$recent    = array();
-		$is_scc    = false;
+		$drafts     = array();
+		$live_pages = array();
 		if ( ! $post_id ) {
-			$statuses = array( 'draft', 'pending', 'publish', 'private', 'future' );
-			$gen = new WP_Query( array(
-				'post_type'      => 'any',
-				'post_status'    => $statuses,
-				'posts_per_page' => 30,
-				'no_found_rows'  => true,
-				'meta_key'       => '_scc_generated', // phpcs:ignore WordPress.DB.SlowDBQuery
-				'orderby'        => 'date',
-				'order'          => 'DESC',
-			) );
-			$posts = $gen->posts;
-			$is_scc = ! empty( $posts );
-			if ( empty( $posts ) ) {
-				// Fallback: any recent editable pages/posts.
-				$any = new WP_Query( array(
-					'post_type'      => array( 'page', 'post' ),
-					'post_status'    => $statuses,
-					'posts_per_page' => 30,
+			$to_row = function ( $p ) {
+				return array(
+					'id'        => (int) $p->ID,
+					'title'     => get_the_title( $p ) ? get_the_title( $p ) : ( '#' . $p->ID ),
+					'type'      => (string) $p->post_type,
+					'status'    => (string) $p->post_status,
+					'generated' => (bool) get_post_meta( $p->ID, '_scc_generated', true ),
+					'working_copy' => '1' === (string) get_post_meta( $p->ID, '_scc_layout_working_copy', true ),
+				);
+			};
+
+			$draft_query = new WP_Query(
+				array(
+					'post_type'      => 'any',
+					'post_status'    => array( 'draft', 'pending', 'private', 'future' ),
+					'posts_per_page' => 60,
 					'no_found_rows'  => true,
 					'orderby'        => 'modified',
 					'order'          => 'DESC',
-				) );
-				$posts = $any->posts;
+				)
+			);
+			foreach ( $draft_query->posts as $p ) {
+				if ( current_user_can( 'edit_post', $p->ID ) ) {
+					$drafts[] = $to_row( $p );
+				}
 			}
-			foreach ( $posts as $p ) {
-				$recent[] = array(
-					'id'     => (int) $p->ID,
-					'title'  => get_the_title( $p ) ? get_the_title( $p ) : ( '#' . $p->ID ),
-					'type'   => $p->post_type,
-					'status' => $p->post_status,
-				);
+			usort(
+				$drafts,
+				function ( $a, $b ) {
+					$aw = ! empty( $a['working_copy'] ) ? 2 : ( ! empty( $a['generated'] ) ? 1 : 0 );
+					$bw = ! empty( $b['working_copy'] ) ? 2 : ( ! empty( $b['generated'] ) ? 1 : 0 );
+					return $bw <=> $aw;
+				}
+			);
+
+			$live_query = new WP_Query(
+				array(
+					'post_type'      => 'any',
+					'post_status'    => 'publish',
+					'posts_per_page' => 60,
+					'no_found_rows'  => true,
+					'orderby'        => 'modified',
+					'order'          => 'DESC',
+				)
+			);
+			foreach ( $live_query->posts as $p ) {
+				if ( current_user_can( 'edit_post', $p->ID ) ) {
+					$live_pages[] = $to_row( $p );
+				}
 			}
 		}
+
+		$backup = $post_id ? get_post_meta( $post_id, '_scc_elementor_backup', true ) : null;
+		$is_live = $post ? 'publish' === (string) $post->post_status : false;
+		$is_working_copy = $post ? '1' === (string) get_post_meta( $post_id, '_scc_layout_working_copy', true ) : false;
+		$clone_of = $post ? (int) get_post_meta( $post_id, '_scc_layout_clone_of', true ) : 0;
 
 		$this->view(
 			'layout',
 			array(
 				'post_id'          => $post_id,
 				'post_title'       => $post ? get_the_title( $post ) : '',
+				'post_status'      => $post ? (string) $post->post_status : '',
+				'is_live'          => $is_live,
+				'is_working_copy'  => $is_working_copy,
+				'clone_of'         => $clone_of,
 				'edit_url'         => $post ? get_edit_post_link( $post_id, 'raw' ) : '',
 				'elementor_active' => class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active(),
-				'recent'           => $recent,
-				'recent_generated' => $is_scc,
+				'drafts'           => $drafts,
+				'live_pages'       => $live_pages,
+				'has_backup'       => is_array( $backup ) && ! empty( $backup['created_at'] ),
+				'backup_created_at'=> is_array( $backup ) ? (string) ( $backup['created_at'] ?? '' ) : '',
 			)
 		);
 	}
@@ -644,17 +672,32 @@ class SCC_Admin {
 	}
 
 	/**
+	 * Answer Engine Optimization / AI citation readiness.
+	 */
+	public function render_aeo() {
+		$this->view(
+			'aeo',
+			array(
+				'report'     => class_exists( 'SCC_AEO_Expert' ) ? SCC_AEO_Expert::site_report( 80 ) : array(),
+				'visibility' => class_exists( 'SCC_AI_Visibility' ) ? SCC_AI_Visibility::status() : array(),
+			)
+		);
+	}
+
+	/**
 	 * Site Architecture page.
 	 */
 	public function render_architecture() {
 		$strategy = SCC_Keyword_Strategy::latest();
 		$tree     = null;
 		$brain    = null;
+		$growth   = null;
 		if ( $strategy && ! empty( $strategy['map_data'] ) ) {
 			$builder = new SCC_Architecture();
 			$base    = $builder->build( $strategy['map_data'] );
 			$brain   = ( new SCC_Architecture_Brain() )->analyze( $base );
-			$tree    = $brain['tree'];
+			$growth  = class_exists( 'SCC_SEO_Growth_Architect' ) ? SCC_SEO_Growth_Architect::build( $brain ) : null;
+			$tree    = is_array( $growth ) && ! empty( $growth['recommended_tree'] ) ? $growth['recommended_tree'] : $brain['tree'];
 		}
 		$this->view(
 			'architecture',
@@ -662,6 +705,7 @@ class SCC_Admin {
 				'strategy' => $strategy,
 				'tree'     => $tree,
 				'brain'    => $brain,
+				'growth'   => $growth,
 			)
 		);
 	}

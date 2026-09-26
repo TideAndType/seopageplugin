@@ -664,3 +664,42 @@
 
 .scc-arch-branch { margin-top:4px; }
 .scc-arch-branch > .scc-arch-node[data-can-parent="1"] { border-radius:6px; padding-left:7px; padding-right:7px; }
+
+
+/* SEO Growth Architect */
+.scc-segmented { display:flex; gap:6px; flex-wrap:wrap; }
+.scc-arch-principle { margin:12px 0 0; padding:10px 12px; border-left:3px solid #2271b1; background:#f0f6fc; }
+.scc-growth-roadmap__cols { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.scc-growth-phase { border:1px solid #dcdcde; border-radius:8px; padding:12px; background:#fff; }
+.scc-growth-phase h3 { margin:0 0 10px; display:flex; align-items:center; justify-content:space-between; }
+.scc-growth-item { border-top:1px solid #eee; padding:10px 0; }
+.scc-growth-item:first-of-type { border-top:0; padding-top:0; }
+.scc-growth-item__top { display:flex; gap:8px; justify-content:space-between; align-items:flex-start; }
+.scc-growth-item code { display:inline-block; margin-top:4px; max-width:100%; overflow-wrap:anywhere; }
+.scc-growth-outcome { margin:6px 0 0; font-size:12px; }
+.scc-arch-growth-phase { font-weight:600; }
+.scc-arch-hidden-by-view, .scc-arch-empty-current { display:none !important; }
+@media (max-width: 960px) {
+  .scc-growth-roadmap__cols { grid-template-columns:1fr; }
+}
+
+
+/* AEO / AI Citations */
+.scc-aeo-actions { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; }
+.scc-aeo-action { border:1px solid #dcdcde; border-radius:8px; padding:12px; background:#fff; }
+.scc-aeo-action p:last-child { margin-bottom:0; }
+.scc-aeo-guidance { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+.scc-aeo-guidance article { border:1px solid #dcdcde; border-radius:8px; padding:12px; background:#f9f9f9; }
+.scc-aeo-guidance h3 { margin-top:0; }
+.scc-badge--warn { background:#fcf0f1; color:#8a2424; border-color:#d63638; }
+
+
+/* Elementor live/draft safety */
+.scc-layout-list[hidden] { display:none !important; }
+.scc-layout-live-guard { border-left:4px solid #d63638; }
+.scc-layout-working-copy { border-left:4px solid #00a32a; }
+.scc-layout-restore-card { border-left:4px solid #72aee6; }
+.scc-layout-live-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:12px 0; }
+.scc-layout-live-confirm { display:block; margin:12px 0 4px; padding:12px; background:#fcf0f1; border:1px solid #d63638; border-radius:6px; }
+.scc-layout-live-confirm input { margin-right:6px; }
+.scc-live-warning { margin:0 0 12px !important; }

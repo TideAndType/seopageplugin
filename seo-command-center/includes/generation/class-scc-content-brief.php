@@ -24,13 +24,16 @@ class SCC_Content_Brief {
 			? ( new SCC_Page_Brain( $this->ai ) )->plan( $entry, true )
 			: array();
 
-		$system = 'You are an SEO content strategist creating a people-first content brief. '
-			. 'Use the supplied Page Brain plan and known brand/site facts. Do not invent claims, statistics, testimonials, credentials, locations or services. '
-			. 'Prioritize search-intent satisfaction, topical completeness, first-party evidence, helpful examples, and natural internal links. '
-			. 'Do not optimize for keyword density or arbitrary word count. '
+		$system = 'You are TideOrbit’s SEO + Answer Engine Optimization (AEO) content strategist creating a people-first brief. '
+			. 'Use the supplied Page Brain plan and known brand/site facts. Do not invent claims, statistics, testimonials, credentials, locations, services, source URLs or citations. '
+			. 'Prioritize search-intent satisfaction, topical completeness, first-party evidence, helpful examples, natural internal links, and answer-engine retrievability. '
+			. 'For important questions, plan concise answer-first passages: answer directly, then explain. Make the main organization/service/location/product entities explicit and unambiguous in visible copy. '
+			. 'Identify factual claims that need first-party evidence or authoritative primary-source support. Never make up a reference; describe the SOURCE TYPE needed instead. '
+			. 'Do not create thin FAQ stuffing, do not optimize for keyword density, and do not claim that special schema, llms.txt, or any formatting guarantees an AI citation. '
 			. 'Return JSON: {"h1":str,"search_intent":str,"summary":str,"recommended_words":int,'
 			. '"outline":[{"heading":str,"purpose":str,"evidence_needed":str}],"entities":[str],"questions":[str],'
-			. '"internal_link_targets":[str],"external_reference_types":[str],"cta":str}.';
+			. '"answer_targets":[{"question":str,"answer_goal":str}],"citation_requirements":[{"claim":str,"source_type":str}],'
+			. '"entity_statements":[str],"internal_link_targets":[str],"external_reference_types":[str],"cta":str}.';
 
 		$context = array(
 			'title'           => $entry['title'] ?? '',
@@ -97,6 +100,26 @@ Produce the content brief JSON now.",
 		$questions = $strip( $brief['questions'] ?? array() );
 		if ( empty( $questions ) ) { $questions = $strip( $page_brain['questions_to_answer'] ?? array() ); }
 
+		$answer_targets = array();
+		foreach ( (array) ( $brief['answer_targets'] ?? array() ) as $target ) {
+			if ( ! is_array( $target ) ) { continue; }
+			$q = SCC_Security::sanitize_text( $target['question'] ?? '' );
+			$goal = SCC_Security::sanitize_textarea( $target['answer_goal'] ?? '' );
+			if ( '' !== $q && '' !== $goal ) {
+				$answer_targets[] = array( 'question' => $q, 'answer_goal' => $goal );
+			}
+		}
+		$citation_requirements = array();
+		foreach ( (array) ( $brief['citation_requirements'] ?? array() ) as $req ) {
+			if ( ! is_array( $req ) ) { continue; }
+			$claim = SCC_Security::sanitize_textarea( $req['claim'] ?? '' );
+			$source_type = SCC_Security::sanitize_text( $req['source_type'] ?? '' );
+			if ( '' !== $claim && '' !== $source_type ) {
+				$citation_requirements[] = array( 'claim' => $claim, 'source_type' => $source_type );
+			}
+		}
+		$entity_statements = $strip( $brief['entity_statements'] ?? array() );
+
 		return array(
 			'h1'                       => SCC_Security::sanitize_text( $brief['h1'] ?? $context['title'] ),
 			'search_intent'            => SCC_Security::sanitize_text( $brief['search_intent'] ?? $context['intent'] ),
@@ -105,6 +128,9 @@ Produce the content brief JSON now.",
 			'outline'                  => $outline,
 			'entities'                 => $entities,
 			'questions'                => $questions,
+			'answer_targets'           => $answer_targets,
+			'citation_requirements'    => $citation_requirements,
+			'entity_statements'        => $entity_statements,
 			'internal_link_targets'    => $strip( $brief['internal_link_targets'] ?? wp_list_pluck( (array) ( $page_brain['internal_links'] ?? array() ), 'url' ) ),
 			'external_reference_types' => $strip( $brief['external_reference_types'] ?? array() ),
 			'cta'                      => SCC_Security::sanitize_textarea( $brief['cta'] ?? ( $page_brain['conversion_goal'] ?? '' ) ),

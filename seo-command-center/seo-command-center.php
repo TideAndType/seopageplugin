@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
- * Description:       TideOrbit — AI-powered SEO for WordPress + Elementor: analyze your site, build an SEO strategy and architecture, and generate on-brand pages and articles — always as drafts by default, you stay in control.
- * Version:           1.60.0
+ * Description:       TideOrbit — AI-powered SEO + AEO for WordPress and Elementor: analyze your site, architect future growth, improve AI citation readiness, and generate on-brand content with draft-first live-page safety.
+ * Version:           1.70.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.60.0' );
+	define( 'SCC_VERSION', '1.70.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -160,6 +160,8 @@ require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-optimizer.ph
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-technical-seo.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-architecture-brain.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-architecture-expansion.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-aeo-expert.php';
+require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-seo-growth-architect.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-topic-coverage.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-tidescore.php';
 require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-critic.php';
