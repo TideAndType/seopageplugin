@@ -207,4 +207,114 @@ class SCC_DataForSEO {
 		return $out;
 	}
 
+
+	/**
+	 * Google Maps results for one exact map coordinate.
+	 *
+	 * @param string $query               Search phrase.
+	 * @param string $location_coordinate latitude,longitude,zoom.
+	 * @param string $language            Language code.
+	 * @param int    $limit               Maximum map results.
+	 * @return array|WP_Error
+	 */
+	public static function maps_search( $query, $location_coordinate, $language = 'en', $limit = 20 ) {
+		$limit = max( 1, min( 100, (int) $limit ) );
+		$coordinate = preg_replace( '/[^0-9,.\-z]/i', '', (string) $location_coordinate );
+		$result = self::post(
+			'/serp/google/maps/live/advanced',
+			array(
+				'keyword'             => SCC_Security::sanitize_text( $query ),
+				'location_coordinate' => $coordinate,
+				'language_code'       => sanitize_key( $language ),
+				'device'              => 'desktop',
+				'depth'               => $limit,
+				'search_places'       => false,
+			)
+		);
+		if ( is_wp_error( $result ) ) { return $result; }
+
+		$out = array();
+		foreach ( $result as $block ) {
+			foreach ( (array) ( $block['items'] ?? array() ) as $item ) {
+				if ( 'maps_search' !== (string) ( $item['type'] ?? '' ) ) { continue; }
+				$out[] = array(
+					'rank_group'    => isset( $item['rank_group'] ) ? (int) $item['rank_group'] : null,
+					'rank_absolute' => isset( $item['rank_absolute'] ) ? (int) $item['rank_absolute'] : null,
+					'title'         => SCC_Security::sanitize_text( $item['title'] ?? '' ),
+					'domain'        => SCC_Security::sanitize_text( $item['domain'] ?? '' ),
+					'url'           => esc_url_raw( $item['url'] ?? '' ),
+					'place_id'      => SCC_Security::sanitize_text( $item['place_id'] ?? '' ),
+				);
+				if ( count( $out ) >= $limit ) { break 2; }
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Domains linking to competitors but not to our domain.
+	 *
+	 * @param string[] $competitors Competitor root domains.
+	 * @param string   $exclude     Current site's root domain.
+	 * @param int      $limit       Maximum results.
+	 * @return array|WP_Error Normalized gap domains.
+	 */
+	public static function backlink_domain_gap( array $competitors, $exclude, $limit = 100 ) {
+		$targets = array();
+		$i = 1;
+		foreach ( array_values( array_unique( array_filter( array_map( 'sanitize_text_field', $competitors ) ) ) ) as $domain ) {
+			$targets[ (string) $i++ ] = preg_replace( '#^www\.#', '', strtolower( trim( $domain ) ) );
+			if ( $i > 20 ) { break; }
+		}
+		if ( empty( $targets ) ) { return array(); }
+
+		$limit = max( 1, min( 1000, (int) $limit ) );
+		$result = self::post(
+			'/backlinks/domain_intersection/live',
+			array(
+				'targets'                    => $targets,
+				'exclude_targets'             => array( preg_replace( '#^www\.#', '', strtolower( trim( (string) $exclude ) ) ) ),
+				'limit'                       => $limit,
+				'include_subdomains'          => false,
+				'exclude_internal_backlinks'  => true,
+				'include_indirect_links'       => false,
+				'intersection_mode'           => 'partial',
+				'backlinks_status_type'       => 'live',
+				'rank_scale'                  => 'one_hundred',
+			)
+		);
+		if ( is_wp_error( $result ) ) { return $result; }
+
+		$out = array();
+		foreach ( $result as $block ) {
+			foreach ( (array) ( $block['items'] ?? array() ) as $item ) {
+				$domain = (string) ( $item['domain'] ?? $item['target'] ?? $item['domain_from'] ?? '' );
+				$intersection = (array) ( $item['domain_intersection'] ?? array() );
+				$hits = 0;
+				$backlinks = 0;
+				$rank = isset( $item['rank'] ) ? (int) $item['rank'] : 0;
+				foreach ( $intersection as $entry ) {
+					if ( ! is_array( $entry ) ) { continue; }
+					$count = (int) ( $entry['backlinks'] ?? $entry['referring_pages'] ?? 0 );
+					if ( $count > 0 ) { $hits++; }
+					$backlinks += max( 0, $count );
+					$rank = max( $rank, (int) ( $entry['rank'] ?? 0 ) );
+					if ( '' === $domain && ! empty( $entry['target'] ) ) {
+						$domain = (string) $entry['target'];
+					}
+				}
+				if ( '' === $domain ) { continue; }
+				$out[] = array(
+					'domain'          => sanitize_text_field( $domain ),
+					'rank'            => max( 0, min( 100, $rank ) ),
+					'competitor_hits' => $hits,
+					'backlinks'       => $backlinks,
+					'intersection'    => $intersection,
+				);
+				if ( count( $out ) >= $limit ) { break 2; }
+			}
+		}
+		return $out;
+	}
+
 }
