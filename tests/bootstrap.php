@@ -484,6 +484,7 @@ add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' 
 SCC_Block_Registry::flush();
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-capabilities.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-widget-catalog.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-widget-schema.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-intel.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-handoff.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-composer.php';
@@ -493,5 +494,7 @@ require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-validator.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-engine.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-content-mapper.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-content-bank.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-composition.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-native-elementor-blocks.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-elementor-renderer.php';

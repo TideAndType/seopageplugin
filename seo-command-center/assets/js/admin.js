@@ -3910,6 +3910,7 @@
 		var applyBtn = document.getElementById( 'scc-layout-apply' );
 		var regen = document.getElementById( 'scc-layout-regen' );
 		var aiBox = document.getElementById( 'scc-layout-ai' );
+		var designPrompt = document.getElementById( 'scc-layout-design-prompt' );
 		var confirmLive = document.getElementById( 'scc-layout-confirm-live' );
 		var restoreBtn = document.getElementById( 'scc-layout-restore' );
 		var cloneBtn = document.getElementById( 'scc-layout-clone-draft' );
@@ -3917,6 +3918,8 @@
 		if ( ! preview || ! applyBtn ) { return; }
 
 		var blocks = []; // [{id, name}]
+		var compositionMode = false;
+		var compositionToken = '';
 
 		function updateApplyState() {
 			applyBtn.disabled = ! blocks.length || ( isLive && ( ! confirmLive || ! confirmLive.checked ) );
@@ -3932,15 +3935,20 @@
 			blocks.forEach( function ( b, i ) {
 				var row = el( 'div', null, 'scc-lblock' );
 				row.appendChild( el( 'span', b.name, 'scc-lblock__name' ) );
-				var ctl = el( 'span', null, 'scc-lblock__ctl' );
-				var up = el( 'button', '↑', 'button button-small' ); up.type = 'button'; up.title = 'Move up'; up.disabled = ( i === 0 );
-				var dn = el( 'button', '↓', 'button button-small' ); dn.type = 'button'; dn.title = 'Move down'; dn.disabled = ( i === blocks.length - 1 );
-				var rm = el( 'button', '✕', 'button button-small' ); rm.type = 'button'; rm.title = 'Remove';
-				up.addEventListener( 'click', function () { if ( i > 0 ) { var t = blocks[ i - 1 ]; blocks[ i - 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
-				dn.addEventListener( 'click', function () { if ( i < blocks.length - 1 ) { var t = blocks[ i + 1 ]; blocks[ i + 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
-				rm.addEventListener( 'click', function () { blocks.splice( i, 1 ); draw(); } );
-				ctl.appendChild( up ); ctl.appendChild( dn ); ctl.appendChild( rm );
-				row.appendChild( ctl );
+				if ( compositionMode ) {
+					var badge = el( 'span', 'Native composition', 'scc-badge scc-badge--ok' );
+					row.appendChild( badge );
+				} else {
+					var ctl = el( 'span', null, 'scc-lblock__ctl' );
+					var up = el( 'button', '↑', 'button button-small' ); up.type = 'button'; up.title = 'Move up'; up.disabled = ( i === 0 );
+					var dn = el( 'button', '↓', 'button button-small' ); dn.type = 'button'; dn.title = 'Move down'; dn.disabled = ( i === blocks.length - 1 );
+					var rm = el( 'button', '✕', 'button button-small' ); rm.type = 'button'; rm.title = 'Remove';
+					up.addEventListener( 'click', function () { if ( i > 0 ) { var t = blocks[ i - 1 ]; blocks[ i - 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
+					dn.addEventListener( 'click', function () { if ( i < blocks.length - 1 ) { var t = blocks[ i + 1 ]; blocks[ i + 1 ] = blocks[ i ]; blocks[ i ] = t; draw(); } } );
+					rm.addEventListener( 'click', function () { blocks.splice( i, 1 ); draw(); } );
+					ctl.appendChild( up ); ctl.appendChild( dn ); ctl.appendChild( rm );
+					row.appendChild( ctl );
+				}
 				preview.appendChild( row );
 			} );
 			updateApplyState();
@@ -3973,24 +3981,48 @@
 
 		function propose() {
 			blocks = [];
+			compositionMode = false;
+			compositionToken = '';
 			updateApplyState();
-			setStatus( msg, 'Analyzing content and choosing blocks…' );
-			request( '/layout/propose', { method: 'POST', data: { post_id: postId, use_ai: aiBox && aiBox.checked } } )
+			var useAgent = !! ( aiBox && aiBox.checked );
+			setStatus( msg, useAgent ? 'Designing with your installed Elementor widgets…' : 'Analyzing content and choosing safe components…' );
+			request( '/layout/propose', {
+				method: 'POST',
+				data: {
+					post_id: postId,
+					use_ai: useAgent,
+					design_prompt: designPrompt ? designPrompt.value : ''
+				}
+			} )
 				.then( function ( res ) {
 					var d = res.data || {};
+					compositionMode = !! d.composition_mode;
+					compositionToken = d.composition_token || '';
 					blocks = ( d.blocks || [] ).map( function ( b ) { return { id: b.id, name: b.name }; } );
 					if ( metaEl ) {
 						metaEl.hidden = false;
-						var planner = d.source === 'ai_constrained_architect' ? 'AI constrained architect' :
+						var planner = d.source === 'ai_elementor_composition' ? 'schema-aware Elementor design agent' :
+							d.source === 'schema_agent_fallback' ? 'smart page architect (AI design fallback)' :
+							d.source === 'ai_constrained_architect' ? 'legacy AI component architect' :
 							d.source === 'page_architect_ai_fallback' ? 'smart rules (AI fallback)' : 'smart page architect';
-						metaEl.textContent = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) +
-							' · planned by ' + planner + ( d.ai_available ? '' : ' (no AI provider configured)' );
+						var details = 'Detected: ' + ( d.content_type || '?' ) + ' · ' + ( d.search_intent || '?' ) + ' · planned by ' + planner;
+						if ( compositionMode && d.widget_discovery ) {
+							details += ' · ' + ( d.widget_discovery.available || 0 ) + ' installed widgets discovered';
+							details += ' · ' + ( d.composition_nodes || 0 ) + ' design nodes';
+							if ( d.repaired ) { details += ' · validator auto-repaired'; }
+						}
+						if ( ! d.ai_available ) { details += ' (no AI provider configured)'; }
+						metaEl.textContent = details;
 					}
-					setStatus( msg, isLive ? 'Preview ready. Live Apply remains locked until you confirm the warning.' : 'Done.', 'is-ok' );
+					var readyMessage = compositionMode ? 'Custom Elementor composition ready.' : ( d.agent_error ? 'AI design could not be validated, so TideOrbit used the safe Page Architect fallback.' : 'Layout preview ready.' );
+					if ( isLive ) { readyMessage += ' Live Apply remains locked until you confirm the warning.'; }
+					setStatus( msg, readyMessage, d.agent_error ? 'is-warning' : 'is-ok' );
 					drawCritique( d.critique );
 					draw();
 				} )
 				.catch( function ( err ) {
+					compositionMode = false;
+					compositionToken = '';
 					setStatus( msg, ( err && err.message ) || i18n.error, 'is-error' );
 					updateApplyState();
 				} );
@@ -4021,12 +4053,13 @@
 				return;
 			}
 			applyBtn.disabled = true;
-			setStatus( applyMsg, isLive ? 'Saving restore point and updating LIVE page…' : 'Building your Elementor layout…' );
+			setStatus( applyMsg, isLive ? 'Saving restore point and updating LIVE page…' : ( compositionMode ? 'Compiling and building your custom Elementor design…' : 'Building your Elementor layout…' ) );
 			request( '/layout/apply', {
 				method: 'POST',
 				data: {
 					post_id: postId,
 					layout: blocks.map( function ( b ) { return b.id; } ),
+					composition_token: compositionMode ? compositionToken : '',
 					confirm_live: isLive && !! ( confirmLive && confirmLive.checked )
 				}
 			} )

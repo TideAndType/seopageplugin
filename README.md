@@ -11,12 +11,14 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.82.0.** The plugin is organized around four areas —
+**Current version: 1.83.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
 and the hardening + simplification passes are implemented. See
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for the detailed breakdown.
+
+**v1.83.0 — Schema-aware Elementor Design Agent:** The Layout Engine can now discover the Elementor and add-on widgets actually installed on the site, read a safe subset of their live controls, and turn a freeform design prompt into a validated nested composition of containers/widgets/responsive rules. Finished page copy is exposed to the designer only through immutable content references, raw Elementor JSON/code widgets are rejected, and Apply revalidates against the current post before using the existing snapshot/rollback writer. The deterministic Page Architect remains the fallback when AI or the richer composition path is unavailable.
 
 **Foundation (phases 1–7)**
 - **Foundation:** bootstrap/loader/lifecycle, versioned custom tables, security

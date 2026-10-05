@@ -1,7 +1,8 @@
 # TideOrbit Professional Elementor Design Engine
 
-Introduced as a native foundation in **v1.41.0** and separated into a dedicated
-article-to-design pipeline in **v1.42.0**.
+Introduced as a native foundation in **v1.41.0**, separated into a dedicated
+article-to-design pipeline in **v1.42.0**, and expanded with the schema-aware
+Elementor Design Agent in **v1.83.0**.
 
 ## Boundary
 
@@ -18,13 +19,19 @@ Completed article/page
         ↓
 SCC_Design_Handoff
         ↓
-SCC_Design_Composer
+SCC_Elementor_Content_Bank ───── exact finished copy/media refs
         ↓
-SCC_Content_Mapper
+SCC_Elementor_Widget_Schema ──── live Elementor/add-on controls
         ↓
-SCC_Native_Elementor_Blocks
+SCC_Elementor_Design_Agent ───── prompt + design DNA + widget schemas
         ↓
-Editable Elementor document
+SCC_Elementor_Composition ────── validate controlled nested DSL
+        ↓
+Compile to editable Elementor containers/widgets
+        ↓
+Verified snapshot / rollback writer
+
+Fallback: Page Architect → Design Composer → Native Elementor Blocks
 ```
 
 ## Design handoff
@@ -65,6 +72,34 @@ Current section treatments include:
 Composition is deterministic: identical finished content produces the same
 visual plan even if SEO metadata changes.
 
+## Schema-aware Design Agent
+
+When **AI Design Agent** is enabled, TideOrbit no longer asks the model merely
+to order pre-registered section IDs. It gives the model a constrained design
+surface inspired by Elementor's MCP composition workflow:
+
+- live discovery of the widgets registered by Elementor Free, Elementor Pro,
+  and compatible third-party Elementor add-ons,
+- compact schemas for the controls each selected widget actually exposes,
+- a site design-DNA snapshot (colors, typography, widths, spacing and radius),
+- immutable references to the already-finished page copy and media,
+- a nested composition DSL for containers, widgets, responsive rules and
+  semantic collections such as FAQ, stats, steps, related pages and locations.
+
+The model may decide presentation, nesting, proportions, spacing and supported
+widget usage. It may **not** emit raw Elementor JSON, PHP, HTML/shortcode/code
+widgets, or replacement SEO copy.
+
+A composition is rejected if it uses an unavailable widget/control, writes
+literal model copy into a content field, drops required finished content,
+duplicates the H1, exceeds the element/depth limits, or references content that
+is no longer present.
+
+The proposed composition is stored server-side behind an opaque preview token.
+On Apply, TideOrbit re-reads the current post and rebuilds the content bank
+before validating again. This prevents an older preview from overwriting copy
+that changed after the preview was generated.
+
 ## Elementor widget catalog
 
 `SCC_Elementor_Widget_Catalog` is owned by TideOrbit. It is not an EMCP
@@ -104,7 +139,11 @@ Missing values use conservative defaults. No AI call is required.
 
 The design engine never executes model-generated raw Elementor JSON.
 
-For every component the fallback order remains:
+For AI-designed pages, TideOrbit first attempts the validated schema-aware
+composition. If the AI designer is unavailable or its plan cannot pass the
+validator, the existing Page Architect remains the guaranteed fallback.
+
+Inside the fallback component renderer the order remains:
 
 1. an explicitly mapped existing Elementor template,
 2. TideOrbit's native Elementor component renderer,
@@ -127,16 +166,14 @@ and site-derived spacing rather than a fixed page template.
 
 ## Future expansion
 
-The next design-side additions can focus entirely on presentation:
+The remaining high-value design-side work is mostly iterative rather than a
+new architecture:
 
-- richer image-box/service-card schemas,
-- native testimonial widgets,
-- lead-form composition when Elementor Pro Form is installed,
-- gallery/carousel treatments when media exists,
-- background-image hero variants,
-- logo/trust rows,
-- pricing/testimonial component families,
-- visual inspection and repair tooling.
+- visual screenshot inspection and automatic critique/repair,
+- richer semantic collection renderers for pricing/testimonials/logos,
+- deeper Atomic Editor class/variable integration where available,
+- interaction/animation schemas with conservative accessibility limits,
+- reusable learned section patterns from approved site designs.
 
 Those additions should continue to respect the same boundary: content is
 complete before the design engine begins.

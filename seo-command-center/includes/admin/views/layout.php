@@ -155,14 +155,26 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 
 		<div class="scc-card">
 			<div class="scc-card__head">
-				<h2><?php esc_html_e( 'Your page structure', 'seo-command-center' ); ?></h2>
+				<div>
+					<h2><?php esc_html_e( 'Your page design', 'seo-command-center' ); ?></h2>
+					<p class="scc-note"><?php esc_html_e( 'Describe the look you want. The AI designer can compose real Elementor containers, responsive layouts, and compatible widgets installed on this site.', 'seo-command-center' ); ?></p>
+				</div>
 				<span>
-					<label class="scc-toggle" title="<?php esc_attr_e( 'Use AI to choose the section order when a provider is configured', 'seo-command-center' ); ?>">
-						<input type="checkbox" id="scc-layout-ai"> <?php esc_html_e( 'AI refine layout', 'seo-command-center' ); ?>
+					<label class="scc-toggle" title="<?php esc_attr_e( 'Use the schema-aware Elementor design agent when an AI provider is configured', 'seo-command-center' ); ?>">
+						<input type="checkbox" id="scc-layout-ai" checked> <?php esc_html_e( 'AI Design Agent', 'seo-command-center' ); ?>
 					</label>
-					<button class="button" id="scc-layout-regen"><?php esc_html_e( 'Regenerate', 'seo-command-center' ); ?></button>
+					<button class="button" id="scc-layout-regen"><?php esc_html_e( 'Regenerate design', 'seo-command-center' ); ?></button>
 				</span>
 			</div>
+			<label for="scc-layout-design-prompt"><strong><?php esc_html_e( 'Design direction', 'seo-command-center' ); ?></strong></label>
+			<textarea
+				id="scc-layout-design-prompt"
+				class="large-text"
+				rows="3"
+				maxlength="2400"
+				placeholder="<?php esc_attr_e( 'Example: Premium editorial service page with an asymmetric image-led hero, bold typography, strong whitespace, varied section widths, subtle dark/light rhythm, and a polished mobile stack. Use installed Elementor widgets when they genuinely improve the design.', 'seo-command-center' ); ?>"
+			></textarea>
+			<p class="scc-note"><?php esc_html_e( 'TideOrbit keeps your finished page copy locked. The designer may change presentation and widget composition, but it cannot rewrite the SEO content.', 'seo-command-center' ); ?></p>
 			<span class="scc-inline-status" id="scc-layout-msg"></span>
 			<p class="scc-note" id="scc-layout-meta" hidden></p>
 			<div id="scc-layout-critic" class="scc-note" hidden></div>
@@ -177,7 +189,7 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 
 		<details class="scc-card">
 			<summary class="scc-adv-summary"><?php esc_html_e( 'How this works', 'seo-command-center' ); ?></summary>
-			<p class="scc-note"><?php esc_html_e( 'The Page Brain chooses from a controlled library of professional Elementor components using the page type, finished content, available proof, and conversion goal. Optional AI refinement can select and order only registered components; it never writes arbitrary Elementor code. Before any layout write, TideOrbit saves an Elementor/page snapshot and WordPress revision so the previous state can be restored.', 'seo-command-center' ); ?></p>
+			<p class="scc-note"><?php esc_html_e( 'With AI Design Agent enabled, TideOrbit discovers the Elementor and add-on widgets actually registered on this site, reads their usable controls, combines them with the site design system, and asks the model for a nested composition plan. The plan is validated against a controlled DSL and exact content references before TideOrbit compiles it into editable Elementor data. The model never writes raw Elementor JSON or replacement page copy. If the richer agent is unavailable or its plan fails validation, the existing deterministic Page Architect remains the fallback. Every apply still creates an Elementor/page restore point and WordPress revision first.', 'seo-command-center' ); ?></p>
 		</details>
 	<?php endif; ?>
 </div>
