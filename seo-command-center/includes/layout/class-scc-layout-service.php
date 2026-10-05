@@ -20,17 +20,43 @@ class SCC_Layout_Service {
 		$this->ai = $ai;
 	}
 
-	public function propose_for_post( $post_id, $use_ai = false ) {
+	public function propose_for_post( $post_id, $use_ai = false, $design_prompt = '' ) {
 		$obj = SCC_Layout_Analyzer::content_object_from_post( $post_id );
 		if ( is_wp_error( $obj ) ) { return $obj; }
 
 		$analysis = SCC_Layout_Analyzer::analyze( $obj );
 		$context  = $this->design_context( $analysis );
 		$plan     = class_exists( 'SCC_Page_Brain' ) ? SCC_Page_Brain::for_post( $post_id ) : array();
-		$choice   = $this->choose_layout( $analysis, $plan, $use_ai );
-		$result   = $this->proposal_from( $obj, $analysis, $context, $choice['layout'], $plan, $choice['source'] );
+
+		// Preferred AI path: schema-aware nested Elementor composition. The model
+		// designs with real installed widgets, but the server validates/compiles it.
+		$agent_error = '';
+		$agent_attempted = false;
+		if ( $use_ai && class_exists( 'SCC_Elementor_Design_Agent' ) ) {
+			$agent = new SCC_Elementor_Design_Agent( $this->ai );
+			if ( $agent->is_available() ) {
+				$agent_attempted = true;
+				$agent_result = $agent->propose( $analysis, $design_prompt );
+				if ( ! is_wp_error( $agent_result ) ) {
+					$result = $this->composition_proposal( $post_id, $obj, $analysis, $agent_result, $design_prompt );
+					if ( ! is_wp_error( $result ) ) { return $result; }
+					$agent_error = $result->get_error_message();
+				} else {
+					$agent_error = $agent_result->get_error_message();
+				}
+			}
+		}
+
+		// Existing page architect remains the guaranteed fallback. If the richer
+		// agent actually ran and failed validation, do not spend a second AI call on
+		// block ordering; fall back deterministically instead.
+		$choice = $this->choose_layout( $analysis, $plan, $agent_attempted ? false : $use_ai );
+		if ( $agent_attempted ) { $choice['source'] = 'schema_agent_fallback'; }
+		$result = $this->proposal_from( $obj, $analysis, $context, $choice['layout'], $plan, $choice['source'] );
 		$result['post_id'] = (int) $post_id;
 		$result['title']   = (string) $obj->title;
+		$result['composition_mode'] = false;
+		if ( '' !== $agent_error ) { $result['agent_error'] = $agent_error; }
 		return $result;
 	}
 
@@ -48,15 +74,140 @@ class SCC_Layout_Service {
 		return $this->proposal_from( $obj, $analysis, $context, $choice['layout'], $plan, $choice['source'] );
 	}
 
-	public function build( $post_id, $use_ai = false ) {
+	public function build( $post_id, $use_ai = false, $design_prompt = '' ) {
+		if ( $use_ai ) {
+			$proposal = $this->propose_for_post( $post_id, true, $design_prompt );
+			if ( is_wp_error( $proposal ) ) { return $proposal; }
+			if ( ! empty( $proposal['composition_mode'] ) && ! empty( $proposal['composition_token'] ) ) {
+				return $this->apply_composition( $post_id, (string) $proposal['composition_token'] );
+			}
+			return $this->apply( $post_id, (array) ( $proposal['layout'] ?? array() ) );
+		}
+
 		$obj = SCC_Layout_Analyzer::content_object_from_post( $post_id );
 		if ( is_wp_error( $obj ) ) { return $obj; }
-
 		$analysis = SCC_Layout_Analyzer::analyze( $obj );
 		$plan     = class_exists( 'SCC_Page_Brain' ) ? SCC_Page_Brain::for_post( $post_id ) : array();
-		$choice   = $this->choose_layout( $analysis, $plan, $use_ai );
+		$choice   = $this->choose_layout( $analysis, $plan, false );
 		return $this->apply( $post_id, $choice['layout'] );
 	}
+
+
+	/**
+	 * Build the browser preview and store the validated composition server-side.
+	 * The browser receives only a short-lived opaque token, not executable JSON.
+	 */
+	protected function composition_proposal( $post_id, SCC_Content_Object $obj, array $analysis, array $agent_result, $design_prompt ) {
+		$composition = (array) ( $agent_result['composition'] ?? array() );
+		$bank = (array) ( $agent_result['bank'] ?? array() );
+		if ( empty( $composition['nodes'] ) || empty( $bank ) ) {
+			return new WP_Error( 'scc_empty_composition', __( 'The design agent produced no usable composition.', 'seo-command-center' ) );
+		}
+
+		$token = function_exists( 'wp_generate_uuid4' )
+			? str_replace( '-', '', wp_generate_uuid4() )
+			: md5( uniqid( 'scc-design-' . (int) $post_id, true ) );
+		$draft = array(
+			'token'       => $token,
+			'created'     => time(),
+			'composition' => $composition,
+			'prompt'      => substr( sanitize_textarea_field( (string) $design_prompt ), 0, 2400 ),
+			'repaired'    => ! empty( $agent_result['repaired'] ),
+		);
+		$written = update_post_meta( (int) $post_id, '_scc_elementor_composition_draft', $draft );
+		if ( false === $written && get_post_meta( (int) $post_id, '_scc_elementor_composition_draft', true ) !== $draft ) {
+			return new WP_Error( 'scc_composition_store', __( 'The proposed Elementor composition could not be saved safely.', 'seo-command-center' ) );
+		}
+
+		$preview = SCC_Elementor_Composition::preview_sections( $composition );
+		return array(
+			'post_id'           => (int) $post_id,
+			'title'             => (string) $obj->title,
+			'layout'            => wp_list_pluck( $preview, 'id' ),
+			'blocks'            => $preview,
+			'critique'          => array(),
+			'source'            => 'ai_elementor_composition',
+			'design_only'       => true,
+			'composition_mode'  => true,
+			'composition_token' => $token,
+			'composition_nodes' => (int) ( $composition['meta']['node_count'] ?? 0 ),
+			'composition_name'  => (string) ( $composition['name'] ?? 'AI Elementor composition' ),
+			'repaired'          => ! empty( $agent_result['repaired'] ),
+			'elementor_active'  => true,
+			'widget_catalog'    => class_exists( 'SCC_Elementor_Widget_Catalog' ) ? SCC_Elementor_Widget_Catalog::snapshot() : array(),
+			'widget_discovery'  => array(
+				'available' => count( (array) ( $agent_result['catalog']['available'] ?? array() ) ),
+				'schema_loaded' => count( (array) ( $agent_result['catalog']['schemas'] ?? array() ) ),
+			),
+			'content_type'      => (string) ( $analysis['content_type'] ?? '' ),
+			'search_intent'     => (string) ( $analysis['search_intent'] ?? '' ),
+			'ai_available'      => ( $this->ai instanceof SCC_AI_Manager ),
+		);
+	}
+
+	/**
+	 * Apply a previously proposed schema-aware composition. Content is rebuilt
+	 * from the current post before compiling so an old proposal cannot overwrite
+	 * newer copy with a stale model payload.
+	 */
+	public function apply_composition( $post_id, $token ) {
+		$post_id = (int) $post_id;
+		$token = sanitize_text_field( (string) $token );
+		$draft = get_post_meta( $post_id, '_scc_elementor_composition_draft', true );
+		if ( ! is_array( $draft ) || empty( $draft['token'] ) || ! hash_equals( (string) $draft['token'], $token ) ) {
+			return new WP_Error( 'scc_composition_token', __( 'This Elementor design preview is missing or no longer matches the page. Regenerate the design first.', 'seo-command-center' ) );
+		}
+		if ( empty( $draft['created'] ) || time() - (int) $draft['created'] > DAY_IN_SECONDS ) {
+			delete_post_meta( $post_id, '_scc_elementor_composition_draft' );
+			return new WP_Error( 'scc_composition_expired', __( 'This Elementor design preview expired. Regenerate it before applying.', 'seo-command-center' ) );
+		}
+
+		$obj = SCC_Layout_Analyzer::content_object_from_post( $post_id );
+		if ( is_wp_error( $obj ) ) { return $obj; }
+		$analysis = SCC_Layout_Analyzer::analyze( $obj );
+		$bank = SCC_Elementor_Content_Bank::build( $analysis );
+		$composition = SCC_Elementor_Composition::validate( (array) ( $draft['composition'] ?? array() ), $bank );
+		if ( is_wp_error( $composition ) ) {
+			return new WP_Error(
+				'scc_composition_stale',
+				__( 'The page content changed enough that this design preview is no longer safe to apply. Regenerate the design.', 'seo-command-center' ),
+				array( 'reason' => $composition->get_error_message() )
+			);
+		}
+
+		$profile = class_exists( 'SCC_Design_Intel' ) ? SCC_Design_Intel::profile() : array();
+		$elements = SCC_Elementor_Composition::compile( $composition, $bank, $profile );
+		if ( empty( $elements ) ) {
+			return new WP_Error( 'scc_empty_composition', __( 'The validated design compiled to an empty Elementor page.', 'seo-command-center' ) );
+		}
+
+		$applied = SCC_Block_Elementor_Renderer::apply_tree_to_post( $post_id, $elements, null, 'schema-aware-agent' );
+		if ( is_wp_error( $applied ) ) { return $applied; }
+
+		$root_ids = wp_list_pluck( SCC_Elementor_Composition::preview_sections( $composition ), 'id' );
+		update_post_meta( $post_id, '_scc_layout_plan', wp_json_encode( $root_ids ) );
+		update_post_meta( $post_id, '_scc_ai_composition_last', array(
+			'name' => (string) ( $composition['name'] ?? '' ),
+			'created' => (int) ( $draft['created'] ?? time() ),
+			'applied' => time(),
+			'prompt' => (string) ( $draft['prompt'] ?? '' ),
+			'node_count' => (int) ( $composition['meta']['node_count'] ?? 0 ),
+		) );
+		delete_post_meta( $post_id, '_scc_elementor_composition_draft' );
+
+		return array(
+			'ok'               => true,
+			'post_id'          => $post_id,
+			'layout'           => $root_ids,
+			'critique'         => array(),
+			'design_source'    => 'schema-aware-elementor-agent',
+			'composition_mode' => true,
+			'edit_url'         => get_edit_post_link( $post_id, 'raw' ),
+			'view_url'         => get_permalink( $post_id ),
+			'elementor_url'    => admin_url( 'post.php?post=' . $post_id . '&action=elementor' ),
+		);
+	}
+
 
 	/**
 	 * Apply an ordered component list. User reordering is still supported.
