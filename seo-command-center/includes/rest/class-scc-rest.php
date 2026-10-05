@@ -2578,6 +2578,7 @@ class SCC_REST {
 		$params  = is_array( $params ) ? $params : $request->get_params();
 		$post_id = (int) ( $params['post_id'] ?? 0 );
 		$use_ai  = ! empty( $params['use_ai'] );
+		$design_prompt = substr( sanitize_textarea_field( (string) ( $params['design_prompt'] ?? '' ) ), 0, 2400 );
 		if ( $post_id <= 0 ) {
 			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
 		}
@@ -2586,7 +2587,7 @@ class SCC_REST {
 			return $guard;
 		}
 		$service = new SCC_Layout_Service( $this->ai );
-		$result  = $service->propose_for_post( $post_id, $use_ai );
+		$result  = $service->propose_for_post( $post_id, $use_ai, $design_prompt );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
@@ -2608,6 +2609,7 @@ class SCC_REST {
 		$params  = is_array( $params ) ? $params : $request->get_params();
 		$post_id = (int) ( $params['post_id'] ?? 0 );
 		$layout  = isset( $params['layout'] ) && is_array( $params['layout'] ) ? $params['layout'] : array();
+		$composition_token = sanitize_text_field( (string) ( $params['composition_token'] ?? '' ) );
 		if ( $post_id <= 0 ) {
 			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
 		}
@@ -2625,7 +2627,9 @@ class SCC_REST {
 			);
 		}
 		$service = new SCC_Layout_Service( $this->ai );
-		$result  = $service->apply( $post_id, $layout );
+		$result = '' !== $composition_token
+			? $service->apply_composition( $post_id, $composition_token )
+			: $service->apply( $post_id, $layout );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}
