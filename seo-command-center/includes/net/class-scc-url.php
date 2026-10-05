@@ -92,6 +92,13 @@ class SCC_URL {
 			return $override;
 		}
 
+		// The site's own host is always a legitimate target (auditing yourself is
+		// not SSRF) even when it resolves internally — local dev sites, and hosts
+		// that map their own domain to 127.0.0.1 or a private IP for requests made
+		// from the server. WordPress core's own URL validator makes the same
+		// exception. Link-local (cloud metadata) and other ranges stay blocked.
+		$same_site = self::is_site_host( $host, isset( $parts['port'] ) ? (int) $parts['port'] : 0 );
+
 		// Resolve the host to the set of IPs it points at, then judge each one.
 		// This catches a hostname that resolves to a private/metadata address
 		// (a basic DNS-rebinding / SSRF-by-hostname mitigation).
@@ -110,6 +117,9 @@ class SCC_URL {
 			if ( 'loopback' === $category && $allow_loopback ) {
 				continue;
 			}
+			if ( $same_site && in_array( $category, array( 'loopback', 'private' ), true ) ) {
+				continue;
+			}
 			return new WP_Error(
 				'scc_url_blocked',
 				/* translators: 1: host, 2: address category */
@@ -119,13 +129,41 @@ class SCC_URL {
 
 		// The literal host "localhost" (and *.localhost) is loopback by definition.
 		if ( empty( $ips ) && self::is_localhost_name( $host ) ) {
-			return $allow_loopback ? true : new WP_Error( 'scc_url_blocked', __( 'Loopback targets are not allowed here.', 'seo-command-center' ) );
+			return ( $allow_loopback || $same_site ) ? true : new WP_Error( 'scc_url_blocked', __( 'Loopback targets are not allowed here.', 'seo-command-center' ) );
 		}
 
 		// If a hostname could not be resolved at all and is not an IP literal, let
 		// it proceed — the request itself will simply fail. We never fail-open for
 		// a resolved private address (handled above).
 		return true;
+	}
+
+	/**
+	 * Whether a host + port is this WordPress site itself (home or site URL).
+	 * The port must be the site's own port or a standard web port, so another
+	 * service on the same machine (e.g. :6379) is never treated as "the site".
+	 *
+	 * @param string $host Lowercased host.
+	 * @param int    $port Port from the URL (0 = none given).
+	 * @return bool
+	 */
+	public static function is_site_host( $host, $port = 0 ) {
+		$host = strtolower( trim( (string) $host, '[]' ) );
+		$port = (int) $port;
+		if ( '' === $host || ! function_exists( 'home_url' ) ) {
+			return false;
+		}
+		foreach ( array( home_url( '/' ), function_exists( 'site_url' ) ? site_url( '/' ) : '' ) as $own ) {
+			$own_host = strtolower( trim( (string) wp_parse_url( $own, PHP_URL_HOST ), '[]' ) );
+			if ( '' === $own_host || $own_host !== $host ) {
+				continue;
+			}
+			$own_port = (int) wp_parse_url( $own, PHP_URL_PORT );
+			if ( 0 === $port || in_array( $port, array( 80, 443 ), true ) || ( $own_port && $port === $own_port ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

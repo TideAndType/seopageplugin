@@ -80,5 +80,25 @@ $val = function ( $inputs, $key ) {
 				<?php require __DIR__ . '/partials/topical-map.php'; ?>
 			<?php endif; ?>
 		</div>
+
+		<div class="scc-card">
+			<div class="scc-card__head">
+				<h2><?php esc_html_e( 'Search Console quick wins', 'seo-command-center' ); ?></h2>
+				<?php if ( ! empty( $data['gsc_connected'] ) ) : ?>
+					<button class="button button-primary" id="scc-gsc-load"><?php esc_html_e( 'Load quick wins', 'seo-command-center' ); ?></button>
+				<?php endif; ?>
+			</div>
+			<?php if ( empty( $data['gsc_connected'] ) ) : ?>
+				<div class="scc-empty">
+					<div class="scc-empty__icon" aria-hidden="true">🔌</div>
+					<h2><?php esc_html_e( 'Connect Search Console', 'seo-command-center' ); ?></h2>
+					<p><?php esc_html_e( 'See real queries ranking in positions 4–20 — your quickest wins.', 'seo-command-center' ); ?></p>
+					<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-connections' ) ); ?>"><?php esc_html_e( 'Connect Search Console', 'seo-command-center' ); ?></a>
+				</div>
+			<?php else : ?>
+				<span class="scc-inline-status" id="scc-gsc-status"></span>
+				<div id="scc-gsc-results"></div>
+			<?php endif; ?>
+		</div>
 	</div>
 </div>

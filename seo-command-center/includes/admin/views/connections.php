@@ -115,6 +115,12 @@ $field = function ( $field, $label, $hints ) {
 			?>
 		</table>
 
+		<h2><?php esc_html_e( 'Google PageSpeed Insights (optional)', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'The SEO Doctor measures real page speed and Core Web Vitals with Google’s free PageSpeed Insights API. It works without a key; a free key (Google Cloud console → enable “PageSpeed Insights API” → create an API key) avoids the shared rate limit.', 'seo-command-center' ); ?></p>
+		<table class="form-table" role="presentation">
+			<?php $field( 'pagespeed_key', __( 'PageSpeed API key', 'seo-command-center' ), $hints ); ?>
+		</table>
+
 		<h2><?php esc_html_e( 'Google Search Console', 'seo-command-center' ); ?></h2>
 
 		<?php if ( ! empty( $data['gsc_notice'] ) ) : ?>

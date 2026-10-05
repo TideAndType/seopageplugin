@@ -171,6 +171,27 @@ class SCC_Metadata {
 	}
 
 	/**
+	 * Whether a post should be left out of every SEO suggestion, check and
+	 * link recommendation: templates (which are not real pages) and pages the
+	 * owner has deliberately set to noindex in their SEO plugin. Cached per request.
+	 *
+	 * @param int|WP_Post $post Post or id.
+	 * @return bool
+	 */
+	public static function is_seo_excluded( $post ) {
+		static $cache = array();
+		$post = get_post( $post );
+		if ( ! $post ) {
+			return false;
+		}
+		if ( ! isset( $cache[ $post->ID ] ) ) {
+			$excluded = self::is_template_post( $post ) || ( class_exists( 'SCC_SEO_Meta' ) && SCC_SEO_Meta::is_noindex( $post->ID ) );
+			$cache[ $post->ID ] = (bool) apply_filters( 'scc_is_seo_excluded', $excluded, $post->ID );
+		}
+		return $cache[ $post->ID ];
+	}
+
+	/**
 	 * List pages/posts with their current metadata for the bulk editor.
 	 *
 	 * Templates (designated SEO templates + Elementor library items) are hidden

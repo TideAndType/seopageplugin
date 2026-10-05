@@ -232,6 +232,12 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 
 			if ( is_wp_error( $http ) ) {
 				SCC_Logger::error( 'lmstudio', sprintf( 'Transport error (attempt %d/%d): %s', $i, $attempts, $http->get_error_message() ) );
+				// Only a mid-response drop is worth resending. A refused connection,
+				// unknown host, timeout or TLS failure will fail the same way again,
+				// so fail fast instead of making the caller wait through every retry.
+				if ( ! self::is_transient_transport_error( $http->get_error_message() ) ) {
+					break;
+				}
 				if ( $i < $attempts ) {
 					sleep( min( 12, 1 + $i * 2 ) ); // 3s, 5s, 7s, 9s … let the tunnel reconnect.
 				}
@@ -251,6 +257,18 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		}
 
 		if ( is_wp_error( $http ) ) {
+			if ( ! self::is_transient_transport_error( $http->get_error_message() ) ) {
+				$response->error = new WP_Error(
+					'scc_transport',
+					sprintf(
+						/* translators: %1$s: server URL, %2$s: error message */
+						__( 'Could not connect to LM Studio at %1$s (%2$s). Make sure the LM Studio server is running and that this address is reachable from your WordPress host.', 'seo-command-center' ),
+						$this->base_url(),
+						$http->get_error_message()
+					)
+				);
+				return $response;
+			}
 			$response->error = new WP_Error(
 				'scc_transport',
 				sprintf(
@@ -293,6 +311,33 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		$response->cost          = 0.0;
 
 		return $response;
+	}
+
+	/**
+	 * Whether a transport error looks like a connection cut off mid-response
+	 * (worth resending) rather than one that will fail identically on every
+	 * attempt. Pure — unit-tested.
+	 *
+	 * Permanent: cURL 6 (unknown host), 7 (refused / no route), 28 (the model
+	 * ran past the timeout — resending would only repeat the wait), and TLS
+	 * failures (35, 51, 58, 60). Anything else — cURL 18/52/55/56, "unexpected
+	 * eof", "connection reset", "empty reply" — is treated as a tunnel blip.
+	 *
+	 * @param string $message Transport error message.
+	 * @return bool
+	 */
+	public static function is_transient_transport_error( $message ) {
+		$message = strtolower( (string) $message );
+		if ( preg_match( '/curl error (\d+)/', $message, $m ) ) {
+			return ! in_array( (int) $m[1], array( 6, 7, 28, 35, 51, 58, 60 ), true );
+		}
+		$permanent = array( 'could not resolve', 'connection refused', 'no route to host', 'timed out', 'ssl certificate', 'ssl routines' );
+		foreach ( $permanent as $needle ) {
+			if ( false !== strpos( $message, $needle ) ) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

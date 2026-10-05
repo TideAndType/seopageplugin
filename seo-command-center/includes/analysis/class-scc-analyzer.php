@@ -147,6 +147,14 @@ class SCC_Analyzer {
 		$title_map = array(); // For simple cannibalization heuristic.
 
 		foreach ( $query->posts as $post ) {
+			// Templates and deliberately-noindexed pages get no suggestions; also
+			// drop any index row they had before this rule existed.
+			if ( class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_seo_excluded( $post ) ) {
+				if ( class_exists( 'SCC_Content_Index' ) ) {
+					SCC_Content_Index::remove( $post->ID );
+				}
+				continue;
+			}
 			$item = $this->analyze_post( $post );
 
 			SCC_DB::insert(

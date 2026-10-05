@@ -95,12 +95,29 @@ Namespace: **`seo-command/v1`** (base: `/wp-json/seo-command/v1/`).
 | GET  | `/history`, POST `/history/revert` | Change history + revert (links/meta/schema). |
 | GET  | `/seo-report` | Unified per-page readiness (internal score). |
 
+## SEO Doctor (v1.80)
+
+One merged diagnosis of the whole site. Heavy crawls run in their own requests; `/doctor/run` only merges the latest results, so the UI can run the four steps in sequence. The SEO Doctor replaced the separate Site Audit screen (v1.80.1); its old URL redirects to the Dashboard.
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| GET  | `/doctor/report` | Latest stored diagnosis: `score`/`grade` (null when nothing was measured), per-area grades (`measured:false` = not measured, excluded from the score), ranked `issues[]` (id, group, source, severity, title, why, fix, affected_count, examples[{url, evidence, post_id}], fix_type, screen), `sources` status. |
+| POST | `/analyze` | Step 1 — read site content (cannibalization, topic gaps, content opportunities). |
+| POST | `/technical-seo/audit` | Step 2 — crawl pages (`limit` 50/150/300) (now also records heading outline, Open Graph tags, post context). |
+| POST | `/doctor/pagespeed` | Step 3 — Google PageSpeed Insights for the homepage + key pages. Body: `{count?: 1–5, strategy?: mobile\|desktop}`. Field (CrUX) data preferred, lab data labelled; failures are stored as "not measured". |
+| POST | `/doctor/run` | Step 4 — merge technical, PageSpeed, architecture, AEO and Search Console opportunities into the diagnosis. Body: `{refresh?: bool}` recomputes opportunities. |
+| POST | `/doctor/fix` | Preview or apply a one-click fix. Body: `{fix: meta_description\|schema\|social_tags\|internal_links, post_id, issue_id, apply: bool}`. `apply:false` returns `{summary, before, after, details}` and writes nothing. `apply:true` checks `edit_post` (or `manage_options` for site-level fixes), records history, and removes the fixed page from the stored issue. |
+| POST | `/doctor/ignore` | Remember an ignore. Body: `{issue_id, post_id?, url?}` — no page = the whole problem. Re-diagnoses from the stored engine results and returns the report (with `ignored[]`). |
+| POST | `/doctor/unignore` | Undo an ignore. Body: `{key}` (from `report.ignored[].key`). Returns the report. |
+| POST | `/doctor/queue` | Add issues to the Action Queue as `doctor_review` items (never auto-run by Autopilot). Body: `{issue_id}` or `{severity: high}` for every issue at that severity or worse. |
+
 ## Error handling
 
 - `401`/`403` — missing capability or nonce.
 - `400` — validation failure (message names the field).
 - `402` — monthly AI budget exceeded (from `SCC_AI_Manager`).
-- `502` — upstream AI/API transport error (after fallback attempted).
+- `404` — missing resource (e.g. `PUT /templates/native/{id}` or `POST /templates/native/clone` with an unknown template id).
+- `502` — upstream AI/API transport error (after fallback attempted). The message names the provider that failed and, when the primary provider has no key, says so.
 - All errors are logged (redacted) via `SCC_Logger`; responses never leak keys
   or stack traces.
 

@@ -96,12 +96,17 @@ class SCC_Plugin {
 		$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
 		$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
 		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
+		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
 
 		// REST.
 		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
+		add_action( 'wp_head', array( 'SCC_Social_Tags', 'output' ), 5 );
+		// With no SEO plugin, print the SEO title/description TideOrbit saved.
+		add_action( 'wp_head', array( 'SCC_Meta_Tags', 'output' ), 1 );
+		add_filter( 'pre_get_document_title', array( 'SCC_Meta_Tags', 'document_title' ), 20 );
 		$this->loader->add_action( 'wp_head', $this, 'front_styles', 8 );
 
 		// Background jobs dispatcher. The recurring hook provides a safety net;

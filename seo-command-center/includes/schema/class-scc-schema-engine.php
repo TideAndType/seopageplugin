@@ -39,8 +39,14 @@ class SCC_Schema_Engine {
 			'default_author'    => '',
 			'schema_enabled'    => true,
 		);
-		$stored = get_option( 'scc_schema_settings', array() );
-		return wp_parse_args( is_array( $stored ) ? $stored : array(), $defaults );
+		$stored   = get_option( 'scc_schema_settings', array() );
+		$business = wp_parse_args( is_array( $stored ) ? $stored : array(), $defaults );
+		// A settings form saved with the name left blank must not blank out the
+		// organization: the site's own name is the accurate default.
+		if ( '' === trim( (string) $business['organization_name'] ) ) {
+			$business['organization_name'] = $defaults['organization_name'];
+		}
+		return $business;
 	}
 
 	/**
@@ -124,6 +130,12 @@ class SCC_Schema_Engine {
 			}
 		}
 
+		// The homepage represents the business itself, so it gets Organization
+		// markup (what the site audit expects there) and no breadcrumb trail.
+		if ( 'page' === get_option( 'show_on_front' ) && (int) get_option( 'page_on_front' ) === (int) $post->ID ) {
+			$recommended = self::front_page_types( $recommended );
+		}
+
 		if ( $has_faq && ! in_array( 'FAQPage', $recommended, true ) ) {
 			$recommended[] = 'FAQPage';
 		}
@@ -168,7 +180,10 @@ class SCC_Schema_Engine {
 		$title       = get_the_title( $post );
 		$description = SCC_SEO_Meta::get_description( $post_id );
 		if ( '' === $description ) {
-			$description = wp_trim_words( SCC_Content_Index::get_plain_text( $post ), 30 );
+			// The page's prose, not its headings; a plain "…" (an HTML entity would
+			// appear literally inside JSON-LD).
+			$lead        = SCC_Content_Index::lead_text_from_html( (string) $post->post_content );
+			$description = wp_trim_words( strlen( $lead ) >= 50 ? $lead : SCC_Content_Index::get_plain_text( $post ), 30, '…' );
 		}
 		$image = get_the_post_thumbnail_url( $post_id, 'full' );
 
@@ -444,6 +459,40 @@ class SCC_Schema_Engine {
 			$crumbs[] = array( 'name' => get_the_title( $ancestor_id ), 'url' => get_permalink( $ancestor_id ) );
 		}
 		$crumbs[] = array( 'name' => get_the_title( $post ), 'url' => get_permalink( $post ) );
-		return $crumbs;
+		return self::dedupe_crumbs( $crumbs );
+	}
+
+	/**
+	 * Schema types for the static front page: Organization added, the
+	 * breadcrumb dropped (a homepage has no trail). Pure — unit-tested.
+	 *
+	 * @param array $types Recommended types.
+	 * @return array
+	 */
+	public static function front_page_types( array $types ) {
+		$types   = array_values( array_diff( $types, array( 'BreadcrumbList', 'Service' ) ) );
+		$types[] = 'Organization';
+		return array_values( array_unique( $types ) );
+	}
+
+	/**
+	 * Drop a crumb that repeats the one before it (the front page is both
+	 * "Home" and itself). Pure — unit-tested.
+	 *
+	 * @param array $crumbs List of {name, url}.
+	 * @return array
+	 */
+	public static function dedupe_crumbs( array $crumbs ) {
+		$out  = array();
+		$last = null;
+		foreach ( $crumbs as $crumb ) {
+			$url = untrailingslashit( (string) ( $crumb['url'] ?? '' ) );
+			if ( null !== $last && $url === $last ) {
+				continue;
+			}
+			$out[] = $crumb;
+			$last  = $url;
+		}
+		return $out;
 	}
 }

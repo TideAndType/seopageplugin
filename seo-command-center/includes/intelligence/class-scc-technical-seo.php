@@ -75,8 +75,11 @@ class SCC_Technical_SEO {
 	 */
 	protected function crawl_pages( $limit ) {
 		$urls = array();
+		$ids  = array();
 		$home = home_url( '/' );
-		$urls[ SCC_URL::normalize_for_crawl( $home ) ] = $home;
+		$home_key = SCC_URL::normalize_for_crawl( $home );
+		$urls[ $home_key ] = $home;
+		$ids[ $home_key ]  = (int) get_option( 'page_on_front', 0 );
 
 		$query = new WP_Query(
 			array(
@@ -91,6 +94,9 @@ class SCC_Technical_SEO {
 		);
 
 		foreach ( (array) $query->posts as $post_id ) {
+			if ( class_exists( 'SCC_Metadata' ) && SCC_Metadata::is_seo_excluded( $post_id ) ) {
+				continue; // Template or owner-set noindex: not an SEO target.
+			}
 			$url = get_permalink( $post_id );
 			if ( ! $url ) {
 				continue;
@@ -98,6 +104,9 @@ class SCC_Technical_SEO {
 			$key = SCC_URL::normalize_for_crawl( $url );
 			if ( '' !== $key ) {
 				$urls[ $key ] = $url;
+				if ( empty( $ids[ $key ] ) ) {
+					$ids[ $key ] = (int) $post_id;
+				}
 			}
 			if ( count( $urls ) >= $limit ) {
 				break;
@@ -106,7 +115,8 @@ class SCC_Technical_SEO {
 
 		$crawler = new SCC_Crawler();
 		$pages   = array();
-		foreach ( array_values( $urls ) as $url ) {
+		foreach ( $urls as $url_key => $url ) {
+			$context = self::page_context( (int) ( $ids[ $url_key ] ?? 0 ), $url_key === $home_key );
 			$started = microtime( true );
 			$data    = $crawler->fetch( $url, false, 12 );
 			$elapsed = (int) round( ( microtime( true ) - $started ) * 1000 );
@@ -122,14 +132,72 @@ class SCC_Technical_SEO {
 					'response_ms' => $elapsed,
 					'internal_link_urls' => array(),
 					'hreflang'    => array(),
-				);
+				) + $context;
 				continue;
 			}
 
 			$data['response_ms'] = $elapsed;
-			$pages[] = $data;
+			$pages[] = $data + $context;
 		}
 		return $pages;
+	}
+
+	/**
+	 * WordPress-side context for a crawled URL: the post behind it, its type, the
+	 * keyword it targets and the schema type it should carry. Only facts the site
+	 * actually holds are returned — an unknown keyword stays empty so the keyword
+	 * check is skipped rather than guessed.
+	 *
+	 * @param int  $post_id Post id (0 when the URL is not a post).
+	 * @param bool $is_home Whether this is the homepage.
+	 * @return array
+	 */
+	protected static function page_context( $post_id, $is_home ) {
+		$context = array(
+			'post_id'         => (int) $post_id,
+			'post_type'       => '',
+			'is_home'         => (bool) $is_home,
+			'target_keyword'  => '',
+			'expected_schema' => array(),
+		);
+		if ( $is_home ) {
+			$context['expected_schema'] = array( 'Organization' );
+		}
+		if ( $post_id <= 0 || ! get_post( $post_id ) ) {
+			return $context;
+		}
+		$context['post_type']      = (string) get_post_type( $post_id );
+		$context['target_keyword'] = self::target_keyword( $post_id );
+		if ( ! $is_home && class_exists( 'SCC_Schema_Engine' ) ) {
+			$rec = SCC_Schema_Engine::recommend( $post_id );
+			// Generic context nodes (WebPage, breadcrumbs) and optional FAQ markup
+			// are not required; only the page's primary type is.
+			$context['expected_schema'] = array_values( array_diff( (array) ( $rec['recommended'] ?? array() ), array( 'WebPage', 'BreadcrumbList', 'FAQPage' ) ) );
+		}
+		return $context;
+	}
+
+	/**
+	 * The keyword a post targets: TideOrbit's content plan first, then the focus
+	 * keyword from Yoast or Rank Math. Empty when none is set.
+	 *
+	 * @param int $post_id Post id.
+	 * @return string
+	 */
+	public static function target_keyword( $post_id ) {
+		$keyword = '';
+		if ( class_exists( 'SCC_Content_Index' ) ) {
+			$row     = SCC_Content_Index::get( $post_id );
+			$keyword = is_array( $row ) ? (string) ( $row['primary_keyword'] ?? '' ) : '';
+		}
+		if ( '' === trim( $keyword ) ) {
+			$keyword = (string) get_post_meta( $post_id, '_yoast_wpseo_focuskw', true );
+		}
+		if ( '' === trim( $keyword ) ) {
+			$rank_math = (string) get_post_meta( $post_id, 'rank_math_focus_keyword', true );
+			$keyword   = trim( (string) strtok( $rank_math, ',' ) );
+		}
+		return trim( $keyword );
 	}
 
 	/**
@@ -350,7 +418,16 @@ class SCC_Technical_SEO {
 		$count  = max( 1, count( $pages ) );
 		$home   = SCC_URL::normalize_for_crawl( (string) ( $site['home_url'] ?? home_url( '/' ) ) );
 
-		$add = function ( $id, $category, $severity, $title, $url, $evidence, $why, $fix, $scope = 'page' ) use ( &$issues ) {
+		// URL → post id, so every issue example can point at the page to fix.
+		$post_by_key = array();
+		foreach ( $pages as $page ) {
+			$page_key = SCC_URL::normalize_for_crawl( (string) ( $page['crawl_url'] ?? $page['url'] ?? '' ) );
+			if ( '' !== $page_key && ! empty( $page['post_id'] ) ) {
+				$post_by_key[ $page_key ] = (int) $page['post_id'];
+			}
+		}
+
+		$add = function ( $id, $category, $severity, $title, $url, $evidence, $why, $fix, $scope = 'page' ) use ( &$issues, $post_by_key ) {
 			if ( ! isset( $issues[ $id ] ) ) {
 				$issues[ $id ] = array(
 					'id'             => $id,
@@ -369,6 +446,7 @@ class SCC_Technical_SEO {
 				$issues[ $id ]['examples'][] = array(
 					'url'      => (string) $url,
 					'evidence' => (string) $evidence,
+					'post_id'  => (int) ( $post_by_key[ SCC_URL::normalize_for_crawl( (string) $url ) ] ?? 0 ),
 				);
 			}
 		};
@@ -475,6 +553,60 @@ class SCC_Technical_SEO {
 				$add( 'multiple_h1', 'onpage_structure', 'low', 'Multiple H1 headings', $url, count( $h1s ) . ' H1 elements found', 'Multiple H1s are valid HTML, but often indicate unclear hierarchy in page-builder layouts.', 'Review the heading hierarchy and keep the primary page heading obvious.' );
 			}
 
+			// Heading hierarchy: a jump of more than one level (H2 → H4) usually
+			// means headings are chosen for their look, not the page's structure.
+			$outline = array_map( 'intval', (array) ( $page['heading_outline'] ?? array() ) );
+			$prev_level = 0;
+			foreach ( $outline as $level ) {
+				if ( $prev_level > 0 && $level > $prev_level + 1 ) {
+					$add( 'heading_level_skip', 'onpage_structure', 'low', 'Heading levels are skipped', $url, 'H' . $prev_level . ' is followed directly by H' . $level, 'Skipped levels blur the outline that search engines and screen readers use to understand how the page is organised.', 'Use heading levels in order (H2 for sections, H3 for sub-points) and style them with CSS instead of picking a level for its size.' );
+					break;
+				}
+				$prev_level = $level;
+			}
+
+			// Thin content. Only judged for real posts/pages with a measured word
+			// count; the homepage and utility pages legitimately carry little copy.
+			$words = (int) ( $page['word_count'] ?? 0 );
+			if ( empty( $page['is_home'] ) && ! empty( $page['post_id'] ) && $words > 0 ) {
+				$thin_limit = 'post' === ( $page['post_type'] ?? '' ) ? 300 : 200;
+				if ( $words < $thin_limit ) {
+					$add( 'thin_content', 'content', $words < 100 ? 'medium' : 'low', 'Thin content', $url, $words . ' words of visible body copy', 'Pages with very little unique copy rarely show enough depth to rank for anything competitive.', 'Expand the page with genuinely useful detail for its audience — or merge it into a stronger related page if it has no distinct purpose.' );
+				}
+			}
+
+			// Target keyword placement (only when the site states a target keyword).
+			$keyword = trim( (string) ( $page['target_keyword'] ?? '' ) );
+			if ( '' !== $keyword ) {
+				if ( '' !== $title && ! self::keyword_in( $keyword, $title ) ) {
+					$add( 'keyword_missing_title', 'onpage_structure', 'medium', 'Target keyword missing from the title', $url, 'Target: “' . $keyword . '” · Title: “' . $title . '”', 'The title is one of the strongest signals of what a page is about; leaving the target phrase out makes the page harder to match to that search.', 'Work the target phrase (or a natural close variant) into the title, ideally near the start.' );
+				}
+				if ( 1 === count( $h1s ) && ! self::keyword_in( $keyword, (string) $h1s[0] ) ) {
+					$add( 'keyword_missing_h1', 'onpage_structure', 'low', 'Target keyword missing from the H1', $url, 'Target: “' . $keyword . '” · H1: “' . (string) $h1s[0] . '”', 'The main heading tells visitors and search engines what the page covers.', 'Reflect the target topic in the H1 in natural language.' );
+				}
+			}
+
+			// Structured data expected for this page type.
+			$expected = (array) ( $page['expected_schema'] ?? array() );
+			if ( ! empty( $expected ) && ! self::schema_satisfies( (array) ( $page['schema_types'] ?? array() ), $expected ) ) {
+				$found = (array) ( $page['schema_types'] ?? array() );
+				$add( 'missing_schema', 'structured_data', 'medium', 'Missing structured data for this page type', $url, 'Expected: ' . implode( ' or ', $expected ) . ' · Found: ' . ( $found ? implode( ', ', array_slice( $found, 0, 6 ) ) : 'none' ), 'Structured data tells search engines exactly what the page represents and makes it eligible for richer results.', 'Add accurate ' . implode( '/', $expected ) . ' markup that matches what is visible on the page.' );
+			}
+
+			// Social sharing previews. Only judged when the crawler recorded tag data.
+			if ( array_key_exists( 'og', $page ) ) {
+				$og = (array) $page['og'];
+				$missing_og = array();
+				foreach ( array( 'og:title', 'og:description', 'og:image' ) as $tag ) {
+					if ( '' === trim( (string) ( $og[ $tag ] ?? '' ) ) ) {
+						$missing_og[] = $tag;
+					}
+				}
+				if ( $missing_og ) {
+					$add( 'missing_social_tags', 'social', 'low', 'Social sharing tags missing', $url, 'Missing: ' . implode( ', ', $missing_og ), 'Without Open Graph tags, links shared on Facebook, LinkedIn, Slack and similar apps show a poor or random preview.', 'Output og:title, og:description and og:image (and a twitter:card) for every public page.' );
+				}
+			}
+
 			if ( empty( $page['viewport'] ) ) {
 				$add( 'missing_viewport', 'mobile_performance', 'medium', 'Viewport meta tag missing', $url, 'No viewport meta tag found.', 'A missing viewport can break mobile rendering and mobile-first usability.', 'Add a standard responsive viewport meta tag in the theme head.' );
 			}
@@ -555,8 +687,21 @@ class SCC_Technical_SEO {
 				}
 			}
 		}
+		// The link graph is only as good as the pages that were actually read.
+		// A page that failed to load contributes no links, so without these
+		// guards a blocked crawl (firewall, password, bot protection) would
+		// report every page as orphaned and unreachable.
+		$fetched = array();
+		foreach ( $url_map as $key => $page ) {
+			if ( empty( $page['fetch_error'] ) && (int) ( $page['status'] ?? 200 ) < 400 ) {
+				$fetched[ $key ] = true;
+			}
+		}
+		$home_read     = isset( $fetched[ $home ] );
+		$graph_trusted = count( $url_map ) > 0 && count( $fetched ) / count( $url_map ) >= 0.8; // Most pages must have been read.
+
 		$depth = array();
-		if ( isset( $url_map[ $home ] ) ) {
+		if ( $home_read ) {
 			$depth[ $home ] = 0;
 			$queue = array( $home );
 			while ( $queue ) {
@@ -572,15 +717,15 @@ class SCC_Technical_SEO {
 		}
 		foreach ( $url_map as $key => $page ) {
 			$url = (string) ( $page['crawl_url'] ?? $page['url'] ?? $key );
-			if ( $key === $home ) {
-				continue;
+			if ( $key === $home || ! isset( $fetched[ $key ] ) ) {
+				continue; // Unreadable pages are already reported as unreachable URLs.
 			}
-			if ( 0 === (int) ( $incoming[ $key ] ?? 0 ) ) {
+			if ( $graph_trusted && 0 === (int) ( $incoming[ $key ] ?? 0 ) ) {
 				$add( 'orphan_page', 'architecture', 'high', 'Page has no discovered internal links pointing to it', $url, '0 incoming links in the audited page graph', 'Orphaned pages are harder for users and crawlers to discover and receive no internal link context.', 'Link to the page naturally from a relevant hub, service, category or supporting article.' );
 			}
 			if ( isset( $depth[ $key ] ) && $depth[ $key ] > 3 ) {
 				$add( 'deep_click_depth', 'architecture', $depth[ $key ] > 5 ? 'high' : 'medium', 'Important page is deep in the internal-link graph', $url, 'Minimum discovered click depth: ' . $depth[ $key ], 'Very deep pages can be harder to discover and signal weaker architectural importance.', 'Add relevant links from higher-level hubs or nearby authoritative pages.' );
-			} elseif ( ! isset( $depth[ $key ] ) ) {
+			} elseif ( $home_read && $graph_trusted && ! isset( $depth[ $key ] ) ) {
 				$add( 'unreachable_from_home', 'architecture', 'high', 'Page was not reachable from the homepage link graph', $url, 'No crawl path from the audited homepage to this URL.', 'Pages disconnected from the normal navigation/link graph are difficult to discover organically.', 'Create a logical internal-link path from a crawlable hub or navigation structure.' );
 			}
 		}
@@ -606,16 +751,28 @@ class SCC_Technical_SEO {
 			}
 		}
 
-		// Real HTTP checks for a bounded sample of linked internal targets.
+		// Real HTTP checks for a bounded sample of linked internal targets. The
+		// evidence names the page(s) holding the link, which is what gets edited.
+		$linked_from = array();
+		foreach ( $url_map as $key => $page ) {
+			foreach ( (array) ( $page['internal_link_urls'] ?? array() ) as $target ) {
+				$tkey = SCC_URL::normalize_for_crawl( (string) $target );
+				if ( '' !== $tkey && count( $linked_from[ $tkey ] ?? array() ) < 3 ) {
+					$linked_from[ $tkey ][] = (string) wp_parse_url( (string) ( $page['crawl_url'] ?? $page['url'] ?? $key ), PHP_URL_PATH );
+				}
+			}
+		}
 		foreach ( (array) ( $site['link_checks'] ?? array() ) as $check ) {
 			$status = (int) ( $check['status'] ?? 0 );
 			$url = (string) ( $check['url'] ?? '' );
+			$sources = array_values( array_unique( array_filter( $linked_from[ SCC_URL::normalize_for_crawl( $url ) ] ?? array() ) ) );
+			$from    = $sources ? ' · linked from ' . implode( ', ', $sources ) : '';
 			if ( 404 === $status || 410 === $status ) {
-				$add( 'broken_internal_link', 'architecture', 'high', 'Broken internal link detected', $url, 'HTTP ' . $status, 'Broken internal links waste crawl paths and frustrate users.', 'Update or remove links to this URL, or restore/redirect the missing destination.', 'site' );
+				$add( 'broken_internal_link', 'architecture', 'high', 'Broken internal link detected', $url, 'HTTP ' . $status . $from, 'Broken internal links waste crawl paths and frustrate users.', 'Update or remove links to this URL, or restore/redirect the missing destination.', 'site' );
 			} elseif ( $status >= 500 ) {
-				$add( 'internal_link_server_error', 'architecture', 'high', 'Internal link points to a server error', $url, 'HTTP ' . $status, 'Internal links should lead to healthy, usable destinations.', 'Fix the destination server error before continuing to link to it.', 'site' );
+				$add( 'internal_link_server_error', 'architecture', 'high', 'Internal link points to a server error', $url, 'HTTP ' . $status . $from, 'Internal links should lead to healthy, usable destinations.', 'Fix the destination server error before continuing to link to it.', 'site' );
 			} elseif ( $status >= 300 && $status < 400 ) {
-				$add( 'internal_link_redirect', 'architecture', 'medium', 'Internal links pass through redirects', $url, 'HTTP ' . $status . ( ! empty( $check['location'] ) ? ' → ' . $check['location'] : '' ), 'Internal redirect hops add latency and waste crawl budget at scale.', 'Update internal links to point directly at the final canonical URL.', 'site' );
+				$add( 'internal_link_redirect', 'architecture', 'medium', 'Internal links pass through redirects', $url, 'HTTP ' . $status . ( ! empty( $check['location'] ) ? ' → ' . $check['location'] : '' ) . $from, 'Internal redirect hops add latency and waste crawl budget at scale.', 'Update internal links to point directly at the final canonical URL.', 'site' );
 			} elseif ( 0 === $status && ! empty( $check['error'] ) ) {
 				$add( 'internal_link_unverifiable', 'crawlability', 'low', 'Some internal links could not be verified', $url, (string) $check['error'], 'An audit transport error does not prove the URL is broken, but it needs a manual check.', 'Open the URL directly and confirm it returns the intended response.', 'site' );
 			}
@@ -634,6 +791,29 @@ class SCC_Technical_SEO {
 			}
 		);
 
+		$scored = self::score_issues( $issues, count( $pages ) );
+
+		return array(
+			'score'      => $scored['score'],
+			'pages'      => count( $pages ),
+			'issues'     => $issues,
+			'counts'     => $scored['counts'],
+			'categories' => $scored['categories'],
+			'disclaimer' => 'Technical SEO Health is a TideOrbit diagnostic based on the audited URLs and observable technical signals. It is not a Google ranking score or a Core Web Vitals field-data score.',
+		);
+	}
+
+	/**
+	 * Score a set of technical issues: per-category health (each issue weighted
+	 * by severity and the share of audited pages it affects) and the overall
+	 * weighted score. Pure — also used to re-score after issues are ignored.
+	 *
+	 * @param array $issues     Issues (id, category, severity, affected_count, scope).
+	 * @param int   $page_count Pages audited.
+	 * @return array {score, categories, counts}
+	 */
+	public static function score_issues( array $issues, $page_count ) {
+		$count = max( 1, (int) $page_count );
 		$category_defs = array(
 			'indexability'       => array( 'label' => 'Indexability', 'weight' => 20 ),
 			'crawlability'       => array( 'label' => 'Crawlability', 'weight' => 15 ),
@@ -643,7 +823,9 @@ class SCC_Technical_SEO {
 			'onpage_structure'   => array( 'label' => 'HTML structure', 'weight' => 8 ),
 			'structured_data'    => array( 'label' => 'Structured data', 'weight' => 7 ),
 			'mobile_performance' => array( 'label' => 'Mobile & performance', 'weight' => 8 ),
+			'content'            => array( 'label' => 'Content depth', 'weight' => 6 ),
 			'media'              => array( 'label' => 'Images', 'weight' => 3 ),
+			'social'             => array( 'label' => 'Social sharing', 'weight' => 2 ),
 			'international'      => array( 'label' => 'International', 'weight' => 2 ),
 		);
 		$base_penalty = array( 'critical' => 55, 'high' => 30, 'medium' => 14, 'low' => 6 );
@@ -682,11 +864,76 @@ class SCC_Technical_SEO {
 
 		return array(
 			'score'      => $weights ? (int) round( $weighted / $weights ) : 100,
-			'pages'      => count( $pages ),
-			'issues'     => $issues,
-			'counts'     => $counts,
 			'categories' => $categories,
-			'disclaimer' => 'Technical SEO Health is a TideOrbit diagnostic based on the audited URLs and observable technical signals. It is not a Google ranking score or a Core Web Vitals field-data score.',
+			'counts'     => $counts,
 		);
+	}
+
+	/**
+	 * Whether a keyword is present in a piece of text. The exact phrase counts,
+	 * and so does every meaningful word of it appearing (in any order, singular
+	 * or plural), which is how people naturally phrase titles.
+	 *
+	 * @param string $keyword Target keyword.
+	 * @param string $text    Title/heading text.
+	 * @return bool
+	 */
+	public static function keyword_in( $keyword, $text ) {
+		$norm = function ( $value ) {
+			$value = strtolower( html_entity_decode( (string) $value, ENT_QUOTES, 'UTF-8' ) );
+			$value = preg_replace( '/[^\p{L}\p{N}]+/u', ' ', $value );
+			return trim( preg_replace( '/\s+/', ' ', (string) $value ) );
+		};
+		$keyword = $norm( $keyword );
+		$text    = $norm( $text );
+		if ( '' === $keyword ) {
+			return true;
+		}
+		if ( '' === $text ) {
+			return false;
+		}
+		if ( false !== strpos( ' ' . $text . ' ', ' ' . $keyword . ' ' ) ) {
+			return true;
+		}
+		$stop  = array( 'a', 'an', 'and', 'the', 'of', 'for', 'in', 'on', 'to', 'with', 'at', 'by', 'or', 'near', 'me', 'my', 'your', 'best' );
+		$words = array_flip( explode( ' ', $text ) );
+		$checked = 0;
+		foreach ( explode( ' ', $keyword ) as $token ) {
+			if ( strlen( $token ) < 2 || in_array( $token, $stop, true ) ) {
+				continue;
+			}
+			$checked++;
+			$stem = preg_replace( '/(es|s)$/', '', $token );
+			if ( ! isset( $words[ $token ] ) && ! isset( $words[ $stem ] ) && ! isset( $words[ $stem . 's' ] ) && ! isset( $words[ $stem . 'es' ] ) ) {
+				return false;
+			}
+		}
+		return $checked > 0;
+	}
+
+	/**
+	 * Whether the schema types on a page satisfy any expected type, counting
+	 * standard subtypes (a Dentist is a LocalBusiness, a NewsArticle an Article).
+	 *
+	 * @param array $found    Types present on the page.
+	 * @param array $expected Acceptable types.
+	 * @return bool
+	 */
+	public static function schema_satisfies( array $found, array $expected ) {
+		$family = array(
+			'Organization'  => array( 'Organization', 'Corporation', 'LocalBusiness', 'ProfessionalService', 'WebSite', 'NGO', 'EducationalOrganization', 'MedicalOrganization', 'Person' ),
+			'BlogPosting'   => array( 'BlogPosting', 'Article', 'NewsArticle', 'TechArticle', 'Report', 'ScholarlyArticle' ),
+			'Article'       => array( 'Article', 'BlogPosting', 'NewsArticle', 'TechArticle', 'Report', 'ScholarlyArticle' ),
+			'Service'       => array( 'Service', 'Product', 'Offer', 'LocalBusiness', 'ProfessionalService' ),
+			'LocalBusiness' => array( 'LocalBusiness', 'ProfessionalService', 'Store', 'Restaurant', 'Dentist', 'Physician', 'MedicalClinic', 'LegalService', 'Attorney', 'HomeAndConstructionBusiness', 'AutomotiveBusiness', 'FinancialService', 'HealthAndBeautyBusiness', 'RealEstateAgent', 'Plumber', 'Electrician', 'HVACBusiness', 'RoofingContractor', 'GeneralContractor' ),
+		);
+		$found = array_map( 'strval', $found );
+		foreach ( $expected as $type ) {
+			$accepted = $family[ $type ] ?? array( $type );
+			if ( array_intersect( $accepted, $found ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 }

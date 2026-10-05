@@ -35,6 +35,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<div id="scc-comp-results" hidden></div>
 
 	<div class="scc-card">
+		<h2><?php esc_html_e( 'Compare one competitor page', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Compare a single competitor page’s public structure (headings, depth, schema) with yours. Respects robots.txt.', 'seo-command-center' ); ?></p>
+		<p>
+			<input type="url" class="regular-text" id="scc-competitor-url" placeholder="https://competitor.com/services/">
+			<button class="button button-primary" id="scc-competitor-go"><?php esc_html_e( 'Analyze', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-competitor-status"></span>
+		</p>
+		<div id="scc-competitor-results"></div>
+	</div>
+
+	<div class="scc-card">
 		<div class="scc-card__head">
 			<h2><?php esc_html_e( 'Competitor debug', 'seo-command-center' ); ?></h2>
 			<button type="button" class="button" id="scc-comp-debug-refresh"><?php esc_html_e( 'Refresh debug', 'seo-command-center' ); ?></button>

@@ -76,8 +76,9 @@ class SCC_Link_Engine {
 			return array( 'outbound' => array(), 'inbound' => array() );
 		}
 
-		$thresholds = self::thresholds();
-		$others     = SCC_Content_Index::all( 3000 );
+		$thresholds   = self::thresholds();
+		$others       = SCC_Content_Index::live_rows( SCC_Content_Index::all( 3000 ) );
+		$subject_live = 'publish' === get_post_status( $post_id );
 
 		$outbound = array();
 		$inbound  = array();
@@ -99,8 +100,8 @@ class SCC_Link_Engine {
 			}
 
 			// EXISTING -> NEW: $other links to subject.
-			$rel_in = SCC_Content_Index::relevance( $other, $subject );
-			if ( $rel_in >= $thresholds['medium'] && ! self::already_links( $other, $post_id ) ) {
+			$rel_in = $subject_live ? SCC_Content_Index::relevance( $other, $subject ) : 0;
+			if ( $subject_live && $rel_in >= $thresholds['medium'] && ! self::already_links( $other, $post_id ) ) {
 				$other_text = SCC_Content_Index::get_plain_text( get_post( (int) $other['post_id'] ) );
 				$rec = $this->build_rec( (int) $other['post_id'], $post_id, $other_text, $subject, $rel_in, $others );
 				if ( $rec ) {
@@ -468,7 +469,7 @@ class SCC_Link_Engine {
 		// drafts with zero links even when relevant pages existed.
 		$min   = self::thresholds()['medium'];
 		$out   = array();
-		$rows  = SCC_Content_Index::all( 3000 );
+		$rows  = SCC_Content_Index::live_rows( SCC_Content_Index::all( 3000 ) );
 
 		foreach ( $rows as $other ) {
 			$rel = SCC_Content_Index::relevance( $subject, $other );

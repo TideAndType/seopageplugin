@@ -169,6 +169,26 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 				</td>
 			</tr>
 			<tr>
+				<th scope="row"><?php esc_html_e( 'Social sharing tags', 'seo-command-center' ); ?></th>
+				<td>
+					<?php $scc_seo_plugin = SCC_SEO_Meta::detect(); ?>
+					<label>
+						<input type="checkbox" name="output_social_tags" value="1" <?php checked( ! empty( $s['output_social_tags'] ) ); ?> <?php disabled( SCC_SEO_Meta::PLUGIN_NONE !== $scc_seo_plugin ); ?>>
+						<?php esc_html_e( 'Output Open Graph and Twitter card tags on public pages', 'seo-command-center' ); ?>
+					</label>
+					<p class="description">
+						<?php
+						if ( SCC_SEO_Meta::PLUGIN_NONE !== $scc_seo_plugin ) {
+							/* translators: %s: SEO plugin name */
+							echo esc_html( sprintf( __( '%s is active and controls social tags, so this is disabled to avoid duplicate tags. Use its social settings instead.', 'seo-command-center' ), SCC_SEO_Meta::label( $scc_seo_plugin ) ) );
+						} else {
+							esc_html_e( 'Controls how links to your pages look when shared on Facebook, LinkedIn, Slack and X — using each page’s SEO title, meta description and featured image.', 'seo-command-center' );
+						}
+						?>
+					</p>
+				</td>
+			</tr>
+			<tr>
 				<th scope="row"><?php esc_html_e( 'Elementor layout', 'seo-command-center' ); ?></th>
 				<td>
 					<label>

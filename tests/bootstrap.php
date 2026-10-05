@@ -104,6 +104,11 @@ if ( ! function_exists( 'home_url' ) ) {
 		return 'https://example.com' . $path;
 	}
 }
+if ( ! function_exists( 'remove_accents' ) ) {
+	function remove_accents( $text ) {
+		return (string) $text;
+	}
+}
 if ( ! function_exists( 'sanitize_title' ) ) {
 	function sanitize_title( $title ) {
 		$title = strtolower( (string) $title );
@@ -396,6 +401,11 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-o
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-action-queue.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-page-optimizer.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-technical-seo.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-pagespeed.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-seo-doctor.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-doctor-fixer.php';
+require_once __DIR__ . '/../seo-command-center/includes/meta/class-scc-social-tags.php';
+require_once __DIR__ . '/../seo-command-center/includes/meta/class-scc-meta-tags.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-health-timeline.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-experiments.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-entity-graph.php';

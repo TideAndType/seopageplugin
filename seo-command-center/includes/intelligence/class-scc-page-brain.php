@@ -46,7 +46,9 @@ class SCC_Page_Brain {
 		}
 		$entities = array_values( array_unique( array_merge( $entities, $secondary ) ) );
 
-		$links = SCC_Site_Knowledge::candidates_for_entry( $entry, 8 );
+		// Only published pages are link targets (a draft's URL 404s for visitors).
+		$links = SCC_Content_Index::live_rows( SCC_Site_Knowledge::candidates_for_entry( $entry, 16 ) );
+		$links = array_slice( $links, 0, 8 );
 		$risk  = SCC_Site_Knowledge::cannibalization_risk( $entry );
 		$plan  = array(
 			'version'             => 1,

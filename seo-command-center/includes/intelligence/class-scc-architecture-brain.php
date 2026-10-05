@@ -84,7 +84,8 @@ class SCC_Architecture_Brain {
 			SCC_Content_Index::reindex_all( 1000 );
 		}
 
-		$index = class_exists( 'SCC_Content_Index' ) ? SCC_Content_Index::all( 2000 ) : array();
+		// Structure is judged on what visitors can reach — drafts are not part of it yet.
+		$index = class_exists( 'SCC_Content_Index' ) ? SCC_Content_Index::live_rows( SCC_Content_Index::all( 2000 ) ) : array();
 		$gsc   = array();
 		$gsc_available = false;
 		if ( class_exists( 'SCC_GSC' ) && SCC_GSC::is_connected() && class_exists( 'SCC_GSC_Learning' ) ) {

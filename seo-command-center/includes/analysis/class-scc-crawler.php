@@ -181,6 +181,8 @@ class SCC_Crawler {
 			'h1'                        => array(),
 			'h2'                        => array(),
 			'h3'                        => array(),
+			'heading_outline'           => array(), // Ordered heading levels (1–6) in document order.
+			'og'                        => array(), // Open Graph / Twitter card tags found (lowercased property => content).
 			'text_excerpt'              => '',
 			'word_count'                => 0,
 			'schema_types'              => array(),
@@ -281,6 +283,21 @@ class SCC_Crawler {
 		foreach ( $xpath->query( '//h3' ) as $node ) {
 			$data['h3'][] = trim( $node->textContent );
 		}
+		// Full heading outline in document order (an XPath union returns nodes in
+		// document order), used to spot skipped levels such as H2 → H4.
+		foreach ( $xpath->query( '//h1 | //h2 | //h3 | //h4 | //h5 | //h6' ) as $node ) {
+			if ( '' !== trim( $node->textContent ) ) {
+				$data['heading_outline'][] = (int) substr( strtolower( $node->nodeName ), 1 );
+			}
+		}
+
+		// Open Graph + Twitter card tags (social sharing previews).
+		foreach ( $xpath->query( '//meta[@property or @name]' ) as $node ) {
+			$key = strtolower( trim( $node->hasAttribute( 'property' ) ? $node->getAttribute( 'property' ) : $node->getAttribute( 'name' ) ) );
+			if ( ( 0 === strpos( $key, 'og:' ) || 0 === strpos( $key, 'twitter:' ) ) && ! isset( $data['og'][ $key ] ) ) {
+				$data['og'][ $key ] = trim( (string) $node->getAttribute( 'content' ) );
+			}
+		}
 
 		// JSON-LD schema types (BEFORE stripping scripts below, so we keep them).
 		// Each block is parsed once, identical blocks are de-duplicated, and a
@@ -320,6 +337,41 @@ class SCC_Crawler {
 			}
 		}
 
+		// Links (internal vs external relative to host). Read before the nav/header/
+		// footer strip below: menu links are real links, and without them every page
+		// reached only from the menu looked orphaned in the audit's link graph.
+		$host = wp_parse_url( $url, PHP_URL_HOST );
+		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
+		$scheme = $scheme ? $scheme : 'https';
+		$link_seen = array();
+		foreach ( $xpath->query( '//a[@href]' ) as $a ) {
+			$href = trim( (string) $a->getAttribute( 'href' ) );
+			if ( '' === $href || 0 === strpos( $href, '#' ) || 0 === stripos( $href, 'mailto:' ) || 0 === stripos( $href, 'tel:' ) || 0 === stripos( $href, 'javascript:' ) ) {
+				continue;
+			}
+			$link_host = wp_parse_url( $href, PHP_URL_HOST );
+			if ( ! $link_host || ( $host && $link_host === $host ) ) {
+				$data['internal_links']++;
+				// Resolve the reference against the page URL (RFC 3986), then reduce
+				// it to a stable crawl identity (fragment + tracking params dropped)
+				// so the same page is not queued many times.
+				$abs = ( '' !== (string) $url && class_exists( 'SCC_URL' ) )
+					? SCC_URL::normalize_for_crawl( SCC_URL::resolve( $url, $href ) )
+					: ( $link_host ? $href : ( $scheme . '://' . $host . '/' . ltrim( $href, '/' ) ) );
+				if ( '' === $abs ) {
+					continue;
+				}
+				$path = (string) wp_parse_url( $abs, PHP_URL_PATH );
+				if ( '' !== $path && '/' !== $path && ! preg_match( '/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js|mp4|mp3|avi|mov|exe|dmg|woff2?|ttf)$/i', $path ) && ! isset( $link_seen[ $abs ] ) ) {
+					$link_seen[ $abs ]            = true;
+					$data['internal_link_urls'][] = $abs;
+				}
+			} else {
+				$data['external_links']++;
+			}
+		}
+		$data['internal_link_urls'] = array_slice( $data['internal_link_urls'], 0, 200 );
+
 		// Visible body text excerpt (drop script/style/nav/header/footer noise), so
 		// callers can compare actual page CONTENT, not just headings.
 		foreach ( $xpath->query( '//script | //style | //noscript | //nav | //header | //footer | //form' ) as $strip ) {
@@ -354,40 +406,6 @@ class SCC_Crawler {
 			}
 		}
 
-
-		// Links (internal vs external relative to host).
-		$host = wp_parse_url( $url, PHP_URL_HOST );
-		$scheme = wp_parse_url( $url, PHP_URL_SCHEME );
-		$scheme = $scheme ? $scheme : 'https';
-		$link_seen = array();
-		foreach ( $xpath->query( '//a[@href]' ) as $a ) {
-			$href = trim( (string) $a->getAttribute( 'href' ) );
-			if ( '' === $href || 0 === strpos( $href, '#' ) || 0 === stripos( $href, 'mailto:' ) || 0 === stripos( $href, 'tel:' ) || 0 === stripos( $href, 'javascript:' ) ) {
-				continue;
-			}
-			$link_host = wp_parse_url( $href, PHP_URL_HOST );
-			if ( ! $link_host || ( $host && $link_host === $host ) ) {
-				$data['internal_links']++;
-				// Resolve the reference against the page URL (RFC 3986), then reduce
-				// it to a stable crawl identity (fragment + tracking params dropped)
-				// so the same page is not queued many times.
-				$abs = ( '' !== (string) $url && class_exists( 'SCC_URL' ) )
-					? SCC_URL::normalize_for_crawl( SCC_URL::resolve( $url, $href ) )
-					: ( $link_host ? $href : ( $scheme . '://' . $host . '/' . ltrim( $href, '/' ) ) );
-				if ( '' === $abs ) {
-					continue;
-				}
-				$path = (string) wp_parse_url( $abs, PHP_URL_PATH );
-				if ( '' !== $path && '/' !== $path && ! preg_match( '/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|css|js|mp4|mp3|avi|mov|exe|dmg|woff2?|ttf)$/i', $path ) && ! isset( $link_seen[ $abs ] ) ) {
-					$link_seen[ $abs ]            = true;
-					$data['internal_link_urls'][] = $abs;
-				}
-			} else {
-				$data['external_links']++;
-			}
-		}
-		$data['internal_link_urls'] = array_slice( $data['internal_link_urls'], 0, 60 );
-
 		return $data;
 	}
 
@@ -400,6 +418,14 @@ class SCC_Crawler {
 	protected function extract_schema_types( $json ) {
 		$types = array();
 		if ( ! is_array( $json ) ) {
+			return $types;
+		}
+		// A JSON-LD block may be a plain list of nodes rather than a single node
+		// or an @graph wrapper.
+		if ( array_values( $json ) === $json ) {
+			foreach ( $json as $item ) {
+				$types = array_merge( $types, $this->extract_schema_types( $item ) );
+			}
 			return $types;
 		}
 		if ( isset( $json['@type'] ) ) {

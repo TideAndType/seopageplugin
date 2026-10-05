@@ -75,7 +75,8 @@ class SCC_GSC {
 		if ( empty( $c['gsc_client_id'] ) || empty( $c['gsc_client_secret'] ) ) {
 			return new WP_Error(
 				'scc_no_client',
-				__( 'Complete the one-time Google app setup first: save the OAuth Client ID and Client Secret, then click Connect Google Search Console.', 'seo-command-center' )
+				__( 'Complete the one-time Google app setup first: save the OAuth Client ID and Client Secret, then click Connect Google Search Console.', 'seo-command-center' ),
+				array( 'status' => 400 )
 			);
 		}
 		$state = wp_generate_password( 32, false );

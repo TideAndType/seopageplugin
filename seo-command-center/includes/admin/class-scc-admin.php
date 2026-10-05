@@ -81,6 +81,7 @@ class SCC_Admin {
 			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-citation-scanner' => array( __( 'Citation Scanner', 'seo-command-center' ), 'render_citation_scanner' ),
+			self::SLUG . '-growth-lab'       => array( __( 'Growth Lab', 'seo-command-center' ), 'render_growth_lab' ),
 			self::SLUG . '-aeo'              => array( __( 'AEO / AI Citations', 'seo-command-center' ), 'render_aeo' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
@@ -120,7 +121,6 @@ class SCC_Admin {
 					'actions' => array( __( 'Action Queue', 'seo-command-center' ), self::SLUG . '-action-queue', 'render_action_queue' ),
 					'links'   => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
 					'meta'    => array( __( 'Meta Editor', 'seo-command-center' ), self::SLUG . '-meta-editor', 'render_meta_editor' ),
-					'audit'   => array( __( 'Site Audit', 'seo-command-center' ), self::SLUG . '-seo-audit', 'render_seo_audit' ),
 				),
 			),
 			// OPPORTUNITIES — where's the upside. The ranked opportunity list leads.
@@ -132,6 +132,7 @@ class SCC_Admin {
 					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
 					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
 					'citations'    => array( __( 'Local Citations', 'seo-command-center' ), self::SLUG . '-citation-scanner', 'render_citation_scanner' ),
+					'growth'       => array( __( 'Growth Lab', 'seo-command-center' ), self::SLUG . '-growth-lab', 'render_growth_lab' ),
 					'aeo'          => array( __( 'AEO / AI Citations', 'seo-command-center' ), self::SLUG . '-aeo', 'render_aeo' ),
 					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
@@ -398,18 +399,13 @@ class SCC_Admin {
 	 * Dashboard page.
 	 */
 	public function render_dashboard() {
-		$latest = SCC_Analyzer::latest();
-		// Top opportunities are read from cache so the dashboard stays fast; the
-		// "Refresh" button recomputes on demand.
-		$opportunities = class_exists( 'SCC_Opportunity_Engine' ) ? SCC_Opportunity_Engine::top( 5 ) : array();
 		$this->view(
 			'dashboard',
 			array(
-				'latest'        => $latest,
 				'seo_plugin'    => SCC_SEO_Meta::label( SCC_SEO_Meta::detect() ),
 				'elementor'     => defined( 'ELEMENTOR_VERSION' ),
 				'usage'         => SCC_AI_Usage::month_summary(),
-				'opportunities' => $opportunities,
+				'doctor'        => class_exists( 'SCC_SEO_Doctor' ) ? SCC_SEO_Doctor::report() : null,
 			)
 		);
 	}
@@ -500,7 +496,8 @@ class SCC_Admin {
 		$this->view(
 			'keyword-strategy',
 			array(
-				'strategy' => SCC_Keyword_Strategy::latest(),
+				'strategy'      => SCC_Keyword_Strategy::latest(),
+				'gsc_connected' => class_exists( 'SCC_GSC' ) && SCC_GSC::is_connected(),
 			)
 		);
 	}
@@ -672,6 +669,24 @@ class SCC_Admin {
 	}
 
 	/**
+	 * SEO Growth Lab: preflight, GSC authority routing, measured cannibalization,
+	 * local Maps grid, backlink gaps and Core Web Vitals root-cause clustering.
+	 */
+	public function render_growth_lab() {
+		$pages = get_posts(
+			array(
+				'post_type'      => array( 'page', 'post' ),
+				'post_status'    => array( 'draft', 'pending', 'future', 'publish' ),
+				'posts_per_page' => 150,
+				'no_found_rows'  => true,
+				'orderby'        => 'modified',
+				'order'          => 'DESC',
+			)
+		);
+		$this->view( 'growth-lab', array( 'pages' => $pages ) );
+	}
+
+	/**
 	 * Answer Engine Optimization / AI citation readiness.
 	 */
 	public function render_aeo() {
@@ -769,20 +784,27 @@ class SCC_Admin {
 	}
 
 	/**
-	 * SEO Audit page (cannibalization for now; expands in later phases).
+	 * Legacy Site Audit URL. The audit now lives in the SEO Doctor on the
+	 * Dashboard; admin_init redirects there. This fallback only renders if the
+	 * redirect could not happen (e.g. headers already sent).
 	 */
 	public function render_seo_audit() {
-		$detector = new SCC_Cannibalization();
-		$this->view(
-			'seo-audit',
-			array(
-				'technical'            => SCC_Technical_SEO::report(),
-				'cannibalization'      => $detector->detect(),
-				'has_analysis'         => (bool) SCC_Analyzer::latest(),
-				'gsc_connected'        => SCC_GSC::is_connected(),
-				'dataforseo_connected' => SCC_DataForSEO::is_connected(),
-			)
-		);
+		$url = admin_url( 'admin.php?page=' . self::SLUG . '#scc-doctor' );
+		echo '<div class="wrap scc-wrap"><div class="scc-card"><h2>' . esc_html__( 'Site Audit is now part of the SEO Doctor', 'seo-command-center' ) . '</h2><p><a class="button button-primary" href="' . esc_url( $url ) . '">' . esc_html__( 'Open the SEO Doctor', 'seo-command-center' ) . '</a></p></div></div>';
+	}
+
+	/**
+	 * Send old links to screens that were merged into the SEO Doctor.
+	 */
+	public function maybe_redirect_legacy_screens() {
+		if ( ! is_admin() || wp_doing_ajax() || ! SCC_Security::current_user_can() ) {
+			return;
+		}
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( self::SLUG . '-seo-audit' === $page ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '#scc-doctor' ) );
+			exit;
+		}
 	}
 
 	/**
@@ -874,7 +896,6 @@ class SCC_Admin {
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 3 ),
 			self::SLUG . '-elementor'        => array( __( 'Elementor Templates', 'seo-command-center' ), 4 ),
 			self::SLUG . '-internal-links'   => array( __( 'Internal Links', 'seo-command-center' ), 5 ),
-			self::SLUG . '-seo-audit'        => array( __( 'SEO Audit', 'seo-command-center' ), 3 ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 3 ),
 			self::SLUG . '-publishing'       => array( __( 'Publishing Queue', 'seo-command-center' ), 7 ),
 		);

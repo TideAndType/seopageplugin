@@ -395,6 +395,7 @@ class SCC_AEO_Expert {
 			}
 			$out[] = array(
 				'key'      => 'page-' . (int) $page['post_id'],
+				'post_id'  => (int) $page['post_id'],
 				'priority' => 74,
 				'title'    => sprintf( __( 'Improve AI citation readiness: %s', 'seo-command-center' ), (string) $page['title'] ),
 				'url'      => (string) $page['url'],
