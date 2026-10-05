@@ -104,6 +104,11 @@ if ( ! function_exists( 'home_url' ) ) {
 		return 'https://example.com' . $path;
 	}
 }
+if ( ! function_exists( 'remove_accents' ) ) {
+	function remove_accents( $text ) {
+		return (string) $text;
+	}
+}
 if ( ! function_exists( 'sanitize_title' ) ) {
 	function sanitize_title( $title ) {
 		$title = strtolower( (string) $title );
