@@ -387,6 +387,7 @@ class SCC_Block_Elementor_Renderer {
 			'_elementor_version',
 			'_wp_page_template',
 			'_scc_generated',
+			'_scc_elementor_design_source',
 		);
 		$meta = array();
 		foreach ( $keys as $key ) {
