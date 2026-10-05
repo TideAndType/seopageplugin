@@ -57,7 +57,12 @@ class SCC_Browser_Runtime {
 			self::set_status( 'offline', $result->get_error_message() );
 			return $result;
 		}
-		self::set_status( 'online', __( 'TideOrbit Browser Bridge is online.', 'seo-command-center' ), $result );
+		if ( array_key_exists( 'browserReady', $result ) && empty( $result['browserReady'] ) ) {
+			$error = new WP_Error( 'scc_browser_not_ready', __( 'The bridge is online, but Chromium is not installed or ready on the scanner machine.', 'seo-command-center' ) );
+			self::set_status( 'offline', $error->get_error_message(), $result );
+			return $error;
+		}
+		self::set_status( 'online', __( 'TideOrbit Browser Bridge and Chromium are online.', 'seo-command-center' ), $result );
 		return $result;
 	}
 
@@ -67,6 +72,11 @@ class SCC_Browser_Runtime {
 		}
 		if ( empty( $args['business_name'] ) && empty( $args['place_id'] ) ) {
 			return new WP_Error( 'scc_browser_target_required', __( 'The browser scanner needs a business name or Place ID to identify your listing.', 'seo-command-center' ) );
+		}
+
+		$health = self::health();
+		if ( is_wp_error( $health ) ) {
+			return $health;
 		}
 
 		$points = SCC_Local_Grid::grid_points( $args['lat'], $args['lng'], $args['size'], $args['spacing_km'] );
