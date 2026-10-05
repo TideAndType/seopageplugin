@@ -11,7 +11,7 @@ templates — always as **drafts you approve**, never auto-published by default.
 
 ## Status
 
-**Current version: 1.81.1.** The plugin is organized around four areas —
+**Current version: 1.82.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,
@@ -48,6 +48,7 @@ and the hardening + simplification passes are implemented. See
   competitor gap analysis.
 
 **Recent passes (this branch)**
+- **v1.82.0 — SEO Growth Lab + Publish Preflight:** Adds a measured growth layer on top of the existing SEO Doctor and Opportunity Engine. TideOrbit-generated pages now run a site-aware preflight before TideOrbit publishes or schedules them, catching repeated long passages, duplicate FAQs, likely wrong-city template bleed, weak title/intent alignment and Search Console cannibalization evidence. The new **Opportunities → Growth Lab** adds Search Console-backed cannibalization groups with a recommended keeper URL, GSC-weighted internal-link authority routing with a safe **Strengthen page** action, a DataForSEO-powered Google Maps 3×3/5×5 geo-grid tracker, DataForSEO backlink-gap discovery/classification, and Core Web Vitals root-cause clustering by shared WordPress/Elementor template signature. Maps and backlink data are measured only when DataForSEO is connected, GSC features stay unavailable rather than inventing rankings when Search Console is disconnected, and redirects/link acquisition remain review-first rather than automatic.
 - **v1.81.1 — Bug fixes from a live test site:** Ran the plugin on a real WordPress install and fixed what broke.
   - **Titles and descriptions now reach the page.** Without an SEO plugin, TideOrbit saved your SEO title and meta description but never printed them, so the Meta Editor and the Doctor's “Write description” fix had no visible effect. They are now output (`<title>` and `<meta name="description">`), and only when no SEO plugin is active (Yoast, Rank Math, AIOSEO, The SEO Framework, SEOPress, Slim SEO, Squirrly or SmartCrawl).
   - **No more false “orphan page” alarms.** The crawler dropped menu, header and footer links, so every page reached only from the menu was reported as orphaned and unreachable. Menu links now count. A crawl that couldn't read most pages (or the homepage) no longer reports every page as orphaned.
