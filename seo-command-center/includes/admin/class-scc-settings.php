@@ -91,6 +91,8 @@ class SCC_Settings {
 			'meta_storage'             => 'text',
 			'default_renderer'         => 'text',
 			'gsc_site_url'             => 'text',
+			'browser_runtime_mode'      => 'text',
+			'browser_runtime_url'       => 'url',
 			'draft_by_default'         => 'bool',
 			'auto_publish'             => 'bool',
 			'monthly_budget'           => 'float',
@@ -156,7 +158,7 @@ class SCC_Settings {
 			$creds = array();
 		}
 
-		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token', 'pagespeed_key' );
+		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token', 'pagespeed_key', 'browser_runtime_key' );
 		foreach ( $fields as $field ) {
 			if ( ! array_key_exists( $field, $input ) ) {
 				continue;
@@ -182,7 +184,7 @@ class SCC_Settings {
 	 */
 	public static function credential_hints() {
 		$creds  = get_option( 'scc_credentials', array() );
-		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token', 'pagespeed_key' );
+		$fields = array( 'claude_key', 'openai_key', 'gemini_key', 'lmstudio_key', 'dataforseo_login', 'dataforseo_key', 'gsc_client_id', 'gsc_client_secret', 'gsc_refresh_token', 'pagespeed_key', 'browser_runtime_key' );
 		$out    = array();
 		foreach ( $fields as $field ) {
 			$value = isset( $creds[ $field ] ) ? (string) $creds[ $field ] : '';
