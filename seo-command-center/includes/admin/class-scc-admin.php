@@ -81,6 +81,7 @@ class SCC_Admin {
 			self::SLUG . '-topical-authority'=> array( __( 'Topical Authority', 'seo-command-center' ), 'render_topical_authority' ),
 			self::SLUG . '-competitors'      => array( __( 'Competitors', 'seo-command-center' ), 'render_competitors' ),
 			self::SLUG . '-citation-scanner' => array( __( 'Citation Scanner', 'seo-command-center' ), 'render_citation_scanner' ),
+			self::SLUG . '-growth-lab'       => array( __( 'Growth Lab', 'seo-command-center' ), 'render_growth_lab' ),
 			self::SLUG . '-aeo'              => array( __( 'AEO / AI Citations', 'seo-command-center' ), 'render_aeo' ),
 			self::SLUG . '-site-analysis'    => array( __( 'Site Analysis', 'seo-command-center' ), 'render_site_analysis' ),
 			self::SLUG . '-schema'           => array( __( 'Schema', 'seo-command-center' ), 'render_schema_info' ),
@@ -131,6 +132,7 @@ class SCC_Admin {
 					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
 					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
 					'citations'    => array( __( 'Local Citations', 'seo-command-center' ), self::SLUG . '-citation-scanner', 'render_citation_scanner' ),
+					'growth'       => array( __( 'Growth Lab', 'seo-command-center' ), self::SLUG . '-growth-lab', 'render_growth_lab' ),
 					'aeo'          => array( __( 'AEO / AI Citations', 'seo-command-center' ), self::SLUG . '-aeo', 'render_aeo' ),
 					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
@@ -664,6 +666,24 @@ class SCC_Admin {
 	 */
 	public function render_citation_scanner() {
 		$this->view( 'citation-scanner', array() );
+	}
+
+	/**
+	 * SEO Growth Lab: preflight, GSC authority routing, measured cannibalization,
+	 * local Maps grid, backlink gaps and Core Web Vitals root-cause clustering.
+	 */
+	public function render_growth_lab() {
+		$pages = get_posts(
+			array(
+				'post_type'      => array( 'page', 'post' ),
+				'post_status'    => array( 'draft', 'pending', 'future', 'publish' ),
+				'posts_per_page' => 150,
+				'no_found_rows'  => true,
+				'orderby'        => 'modified',
+				'order'          => 'DESC',
+			)
+		);
+		$this->view( 'growth-lab', array( 'pages' => $pages ) );
 	}
 
 	/**
