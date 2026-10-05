@@ -2672,6 +2672,7 @@ require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-g
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-link-boost.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-preflight.php';
 require_once __DIR__ . '/../seo-command-center/includes/local/class-scc-local-grid.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php';
 require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-backlink-gap.php';
 
 // Search Console cannibalization uses measured query+page rows and picks a keeper.
@@ -2747,6 +2748,65 @@ $publishing_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/
 assert_true( false !== strpos( $publishing_src, 'SCC_Preflight::evaluate' ), 'TideOrbit publishing is wired through SEO Preflight' );
 $admin_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php' );
 assert_true( false !== strpos( $admin_src, "'growth'") && false !== strpos( $admin_src, 'render_growth_lab' ), 'Growth Lab is wired into Opportunities' );
+
+echo "\n== TideOrbit 1.84 Browser Runtime ==\n";
+$browser_job = array(
+	'scan_id' => 'scan-abc',
+	'args' => array(
+		'keyword' => 'marketing agency',
+		'business_name' => 'Tide & Type Co.',
+		'domain' => 'tideandtype.com',
+		'lat' => 29.2858,
+		'lng' => -81.0559,
+		'size' => 3,
+		'spacing_km' => 1.0,
+	),
+	'points' => SCC_Local_Grid::grid_points( 29.2858, -81.0559, 3, 1.0 ),
+);
+$expected_points = $browser_job['points'];
+$browser_scan = array(
+	'id' => 'scan-abc',
+	'status' => 'COMPLETED',
+	'keyword' => 'marketing agency',
+	'businessName' => 'Tide & Type Co.',
+	'centerLat' => 29.2858,
+	'centerLng' => -81.0559,
+	'gridSize' => 3,
+	'results' => array(
+		array(
+			'lat' => $expected_points[0]['lat'],
+			'lng' => $expected_points[0]['lng'],
+			'rank' => 2,
+			'targetName' => 'Tide & Type Co.',
+			'placeId' => 'ChIJ-test',
+			'topResults' => array( array( 'name' => 'Tide & Type Co.', 'rank' => 2 ) ),
+		),
+		array(
+			'lat' => $expected_points[1]['lat'],
+			'lng' => $expected_points[1]['lng'],
+			'rank' => null,
+			'targetName' => null,
+			'placeId' => null,
+			'topResults' => array( array( 'name' => 'Competitor', 'rank' => 1 ) ),
+		),
+	),
+);
+$normalized_browser = SCC_Browser_Runtime::normalize_grid_result( $browser_scan, $browser_job );
+assert_eq( 'browser', $normalized_browser['engine'], 'browser bridge results identify their execution engine' );
+assert_eq( 'TideOrbit Browser via Cloudflare Tunnel', $normalized_browser['provider'], 'browser bridge result records the tunnel provider' );
+assert_eq( 9, $normalized_browser['total_points'], 'browser result preserves the expected 3x3 geometry even when some point rows are absent' );
+assert_eq( 1, $normalized_browser['found_points'], 'browser result counts only measured target ranks' );
+assert_eq( 2, $normalized_browser['points'][0]['rank'], 'browser point rank maps back to the correct grid coordinate' );
+assert_eq( null, $normalized_browser['points'][1]['rank'], 'a measured not-found point remains rank null rather than becoming an error rank' );
+assert_true( false !== strpos( $normalized_browser['points'][2]['error'], 'No result returned' ), 'missing browser point is explicitly marked instead of silently treated as not ranked' );
+
+$runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php' );
+assert_true( false !== strpos( $runtime_src, "'auto' === self::mode()") && false !== strpos( $runtime_src, 'scan_dataforseo' ), 'Automatic Browser Runtime contains a DataForSEO failure fallback' );
+assert_true( false !== strpos( $runtime_src, 'X-TideOrbit-Key' ), 'browser bridge requests carry the pairing key header' );
+$main_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/seo-command-center.php' );
+assert_true( false !== strpos( $main_src, 'SCC_Browser_Runtime::CRON_HOOK' ), 'async browser polling is registered with WordPress cron' );
+$grid_view_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/growth-lab.php' );
+assert_true( false !== strpos( $grid_view_src, 'Automatic: Browser') && false !== strpos( $grid_view_src, 'Test Browser Bridge' ), 'Growth Lab exposes automatic runtime setup and connection testing' );
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
