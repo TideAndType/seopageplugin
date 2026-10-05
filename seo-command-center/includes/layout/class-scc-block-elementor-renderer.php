@@ -174,6 +174,102 @@ class SCC_Block_Elementor_Renderer {
 		return true;
 	}
 
+
+	/**
+	 * Apply a pre-validated Elementor element tree produced by TideOrbit's
+	 * composition compiler. This intentionally shares the same snapshot,
+	 * verification and rollback guarantees as the legacy block renderer.
+	 *
+	 * @param int         $post_id Target post id.
+	 * @param array       $elements Validated Elementor element tree.
+	 * @param string|null $native_html Crawlable fallback; null preserves current content.
+	 * @param string      $source Log source label.
+	 * @return true|WP_Error
+	 */
+	public static function apply_tree_to_post( $post_id, array $elements, $native_html = null, $source = 'composition-agent' ) {
+		$post_id = (int) $post_id;
+		$post = get_post( $post_id );
+		if ( ! $post ) {
+			return new WP_Error( 'scc_no_post', __( 'Target post not found.', 'seo-command-center' ) );
+		}
+		if ( ! class_exists( 'SCC_Elementor' ) || ! SCC_Elementor::is_active() ) {
+			return new WP_Error( 'scc_no_elementor', __( 'Elementor is not active.', 'seo-command-center' ) );
+		}
+		if ( empty( $elements ) ) {
+			return new WP_Error( 'scc_empty_layout', __( 'The composition produced no Elementor elements.', 'seo-command-center' ) );
+		}
+
+		$elementor_json = wp_json_encode( array_values( $elements ) );
+		if ( ! is_string( $elementor_json ) || '' === $elementor_json ) {
+			return new WP_Error( 'scc_elementor_encode', __( 'Could not encode the Elementor composition.', 'seo-command-center' ) );
+		}
+
+		$snapshot = self::snapshot_post( $post_id );
+		if ( ! self::update_meta_verified( $post_id, '_scc_elementor_backup', $snapshot, $snapshot ) ) {
+			return new WP_Error( 'scc_backup_failed', __( 'Could not create a rollback snapshot, so the existing page was left unchanged.', 'seo-command-center' ) );
+		}
+		if ( function_exists( 'wp_save_post_revision' ) ) {
+			wp_save_post_revision( $post_id );
+		}
+
+		$post_type = get_post_type( $post_id );
+		$writes = array(
+			array( '_elementor_data', wp_slash( $elementor_json ), $elementor_json ),
+			array( '_elementor_edit_mode', 'builder', 'builder' ),
+			array( '_elementor_template_type', 'page' === $post_type ? 'wp-page' : 'wp-post', 'page' === $post_type ? 'wp-page' : 'wp-post' ),
+		);
+		if ( defined( 'ELEMENTOR_VERSION' ) ) {
+			$writes[] = array( '_elementor_version', ELEMENTOR_VERSION, ELEMENTOR_VERSION );
+		}
+		$page_tpl = (string) apply_filters( 'scc_elementor_page_template', 'elementor_header_footer', $post_type, $post_type );
+		if ( '' !== $page_tpl && 'default' !== $page_tpl ) {
+			$writes[] = array( '_wp_page_template', $page_tpl, $page_tpl );
+		}
+		if ( '' === (string) get_post_meta( $post_id, '_scc_generated', true ) ) {
+			$generated = current_time( 'mysql' );
+			$writes[] = array( '_scc_generated', $generated, $generated );
+		}
+		$writes[] = array( '_scc_elementor_design_source', sanitize_key( (string) $source ), sanitize_key( (string) $source ) );
+
+		foreach ( $writes as $write ) {
+			if ( ! self::update_meta_verified( $post_id, $write[0], $write[1], $write[2] ) ) {
+				self::restore_snapshot( $post_id, $snapshot );
+				return new WP_Error(
+					'scc_elementor_write',
+					sprintf(
+						/* translators: %s: post-meta key */
+						__( 'Could not save Elementor field %s. The previous page was restored.', 'seo-command-center' ),
+						$write[0]
+					)
+				);
+			}
+		}
+
+		$native_html = null === $native_html ? (string) $post->post_content : (string) $native_html;
+		$updated = wp_update_post( array( 'ID' => $post_id, 'post_content' => $native_html ), true );
+		if ( is_wp_error( $updated ) || ! $updated ) {
+			self::restore_snapshot( $post_id, $snapshot );
+			$message = is_wp_error( $updated ) ? $updated->get_error_message() : __( 'Unknown WordPress update error.', 'seo-command-center' );
+			return new WP_Error(
+				'scc_post_update',
+				sprintf( __( 'Could not update the page content (%s). The previous page was restored.', 'seo-command-center' ), $message )
+			);
+		}
+
+		if ( class_exists( '\\Elementor\\Plugin' ) && isset( \Elementor\Plugin::$instance->files_manager ) ) {
+			\Elementor\Plugin::$instance->files_manager->clear_cache();
+		}
+		if ( class_exists( 'SCC_Logger' ) ) {
+			SCC_Logger::info( 'layout', 'Elementor composition applied', array(
+				'post_id' => $post_id,
+				'elements' => count( $elements ),
+				'source' => sanitize_key( (string) $source ),
+			) );
+		}
+		return true;
+	}
+
+
 	/**
 	 * Append one reviewed content section to an existing Elementor document
 	 * without rebuilding or replacing the rest of the page.
