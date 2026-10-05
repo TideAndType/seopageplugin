@@ -387,4 +387,103 @@ class SCC_PageSpeed {
 			'disclaimer' => __( 'Speed data comes from Google PageSpeed Insights. Field data reflects real Chrome visitors; lab data is a single simulated test and is labelled as such.', 'seo-command-center' ),
 		);
 	}
+
+	/**
+	 * Group measured speed problems by WordPress/Elementor template signature so
+	 * one root-cause fix can be prioritized over page-by-page whack-a-mole.
+	 *
+	 * @param array|null $report Stored PageSpeed report, or null for latest.
+	 * @return array
+	 */
+	public static function cluster_report( $report = null ) {
+		$report = is_array( $report ) ? $report : self::report();
+		if ( ! is_array( $report ) || empty( $report['results'] ) ) {
+			return array( 'available' => false, 'clusters' => array() );
+		}
+		$signatures = array();
+		foreach ( (array) $report['results'] as $r ) {
+			$post_id = (int) ( $r['post_id'] ?? 0 );
+			$signatures[ $post_id ] = self::template_signature( $post_id );
+		}
+		return array(
+			'available' => true,
+			'clusters' => self::cluster_results( (array) $report['results'], $signatures ),
+			'strategy' => (string) ( $report['strategy'] ?? 'mobile' ),
+		);
+	}
+
+	/**
+	 * Pure clustering helper used by the dependency-free tests.
+	 *
+	 * @param array $results    PageSpeed result rows.
+	 * @param array $signatures post_id => template signature.
+	 * @return array
+	 */
+	public static function cluster_results( array $results, array $signatures ) {
+		$groups = array();
+		foreach ( $results as $r ) {
+			if ( empty( $r['ok'] ) ) { continue; }
+			$post_id = (int) ( $r['post_id'] ?? 0 );
+			$sig = (string) ( $signatures[ $post_id ] ?? 'unknown' );
+			if ( ! isset( $groups[ $sig ] ) ) {
+				$groups[ $sig ] = array(
+					'signature' => $sig, 'pages' => array(), 'scores' => array(),
+					'slow_lcp' => 0, 'bad_cls' => 0, 'slow_interaction' => 0,
+				);
+			}
+			$field = is_array( $r['field'] ?? null ) ? $r['field'] : null;
+			$lab   = is_array( $r['lab'] ?? null ) ? $r['lab'] : null;
+			$data  = $field ? $field : ( $lab ? $lab : array() );
+			if ( isset( $r['performance'] ) && is_numeric( $r['performance'] ) ) {
+				$groups[ $sig ]['scores'][] = (int) $r['performance'];
+			}
+			if ( isset( $data['lcp_ms'] ) && 'good' !== self::rate( 'lcp_ms', $data['lcp_ms'] ) ) {
+				$groups[ $sig ]['slow_lcp']++;
+			}
+			if ( isset( $data['cls'] ) && 'good' !== self::rate( 'cls', $data['cls'] ) ) {
+				$groups[ $sig ]['bad_cls']++;
+			}
+			$interaction = $field ? ( $field['inp_ms'] ?? null ) : ( $lab['tbt_ms'] ?? null );
+			$metric = $field ? 'inp_ms' : 'tbt_ms';
+			if ( null !== $interaction && 'good' !== self::rate( $metric, $interaction ) ) {
+				$groups[ $sig ]['slow_interaction']++;
+			}
+			$groups[ $sig ]['pages'][] = array(
+				'post_id' => $post_id,
+				'url' => (string) ( $r['url'] ?? '' ),
+				'performance' => isset( $r['performance'] ) ? $r['performance'] : null,
+			);
+		}
+
+		$out = array();
+		foreach ( $groups as $g ) {
+			$count = count( $g['pages'] );
+			$problem_count = max( $g['slow_lcp'], $g['bad_cls'], $g['slow_interaction'] );
+			$g['page_count'] = $count;
+			$g['average_performance'] = $g['scores'] ? (int) round( array_sum( $g['scores'] ) / count( $g['scores'] ) ) : null;
+			$g['root_cause_likelihood'] = $count >= 2 && $problem_count >= (int) ceil( $count / 2 ) ? 'high' : ( $problem_count > 0 ? 'medium' : 'low' );
+			$g['recommendation'] = 'high' === $g['root_cause_likelihood']
+				? 'Multiple pages sharing this template fail the same speed signal. Fix the shared template, widget stack, hero/media pattern or scripts before tuning individual pages.'
+				: 'Review page-specific assets first; the measurements do not yet show a strong shared-template pattern.';
+			unset( $g['scores'] );
+			$out[] = $g;
+		}
+		$rank = array( 'high' => 3, 'medium' => 2, 'low' => 1 );
+		usort( $out, function ( $a, $b ) use ( $rank ) {
+			$r = ( $rank[ $b['root_cause_likelihood'] ] ?? 0 ) <=> ( $rank[ $a['root_cause_likelihood'] ] ?? 0 );
+			return 0 !== $r ? $r : $b['page_count'] <=> $a['page_count'];
+		} );
+		return $out;
+	}
+
+	protected static function template_signature( $post_id ) {
+		if ( ! $post_id ) { return 'homepage-or-unknown'; }
+		$builder = get_post_meta( $post_id, '_elementor_edit_mode', true ) ? 'elementor' : 'native';
+		$type = function_exists( 'get_post_type' ) ? (string) get_post_type( $post_id ) : 'post';
+		$template = function_exists( 'get_page_template_slug' ) ? (string) get_page_template_slug( $post_id ) : '';
+		if ( '' === $template ) { $template = 'default'; }
+		$kit = (int) get_post_meta( $post_id, '_elementor_page_settings', true ) ? 'custom-settings' : 'site-settings';
+		return $builder . ' · ' . $type . ' · ' . $template . ' · ' . $kit;
+	}
+
 }
