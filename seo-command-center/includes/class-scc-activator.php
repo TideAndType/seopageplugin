@@ -109,6 +109,9 @@ class SCC_Activator {
 			'default_renderer'       => 'gutenberg',
 			// Google Search Console property (e.g. sc-domain:example.com or https://example.com/).
 			'gsc_site_url'           => '',
+			// Browser Runtime: Automatic prefers paired Chromium and falls back to DataForSEO.
+			'browser_runtime_mode'    => 'auto',
+			'browser_runtime_url'     => '',
 			// Publishing.
 			'draft_by_default'      => true,
 			'auto_publish'          => false,
