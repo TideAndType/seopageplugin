@@ -2605,6 +2605,88 @@ assert_true( 1 === preg_match( "/function templates_clone.*?'missing_id'.*?400.*
 $gsc_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php' );
 assert_true( 1 === preg_match( "/'scc_no_client',[^;]*'status' => 400/s", $gsc_src ), 'Search Console auth URL without the Google app set up returns 400' );
 
+
+echo "\n== TideOrbit 1.82 Growth Lab ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-gsc-cannibalization.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-link-boost.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-preflight.php';
+require_once __DIR__ . '/../seo-command-center/includes/local/class-scc-local-grid.php';
+require_once __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-backlink-gap.php';
+
+// Search Console cannibalization uses measured query+page rows and picks a keeper.
+$gsc_groups = SCC_GSC_Cannibalization::analyze_rows(
+	array(
+		array( 'keys' => array( 'marketing agency', 'https://example.com/marketing/' ), 'clicks' => 10, 'impressions' => 100, 'position' => 4.0 ),
+		array( 'keys' => array( 'marketing agency', 'https://example.com/daytona/' ), 'clicks' => 1, 'impressions' => 60, 'position' => 8.0 ),
+		array( 'keys' => array( 'unrelated query', 'https://example.com/one/' ), 'clicks' => 1, 'impressions' => 20, 'position' => 10.0 ),
+	),
+	1
+);
+assert_eq( 1, count( $gsc_groups ), 'GSC cannibalization requires multiple URLs for the same query' );
+assert_eq( 'high', $gsc_groups[0]['risk'], 'meaningful split with close positions is high-risk cannibalization' );
+assert_eq( 'https://example.com/marketing/', $gsc_groups[0]['keeper']['url'], 'strongest GSC URL becomes the recommended keeper' );
+assert_eq( 2, count( $gsc_groups[0]['pages'] ), 'both competing URLs are retained as evidence' );
+
+// Preflight catches exact repetition/FAQ duplication and compares target intent.
+$repeat_sentence = 'This is a sufficiently long sentence about local search strategy that contains many useful words for a real business owner.';
+$passage_dupes = SCC_Preflight::duplicate_passages( $repeat_sentence . ' Another unique sentence appears here with enough detail to be useful. ' . $repeat_sentence );
+assert_eq( 1, count( $passage_dupes ), 'preflight detects a repeated long passage' );
+$faq_dupes = SCC_Preflight::duplicate_questions( 'How long does local SEO take? It varies. How long does local SEO take? Usually several months.' );
+assert_eq( 1, count( $faq_dupes ), 'preflight detects a duplicate FAQ question' );
+assert_true( SCC_Preflight::token_overlap( 'Ormond Beach web design', 'Web Design in Ormond Beach, Florida' ) > 0.9, 'preflight title/intent overlap recognizes a strong match' );
+
+// GSC link boosting should prioritize a natural link into a page already near page one.
+$link_rec = array( 'confidence' => 88, 'natural' => true );
+$near_score = SCC_Link_Boost::score_candidate(
+	$link_rec,
+	array( 'position' => 7.2, 'impressions' => 2400, 'clicks' => 90 ),
+	array( 'position' => 3.4, 'impressions' => 1800, 'clicks' => 120 )
+);
+$blind_score = SCC_Link_Boost::score_candidate( $link_rec, null, null );
+assert_true( $near_score > $blind_score, 'GSC opportunity and source visibility raise link-boost priority' );
+assert_true( $near_score >= 70, 'near-ranking commercial page can become a high-priority link target' );
+
+// Local Maps grid geometry + exact business identification.
+$grid = SCC_Local_Grid::grid_points( 29.2858, -81.0559, 5, 1.0 );
+assert_eq( 25, count( $grid ), '5x5 local rank grid generates 25 independently measurable points' );
+assert_eq( 2, SCC_Local_Grid::identify_rank(
+	array(
+		array( 'rank_group' => 1, 'title' => 'Other Agency', 'domain' => 'other.example' ),
+		array( 'rank_group' => 2, 'title' => 'Tide & Type Co.', 'domain' => 'tideandtype.com' ),
+	),
+	'Tide & Type Co.',
+	'tideandtype.com'
+)['rank'], 'Maps grid identifies the business by domain/name without estimating rank' );
+
+// Backlink gap prioritization classifies useful acquisition sources.
+assert_eq( 'association', SCC_Backlink_Gap::classify_domain( 'ormondchamber.com' ), 'chamber backlink classified as association' );
+assert_eq( 'news', SCC_Backlink_Gap::classify_domain( 'daytonadailynews.com' ), 'news backlink classified as news/media opportunity' );
+$assoc_score = SCC_Backlink_Gap::score_item( array( 'rank' => 70, 'competitor_hits' => 3, 'backlinks' => 8 ), 'association' );
+$generic_score = SCC_Backlink_Gap::score_item( array( 'rank' => 70, 'competitor_hits' => 3, 'backlinks' => 8 ), 'website' );
+assert_true( $assoc_score > $generic_score, 'relevant association opportunities receive a strategic priority bonus' );
+
+// Existing PSI/CrUX measurements are clustered by shared template/root cause.
+$clusters = SCC_PageSpeed::cluster_results(
+	array(
+		array( 'ok' => true, 'post_id' => 11, 'url' => 'https://example.com/a/', 'performance' => 42, 'field' => array( 'lcp_ms' => 4500, 'cls' => 0.04, 'inp_ms' => 180 ) ),
+		array( 'ok' => true, 'post_id' => 12, 'url' => 'https://example.com/b/', 'performance' => 46, 'field' => array( 'lcp_ms' => 4300, 'cls' => 0.05, 'inp_ms' => 190 ) ),
+		array( 'ok' => true, 'post_id' => 13, 'url' => 'https://example.com/c/', 'performance' => 91, 'field' => array( 'lcp_ms' => 1800, 'cls' => 0.03, 'inp_ms' => 120 ) ),
+	),
+	array( 11 => 'elementor · page · service-template', 12 => 'elementor · page · service-template', 13 => 'native · post · default' )
+);
+assert_eq( 2, count( $clusters ), 'PageSpeed root-cause analysis groups pages by shared template signature' );
+assert_eq( 'high', $clusters[0]['root_cause_likelihood'], 'repeated LCP failure across one shared template is flagged as a likely root cause' );
+assert_eq( 2, $clusters[0]['slow_lcp'], 'template cluster counts repeated LCP failures' );
+
+// Provider wrappers remain explicit and reviewable.
+$dfs_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php' );
+assert_true( false !== strpos( $dfs_src, '/serp/google/maps/live/advanced' ), 'DataForSEO Maps integration uses the Google Maps live endpoint' );
+assert_true( false !== strpos( $dfs_src, '/backlinks/domain_intersection/live' ), 'backlink gap uses DataForSEO domain intersection' );
+$publishing_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/publishing/class-scc-publishing.php' );
+assert_true( false !== strpos( $publishing_src, 'SCC_Preflight::evaluate' ), 'TideOrbit publishing is wired through SEO Preflight' );
+$admin_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php' );
+assert_true( false !== strpos( $admin_src, "'growth'") && false !== strpos( $admin_src, 'render_growth_lab' ), 'Growth Lab is wired into Opportunities' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
