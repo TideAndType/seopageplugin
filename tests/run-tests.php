@@ -2449,6 +2449,67 @@ assert_true( is_array( $scc_content_block ) && ! empty( $scc_content_block['vars
 assert_eq( 'split-list', $scc_content_block['vars']['CONTENT_SECTIONS'][0]['layout'], 'section-level composition survives mapping into Elementor renderer input' );
 assert_eq( array(), SCC_Native_Elementor_Blocks::render_block( $scc_variant_blocks[0] ), 'native renderer safely declines when Elementor containers are unavailable' );
 
+
+echo "\n== Schema-aware Elementor composition engine ==\n";
+$scc_agent_bank = array(
+	'hero.title' => array( 'type' => 'text', 'value' => 'Exact Finished Headline', 'required' => true, 'meta' => array( 'role' => 'h1' ) ),
+	'hero.intro' => array( 'type' => 'text', 'value' => 'Exact finished introduction copy.', 'required' => true, 'meta' => array( 'role' => 'lead' ) ),
+);
+$scc_agent_composition = array(
+	'version' => 1,
+	'name' => 'Editorial split',
+	'nodes' => array(
+		array(
+			'id' => 'hero',
+			'type' => 'container',
+			'label' => 'Hero',
+			'layout' => array( 'direction' => 'row', 'gap' => 48, 'content_width' => 'boxed', 'max_width' => 1180 ),
+			'style' => array( 'padding' => array( 96, 24, 96, 24 ), 'background' => 'surface' ),
+			'responsive' => array( 'mobile' => array( 'layout' => array( 'direction' => 'column' ) ) ),
+			'children' => array(
+				array(
+					'id' => 'hero-title',
+					'type' => 'widget',
+					'widget' => 'heading',
+					'bindings' => array( 'title' => 'hero.title' ),
+					'settings' => array( 'header_size' => 'h1' ),
+					'style' => array( 'font_size' => 64, 'font_weight' => 800, 'line_height' => 1.05 ),
+				),
+				array(
+					'id' => 'hero-intro',
+					'type' => 'widget',
+					'widget' => 'text-editor',
+					'bindings' => array( 'editor' => 'hero.intro' ),
+					'style' => array( 'font_size' => 19, 'line_height' => 1.7 ),
+				),
+			),
+		),
+	),
+);
+$scc_agent_valid = SCC_Elementor_Composition::validate( $scc_agent_composition, $scc_agent_bank );
+assert_true( ! is_wp_error( $scc_agent_valid ), 'controlled nested composition validates against widget schemas and content refs' );
+$scc_agent_tree = SCC_Elementor_Composition::compile( $scc_agent_valid, $scc_agent_bank, $scc_profile );
+assert_eq( 'container', $scc_agent_tree[0]['elType'], 'composition compiles to a native Elementor container' );
+assert_eq( 'heading', $scc_agent_tree[0]['elements'][0]['widgetType'], 'bound heading compiles to a native Elementor widget' );
+assert_eq( 'Exact Finished Headline', $scc_agent_tree[0]['elements'][0]['settings']['title'], 'compiler inserts exact finished copy from content bank, not model copy' );
+assert_eq( 'Exact finished introduction copy.', $scc_agent_tree[0]['elements'][1]['settings']['editor'], 'text binding preserves exact finished introduction' );
+assert_eq( 'column', $scc_agent_tree[0]['settings']['flex_direction_mobile'], 'responsive DSL compiles to Elementor mobile container settings' );
+
+$scc_agent_literal = $scc_agent_composition;
+$scc_agent_literal['nodes'][0]['children'][0]['settings']['title'] = 'Model invented headline';
+assert_true( is_wp_error( SCC_Elementor_Composition::validate( $scc_agent_literal, $scc_agent_bank ) ), 'model-written text in a content control is rejected' );
+
+$scc_agent_missing = $scc_agent_composition;
+array_pop( $scc_agent_missing['nodes'][0]['children'] );
+assert_true( is_wp_error( SCC_Elementor_Composition::validate( $scc_agent_missing, $scc_agent_bank ) ), 'composition omitting required finished content is rejected' );
+
+$scc_agent_unsafe = $scc_agent_composition;
+$scc_agent_unsafe['nodes'][0]['children'][0]['widget'] = 'html';
+assert_true( is_wp_error( SCC_Elementor_Composition::validate( $scc_agent_unsafe, $scc_agent_bank ) ), 'raw HTML/code-style widgets are blocked from agent compositions' );
+
+$scc_runtime_catalog = SCC_Elementor_Widget_Schema::agent_catalog( 'bold testimonial form layout' );
+assert_true( isset( $scc_runtime_catalog['schemas']['heading'], $scc_runtime_catalog['schemas']['text-editor'] ), 'schema discovery always provides safe core widget schemas as a fallback' );
+
 echo "\n== The SEO Framework active detection ==\n";
 if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
 	define( 'THE_SEO_FRAMEWORK_VERSION', '5.1.4-test' );
