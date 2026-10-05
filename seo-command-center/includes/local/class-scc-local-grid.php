@@ -38,38 +38,75 @@ class SCC_Local_Grid {
 	}
 
 	public static function scan( array $args, $refresh = false ) {
-		if ( ! class_exists( 'SCC_DataForSEO' ) || ! SCC_DataForSEO::is_connected() ) {
-			return new WP_Error( 'scc_grid_no_provider', __( 'Connect DataForSEO before running a Maps grid scan.', 'seo-command-center' ), array( 'status' => 400 ) );
+		$args = self::normalize_args( $args );
+		if ( is_wp_error( $args ) ) {
+			return $args;
 		}
-		$keyword = sanitize_text_field( $args['keyword'] ?? '' );
-		$name = sanitize_text_field( $args['business_name'] ?? '' );
-		$domain = self::normalize_domain( $args['domain'] ?? home_url( '/' ) );
-		$lat = (float) ( $args['lat'] ?? 0 );
-		$lng = (float) ( $args['lng'] ?? 0 );
-		$size = in_array( (int) ( $args['size'] ?? 3 ), array( 3, 5 ), true ) ? (int) $args['size'] : 3;
-		$spacing = max( 0.2, min( 10.0, (float) ( $args['spacing_km'] ?? 1.0 ) ) );
 
-		if ( '' === $keyword || ( '' === $name && '' === $domain ) || 0.0 === $lat || 0.0 === $lng ) {
-			return new WP_Error( 'scc_grid_input', __( 'Keyword, coordinates, and a business name or domain are required.', 'seo-command-center' ), array( 'status' => 400 ) );
+		$cache_key = self::cache_key( $args );
+		if ( ! $refresh ) {
+			$cached = get_transient( $cache_key );
+			if ( is_array( $cached ) ) {
+				$cached['cached'] = true;
+				return $cached;
+			}
 		}
-		$key = 'scc_grid_' . md5( wp_json_encode( array( $keyword, $name, $domain, $lat, $lng, $size, $spacing ) ) );
+
+		if ( class_exists( 'SCC_Browser_Runtime' ) && 'dataforseo' !== SCC_Browser_Runtime::mode() ) {
+			if ( SCC_Browser_Runtime::configured() ) {
+				$browser = SCC_Browser_Runtime::start_local_grid( $args );
+				if ( ! is_wp_error( $browser ) ) {
+					return $browser;
+				}
+				if ( 'browser' === SCC_Browser_Runtime::mode() ) {
+					return $browser;
+				}
+			} elseif ( 'browser' === SCC_Browser_Runtime::mode() ) {
+				return new WP_Error( 'scc_grid_browser_unpaired', __( 'Browser-only mode is selected, but no TideOrbit Browser Bridge is paired.', 'seo-command-center' ) );
+			}
+		}
+
+		return self::scan_dataforseo( $args, true );
+	}
+
+	/**
+	 * Run the existing paid API path directly. Public so the Browser Runtime can
+	 * use it as a background fallback without recursing through scan().
+	 *
+	 * @param array $args    Normalized or raw scan args.
+	 * @param bool  $refresh Ignore cache.
+	 * @return array|WP_Error
+	 */
+	public static function scan_dataforseo( array $args, $refresh = false ) {
+		$args = self::normalize_args( $args );
+		if ( is_wp_error( $args ) ) {
+			return $args;
+		}
+		if ( ! class_exists( 'SCC_DataForSEO' ) || ! SCC_DataForSEO::is_connected() ) {
+			return new WP_Error( 'scc_grid_no_provider', __( 'No browser runtime is available and DataForSEO is not connected.', 'seo-command-center' ), array( 'status' => 400 ) );
+		}
+
+		$key = self::cache_key( $args );
 		if ( ! $refresh ) {
 			$cached = get_transient( $key );
-			if ( is_array( $cached ) ) { $cached['cached'] = true; return $cached; }
+			if ( is_array( $cached ) ) {
+				$cached['cached'] = true;
+				return $cached;
+			}
 		}
 
-		$points = self::grid_points( $lat, $lng, $size, $spacing );
+		$points = self::grid_points( $args['lat'], $args['lng'], $args['size'], $args['spacing_km'] );
 		$found = 0;
 		$rank_sum = 0;
 		foreach ( $points as &$point ) {
 			$coordinate = $point['lat'] . ',' . $point['lng'] . ',16z';
-			$items = SCC_DataForSEO::maps_search( $keyword, $coordinate, 'en', 20 );
+			$items = SCC_DataForSEO::maps_search( $args['keyword'], $coordinate, 'en', 20 );
 			if ( is_wp_error( $items ) ) {
 				$point['rank'] = null;
 				$point['error'] = $items->get_error_message();
 				continue;
 			}
-			$match = self::identify_rank( (array) $items, $name, $domain );
+			$match = self::identify_rank( (array) $items, $args['business_name'], $args['domain'] );
 			$point['rank'] = $match['rank'];
 			$point['matched_by'] = $match['matched_by'];
 			$point['matched_title'] = $match['title'];
@@ -82,12 +119,12 @@ class SCC_Local_Grid {
 		unset( $point );
 
 		$out = array(
-			'keyword' => $keyword,
-			'business_name' => $name,
-			'domain' => $domain,
-			'center' => array( 'lat' => $lat, 'lng' => $lng ),
-			'size' => $size,
-			'spacing_km' => $spacing,
+			'keyword' => $args['keyword'],
+			'business_name' => $args['business_name'],
+			'domain' => $args['domain'],
+			'center' => array( 'lat' => $args['lat'], 'lng' => $args['lng'] ),
+			'size' => $args['size'],
+			'spacing_km' => $args['spacing_km'],
 			'points' => $points,
 			'found_points' => $found,
 			'total_points' => count( $points ),
@@ -96,10 +133,51 @@ class SCC_Local_Grid {
 			'generated_at' => current_time( 'mysql' ),
 			'cached' => false,
 			'provider' => 'DataForSEO Google Maps',
+			'engine' => 'dataforseo',
 		);
-		set_transient( $key, $out, self::CACHE_TTL );
-		update_option( self::LAST_OPTION, $out, false );
+		self::store_result( $out, $key );
 		return $out;
+	}
+
+	/**
+	 * Persist a completed grid regardless of which engine measured it.
+	 *
+	 * @param array  $result    Normalized grid result.
+	 * @param string $cache_key Optional cache key.
+	 */
+	public static function store_result( array $result, $cache_key = '' ) {
+		if ( '' !== $cache_key ) {
+			set_transient( $cache_key, $result, self::CACHE_TTL );
+		}
+		update_option( self::LAST_OPTION, $result, false );
+	}
+
+	protected static function normalize_args( array $args ) {
+		$out = array(
+			'keyword'       => sanitize_text_field( $args['keyword'] ?? '' ),
+			'business_name' => sanitize_text_field( $args['business_name'] ?? '' ),
+			'domain'        => self::normalize_domain( $args['domain'] ?? home_url( '/' ) ),
+			'place_id'      => sanitize_text_field( $args['place_id'] ?? '' ),
+			'lat'           => (float) ( $args['lat'] ?? 0 ),
+			'lng'           => (float) ( $args['lng'] ?? 0 ),
+			'size'          => in_array( (int) ( $args['size'] ?? 3 ), array( 3, 5 ), true ) ? (int) $args['size'] : 3,
+			'spacing_km'    => max( 0.2, min( 10.0, (float) ( $args['spacing_km'] ?? 1.0 ) ) ),
+		);
+		if ( '' === $out['keyword'] || ( '' === $out['business_name'] && '' === $out['domain'] && '' === $out['place_id'] ) || 0.0 === $out['lat'] || 0.0 === $out['lng'] ) {
+			return new WP_Error( 'scc_grid_input', __( 'Keyword, coordinates, and a business name, Place ID, or domain are required.', 'seo-command-center' ), array( 'status' => 400 ) );
+		}
+		return $out;
+	}
+
+	protected static function cache_key( array $args ) {
+		return 'scc_grid_' . md5(
+			wp_json_encode(
+				array(
+					$args['keyword'], $args['business_name'], $args['domain'], $args['place_id'],
+					$args['lat'], $args['lng'], $args['size'], $args['spacing_km'],
+				)
+			)
+		);
 	}
 
 	public static function identify_rank( array $items, $business_name = '', $domain = '' ) {
