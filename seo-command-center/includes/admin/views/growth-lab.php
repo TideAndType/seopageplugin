@@ -32,12 +32,30 @@ if ( 'POST' === (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) && isset( $_POST['
 			case 'gsc_cannibal':
 				$result = SCC_GSC_Cannibalization::detect( true, 90 );
 				break;
+			case 'runtime_settings':
+				SCC_Settings::update(
+					array(
+						'browser_runtime_mode' => sanitize_key( wp_unslash( $_POST['browser_runtime_mode'] ?? 'auto' ) ),
+						'browser_runtime_url'  => esc_url_raw( trim( wp_unslash( $_POST['browser_runtime_url'] ?? '' ) ) ),
+					)
+				);
+				SCC_Settings::update_credentials(
+					array(
+						'browser_runtime_key' => sanitize_text_field( wp_unslash( $_POST['browser_runtime_key'] ?? '' ) ),
+					)
+				);
+				$result = array( 'saved' => true, 'message' => __( 'Browser Runtime settings saved.', 'seo-command-center' ) );
+				break;
+			case 'runtime_test':
+				$result = SCC_Browser_Runtime::health();
+				break;
 			case 'local_grid':
 				$result = SCC_Local_Grid::scan(
 					array(
 						'keyword'       => sanitize_text_field( wp_unslash( $_POST['keyword'] ?? '' ) ),
 						'business_name' => sanitize_text_field( wp_unslash( $_POST['business_name'] ?? '' ) ),
 						'domain'        => sanitize_text_field( wp_unslash( $_POST['domain'] ?? '' ) ),
+						'place_id'      => sanitize_text_field( wp_unslash( $_POST['place_id'] ?? '' ) ),
 						'lat'           => (float) ( $_POST['lat'] ?? 0 ),
 						'lng'           => (float) ( $_POST['lng'] ?? 0 ),
 						'size'          => (int) ( $_POST['size'] ?? 3 ),
@@ -59,8 +77,18 @@ if ( 'POST' === (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) && isset( $_POST['
 	}
 }
 
+if ( class_exists( 'SCC_Browser_Runtime' ) ) {
+	SCC_Browser_Runtime::poll_due_jobs();
+}
 $clusters = class_exists( 'SCC_PageSpeed' ) ? SCC_PageSpeed::cluster_report() : array();
 $last_grid = class_exists( 'SCC_Local_Grid' ) ? SCC_Local_Grid::last() : null;
+$runtime_status = class_exists( 'SCC_Browser_Runtime' ) ? SCC_Browser_Runtime::last_status() : array();
+$runtime_jobs = class_exists( 'SCC_Browser_Runtime' ) ? SCC_Browser_Runtime::active_jobs() : array();
+$runtime_mode = class_exists( 'SCC_Browser_Runtime' ) ? SCC_Browser_Runtime::mode() : 'dataforseo';
+$runtime_url = (string) SCC_Settings::get( 'browser_runtime_url', '' );
+$credential_hints = SCC_Settings::credential_hints();
+$runtime_key_hint = (string) ( $credential_hints['browser_runtime_key']['hint'] ?? '' );
+$runtime_key_configured = ! empty( $credential_hints['browser_runtime_key']['configured'] );
 $last_backlinks = class_exists( 'SCC_Backlink_Gap' ) ? SCC_Backlink_Gap::last() : null;
 
 $page_options = function ( $published_only = false ) use ( $pages ) {
@@ -159,8 +187,61 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 	</div>
 
 	<div class="scc-card">
+		<div class="scc-card__head">
+			<div>
+				<h2><?php esc_html_e( 'TideOrbit Browser Runtime', 'seo-command-center' ); ?></h2>
+				<p class="scc-note"><?php esc_html_e( 'Automatic mode uses your Cloudflare-tunneled local Chromium scanner first and falls back to DataForSEO if the tunnel/browser is unavailable.', 'seo-command-center' ); ?></p>
+			</div>
+			<?php if ( ! empty( $runtime_status['state'] ) ) : ?>
+				<strong><?php echo esc_html( strtoupper( (string) $runtime_status['state'] ) ); ?></strong>
+			<?php endif; ?>
+		</div>
+		<form method="post">
+			<?php wp_nonce_field( 'scc_growth_lab', 'scc_growth_nonce' ); ?>
+			<input type="hidden" name="scc_growth_action" value="runtime_settings">
+			<div class="scc-columns">
+				<p>
+					<label><strong><?php esc_html_e( 'Execution mode', 'seo-command-center' ); ?></strong><br>
+					<select name="browser_runtime_mode">
+						<option value="auto" <?php selected( $runtime_mode, 'auto' ); ?>><?php esc_html_e( 'Automatic: Browser → DataForSEO', 'seo-command-center' ); ?></option>
+						<option value="browser" <?php selected( $runtime_mode, 'browser' ); ?>><?php esc_html_e( 'Browser only', 'seo-command-center' ); ?></option>
+						<option value="dataforseo" <?php selected( $runtime_mode, 'dataforseo' ); ?>><?php esc_html_e( 'DataForSEO only', 'seo-command-center' ); ?></option>
+					</select></label>
+				</p>
+				<p>
+					<label><strong><?php esc_html_e( 'Cloudflare Tunnel URL', 'seo-command-center' ); ?></strong><br>
+					<input type="url" name="browser_runtime_url" class="regular-text" value="<?php echo esc_attr( $runtime_url ); ?>" placeholder="https://your-tunnel.trycloudflare.com"></label>
+				</p>
+				<p>
+					<label><strong><?php esc_html_e( 'Pairing key', 'seo-command-center' ); ?></strong><br>
+					<input type="password" name="browser_runtime_key" class="regular-text" value="" placeholder="<?php echo esc_attr( $runtime_key_configured ? $runtime_key_hint : 'Paste key from Google Maps SERP → Settings → TideOrbit' ); ?>"></label>
+				</p>
+			</div>
+			<p>
+				<button class="button button-primary"><?php esc_html_e( 'Save Browser Runtime', 'seo-command-center' ); ?></button>
+				<?php if ( $runtime_key_configured ) : ?><span class="scc-note"><?php echo esc_html( sprintf( __( 'Pairing key saved: %s', 'seo-command-center' ), $runtime_key_hint ) ); ?></span><?php endif; ?>
+			</p>
+		</form>
+		<form method="post" style="margin-top:8px">
+			<?php wp_nonce_field( 'scc_growth_lab', 'scc_growth_nonce' ); ?>
+			<input type="hidden" name="scc_growth_action" value="runtime_test">
+			<button class="button"><?php esc_html_e( 'Test Browser Bridge', 'seo-command-center' ); ?></button>
+			<?php if ( $runtime_jobs ) : ?>
+				<span class="scc-note"><?php echo esc_html( sprintf( _n( '%d browser scan active', '%d browser scans active', count( $runtime_jobs ), 'seo-command-center' ), count( $runtime_jobs ) ) ); ?></span>
+			<?php endif; ?>
+		</form>
+		<?php if ( 'runtime_test' === $action && is_array( $result ) && ! empty( $result['ok'] ) ) : ?>
+			<p class="scc-ok"><?php esc_html_e( 'Connected. The tunneled Playwright scanner is online and accepting jobs.', 'seo-command-center' ); ?></p>
+		<?php elseif ( 'runtime_settings' === $action && is_array( $result ) && ! empty( $result['saved'] ) ) : ?>
+			<p class="scc-ok"><?php echo esc_html( $result['message'] ); ?></p>
+		<?php elseif ( ! empty( $runtime_status['message'] ) ) : ?>
+			<p class="scc-note"><?php echo esc_html( $runtime_status['message'] ); ?></p>
+		<?php endif; ?>
+	</div>
+
+	<div class="scc-card">
 		<h2><?php esc_html_e( 'Local Map Grid', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'Each grid point is a real Google Maps SERP request through DataForSEO. A 3×3 scan uses 9 requests; a 5×5 scan uses 25. Results are cached for six hours.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( 'In Automatic mode TideOrbit sends the grid to your local Playwright/Chromium scanner through Cloudflare Tunnel. If it cannot connect, DataForSEO is used as the fallback. Browser scans run asynchronously so WordPress never waits for Chrome.', 'seo-command-center' ); ?></p>
 		<form method="post">
 			<?php wp_nonce_field( 'scc_growth_lab', 'scc_growth_nonce' ); ?>
 			<input type="hidden" name="scc_growth_action" value="local_grid">
@@ -168,12 +249,19 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 				<p><label><strong><?php esc_html_e( 'Keyword', 'seo-command-center' ); ?></strong><br><input type="text" name="keyword" class="regular-text" placeholder="marketing agency" required></label></p>
 				<p><label><strong><?php esc_html_e( 'Business name', 'seo-command-center' ); ?></strong><br><input type="text" name="business_name" class="regular-text" value="<?php echo esc_attr( $business['organization_name'] ?? '' ); ?>"></label></p>
 				<p><label><strong><?php esc_html_e( 'Domain', 'seo-command-center' ); ?></strong><br><input type="text" name="domain" class="regular-text" value="<?php echo esc_attr( wp_parse_url( home_url( '/' ), PHP_URL_HOST ) ); ?>"></label></p>
+				<p><label><strong><?php esc_html_e( 'Google Place ID / CID', 'seo-command-center' ); ?></strong><br><input type="text" name="place_id" class="regular-text" placeholder="Optional but improves exact matching"></label></p>
 				<p><label><strong><?php esc_html_e( 'Center latitude', 'seo-command-center' ); ?></strong><br><input type="number" step="0.0000001" name="lat" required></label> &nbsp; <label><strong><?php esc_html_e( 'Longitude', 'seo-command-center' ); ?></strong><br><input type="number" step="0.0000001" name="lng" required></label></p>
 				<p><label><strong><?php esc_html_e( 'Grid', 'seo-command-center' ); ?></strong><br><select name="size"><option value="3">3×3</option><option value="5">5×5</option></select></label> &nbsp; <label><strong><?php esc_html_e( 'Spacing km', 'seo-command-center' ); ?></strong><br><input type="number" min="0.2" max="10" step="0.1" name="spacing_km" value="1"></label></p>
 			</div>
 			<button class="button button-primary"><?php esc_html_e( 'Run Maps grid', 'seo-command-center' ); ?></button>
 		</form>
-		<?php $grid = ( 'local_grid' === $action && is_array( $result ) ) ? $result : $last_grid; ?>
+		<?php
+		$queued_grid = 'local_grid' === $action && is_array( $result ) && ! empty( $result['queued'] );
+		$grid = ( 'local_grid' === $action && is_array( $result ) && ! empty( $result['points'] ) ) ? $result : $last_grid;
+		?>
+		<?php if ( $queued_grid ) : ?>
+			<div class="notice notice-info inline"><p><?php echo esc_html( $result['message'] ?? __( 'Browser grid started. TideOrbit will import it automatically.', 'seo-command-center' ) ); ?> <strong><?php echo esc_html( '#' . (string) ( $result['scan_id'] ?? '' ) ); ?></strong></p></div>
+		<?php endif; ?>
 		<?php if ( is_array( $grid ) && ! empty( $grid['points'] ) ) : ?>
 			<h3><?php echo esc_html( sprintf( '%s · %.1f%% visible · average found rank %s', $grid['keyword'], (float) $grid['visibility_pct'], null === $grid['average_rank'] ? '—' : $grid['average_rank'] ) ); ?></h3>
 			<div style="display:grid;grid-template-columns:repeat(<?php echo (int) $grid['size']; ?>,minmax(72px,1fr));gap:8px;max-width:620px">
