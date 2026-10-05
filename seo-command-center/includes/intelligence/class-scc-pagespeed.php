@@ -482,7 +482,8 @@ class SCC_PageSpeed {
 		$type = function_exists( 'get_post_type' ) ? (string) get_post_type( $post_id ) : 'post';
 		$template = function_exists( 'get_page_template_slug' ) ? (string) get_page_template_slug( $post_id ) : '';
 		if ( '' === $template ) { $template = 'default'; }
-		$kit = (int) get_post_meta( $post_id, '_elementor_page_settings', true ) ? 'custom-settings' : 'site-settings';
+		$page_settings = get_post_meta( $post_id, '_elementor_page_settings', true );
+		$kit = ! empty( $page_settings ) ? 'custom-settings' : 'site-settings';
 		return $builder . ' · ' . $type . ' · ' . $template . ' · ' . $kit;
 	}
 
