@@ -2808,6 +2808,16 @@ assert_true( false !== strpos( $main_src, 'SCC_Browser_Runtime::CRON_HOOK' ), 'a
 $grid_view_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/growth-lab.php' );
 assert_true( false !== strpos( $grid_view_src, 'Automatic: Browser') && false !== strpos( $grid_view_src, 'Test Browser Bridge' ), 'Growth Lab exposes automatic runtime setup and connection testing' );
 
+echo "\n== TideOrbit 1.84.1 Rank Tracker Connections ==\n";
+$connections_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/connections.php' );
+assert_true( false !== strpos( $connections_src, 'Google Maps Rank Tracker / Browser Runtime' ), 'Rank Tracker pairing is discoverable under Connections' );
+assert_true( false !== strpos( $connections_src, '127.0.0.1:4317' ), 'Connections screen documents the secure local bridge port' );
+$admin_js_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+assert_true( false !== strpos( $admin_js_src, 'browser_runtime_mode' ) && false !== strpos( $admin_js_src, 'browser_runtime_url' ), 'Connections form saves Browser Runtime settings' );
+assert_true( false !== strpos( $admin_js_src, "/browser-runtime/test" ), 'Connections screen can test the Rank Tracker bridge' );
+$rest_src_1841 = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+assert_true( false !== strpos( $rest_src_1841, "'/browser-runtime/test'" ) && false !== strpos( $rest_src_1841, 'browser_runtime_test' ), 'Rank Tracker test endpoint is registered' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
