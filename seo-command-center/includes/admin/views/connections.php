@@ -106,6 +106,40 @@ $field = function ( $field, $label, $hints ) {
 		</table>
 		<p class="scc-note"><?php esc_html_e( 'An API key is optional; only add one if you configured LM Studio to require it. These settings also appear under Settings → AI.', 'seo-command-center' ); ?></p>
 
+		<h2><?php esc_html_e( 'Google Maps Rank Tracker / Browser Runtime', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Connect the GBP Rank Tracker desktop app through a Cloudflare Tunnel. Automatic mode uses your local Chromium scanner first and falls back to DataForSEO if the scanner is offline.', 'seo-command-center' ); ?></p>
+		<div class="notice notice-info inline" style="margin:8px 0;">
+			<p><?php echo wp_kses_post( __( 'In the desktop app open <strong>Settings → TideOrbit</strong>, copy the pairing key, and point Cloudflare at <code>http://127.0.0.1:4317</code>. Paste the public HTTPS tunnel URL and pairing key here.', 'seo-command-center' ) ); ?></p>
+		</div>
+		<table class="form-table" role="presentation">
+			<tr>
+				<th scope="row"><label for="scc-browser-runtime-mode"><?php esc_html_e( 'Execution mode', 'seo-command-center' ); ?></label></th>
+				<td>
+					<?php $browser_mode = isset( $data['browser_runtime_mode'] ) ? (string) $data['browser_runtime_mode'] : 'auto'; ?>
+					<select id="scc-browser-runtime-mode">
+						<option value="auto" <?php selected( $browser_mode, 'auto' ); ?>><?php esc_html_e( 'Automatic: Rank Tracker → DataForSEO', 'seo-command-center' ); ?></option>
+						<option value="browser" <?php selected( $browser_mode, 'browser' ); ?>><?php esc_html_e( 'Rank Tracker only', 'seo-command-center' ); ?></option>
+						<option value="dataforseo" <?php selected( $browser_mode, 'dataforseo' ); ?>><?php esc_html_e( 'DataForSEO only', 'seo-command-center' ); ?></option>
+					</select>
+				</td>
+			</tr>
+			<tr>
+				<th scope="row"><label for="scc-browser-runtime-url"><?php esc_html_e( 'Cloudflare Tunnel URL', 'seo-command-center' ); ?></label></th>
+				<td>
+					<input type="url" class="regular-text code" id="scc-browser-runtime-url" value="<?php echo esc_attr( isset( $data['browser_runtime_url'] ) ? $data['browser_runtime_url'] : '' ); ?>" placeholder="https://your-tunnel.trycloudflare.com">
+					<p class="description"><?php esc_html_e( 'This should be the public URL for the tunnel that points to 127.0.0.1:4317 on the machine running GBP Rank Tracker.', 'seo-command-center' ); ?></p>
+				</td>
+			</tr>
+			<?php $field( 'browser_runtime_key', __( 'Rank Tracker pairing key', 'seo-command-center' ), $hints ); ?>
+		</table>
+		<p>
+			<button type="button" class="button" id="scc-browser-runtime-test"><?php esc_html_e( 'Test Rank Tracker connection', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-browser-runtime-test-status"></span>
+		</p>
+		<?php if ( ! empty( $data['browser_runtime_status']['message'] ) ) : ?>
+			<p class="scc-note"><?php echo esc_html( $data['browser_runtime_status']['message'] ); ?></p>
+		<?php endif; ?>
+
 		<h2><?php esc_html_e( 'DataForSEO (optional)', 'seo-command-center' ); ?></h2>
 		<p class="scc-note"><?php esc_html_e( 'Adds real keyword volume, competition, and related keywords. The plugin works without it.', 'seo-command-center' ); ?></p>
 		<table class="form-table" role="presentation">

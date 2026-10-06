@@ -82,6 +82,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/browser-runtime/test',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'browser_runtime_test' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/ai/test',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1236,6 +1246,22 @@ class SCC_REST {
 				'saved'       => true,
 			)
 		);
+	}
+
+	/**
+	 * POST /browser-runtime/test.
+	 *
+	 * @return WP_REST_Response|WP_Error
+	 */
+	public function browser_runtime_test() {
+		if ( ! class_exists( 'SCC_Browser_Runtime' ) ) {
+			return $this->fail( 'browser_runtime_unavailable', __( 'Browser Runtime is unavailable in this TideOrbit build.', 'seo-command-center' ), 500 );
+		}
+		$result = SCC_Browser_Runtime::health();
+		if ( is_wp_error( $result ) ) {
+			return $this->fail( $result->get_error_code(), $result->get_error_message(), 502 );
+		}
+		return $this->ok( $result );
 	}
 
 	/**

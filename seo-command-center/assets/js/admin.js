@@ -307,6 +307,14 @@
 			if ( lmModel ) {
 				settings.lmstudio_model = lmModel.value;
 			}
+			var browserMode = document.getElementById( 'scc-browser-runtime-mode' );
+			if ( browserMode ) {
+				settings.browser_runtime_mode = browserMode.value;
+			}
+			var browserUrl = document.getElementById( 'scc-browser-runtime-url' );
+			if ( browserUrl ) {
+				settings.browser_runtime_url = browserUrl.value;
+			}
 			payload.settings = settings;
 			setStatus( status, '…' );
 			request( '/settings', { method: 'POST', data: payload } )
@@ -318,6 +326,29 @@
 					setStatus( status, ( err && err.message ) || i18n.error, 'is-error' );
 				} );
 		} );
+
+		// TideOrbit Browser Runtime / GBP Rank Tracker bridge test.
+		var browserTest = document.getElementById( 'scc-browser-runtime-test' );
+		if ( browserTest ) {
+			var browserStatus = document.getElementById( 'scc-browser-runtime-test-status' );
+			browserTest.addEventListener( 'click', function () {
+				browserTest.disabled = true;
+				setStatus( browserStatus, 'Testing Rank Tracker…' );
+				request( '/browser-runtime/test', { method: 'POST', data: {} } )
+					.then( function ( res ) {
+						browserTest.disabled = false;
+						var d = res.data || {};
+						var queue = d.queue || {};
+						var active = typeof queue.active === 'number' ? queue.active : 0;
+						var queued = typeof queue.queued === 'number' ? queue.queued : 0;
+						setStatus( browserStatus, 'Connected — Chromium ready. Active scans: ' + active + ', queued: ' + queued + '.', 'is-ok' );
+					} )
+					.catch( function ( err ) {
+						browserTest.disabled = false;
+						setStatus( browserStatus, ( err && err.message ) || 'Could not reach the Rank Tracker bridge.', 'is-error' );
+					} );
+			} );
+		}
 
 		// GSC one-click connect button.
 		var gscConnect = document.getElementById( 'scc-gsc-connect' );
