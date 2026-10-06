@@ -2818,6 +2818,33 @@ assert_true( false !== strpos( $admin_js_src, "/browser-runtime/test" ), 'Connec
 $rest_src_1841 = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
 assert_true( false !== strpos( $rest_src_1841, "'/browser-runtime/test'" ) && false !== strpos( $rest_src_1841, 'browser_runtime_test' ), 'Rank Tracker test endpoint is registered' );
 
+echo "\n== TideOrbit 1.84.2 Simple Local Grid ==\n";
+$city_profile = SCC_Local_Grid::coverage_profile( 'city' );
+assert_eq( 5, $city_profile['size'], 'City coverage uses a 5x5 grid' );
+assert_true( abs( 1.5 - (float) $city_profile['spacing_km'] ) < 0.001, 'City coverage hides a sane spacing preset behind the simple UI' );
+assert_eq(
+	'123 Main St, Ormond Beach, FL, 32174, US',
+	SCC_Local_Grid::default_location(
+		array(
+			'street' => '123 Main St',
+			'city' => 'Ormond Beach',
+			'region' => 'FL',
+			'postal_code' => '32174',
+			'country' => 'US',
+		)
+	),
+	'business schema address becomes the default human-friendly Local Grid location'
+);
+$grid_view_simple = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/growth-lab.php' );
+assert_true( false !== strpos( $grid_view_simple, 'Where should we scan?' ), 'Local Grid asks for a human-friendly scan area' );
+assert_true( false !== strpos( $grid_view_simple, 'Check my map rankings' ), 'Local Grid has a simple action label' );
+assert_true( false === strpos( $grid_view_simple, "name=\"lat\"" ) && false === strpos( $grid_view_simple, "name=\"lng\"" ), 'Local Grid no longer exposes latitude/longitude inputs' );
+assert_true( false === strpos( $grid_view_simple, "name=\"spacing_km\"" ), 'Local Grid no longer exposes raw spacing kilometers' );
+$browser_runtime_src_1842 = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php' );
+assert_true( false !== strpos( $browser_runtime_src_1842, '/api/tideorbit/geocode?address=' ), 'paired Rank Tracker resolves friendly locations' );
+$dfs_src_1842 = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php' );
+assert_true( false !== strpos( $dfs_src_1842, 'resolve_maps_location' ) && false !== strpos( $dfs_src_1842, "'location_name' => $location_name" ), 'DataForSEO provides a friendly-location fallback' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
