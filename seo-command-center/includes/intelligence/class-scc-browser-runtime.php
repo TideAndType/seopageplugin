@@ -255,6 +255,8 @@ class SCC_Browser_Runtime {
 
 		return array(
 			'keyword'        => (string) ( $args['keyword'] ?? $scan['keyword'] ?? '' ),
+			'location'       => (string) ( $args['location'] ?? '' ),
+			'resolved_location' => (string) ( $args['resolved_location'] ?? $args['location'] ?? '' ),
 			'business_name'  => (string) ( $args['business_name'] ?? $scan['businessName'] ?? '' ),
 			'domain'         => (string) ( $args['domain'] ?? '' ),
 			'center'         => array( 'lat' => (float) ( $args['lat'] ?? $scan['centerLat'] ?? 0 ), 'lng' => (float) ( $args['lng'] ?? $scan['centerLng'] ?? 0 ) ),
