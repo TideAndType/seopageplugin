@@ -54,12 +54,10 @@ if ( 'POST' === (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) && isset( $_POST['
 					array(
 						'keyword'       => sanitize_text_field( wp_unslash( $_POST['keyword'] ?? '' ) ),
 						'business_name' => sanitize_text_field( wp_unslash( $_POST['business_name'] ?? '' ) ),
+						'location'      => sanitize_text_field( wp_unslash( $_POST['location'] ?? '' ) ),
+						'coverage'      => sanitize_key( wp_unslash( $_POST['coverage'] ?? 'city' ) ),
 						'domain'        => sanitize_text_field( wp_unslash( $_POST['domain'] ?? '' ) ),
 						'place_id'      => sanitize_text_field( wp_unslash( $_POST['place_id'] ?? '' ) ),
-						'lat'           => (float) ( $_POST['lat'] ?? 0 ),
-						'lng'           => (float) ( $_POST['lng'] ?? 0 ),
-						'size'          => (int) ( $_POST['size'] ?? 3 ),
-						'spacing_km'    => (float) ( $_POST['spacing_km'] ?? 1 ),
 					),
 					true
 				);
@@ -90,6 +88,7 @@ $credential_hints = SCC_Settings::credential_hints();
 $runtime_key_hint = (string) ( $credential_hints['browser_runtime_key']['hint'] ?? '' );
 $runtime_key_configured = ! empty( $credential_hints['browser_runtime_key']['configured'] );
 $last_backlinks = class_exists( 'SCC_Backlink_Gap' ) ? SCC_Backlink_Gap::last() : null;
+$default_grid_location = class_exists( 'SCC_Local_Grid' ) ? SCC_Local_Grid::default_location( (array) $business ) : '';
 
 $page_options = function ( $published_only = false ) use ( $pages ) {
 	foreach ( $pages as $p ) {
@@ -241,32 +240,56 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 
 	<div class="scc-card">
 		<h2><?php esc_html_e( 'Local Map Grid', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'In Automatic mode TideOrbit sends the grid to your local Playwright/Chromium scanner through Cloudflare Tunnel. If it cannot connect, DataForSEO is used as the fallback. Browser scans run asynchronously so WordPress never waits for Chrome.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( 'See how your business ranks across the area around you. Enter a keyword and a city/address — TideOrbit handles the map coordinates automatically.', 'seo-command-center' ); ?></p>
 		<form method="post">
 			<?php wp_nonce_field( 'scc_growth_lab', 'scc_growth_nonce' ); ?>
 			<input type="hidden" name="scc_growth_action" value="local_grid">
 			<div class="scc-columns">
-				<p><label><strong><?php esc_html_e( 'Keyword', 'seo-command-center' ); ?></strong><br><input type="text" name="keyword" class="regular-text" placeholder="marketing agency" required></label></p>
-				<p><label><strong><?php esc_html_e( 'Business name', 'seo-command-center' ); ?></strong><br><input type="text" name="business_name" class="regular-text" value="<?php echo esc_attr( $business['organization_name'] ?? '' ); ?>"></label></p>
-				<p><label><strong><?php esc_html_e( 'Domain', 'seo-command-center' ); ?></strong><br><input type="text" name="domain" class="regular-text" value="<?php echo esc_attr( wp_parse_url( home_url( '/' ), PHP_URL_HOST ) ); ?>"></label></p>
-				<p><label><strong><?php esc_html_e( 'Google Place ID / CID', 'seo-command-center' ); ?></strong><br><input type="text" name="place_id" class="regular-text" placeholder="Optional but improves exact matching"></label></p>
-				<p><label><strong><?php esc_html_e( 'Center latitude', 'seo-command-center' ); ?></strong><br><input type="number" step="0.0000001" name="lat" required></label> &nbsp; <label><strong><?php esc_html_e( 'Longitude', 'seo-command-center' ); ?></strong><br><input type="number" step="0.0000001" name="lng" required></label></p>
-				<p><label><strong><?php esc_html_e( 'Grid', 'seo-command-center' ); ?></strong><br><select name="size"><option value="3">3×3</option><option value="5">5×5</option></select></label> &nbsp; <label><strong><?php esc_html_e( 'Spacing km', 'seo-command-center' ); ?></strong><br><input type="number" min="0.2" max="10" step="0.1" name="spacing_km" value="1"></label></p>
+				<p>
+					<label><strong><?php esc_html_e( 'What do you want to rank for?', 'seo-command-center' ); ?></strong><br>
+					<input type="text" name="keyword" class="regular-text" placeholder="web design" required></label>
+				</p>
+				<p>
+					<label><strong><?php esc_html_e( 'Business name', 'seo-command-center' ); ?></strong><br>
+					<input type="text" name="business_name" class="regular-text" value="<?php echo esc_attr( $business['organization_name'] ?? '' ); ?>" placeholder="Your business name" required></label>
+				</p>
+				<p>
+					<label><strong><?php esc_html_e( 'Where should we scan?', 'seo-command-center' ); ?></strong><br>
+					<input type="text" name="location" class="regular-text" value="<?php echo esc_attr( $default_grid_location ); ?>" placeholder="Ormond Beach, FL" required></label>
+					<span class="description"><?php esc_html_e( 'City + state, ZIP code, or a full street address all work.', 'seo-command-center' ); ?></span>
+				</p>
+				<p>
+					<label><strong><?php esc_html_e( 'Coverage', 'seo-command-center' ); ?></strong><br>
+					<select name="coverage">
+						<option value="neighborhood"><?php esc_html_e( 'Neighborhood — quick 3×3 scan', 'seo-command-center' ); ?></option>
+						<option value="city" selected><?php esc_html_e( 'City — recommended 5×5 scan', 'seo-command-center' ); ?></option>
+						<option value="metro"><?php esc_html_e( 'Wider area — broad 5×5 scan', 'seo-command-center' ); ?></option>
+					</select></label>
+				</p>
 			</div>
-			<button class="button button-primary"><?php esc_html_e( 'Run Maps grid', 'seo-command-center' ); ?></button>
+			<details style="margin:10px 0 14px;">
+				<summary><strong><?php esc_html_e( 'Advanced matching', 'seo-command-center' ); ?></strong> <span class="scc-note"><?php esc_html_e( '(usually leave this alone)', 'seo-command-center' ); ?></span></summary>
+				<div class="scc-columns" style="margin-top:10px;">
+					<p><label><strong><?php esc_html_e( 'Website domain', 'seo-command-center' ); ?></strong><br><input type="text" name="domain" class="regular-text" value="<?php echo esc_attr( wp_parse_url( home_url( '/' ), PHP_URL_HOST ) ); ?>"></label></p>
+					<p><label><strong><?php esc_html_e( 'Google Place ID / CID', 'seo-command-center' ); ?></strong><br><input type="text" name="place_id" class="regular-text" placeholder="<?php esc_attr_e( 'Optional — only needed for hard-to-match listings', 'seo-command-center' ); ?>"></label></p>
+				</div>
+			</details>
+			<button class="button button-primary"><?php esc_html_e( 'Check my map rankings', 'seo-command-center' ); ?></button>
 		</form>
 		<?php
 		$queued_grid = 'local_grid' === $action && is_array( $result ) && ! empty( $result['queued'] );
 		$grid = ( 'local_grid' === $action && is_array( $result ) && ! empty( $result['points'] ) ) ? $result : $last_grid;
 		?>
 		<?php if ( $queued_grid ) : ?>
-			<div class="notice notice-info inline"><p><?php echo esc_html( $result['message'] ?? __( 'Browser grid started. TideOrbit will import it automatically.', 'seo-command-center' ) ); ?> <strong><?php echo esc_html( '#' . (string) ( $result['scan_id'] ?? '' ) ); ?></strong></p></div>
+			<div class="notice notice-info inline"><p><?php echo esc_html( $result['message'] ?? __( 'Map scan started. TideOrbit will import it automatically.', 'seo-command-center' ) ); ?></p></div>
 		<?php endif; ?>
 		<?php if ( is_array( $grid ) && ! empty( $grid['points'] ) ) : ?>
+			<?php $grid_location = (string) ( $grid['resolved_location'] ?? $grid['location'] ?? '' ); ?>
 			<h3><?php echo esc_html( sprintf( '%s · %.1f%% visible · average found rank %s', $grid['keyword'], (float) $grid['visibility_pct'], null === $grid['average_rank'] ? '—' : $grid['average_rank'] ) ); ?></h3>
+			<?php if ( '' !== $grid_location ) : ?><p class="scc-note"><?php echo esc_html( sprintf( __( 'Scan area: %s', 'seo-command-center' ), $grid_location ) ); ?></p><?php endif; ?>
 			<div style="display:grid;grid-template-columns:repeat(<?php echo (int) $grid['size']; ?>,minmax(72px,1fr));gap:8px;max-width:620px">
 				<?php foreach ( $grid['points'] as $point ) : $rank = $point['rank']; ?>
-					<div class="scc-card" style="margin:0;padding:14px;text-align:center"><strong style="font-size:20px"><?php echo null === $rank ? '—' : esc_html( (int) $rank ); ?></strong><br><span class="scc-note"><?php echo esc_html( round( $point['lat'], 4 ) . ', ' . round( $point['lng'], 4 ) ); ?></span></div>
+					<div class="scc-card" style="margin:0;padding:14px;text-align:center"><strong style="font-size:20px"><?php echo null === $rank ? '—' : esc_html( (int) $rank ); ?></strong></div>
 				<?php endforeach; ?>
 			</div>
 		<?php endif; ?>

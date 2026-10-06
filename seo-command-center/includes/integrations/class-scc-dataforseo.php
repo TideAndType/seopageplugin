@@ -252,6 +252,90 @@ class SCC_DataForSEO {
 	}
 
 	/**
+	 * Resolve a human-friendly scan area to the matched business coordinates.
+	 *
+	 * Used when the local Rank Tracker is unavailable but DataForSEO is
+	 * connected. The user still enters a city/address; coordinates remain an
+	 * implementation detail.
+	 *
+	 * @param string $location_name City/region/address entered by the user.
+	 * @param string $business_name Business name to match.
+	 * @param string $domain        Business domain.
+	 * @param string $place_id      Optional Google Place ID/CID.
+	 * @return array|WP_Error {lat,lng,display_name,source}
+	 */
+	public static function resolve_maps_location( $location_name, $business_name, $domain = '', $place_id = '' ) {
+		$location_name = SCC_Security::sanitize_text( $location_name );
+		$business_name = SCC_Security::sanitize_text( $business_name );
+		$domain        = SCC_Security::sanitize_text( $domain );
+		$place_id      = SCC_Security::sanitize_text( $place_id );
+
+		if ( '' === $location_name || '' === $business_name ) {
+			return new WP_Error( 'scc_dfs_location_input', __( 'A scan area and business name are required.', 'seo-command-center' ) );
+		}
+
+		$result = self::post(
+			'/serp/google/maps/live/advanced',
+			array(
+				'keyword'       => $business_name,
+				'location_name' => $location_name,
+				'language_code' => 'en',
+				'device'        => 'desktop',
+				'depth'         => 20,
+				'search_places' => true,
+			)
+		);
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		foreach ( $result as $block ) {
+			foreach ( (array) ( $block['items'] ?? array() ) as $item ) {
+				if ( 'maps_search' !== (string) ( $item['type'] ?? '' ) ) {
+					continue;
+				}
+				$lat = isset( $item['latitude'] ) ? (float) $item['latitude'] : 0.0;
+				$lng = isset( $item['longitude'] ) ? (float) $item['longitude'] : 0.0;
+				if ( 0.0 === $lat && 0.0 === $lng ) {
+					continue;
+				}
+
+				$item_place = (string) ( $item['place_id'] ?? $item['cid'] ?? $item['feature_id'] ?? '' );
+				$matched = '' !== $place_id && '' !== $item_place && $place_id === $item_place;
+				if ( ! $matched && class_exists( 'SCC_Local_Grid' ) ) {
+					$rank_match = SCC_Local_Grid::identify_rank(
+						array(
+							array(
+								'rank_group' => (int) ( $item['rank_group'] ?? 1 ),
+								'title'      => (string) ( $item['title'] ?? '' ),
+								'domain'     => (string) ( $item['domain'] ?? '' ),
+								'url'        => (string) ( $item['url'] ?? '' ),
+							),
+						),
+						$business_name,
+						$domain
+					);
+					$matched = null !== ( $rank_match['rank'] ?? null );
+				}
+
+				if ( $matched ) {
+					return array(
+						'lat'          => $lat,
+						'lng'          => $lng,
+						'display_name' => sanitize_text_field( (string) ( $item['address'] ?? $item['title'] ?? $location_name ) ),
+						'source'       => 'dataforseo',
+					);
+				}
+			}
+		}
+
+		return new WP_Error(
+			'scc_dfs_location_not_found',
+			__( 'TideOrbit could not match that business in the scan area. Try the city and state or a full street address.', 'seo-command-center' )
+		);
+	}
+
+	/**
 	 * Domains linking to competitors but not to our domain.
 	 *
 	 * @param string[] $competitors Competitor root domains.

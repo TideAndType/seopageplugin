@@ -48,6 +48,30 @@ class SCC_Browser_Runtime {
 		return is_array( $jobs ) ? $jobs : array();
 	}
 
+	public static function geocode( $location ) {
+		$location = sanitize_text_field( (string) $location );
+		if ( '' === $location ) {
+			return new WP_Error( 'scc_browser_location_required', __( 'Enter a city, ZIP code, or street address.', 'seo-command-center' ) );
+		}
+		if ( ! self::configured() ) {
+			return new WP_Error( 'scc_browser_not_configured', __( 'Browser Runtime is not paired.', 'seo-command-center' ) );
+		}
+
+		$result = self::request( 'GET', '/api/tideorbit/geocode?address=' . rawurlencode( $location ) );
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+		if ( ! isset( $result['lat'], $result['lng'] ) ) {
+			return new WP_Error( 'scc_browser_bad_location', __( 'The Rank Tracker could not resolve that location.', 'seo-command-center' ) );
+		}
+		return array(
+			'lat'          => (float) $result['lat'],
+			'lng'          => (float) $result['lng'],
+			'display_name' => sanitize_text_field( (string) ( $result['displayName'] ?? $location ) ),
+			'source'       => 'browser',
+		);
+	}
+
 	public static function health() {
 		if ( ! self::configured() ) {
 			return new WP_Error( 'scc_browser_not_configured', __( 'Add your Cloudflare Tunnel URL and TideOrbit pairing key first.', 'seo-command-center' ) );
@@ -231,6 +255,8 @@ class SCC_Browser_Runtime {
 
 		return array(
 			'keyword'        => (string) ( $args['keyword'] ?? $scan['keyword'] ?? '' ),
+			'location'       => (string) ( $args['location'] ?? '' ),
+			'resolved_location' => (string) ( $args['resolved_location'] ?? $args['location'] ?? '' ),
 			'business_name'  => (string) ( $args['business_name'] ?? $scan['businessName'] ?? '' ),
 			'domain'         => (string) ( $args['domain'] ?? '' ),
 			'center'         => array( 'lat' => (float) ( $args['lat'] ?? $scan['centerLat'] ?? 0 ), 'lng' => (float) ( $args['lng'] ?? $scan['centerLng'] ?? 0 ) ),

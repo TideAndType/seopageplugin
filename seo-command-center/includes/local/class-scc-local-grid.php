@@ -11,7 +11,73 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class SCC_Local_Grid {
 	const CACHE_TTL = 6 * HOUR_IN_SECONDS;
+	const GEO_CACHE_TTL = 30 * DAY_IN_SECONDS;
 	const LAST_OPTION = 'scc_local_grid_last';
+
+	public static function coverage_profile( $coverage ) {
+		$coverage = sanitize_key( (string) $coverage );
+		$profiles = array(
+			'neighborhood' => array( 'size' => 3, 'spacing_km' => 0.75, 'label' => __( 'Neighborhood', 'seo-command-center' ) ),
+			'city'         => array( 'size' => 5, 'spacing_km' => 1.5, 'label' => __( 'City', 'seo-command-center' ) ),
+			'metro'        => array( 'size' => 5, 'spacing_km' => 3.0, 'label' => __( 'Wider area', 'seo-command-center' ) ),
+		);
+		return isset( $profiles[ $coverage ] ) ? $profiles[ $coverage ] : $profiles['city'];
+	}
+
+	public static function default_location( array $business ) {
+		$parts = array_filter(
+			array(
+				trim( (string) ( $business['street'] ?? '' ) ),
+				trim( (string) ( $business['city'] ?? '' ) ),
+				trim( (string) ( $business['region'] ?? '' ) ),
+				trim( (string) ( $business['postal_code'] ?? '' ) ),
+				trim( (string) ( $business['country'] ?? '' ) ),
+			)
+		);
+		return implode( ', ', array_values( $parts ) );
+	}
+
+	public static function resolve_location( $location, $business_name = '', $domain = '', $place_id = '' ) {
+		$location = sanitize_text_field( (string) $location );
+		if ( '' === $location ) {
+			return new WP_Error( 'scc_grid_location_required', __( 'Enter the city, ZIP code, or address you want to scan.', 'seo-command-center' ) );
+		}
+
+		$cache_key = 'scc_grid_geo_' . md5( strtolower( $location . '|' . $business_name . '|' . $domain . '|' . $place_id ) );
+		$cached = get_transient( $cache_key );
+		if ( is_array( $cached ) && isset( $cached['lat'], $cached['lng'] ) ) {
+			return $cached;
+		}
+
+		$browser_error = null;
+		if ( class_exists( 'SCC_Browser_Runtime' ) && 'dataforseo' !== SCC_Browser_Runtime::mode() && SCC_Browser_Runtime::configured() ) {
+			$resolved = SCC_Browser_Runtime::geocode( $location );
+			if ( ! is_wp_error( $resolved ) ) {
+				set_transient( $cache_key, $resolved, self::GEO_CACHE_TTL );
+				return $resolved;
+			}
+			$browser_error = $resolved;
+		}
+
+		if ( class_exists( 'SCC_DataForSEO' ) && SCC_DataForSEO::is_connected() ) {
+			$resolved = SCC_DataForSEO::resolve_maps_location( $location, $business_name, $domain, $place_id );
+			if ( ! is_wp_error( $resolved ) ) {
+				set_transient( $cache_key, $resolved, self::GEO_CACHE_TTL );
+				return $resolved;
+			}
+			if ( ! $browser_error ) {
+				$browser_error = $resolved;
+			}
+		}
+
+		if ( is_wp_error( $browser_error ) ) {
+			return $browser_error;
+		}
+		return new WP_Error(
+			'scc_grid_location_provider',
+			__( 'TideOrbit could not resolve that scan area. Connect the Rank Tracker or DataForSEO, then try the city and state or a full address.', 'seo-command-center' )
+		);
+	}
 
 	public static function grid_points( $lat, $lng, $size = 3, $spacing_km = 1.0 ) {
 		$lat = (float) $lat;
@@ -120,6 +186,8 @@ class SCC_Local_Grid {
 
 		$out = array(
 			'keyword' => $args['keyword'],
+			'location' => (string) ( $args['location'] ?? '' ),
+			'resolved_location' => (string) ( $args['resolved_location'] ?? $args['location'] ?? '' ),
 			'business_name' => $args['business_name'],
 			'domain' => $args['domain'],
 			'center' => array( 'lat' => $args['lat'], 'lng' => $args['lng'] ),
@@ -153,18 +221,40 @@ class SCC_Local_Grid {
 	}
 
 	protected static function normalize_args( array $args ) {
+		$coverage = sanitize_key( (string) ( $args['coverage'] ?? '' ) );
+		$profile  = '' !== $coverage ? self::coverage_profile( $coverage ) : null;
 		$out = array(
 			'keyword'       => sanitize_text_field( $args['keyword'] ?? '' ),
 			'business_name' => sanitize_text_field( $args['business_name'] ?? '' ),
 			'domain'        => self::normalize_domain( $args['domain'] ?? home_url( '/' ) ),
 			'place_id'      => sanitize_text_field( $args['place_id'] ?? '' ),
+			'location'      => sanitize_text_field( $args['location'] ?? '' ),
+			'coverage'      => '' !== $coverage ? $coverage : 'custom',
 			'lat'           => (float) ( $args['lat'] ?? 0 ),
 			'lng'           => (float) ( $args['lng'] ?? 0 ),
-			'size'          => in_array( (int) ( $args['size'] ?? 3 ), array( 3, 5 ), true ) ? (int) $args['size'] : 3,
-			'spacing_km'    => max( 0.2, min( 10.0, (float) ( $args['spacing_km'] ?? 1.0 ) ) ),
+			'size'          => $profile ? (int) $profile['size'] : ( in_array( (int) ( $args['size'] ?? 3 ), array( 3, 5 ), true ) ? (int) $args['size'] : 3 ),
+			'spacing_km'    => $profile ? (float) $profile['spacing_km'] : max( 0.2, min( 10.0, (float) ( $args['spacing_km'] ?? 1.0 ) ) ),
 		);
-		if ( '' === $out['keyword'] || ( '' === $out['business_name'] && '' === $out['domain'] && '' === $out['place_id'] ) || 0.0 === $out['lat'] || 0.0 === $out['lng'] ) {
-			return new WP_Error( 'scc_grid_input', __( 'Keyword, coordinates, and a business name, Place ID, or domain are required.', 'seo-command-center' ), array( 'status' => 400 ) );
+
+		if ( '' === $out['location'] && class_exists( 'SCC_Schema_Engine' ) ) {
+			$out['location'] = self::default_location( SCC_Schema_Engine::business() );
+		}
+		if ( '' === $out['keyword'] || ( '' === $out['business_name'] && '' === $out['domain'] && '' === $out['place_id'] ) ) {
+			return new WP_Error( 'scc_grid_input', __( 'Keyword and business name are required.', 'seo-command-center' ), array( 'status' => 400 ) );
+		}
+
+		if ( 0.0 === $out['lat'] || 0.0 === $out['lng'] ) {
+			$resolved = self::resolve_location( $out['location'], $out['business_name'], $out['domain'], $out['place_id'] );
+			if ( is_wp_error( $resolved ) ) {
+				return $resolved;
+			}
+			$out['lat'] = (float) $resolved['lat'];
+			$out['lng'] = (float) $resolved['lng'];
+			$out['resolved_location'] = sanitize_text_field( (string) ( $resolved['display_name'] ?? $out['location'] ) );
+			$out['location_source'] = sanitize_key( (string) ( $resolved['source'] ?? '' ) );
+		} else {
+			$out['resolved_location'] = $out['location'];
+			$out['location_source'] = 'coordinates';
 		}
 		return $out;
 	}
@@ -174,7 +264,7 @@ class SCC_Local_Grid {
 			wp_json_encode(
 				array(
 					$args['keyword'], $args['business_name'], $args['domain'], $args['place_id'],
-					$args['lat'], $args['lng'], $args['size'], $args['spacing_km'],
+					$args['location'] ?? '', $args['lat'], $args['lng'], $args['size'], $args['spacing_km'],
 				)
 			)
 		);
