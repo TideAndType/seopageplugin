@@ -3932,6 +3932,88 @@
 			} );
 		} );
 
+		// 21st.dev Design Discovery: independent of selected post so the
+		// administrator can build the design library before creating a page.
+		( function bindDiscovery() {
+			var panel = document.getElementById( 'scc-design-discovery' );
+			if ( ! panel ) { return; }
+			var category = document.getElementById( 'scc-dd-category' );
+			var scan = document.getElementById( 'scc-dd-scan' );
+			var refresh = document.getElementById( 'scc-dd-refresh' );
+			var message = document.getElementById( 'scc-dd-message' );
+			var count = document.getElementById( 'scc-dd-count' );
+			var results = document.getElementById( 'scc-dd-results' );
+			function renderItems( items ) {
+				results.innerHTML = '';
+				if ( ! items.length ) {
+					results.appendChild( el( 'p', 'No saved components in this category. Click Scan next components to start.', 'scc-note' ) );
+					return;
+				}
+				var table = el( 'table', null, 'widefat striped' );
+				var thead = el( 'thead' ), headers = el( 'tr' );
+				[ 'Component', 'Designer', 'Design details', 'License', 'Actions' ].forEach( function ( label ) {
+					headers.appendChild( el( 'th', label ) );
+				} );
+				thead.appendChild( headers ); table.appendChild( thead );
+				var body = el( 'tbody' );
+				items.slice( 0, 40 ).forEach( function ( item ) {
+					var tr = el( 'tr' );
+					var title = el( 'td' );
+					var link = el( 'a', item.title );
+					link.href = item.url;
+					link.target = '_blank';
+					link.rel = 'noopener noreferrer';
+					title.appendChild( link ); tr.appendChild( title );
+					tr.appendChild( el( 'td', item.author || 'Unknown' ) );
+					tr.appendChild( el( 'td', ( item.description || '' ).slice( 0, 180 ) + ( item.signals && item.signals.length ? ' · ' + item.signals.join( ', ' ) : '' ) ) );
+					tr.appendChild( el( 'td', item.license || 'Not stated' ) );
+					var action = el( 'td' );
+					if ( postId > 0 ) {
+						var select = el( 'button', 'Use as design reference', 'button button-small' );
+						select.type = 'button';
+						select.addEventListener( 'click', function () {
+							var prompt = document.getElementById( 'scc-layout-design-prompt' );
+							if ( ! prompt ) { return; }
+							var reference = 'Visual inspiration: ' + item.title + ' (' + item.url + '). ' + ( item.description || '' );
+							prompt.value = ( ( prompt.value ? prompt.value + '\\n' : '' ) + reference ).slice( 0, 2400 );
+							prompt.focus();
+							setStatus( message, 'Reference added to Design direction. Click Regenerate design to apply it.', 'is-ok' );
+						} );
+						action.appendChild( select );
+					}
+					tr.appendChild( action );
+					body.appendChild( tr );
+				} );
+				table.appendChild( body ); results.appendChild( table );
+			}
+			function load() {
+				request( '/design-discovery/catalog?category=' + encodeURIComponent( category.value ), { method: 'GET' } )
+					.then( function ( res ) {
+						var d = res.data || {};
+						count.textContent = ( d.total || 0 ) + ' saved components';
+						renderItems( d.items || [] );
+					} )
+					.catch( function ( err ) { setStatus( message, err.message || 'Library unavailable.', 'is-error' ); } );
+			}
+			if ( scan ) {
+				scan.addEventListener( 'click', function () {
+					scan.disabled = true;
+					setStatus( message, 'Scanning 21st.dev metadata for ' + category.value + '…' );
+					request( '/design-discovery/scan', { method: 'POST', data: { category: category.value } } )
+						.then( function ( res ) {
+							var d = res.data || {};
+							setStatus( message, 'Added ' + ( d.added || 0 ) + ' components from ' + ( d.found_on_page || 0 ) + ' visible links; ' + ( d.total || 0 ) + ' saved in library.', 'is-ok' );
+							load();
+						} )
+						.catch( function ( err ) { setStatus( message, err.message || 'Scan failed.', 'is-error' ); } )
+						.finally( function () { scan.disabled = false; } );
+				} );
+			}
+			if ( refresh ) { refresh.addEventListener( 'click', load ); }
+			category.addEventListener( 'change', load );
+			load();
+		}() );
+
 		if ( postId <= 0 ) { return; }
 
 		var preview = document.getElementById( 'scc-layout-preview' );
