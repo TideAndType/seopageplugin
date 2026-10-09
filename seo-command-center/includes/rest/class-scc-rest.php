@@ -2756,6 +2756,10 @@ class SCC_REST {
 		$service = new SCC_Layout_Service( $this->ai );
 		$result  = $service->propose_for_post( $post_id, $use_ai, $design_prompt, $visual_recipe );
 		if ( ! is_wp_error( $result ) && $visual_mode ) {
+			if ( empty( $result['composition_mode'] ) ) {
+				return $this->fail( 'scc_visual_compose_failed',
+					'Visual Recreation could not create a validated native Elementor composition. Check Elementor Flexbox containers and the reference screenshot before retrying.', 422 );
+			}
 			$result['visual_recreation'] = true;
 		}
 		if ( is_wp_error( $result ) ) {
