@@ -81,8 +81,7 @@ jobs:
           # Preserve the required WordPress plugin header and uninstall
           # source. Strip PHP comments/whitespace in distributed includes
           # only; source files in Git remain readable and documented.
-          find packaging/seo-command-center/includes -type f -name '*.php' -print0 \\
-            | xargs -0 -n1 php -r 'file_put_contents($argv[1], php_strip_whitespace($argv[1]));'
+          find packaging/seo-command-center/includes -type f -name '*.php' -print0 | xargs -0 -n1 php -r 'file_put_contents($argv[1], php_strip_whitespace($argv[1]));'
           # Validate ALL production PHP files after stripping.
           php -l packaging/seo-command-center/seo-command-center.php
           find packaging/seo-command-center -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
