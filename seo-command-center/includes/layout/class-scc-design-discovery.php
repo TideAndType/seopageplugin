@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 class SCC_Design_Discovery {
 	const OPTION = 'scc_21st_component_catalog';
 	const LIMIT = 600;
-	const PER_RUN = 8;
+	const PER_RUN = 6;
 
 	public static function categories() {
 		return array(
@@ -192,8 +192,9 @@ class SCC_Design_Discovery {
 		$catalog = self::catalog();
 		$stored = 0;
 		$failed = 0;
+		$started = microtime( true );
 		foreach ( $links as $link ) {
-			if ( $stored >= self::PER_RUN ) { break; }
+			if ( $stored >= self::PER_RUN || microtime( true ) - $started > 42 ) { break; }
 			$key = md5( $link );
 			if ( isset( $catalog[ $key ] ) ) { continue; }
 			$detail = self::fetch( $link );
