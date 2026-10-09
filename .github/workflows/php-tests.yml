@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches:
+      - main
       - ttgmbapp
       - 'claude/**'
 
@@ -42,7 +43,7 @@ jobs:
   package:
     name: Build WordPress install ZIP
     needs: test
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/ttgmbapp')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ttgmbapp'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
