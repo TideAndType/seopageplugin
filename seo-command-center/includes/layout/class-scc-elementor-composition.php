@@ -560,6 +560,10 @@ class SCC_Elementor_Composition {
 			$title = trim( (string) ( $item['title'] ?? '' ) );
 			$heading = sprintf( '%02d — %s', $index + 1, $title );
 			$body = trim( (string) ( $item['description'] ?? '' ) );
+		} elseif ( 'services' === $kind ) {
+			$heading = trim( (string) ( $item['title'] ?? '' ) );
+			$body = trim( (string) ( $item['description'] ?? '' ) );
+			$url = esc_url_raw( (string) ( $item['url'] ?? '' ) );
 		} elseif ( 'related' === $kind || 'areas' === $kind ) {
 			$heading = trim( (string) ( $item['title'] ?? $item['name'] ?? '' ) );
 			$url = esc_url_raw( (string) ( $item['url'] ?? '' ) );

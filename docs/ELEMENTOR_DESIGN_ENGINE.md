@@ -72,6 +72,25 @@ Current section treatments include:
 Composition is deterministic: identical finished content produces the same
 visual plan even if SEO metadata changes.
 
+## LM Studio compact art-direction workflow (v1.85.0)
+
+Local models are best at short creative decisions, not huge nested JSON trees.
+When Layout Design is routed to LM Studio, TideOrbit now asks for a concise
+art-direction recipe (hero treatment, palette tone, responsive section rhythm,
+preferred widths). The server **constructs** the real Elementor widget tree
+from the completed, immutable content bank; missing required content is
+rejected by the same composition validator.
+
+Newly generated WordPress **pages** automatically use this professional design
+path when the existing auto-layout option is enabled and LM Studio is chosen
+for Layout Design (or as the primary AI provider). Blog posts, explicit
+Elementor template mappings, and all existing rollback/draft protections
+are preserved.
+
+The compact approach reduces token usage and tunnel exposure, but very slow
+local models or Cloudflare Quick Tunnel limits can still interrupt requests;
+in those cases the previous deterministic layout is used as a fallback.
+
 ## Schema-aware Design Agent
 
 When **AI Design Agent** is enabled, TideOrbit no longer asks the model merely

@@ -9,9 +9,29 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## LM Studio professional page creation (1.85.0)
+
+When **LM Studio** is the chosen Layout Design provider (or primary AI provider),
+newly generated **WordPress pages** with auto-build enabled are no longer
+limited to the static section builder. After the full draft copy is saved,
+LM Studio produces a short creative art-direction recipe; TideOrbit turns it
+into complete native Elementor containers/widgets with intentional typography,
+responsive layouts, brand colors, full sections, supplied images, service cards,
+FAQ, stats, links and CTA. The agent never rewrites completed copy.
+
+This compact recipe is designed for small local models and tunnel connections.
+It requires far less generated JSON than the full schema-aware agent. AI
+failures do not destroy the draft: the previous deterministic Page Architect
+remains the fallback. Existing mapped Elementor templates remain unchanged.
+
+The **Layout Engine** also uses the compact designer when LM Studio is the
+selected layout provider and AI Design Agent is enabled. Draft copies and
+rollback remain available. An actual WordPress+Elementor visual smoke test
+should still be done before using this on a live published page.
+
 ## Status
 
-**Current version: 1.84.2.** The plugin is organized around four areas —
+**Current version: 1.85.0.** The plugin is organized around four areas —
 **Dashboard, Create, Optimize, Opportunities** — with an **SEO Copilot** on the
 Dashboard that answers plain-language questions using your real data. All seven
 foundational phases plus the intelligence engine, CMS-agnostic template system,

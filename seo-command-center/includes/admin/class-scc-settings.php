@@ -69,6 +69,8 @@ class SCC_Settings {
 			'route_keyword_strategy_model'      => 'text',
 			'route_content_generation_provider' => 'provider_or_empty',
 			'route_content_generation_model'    => 'text',
+			'route_layout_design_provider' => 'provider_or_empty',
+			'route_layout_design_model' => 'text',
 			'route_content_brief_provider'      => 'provider_or_empty',
 			'route_content_brief_model'         => 'text',
 			'route_meta_optimization_provider'  => 'provider_or_empty',

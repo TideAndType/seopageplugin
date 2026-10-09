@@ -117,9 +117,24 @@ class SCC_AI_Manager {
 			'regenerate-section'  => 'content_generation',
 			'content-brief'       => 'content_brief',
 			'layout-design'       => 'layout_design',
+			'elementor-design-agent' => 'layout_design',
+			'elementor-design-agent-repair' => 'layout_design',
+			'elementor-design-blueprint' => 'layout_design',
 			'meta-optimization'   => 'meta_optimization',
 		);
 		return isset( $map[ $operation ] ) ? $map[ $operation ] : '';
+	}
+
+	/**
+	 * Read the user's preferred design provider without starting an AI call.
+	 * This is used by the generator to choose the compact LM Studio path,
+	 * rather than accidentally calling a hosted provider when a local model
+	 * was explicitly selected for Elementor layout planning.
+	 */
+	public static function preferred_layout_provider() {
+		$settings = get_option( 'scc_settings', array() );
+		$override = isset( $settings['route_layout_design_provider'] ) ? (string) $settings['route_layout_design_provider'] : '';
+		return '' !== $override ? $override : (string) ( $settings['default_provider'] ?? 'claude' );
 	}
 
 	/**
