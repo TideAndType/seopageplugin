@@ -164,7 +164,12 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		$req_messages = isset( $request['messages'] ) && is_array( $request['messages'] ) ? $request['messages'] : array();
 		foreach ( $req_messages as $m ) {
 			$role = ( isset( $m['role'] ) && 'assistant' === $m['role'] ) ? 'assistant' : 'user';
-			$messages[] = array( 'role' => $role, 'content' => (string) ( $m['content'] ?? '' ) );
+			// LM Studio's OpenAI-compatible chat endpoint supports image input
+			// for vision-capable models. Preserve structured content when it contains
+			// valid, in-memory data images; never forward remote image URLs.
+			$raw_content = $m['content'] ?? '';
+			$messages[] = array( 'role' => $role, 'content' => is_array( $raw_content )
+				? self::safe_multimodal_content( $raw_content ) : (string) $raw_content );
 		}
 		if ( empty( $req_messages ) ) {
 			$messages[] = array( 'role' => 'user', 'content' => (string) ( $request['prompt'] ?? 'Hello' ) );
@@ -338,6 +343,31 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Whitelist OpenAI image-content parts and protect LM Studio from arbitrary
+	 * remote URLs or excessively large base64 payloads. No public-site assets.
+	 *
+	 * @param array $parts Message content parts.
+	 * @return array Structured parts safe for LM Studio.
+	 */
+	public static function safe_multimodal_content( array $parts ) {
+		$out = array();
+		foreach ( array_slice( $parts, 0, 5 ) as $part ) {
+			if ( ! is_array( $part ) ) { continue; }
+			if ( 'text' === ( $part['type'] ?? '' ) ) {
+				$out[] = array( 'type' => 'text', 'text' => substr( (string) ( $part['text'] ?? '' ), 0, 4500 ) );
+			} elseif ( 'image_url' === ( $part['type'] ?? '' ) ) {
+				$url = (string) ( $part['image_url']['url'] ?? '' );
+				if ( ! preg_match( '#^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$#D', $url, $m ) ) { continue; }
+				if ( strlen( $m[2] ) > 4194304 ) { continue; }
+				$decoded = base64_decode( $m[2], true );
+				if ( false === $decoded || strlen( $decoded ) > 3145728 ) { continue; }
+				$out[] = array( 'type' => 'image_url', 'image_url' => array( 'url' => $url ) );
+			}
+		}
+		return $out;
 	}
 
 	/**
