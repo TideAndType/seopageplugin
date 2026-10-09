@@ -32,7 +32,9 @@ jobs:
         run: find seo-command-center tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Admin JavaScript syntax check
-        run: node --check seo-command-center/assets/js/admin.js
+        run: |
+          node --check seo-command-center/assets/js/admin.js
+          node --check seo-command-center/assets/js/editor.js
 
       - name: Unit tests
         run: php tests/run-tests.php
@@ -54,9 +56,45 @@ jobs:
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Build lean production-only plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packaging/seo-command-center
+          cp -a seo-command-center/. packaging/seo-command-center/
+          # Documentation and the original unminified sources remain in Git,
+          # not in the WordPress installation archive.
+          rm -rf packaging/seo-command-center/docs
+          # Build-time-only tooling: no npm/React dependencies shipped or loaded.
+          for file in packaging/seo-command-center/assets/js/*.js; do
+            out="${file%.js}.pack.js"
+            npx --yes terser@5.44.1 "$file" --compress --mangle --output "$out"
+            node --check "$out"
+            mv "$out" "$file"
+          done
+          for file in packaging/seo-command-center/assets/css/*.css; do
+            out="${file%.css}.pack.css"
+            npx --yes clean-css-cli@5.6.3 --output "$out" "$file"
+            test -s "$out"
+            mv "$out" "$file"
+          done
+          # The installed plugin keeps the same normal asset filenames, so
+          # PHP enqueues and versioned browser caches need no special handling.
+          php -l packaging/seo-command-center/seo-command-center.php
+          find packaging/seo-command-center -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+          echo "Production plugin bytes: $(du -sb packaging/seo-command-center | cut -f1)"
+
       - name: Build WordPress install ZIP
         shell: bash
-        run: zip -r "TideOrbit-${{ steps.version.outputs.version }}.zip" seo-command-center
+        run: |
+          set -euo pipefail
+          ( cd packaging && zip -qr "../TideOrbit-${{ steps.version.outputs.version }}.zip" seo-command-center )
+          unzip -tq "TideOrbit-${{ steps.version.outputs.version }}.zip"
+          if unzip -Z1 "TideOrbit-${{ steps.version.outputs.version }}.zip" | grep -E '^seo-command-center/docs/|/\.git/|/node_modules/'; then
+            echo "Developer-only files escaped into the package"
+            exit 1
+          fi
+          echo "Install ZIP bytes: $(stat -c '%s' TideOrbit-${{ steps.version.outputs.version }}.zip)"
 
       - name: Upload WordPress install ZIP
         uses: actions/upload-artifact@v4
