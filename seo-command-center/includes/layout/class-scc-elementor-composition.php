@@ -214,6 +214,7 @@ class SCC_Elementor_Composition {
 		if ( $collection && isset( $layout['columns'] ) ) {
 			$out['columns'] = max( 1, min( 6, (int) $layout['columns'] ) );
 		}
+		if ( $collection && ! empty( $layout['bento'] ) ) { $out['bento'] = true; }
 		return $out;
 	}
 
@@ -468,6 +469,8 @@ class SCC_Elementor_Composition {
 		$kind = (string) ( $entry['meta']['collection'] ?? '' );
 		$layout = (array) ( $node['layout'] ?? array() );
 		$columns = max( 1, min( 6, (int) ( $layout['columns'] ?? ( 'stats' === $kind ? min( 4, max( 1, count( $items ) ) ) : 3 ) ) ) );
+		$bento = ! empty( $layout['bento'] ) && $columns >= 2 && count( $items ) >= 3 && 'faq' !== $kind;
+		$base_width = $bento ? max( 18, ( 100 / $columns ) - 2 ) : 100 / $columns;
 		$children = array();
 
 		if ( 'faq' === $kind && SCC_Elementor_Widget_Schema::supports( 'accordion' ) ) {
@@ -498,7 +501,7 @@ class SCC_Elementor_Composition {
 							'content_width' => 'full',
 							'flex_direction' => 'column',
 							'flex_gap' => self::gap( 14 ),
-							'width' => self::size( 100 / $columns, '%' ),
+							'width' => self::size( $bento && 0 === $i ? min( 98, $base_width * 2 + 1 ) : $base_width, '%' ),
 							'width_mobile' => self::size( 100, '%' ),
 							'padding' => self::dims( array( 28, 28, 28, 28 ) ),
 							'background_background' => 'classic',
