@@ -2510,6 +2510,48 @@ assert_true( is_wp_error( SCC_Elementor_Composition::validate( $scc_agent_unsafe
 $scc_runtime_catalog = SCC_Elementor_Widget_Schema::agent_catalog( 'bold testimonial form layout' );
 assert_true( isset( $scc_runtime_catalog['schemas']['heading'], $scc_runtime_catalog['schemas']['text-editor'] ), 'schema discovery always provides safe core widget schemas as a fallback' );
 
+echo "\n== LM Studio compact professional page designer ==\n";
+$scc_blueprint_analysis = $scc_variant_analysis;
+$scc_blueprint_analysis['services'] = array(
+	array( 'title' => 'Managed SEO', 'description' => 'Technical and content improvements.', 'url' => '/seo/' ),
+	array( 'title' => 'Web design', 'description' => 'Professional custom site design.', 'url' => '/design/' ),
+);
+$scc_blueprint_bank = SCC_Elementor_Content_Bank::build( $scc_blueprint_analysis );
+assert_true( isset( $scc_blueprint_bank['services.items'], $scc_blueprint_bank['faq.items'], $scc_blueprint_bank['hero.media'] ), 'content bank retains services, FAQs and hero imagery for the page designer' );
+$scc_blueprint_recipe = array(
+	'name' => 'Professional Contrast',
+	'hero' => 'split',
+	'tone' => 'contrast',
+	'accent' => 'primary',
+	'width' => 1160,
+	'sections' => array( array( 'index' => 0, 'style' => 'spotlight' ), array( 'index' => 1, 'style' => 'narrow' ) ),
+);
+$scc_blueprint_composition = SCC_Elementor_Design_Blueprint::compose( $scc_blueprint_bank, $scc_blueprint_recipe, $scc_profile );
+$scc_blueprint_valid = SCC_Elementor_Composition::validate( $scc_blueprint_composition, $scc_blueprint_bank );
+assert_true( ! is_wp_error( $scc_blueprint_valid ), 'short LM Studio creative recipe becomes a fully validated Elementor page' );
+if ( ! is_wp_error( $scc_blueprint_valid ) ) {
+	$scc_blueprint_required = SCC_Elementor_Content_Bank::required_keys( $scc_blueprint_bank );
+	assert_eq( array(), array_values( array_diff( $scc_blueprint_required, $scc_blueprint_valid['meta']['content_refs'] ) ), 'professional blueprint composes every required content reference without dropped copy' );
+	$scc_blueprint_tree = SCC_Elementor_Composition::compile( $scc_blueprint_valid, $scc_blueprint_bank, $scc_profile );
+	assert_true( count( $scc_blueprint_tree ) >= 5, 'professional design compiles a complete multi-section Elementor page' );
+	assert_eq( 'container', $scc_blueprint_tree[0]['elType'], 'professional hero is an editable native Elementor container' );
+}
+$scc_no_media_analysis = $scc_blueprint_analysis;
+$scc_no_media_analysis['image'] = array();
+$scc_no_media_analysis['has_image'] = false;
+$scc_no_media_analysis['content_html'] = '<p>Lead paragraph.</p><h2>Our approach</h2><p>Trustworthy original copy.</p>';
+$scc_no_media_analysis['intro'] = 'Lead paragraph.';
+$scc_no_media_bank = SCC_Elementor_Content_Bank::build( $scc_no_media_analysis );
+$scc_no_media_composition = SCC_Elementor_Design_Blueprint::compose( $scc_no_media_bank, array( 'hero' => 'split', 'tone' => 'light' ), $scc_profile );
+assert_true( ! is_wp_error( SCC_Elementor_Composition::validate( $scc_no_media_composition, $scc_no_media_bank ) ), 'design still produces a valid editorial hero when no image is supplied' );
+
+$scc_route_method = new ReflectionMethod( 'SCC_AI_Manager', 'route_key_for' );
+$scc_route_method->setAccessible( true );
+$scc_route_ai = new SCC_AI_Manager();
+assert_eq( 'layout_design', $scc_route_method->invoke( $scc_route_ai, 'elementor-design-agent' ), 'full Elementor design agent respects the Layout Design provider route' );
+assert_eq( 'layout_design', $scc_route_method->invoke( $scc_route_ai, 'elementor-design-blueprint' ), 'compact LM Studio designer respects the Layout Design provider route' );
+
+
 echo "\n== The SEO Framework active detection ==\n";
 if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
 	define( 'THE_SEO_FRAMEWORK_VERSION', '5.1.4-test' );
