@@ -65,7 +65,18 @@ jobs:
           # Documentation and the original unminified sources remain in Git,
           # not in the WordPress installation archive.
           rm -rf packaging/seo-command-center/docs
-          # Build-time-only tooling: no npm/React dependencies shipped or loaded.
+          # Preserve the WordPress plugin header; safely remove PHP
+          # comment/whitespace tokens from distribution-only include files.
+          find packaging/seo-command-center/includes -type f -name '*.php' -print0 | xargs -0 -n1 php -r 'file_put_contents($argv[1], php_strip_whitespace($argv[1]));'
+          php -l packaging/seo-command-center/seo-command-center.php
+          find packaging/seo-command-center -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+          # Test compacted PHP against unchanged, readable source assets.
+          # Some tests intentionally audit JS source conventions and cannot
+          # inspect already-minified JS; the emitted JS is syntax-checked below.
+          cp -a tests packaging/tests
+          ( cd packaging && php tests/run-tests.php )
+          rm -rf packaging/tests
+          # Build-time-only tooling: no npm or React deps ship to WordPress.
           for file in packaging/seo-command-center/assets/js/*.js; do
             out="${file%.js}.pack.js"
             npx --yes terser@5.44.1 "$file" --compress --mangle --output "$out"
@@ -78,18 +89,6 @@ jobs:
             test -s "$out"
             mv "$out" "$file"
           done
-          # Preserve the required WordPress plugin header and uninstall
-          # source. Strip PHP comments/whitespace in distributed includes
-          # only; source files in Git remain readable and documented.
-          find packaging/seo-command-center/includes -type f -name '*.php' -print0 | xargs -0 -n1 php -r 'file_put_contents($argv[1], php_strip_whitespace($argv[1]));'
-          # Validate ALL production PHP files after stripping.
-          php -l packaging/seo-command-center/seo-command-center.php
-          find packaging/seo-command-center -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
-          # Run the same regression suite against files as INSTALLED,
-          # not just the readable development sources.
-          cp -a tests packaging/tests
-          ( cd packaging && php tests/run-tests.php )
-          rm -rf packaging/tests
           echo "Production plugin bytes: $(du -sb packaging/seo-command-center | cut -f1)"
 
       - name: Build WordPress install ZIP
