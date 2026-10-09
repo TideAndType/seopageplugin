@@ -182,6 +182,42 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 			</div>
 		<?php endif; ?>
 
+		<div class="scc-card" id="scc-visual-recreation">
+			<div class="scc-card__head">
+				<div>
+					<h2><?php esc_html_e( 'Visual Recreation Mode', 'seo-command-center' ); ?></h2>
+					<p class="scc-note"><?php esc_html_e( 'Choose a screenshot of a 21st.dev component (or any design you have permission to reference). LM Studio will inspect the image, then TideOrbit recreates the style using ONLY editable Elementor containers and widgets.', 'seo-command-center' ); ?></p>
+				</div>
+				<span class="scc-badge"><?php esc_html_e( 'No imported scripts', 'seo-command-center' ); ?></span>
+			</div>
+			<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
+				<button type="button" class="button" id="scc-visual-pick"><?php esc_html_e( 'Choose / upload reference screenshot', 'seo-command-center' ); ?></button>
+				<label for="scc-visual-source">
+					<strong><?php esc_html_e( '21st.dev source URL (optional)', 'seo-command-center' ); ?></strong>
+					<input type="url" class="regular-text" id="scc-visual-source" placeholder="https://21st.dev/@designer/components/..." />
+				</label>
+				<button type="button" class="button button-primary" id="scc-visual-analyze" disabled><?php esc_html_e( 'Analyze design with LM Studio', 'seo-command-center' ); ?></button>
+			</div>
+			<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:start;margin-top:16px">
+				<div style="flex:0 1 340px;min-width:210px">
+					<img id="scc-visual-reference-image" alt="<?php esc_attr_e( 'Chosen screenshot for visual recreation', 'seo-command-center' ); ?>" style="width:100%;height:auto;max-height:340px;object-fit:contain;border:1px solid #ddd;border-radius:8px" hidden>
+				</div>
+				<div style="flex:1 1 260px">
+					<label class="scc-toggle"><input id="scc-visual-use" type="checkbox" disabled> <strong><?php esc_html_e( 'Use this visual recipe when regenerating', 'seo-command-center' ); ?></strong></label>
+					<p id="scc-visual-recipe" class="scc-note"><?php esc_html_e( 'Choose a screenshot to begin. Use a vision-capable model in LM Studio, such as a loaded model with image input support.', 'seo-command-center' ); ?></p>
+					<span id="scc-visual-message" class="scc-inline-status" role="status"></span>
+				</div>
+			</div>
+			<details style="margin-top:14px">
+				<summary><?php esc_html_e( 'Compare and refine after previewing the draft', 'seo-command-center' ); ?></summary>
+				<p class="scc-note"><?php esc_html_e( 'After generating the Elementor draft, open its WordPress preview and take a screenshot. Choose that new screenshot here for an optional second vision pass. LM Studio compares the screenshots and adjusts the design recipe without adding code to your site.', 'seo-command-center' ); ?></p>
+				<button type="button" class="button" id="scc-visual-pick-rendered"><?php esc_html_e( 'Choose draft screenshot for comparison', 'seo-command-center' ); ?></button>
+				<button type="button" class="button button-secondary" id="scc-visual-compare" disabled><?php esc_html_e( 'Compare & refine design', 'seo-command-center' ); ?></button>
+				<span id="scc-visual-compare-info" class="scc-note"></span>
+			</details>
+			<p class="scc-note"><?php esc_html_e( 'Screenshots are stored in your existing Media Library, not served to visitors unless you use them in page content. No npm packages, third-party scripts, React, or additional Elementor plugins are installed. Unreproducible 3D and motion effects are simplified.', 'seo-command-center' ); ?></p>
+		</div>
+
 		<div class="scc-card">
 			<div class="scc-card__head">
 				<div>
