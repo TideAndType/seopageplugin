@@ -675,6 +675,24 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/layout/visual-upload',
+			array(
+				'methods' => WP_REST_Server::CREATABLE,
+				'callback' => array( $this, 'layout_visual_upload' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/layout/visual-finish',
+			array(
+				'methods' => WP_REST_Server::CREATABLE,
+				'callback' => array( $this, 'layout_visual_finish' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
 			'/layout/visual-analyze',
 			array(
 				'methods' => WP_REST_Server::CREATABLE,
@@ -2666,6 +2684,38 @@ class SCC_REST {
 	 * store a bounded design recipe for a single editable post. Never installs
 	 * image component code or writes to Elementor during analysis.
 	 */
+	/**
+	 * Create a TideOrbit-owned temporary screenshot; ordinary media library
+	 * items are never flagged for cleanup.
+	 */
+	public function layout_visual_upload( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) { return $guard; }
+		if ( ! current_user_can( 'upload_files' ) ) {
+			return $this->fail( 'scc_visual_upload_forbidden', 'Media upload permission required.', 403 );
+		}
+		$files = $request->get_file_params();
+		if ( empty( $files['image'] ) || ! is_array( $files['image'] ) ) {
+			return $this->fail( 'scc_visual_no_upload', 'Select a screenshot to upload.', 400 );
+		}
+		$result = SCC_Visual_Recreation::upload_reference( $post_id, $files['image'],
+			(string) $request->get_param( 'role' ) );
+		return is_wp_error( $result ) ? $result : $this->ok( $result );
+	}
+
+	/** Explicit completion/discard; only tagged temporary media are affected. */
+	public function layout_visual_finish( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) { return $guard; }
+		if ( ! $request->get_param( 'confirm_cleanup' ) ) {
+			return $this->fail( 'scc_visual_confirm_cleanup', 'Confirm that you want temporary design screenshots deleted.', 400 );
+		}
+		$result = SCC_Visual_Recreation::finish( $post_id );
+		return $this->ok( $result );
+	}
+
 	public function layout_visual_analyze( WP_REST_Request $request ) {
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
@@ -2806,6 +2856,14 @@ class SCC_REST {
 			: $service->apply( $post_id, $layout );
 		if ( is_wp_error( $result ) ) {
 			return $result;
+		}
+		if ( $is_live && '' !== $composition_token ) {
+			$last = get_post_meta( $post_id, '_scc_ai_composition_last', true );
+			$ref = get_post_meta( $post_id, SCC_Visual_Recreation::META, true );
+			if ( ! empty( $last['visual_recreation'] ) && is_array( $ref )
+				&& (int) ( $last['applied'] ?? 0 ) >= (int) ( $ref['updated'] ?? 0 ) ) {
+				$result['visual_cleanup'] = SCC_Visual_Recreation::finish( $post_id );
+			}
 		}
 		return $this->ok( $result );
 	}
