@@ -2547,7 +2547,7 @@ assert_true( ! is_wp_error( SCC_Elementor_Composition::validate( $scc_no_media_c
 
 $scc_route_method = new ReflectionMethod( 'SCC_AI_Manager', 'route_key_for' );
 $scc_route_method->setAccessible( true );
-$scc_route_ai = new SCC_AI_Manager();
+$scc_route_ai = ( new ReflectionClass( 'SCC_AI_Manager' ) )->newInstanceWithoutConstructor();
 assert_eq( 'layout_design', $scc_route_method->invoke( $scc_route_ai, 'elementor-design-agent' ), 'full Elementor design agent respects the Layout Design provider route' );
 assert_eq( 'layout_design', $scc_route_method->invoke( $scc_route_ai, 'elementor-design-blueprint' ), 'compact LM Studio designer respects the Layout Design provider route' );
 
