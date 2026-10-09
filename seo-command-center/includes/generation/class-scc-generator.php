@@ -546,20 +546,29 @@ class SCC_Generator {
 			);
 		}
 
-		// Auto-build an Elementor layout from the controlled block library, when
-		// enabled and Elementor is active — UNLESS this render already produced an
-		// Elementor page from a mapped template (never clobber the user's template
-		// design). Deterministic (rules only, no AI) so it stays fast and runs
-		// directly; never fatal to generation.
+		// For new pages with a selected LM Studio designer, create the actual
+		// professional Elementor composition after the finished copy is saved.
+		// The local model returns only a short visual recipe; TideOrbit builds
+		// native widgets and preserves the finished content. Existing explicit
+		// Elementor templates still take priority, and any AI failure falls back
+		// safely to the proven Page Architect without losing the content draft.
 		if ( class_exists( 'SCC_Layout_Service' )
 			&& class_exists( 'SCC_Elementor' ) && SCC_Elementor::is_active()
 			&& 'elementor' !== $used_renderer
 			&& ( ! class_exists( 'SCC_Settings' ) || SCC_Settings::get( 'layout_auto_build', true ) )
 		) {
 			try {
-				$built = ( new SCC_Layout_Service() )->build( $post_id, false );
+				// AI design is automatic only for WordPress pages when the user's
+				// Layout Design route (or primary AI provider) explicitly selects
+				// LM Studio. Blog posts retain the standard fast layout path.
+				$use_ai_design = 'page' === get_post_type( $post_id )
+					&& $this->ai instanceof SCC_AI_Manager
+					&& 'lmstudio' === SCC_AI_Manager::preferred_layout_provider();
+				$built = ( new SCC_Layout_Service( $this->ai ) )->build( $post_id, $use_ai_design );
 				self::dbg( 'auto-built Elementor layout', array(
 					'ok'     => ! is_wp_error( $built ),
+					'ai_requested' => $use_ai_design,
+					'source' => is_array( $built ) ? (string) ( $built['design_source'] ?? '' ) : '',
 					'blocks' => is_array( $built ) && isset( $built['layout'] ) ? count( (array) $built['layout'] ) : 0,
 					'error'  => is_wp_error( $built ) ? $built->get_error_message() : '',
 				) );
