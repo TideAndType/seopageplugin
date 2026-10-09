@@ -9,6 +9,31 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## 21st.dev Design Discovery (1.86.0)
+
+Go to **TideOrbit → Layout Engine → 21st.dev Design Discovery**. Choose a
+component category and click **Scan next components**. TideOrbit retrieves a
+fixed 21st.dev category listing plus a small batch of detail pages per click,
+stores titles, author, description, tags, dependencies, stated license and
+visual pattern signals, and shows a browsable source-linked catalog. This
+administrator-only scan requires the site's ability to make outbound HTTPS
+requests to 21st.dev. Repeat to fill a category; scan other categories to
+broaden the design library.
+
+Saved component metadata is automatically summarized for both the LM Studio
+compact art-director and the full Elementor Design Agent, giving them
+real-world visual references rather than generic layout instructions. Select
+**Use as design reference** next to any discovered component on an open page
+to add it to the design direction and click Regenerate Design.
+
+**Boundary:** The scanner imports **references only**, never remote JS/TSX.
+No code is executed, added to the website or redistributed. Design treatments
+are reproduced with the plugin's existing editable Elementor DSL/widgets,
+not pixel-perfect React component clones. Import of specific interactive
+components would require a separate, versioned, license-verified Elementor
+widget adapter. Scans are user-triggered and conservative to reduce request
+timeouts and load on the source.
+
 ## LM Studio professional page creation (1.85.0)
 
 When **LM Studio** is the chosen Layout Design provider (or primary AI provider),
