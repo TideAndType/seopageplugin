@@ -222,7 +222,7 @@ class SCC_Elementor_Design_Blueprint {
 				self::widget( 'final-cta-text', 'heading', array( 'title' => 'cta.copy' ), array( 'header_size' => 'h2' ),
 					array( 'font_size' => 42, 'font_weight' => 800, 'line_height' => 1.15, 'color' => '#ffffff' ),
 					array( 'mobile' => array( 'style' => array( 'font_size' => 30 ) ) )
-			), array( 'direction' => 'column', 'content_width' => 'boxed', 'max_width' => 960, 'gap' => 18, 'align' => 'center' ),
+			) ), array( 'direction' => 'column', 'content_width' => 'boxed', 'max_width' => 960, 'gap' => 18, 'align' => 'center' ),
 			array( 'background' => '#111827', 'padding' => array( 86, 24, 86, 24 ) ),
 			array( 'mobile' => array( 'style' => array( 'padding' => array( 54, 20, 54, 20 ) ) ) ) );
 		}
