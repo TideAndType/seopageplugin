@@ -253,7 +253,26 @@ class SCC_Design_Discovery {
 	/** Small grounded set sent to LM Studio as design reference material. */
 	public static function inspirations( $category = '', $limit = 6 ) {
 		$items = self::listing( $category );
-		$items = array_slice( $items, 0, max( 1, min( 12, (int) $limit ) ) );
+		$limit = max( 1, min( 12, (int) $limit ) );
+		if ( '' === $category ) {
+			// Diversify the art-direction context across hero, feature, grid,
+			// pricing, CTA and supporting components; don't send eight similar
+			// cards merely because that category was scanned most recently.
+			$groups = array();
+			foreach ( $items as $item ) {
+				$groups[ $item['category'] ][] = $item;
+			}
+			$balanced = array();
+			while ( count( $balanced ) < $limit && ! empty( $groups ) ) {
+				foreach ( array_keys( $groups ) as $key ) {
+					if ( count( $balanced ) >= $limit ) { break; }
+					$next = array_shift( $groups[ $key ] );
+					if ( $next ) { $balanced[] = $next; }
+					if ( empty( $groups[ $key ] ) ) { unset( $groups[ $key ] ); }
+				}
+			}
+			$items = $balanced;
+		} else { $items = array_slice( $items, 0, $limit ); }
 		return array_map( function ( $c ) {
 			return array(
 				'name' => $c['title'],
