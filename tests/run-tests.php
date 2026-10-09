@@ -2332,22 +2332,9 @@ assert_eq( 'hero-local', $scc_smart_layout[0], 'local-service architecture start
 assert_true( in_array( 'service-bento', $scc_smart_layout, true ), 'local-service architecture includes service presentation' );
 assert_true( in_array( 'faq-accordion', $scc_smart_layout, true ), 'real FAQ content earns an FAQ component' );
 
-echo "\n== Layout Engine: deterministic rule provider ==\n";
-$scc_rule = new SCC_Layout_Rule_Provider();
-$scc_svc  = $scc_rule->decide( array( 'content_type' => 'service', 'search_intent' => 'commercial' ) );
-assert_true( in_array( 'hero', $scc_svc, true ) && in_array( 'content', $scc_svc, true ) && in_array( 'cta', $scc_svc, true ), 'service layout has hero + content + cta' );
-$scc_art = $scc_rule->decide( array( 'content_type' => 'article', 'search_intent' => 'informational' ) );
-assert_true( in_array( 'toc', $scc_art, true ), 'article layout offers a TOC' );
-
-echo "\n== Layout Engine: availability gate + conflict resolution ==\n";
-$scc_an_min = array( 'intro' => '', 'content_html' => '<p>Hi</p>', 'counts' => array( 'faqs' => 0, 'services' => 0, 'benefits' => 0, 'process' => 0, 'stats' => 0, 'related' => 0, 'sections' => 0 ), 'areas' => array(), 'city' => '' );
-$scc_gated = SCC_Layout_Engine::gate_by_availability( array( 'hero', 'faq', 'service-grid', 'content', 'cta' ), $scc_an_min );
-assert_true( ! in_array( 'faq', $scc_gated, true ), 'faq dropped when there are no FAQs' );
-assert_true( ! in_array( 'service-grid', $scc_gated, true ), 'service-grid dropped when there are no services' );
-assert_true( in_array( 'hero', $scc_gated, true ) && in_array( 'cta', $scc_gated, true ), 'required blocks survive the gate' );
-$scc_res = SCC_Layout_Engine::resolve_conflicts( array( 'hero', 'content-intro', 'benefits', 'content', 'faq', 'cta' ) );
-assert_true( ! in_array( 'content-intro', $scc_res, true ) && ! in_array( 'benefits', $scc_res, true ), 'prose-duplicating blocks removed when full content present' );
-assert_true( in_array( 'faq', $scc_res, true ), 'discrete blocks kept alongside content' );
+// Legacy standalone SCC_Layout_Engine and its providers were replaced by
+// SCC_Page_Architect + the validated Elementor composition service. Their
+// obsolete tests are removed; current architecture tests above remain.
 
 echo "\n== Layout Engine: analyzer ==\n";
 assert_eq( 'blog_post', SCC_Layout_Analyzer::normalize_type( 'Blog' ), 'normalize_type maps Blog => blog_post' );
