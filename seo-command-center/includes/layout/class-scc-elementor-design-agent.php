@@ -36,6 +36,15 @@ class SCC_Elementor_Design_Agent {
 		}
 
 		$design_prompt = substr( sanitize_textarea_field( (string) $design_prompt ), 0, 2400 );
+
+		// A local model should make short art-direction decisions, not output
+		// thousands of Elementor nodes in one tunneled HTTP request. The compact
+		// blueprint expands those choices into a complete, editable page and
+		// validates the finished tree against the same content-bank contract.
+		if ( class_exists( 'SCC_Elementor_Design_Blueprint' )
+			&& 'lmstudio' === SCC_AI_Manager::preferred_layout_provider() ) {
+			return SCC_Elementor_Design_Blueprint::propose( $this->ai, $analysis, $design_prompt );
+		}
 		$bank = SCC_Elementor_Content_Bank::build( $analysis );
 		if ( empty( $bank['hero.title'] ) ) {
 			return new WP_Error( 'scc_agent_no_content', __( 'The page does not have enough finished content to design.', 'seo-command-center' ) );
