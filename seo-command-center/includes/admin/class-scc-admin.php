@@ -229,6 +229,12 @@ class SCC_Admin {
 			return;
 		}
 
+		// Visual Recreation uses WordPress's existing Media Library picker;
+		// no image-uploader frontend library is bundled with the plugin.
+		if ( false !== strpos( (string) $hook, 'seo-command-center-layout' ) ) {
+			wp_enqueue_media();
+		}
+
 		wp_enqueue_style(
 			'scc-admin',
 			SCC_PLUGIN_URL . 'assets/css/admin.css',
