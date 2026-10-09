@@ -2963,6 +2963,97 @@ assert_true( false !== strpos( $browser_runtime_src_1842, '/api/tideorbit/geocod
 $dfs_src_1842 = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php' );
 assert_true( false !== strpos( $dfs_src_1842, 'resolve_maps_location' ) && false !== strpos( $dfs_src_1842, "'location_name' => $location_name" ), 'DataForSEO provides a friendly-location fallback' );
 
+
+echo "\n== TideOrbit temporary visual screenshot retention ==\n";
+$GLOBALS['scc_test_temp_posts'] = array();
+$GLOBALS['scc_test_temp_meta'] = array();
+$GLOBALS['scc_test_temp_deleted'] = array();
+if ( ! function_exists( 'get_post_type' ) ) {
+	function get_post_type( $id ) { return isset( $GLOBALS['scc_test_temp_posts'][ $id ] ) && 'attachment' === $GLOBALS['scc_test_temp_posts'][ $id ]['type'] ? 'attachment' : 'page'; }
+}
+if ( ! function_exists( 'get_post_meta' ) ) {
+	function get_post_meta( $id, $key, $single = false ) {
+		return $GLOBALS['scc_test_temp_meta'][ $id ][ $key ] ?? ( $single ? '' : array() );
+	}
+}
+if ( ! function_exists( 'update_post_meta' ) ) {
+	function update_post_meta( $id, $key, $value ) {
+		$GLOBALS['scc_test_temp_meta'][ $id ][ $key ] = $value; return true;
+	}
+}
+if ( ! function_exists( 'delete_post_meta' ) ) {
+	function delete_post_meta( $id, $key ) {
+		unset( $GLOBALS['scc_test_temp_meta'][ $id ][ $key ] ); return true;
+	}
+}
+if ( ! function_exists( 'get_post' ) ) {
+	function get_post( $id ) {
+		return isset( $GLOBALS['scc_test_temp_posts'][ $id ] )
+			? (object) array( 'ID' => $id, 'post_content' => $GLOBALS['scc_test_temp_posts'][ $id ]['content'] ) : null;
+	}
+}
+if ( ! function_exists( 'get_posts' ) ) {
+	function get_posts( $args = array() ) {
+		$ids = array();
+		foreach ( $GLOBALS['scc_test_temp_posts'] as $id => $post ) {
+			if ( 'attachment' !== $post['type'] ) { continue; }
+			$marker = get_post_meta( $id, SCC_Visual_Recreation::TEMP_POST_META, true );
+			if ( ! $marker ) { continue; }
+			if ( isset( $args['meta_value'] ) && (int) $marker !== (int) $args['meta_value'] ) { continue; }
+			if ( isset( $args['meta_query'] ) && (int) get_post_meta( $id, SCC_Visual_Recreation::TEMP_CREATED_META, true ) >= time() - 14 * DAY_IN_SECONDS ) { continue; }
+			$ids[] = $id;
+		}
+		return $ids;
+	}
+}
+if ( ! function_exists( 'wp_get_attachment_url' ) ) {
+	function wp_get_attachment_url( $id ) { return 'https://example.com/uploads/' . $id . '.png'; }
+}
+if ( ! function_exists( 'wp_delete_attachment' ) ) {
+	function wp_delete_attachment( $id, $force = false ) {
+		$GLOBALS['scc_test_temp_deleted'][] = $id;
+		unset( $GLOBALS['scc_test_temp_posts'][ $id ], $GLOBALS['scc_test_temp_meta'][ $id ] );
+		return (object) array( 'ID' => $id );
+	}
+}
+$GLOBALS['scc_test_temp_posts'][77] = array( 'type' => 'page', 'content' => '<p>Live SEO content.</p>' );
+$GLOBALS['scc_test_temp_posts'][700] = array( 'type' => 'attachment', 'content' => '' );
+$GLOBALS['scc_test_temp_posts'][701] = array( 'type' => 'attachment', 'content' => '' );
+$GLOBALS['scc_test_temp_posts'][702] = array( 'type' => 'attachment', 'content' => '' );
+$GLOBALS['scc_test_temp_meta'][700] = array( SCC_Visual_Recreation::TEMP_POST_META => 77, SCC_Visual_Recreation::TEMP_CREATED_META => time() );
+$GLOBALS['scc_test_temp_meta'][701] = array( SCC_Visual_Recreation::TEMP_POST_META => 88, SCC_Visual_Recreation::TEMP_CREATED_META => time() );
+$GLOBALS['scc_test_temp_meta'][702] = array( SCC_Visual_Recreation::TEMP_CREATED_META => time() );
+assert_true( SCC_Visual_Recreation::is_managed_reference( 700, 77 ), 'dedicated temporary screenshot belongs to its original design page' );
+assert_true( ! SCC_Visual_Recreation::is_managed_reference( 701, 77 ), 'a different page attachment must not be deleted' );
+assert_true( ! SCC_Visual_Recreation::is_managed_reference( 702, 77 ), 'pre-existing Media Library assets have no cleanup marker' );
+assert_true( ! SCC_Visual_Recreation::delete_managed_attachment( 701, 77 ), 'cannot delete screenshots owned by a different post' );
+assert_true( ! SCC_Visual_Recreation::delete_managed_attachment( 702, 77 ), 'cannot delete ordinary untagged media' );
+update_post_meta( 77, SCC_Visual_Recreation::META, array( 'reference_id' => 700, 'recipe' => array( 'hero' => 'split' ), 'updated' => time() ) );
+$result_cleanup = SCC_Visual_Recreation::finish( 77 );
+assert_eq( 1, $result_cleanup['deleted'], 'finish design permanently removes its temporary screenshot' );
+assert_true( ! isset( $GLOBALS['scc_test_temp_posts'][700] ), 'temporary attachment record and file are removed' );
+assert_eq( 0, get_post_meta( 77, SCC_Visual_Recreation::META, true )['reference_id'], 'stored recipe no longer points to a deleted screenshot' );
+assert_eq( 'split', get_post_meta( 77, SCC_Visual_Recreation::META, true )['recipe']['hero'], 'design recipe remains available after screenshot deletion' );
+assert_true( isset( $GLOBALS['scc_test_temp_posts'][701], $GLOBALS['scc_test_temp_posts'][702] ), 'existing and unrelated attachments remain intact' );
+$GLOBALS['scc_test_temp_posts'][703] = array( 'type' => 'attachment', 'content' => '' );
+$GLOBALS['scc_test_temp_meta'][703] = array( SCC_Visual_Recreation::TEMP_POST_META => 77, SCC_Visual_Recreation::TEMP_CREATED_META => time() );
+$GLOBALS['scc_test_temp_posts'][77]['content'] = '<img src="https://example.com/uploads/703.png">';
+assert_true( ! SCC_Visual_Recreation::delete_managed_attachment( 703, 77 ), 'a temporary screenshot actually embedded in page content is preserved' );
+assert_true( isset( $GLOBALS['scc_test_temp_posts'][703] ), 'content-embedded screenshot is left in Media Library' );
+assert_true( ! SCC_Visual_Recreation::is_managed_reference( 703, 77 ), 'protected content asset is permanently released from cleanup tracking' );
+$bad_file = tempnam( sys_get_temp_dir(), 'scc-vr-' );
+file_put_contents( $bad_file, str_repeat( 'not an image', 15 ) );
+assert_true( is_wp_error( SCC_Visual_Recreation::validate_upload( array( 'tmp_name' => $bad_file, 'error' => 0 ) ) ), 'screenshot uploader refuses forged image data' );
+unlink( $bad_file );
+$huge_file = tempnam( sys_get_temp_dir(), 'scc-vr-' );
+$handle = fopen( $huge_file, 'wb' ); ftruncate( $handle, SCC_Visual_Recreation::MAX_IMAGE_BYTES + 1 ); fclose( $handle );
+assert_eq( 'scc_visual_upload_size', SCC_Visual_Recreation::validate_upload( array( 'tmp_name' => $huge_file, 'error' => 0 ) )->get_error_code(), 'screenshot uploader rejects oversized temporary files' );
+unlink( $huge_file );
+$rest_temp_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+assert_true( false !== strpos( $rest_temp_src, '/layout/visual-upload' ) && false !== strpos( $rest_temp_src, '/layout/visual-finish' ), 'upload and finish actions are wired through the authenticated REST API' );
+$ui_temp_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/layout.php' );
+assert_true( false !== strpos( $ui_temp_src, 'scc-visual-file' ) && false !== strpos( $ui_temp_src, 'scc-visual-finish' ), 'Layout Engine offers temporary screenshot picker and finish/cleanup action' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

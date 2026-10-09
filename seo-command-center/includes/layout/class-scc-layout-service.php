@@ -113,6 +113,7 @@ class SCC_Layout_Service {
 			'composition' => $composition,
 			'prompt'      => substr( sanitize_textarea_field( (string) $design_prompt ), 0, 2400 ),
 			'repaired'    => ! empty( $agent_result['repaired'] ),
+			'visual_recreation' => ! empty( $agent_result['visual_recreation'] ),
 		);
 		$written = update_post_meta( (int) $post_id, '_scc_elementor_composition_draft', $draft );
 		if ( false === $written && get_post_meta( (int) $post_id, '_scc_elementor_composition_draft', true ) !== $draft ) {
@@ -192,6 +193,7 @@ class SCC_Layout_Service {
 			'applied' => time(),
 			'prompt' => (string) ( $draft['prompt'] ?? '' ),
 			'node_count' => (int) ( $composition['meta']['node_count'] ?? 0 ),
+			'visual_recreation' => ! empty( $draft['visual_recreation'] ),
 		) );
 		delete_post_meta( $post_id, '_scc_elementor_composition_draft' );
 

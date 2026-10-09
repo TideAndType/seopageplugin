@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO + AEO for WordPress and Elementor: analyze your site, architect future growth, improve AI citation readiness, and generate on-brand content with draft-first live-page safety.
- * Version:           1.88.0
+ * Version:           1.89.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.88.0' );
+	define( 'SCC_VERSION', '1.89.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -132,6 +132,7 @@ require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-content-bank.
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-composition.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-discovery.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-visual-recreation.php';
+SCC_Visual_Recreation::register_cleanup();
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-design-blueprint.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-design-agent.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-intel.php';

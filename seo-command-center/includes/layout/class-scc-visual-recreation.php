@@ -14,6 +14,174 @@ class SCC_Visual_Recreation {
 	const META = '_scc_visual_recreation';
 	const MAX_IMAGE_BYTES = 3145728;
 
+	const TEMP_POST_META = '_scc_visual_temp_post';
+	const TEMP_CREATED_META = '_scc_visual_temp_created';
+	const TEMP_ROLE_META = '_scc_visual_temp_role';
+	const CLEANUP_HOOK = 'scc_visual_recreation_prune';
+
+	/**
+	 * Reference screenshots uploaded through TideOrbit are disposable Media
+	 * Library attachments. Existing images chosen before this update are NEVER
+	 * auto-deleted: only an attachment carrying our matching post marker qualifies.
+	 */
+	public static function is_managed_reference( $attachment_id, $post_id ) {
+		return (int) $attachment_id > 0
+			&& (int) $post_id > 0
+			&& 'attachment' === get_post_type( (int) $attachment_id )
+			&& (int) get_post_meta( (int) $attachment_id, self::TEMP_POST_META, true ) === (int) $post_id;
+	}
+
+	/**
+	 * Validate an actual temporary image upload. File names and client MIME
+	 * claims alone never decide whether a file is an acceptable screenshot.
+	 */
+	public static function validate_upload( array $file ) {
+		if ( ! empty( $file['error'] ) || empty( $file['tmp_name'] ) || ! is_file( (string) $file['tmp_name'] ) ) {
+			return new WP_Error( 'scc_visual_upload_failed', 'Select a valid local screenshot file.' );
+		}
+		$size = filesize( $file['tmp_name'] );
+		if ( false === $size || $size < 100 || $size > self::MAX_IMAGE_BYTES ) {
+			return new WP_Error( 'scc_visual_upload_size', 'Screenshots must be at least 100 bytes and no larger than 3 MB.' );
+		}
+		$dimensions = @getimagesize( $file['tmp_name'] );
+		if ( ! is_array( $dimensions ) || empty( $dimensions['mime'] )
+			|| ! in_array( $dimensions['mime'], array( 'image/png', 'image/jpeg', 'image/webp' ), true )
+			|| (int) $dimensions[0] < 200 || (int) $dimensions[1] < 160
+			|| (int) $dimensions[0] > 9000 || (int) $dimensions[1] > 9000 ) {
+			return new WP_Error( 'scc_visual_upload_type', 'Upload a genuine PNG, JPEG or WebP screenshot (minimum 200 × 160 pixels).' );
+		}
+		return array( 'mime' => (string) $dimensions['mime'], 'width' => (int) $dimensions[0], 'height' => (int) $dimensions[1] );
+	}
+
+	/**
+	 * Create exactly one original attachment: no WordPress thumbnails,
+	 * generated sizes, Elementor imports or additional image optimization jobs.
+	 */
+	public static function upload_reference( $post_id, array $file, $role ) {
+		$post_id = (int) $post_id;
+		$role = sanitize_key( $role );
+		if ( $post_id <= 0 || ! in_array( $role, array( 'reference', 'comparison' ), true ) ) {
+			return new WP_Error( 'scc_visual_upload_role', 'Invalid temporary design screenshot role.' );
+		}
+		$checked = self::validate_upload( $file );
+		if ( is_wp_error( $checked ) ) { return $checked; }
+		if ( ! function_exists( 'wp_handle_upload' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+		}
+		$uploaded = wp_handle_upload( $file, array(
+			'test_form' => false,
+			'mimes' => array( 'png' => 'image/png', 'jpg|jpeg|jpe' => 'image/jpeg', 'webp' => 'image/webp' ),
+		) );
+		if ( ! is_array( $uploaded ) || ! empty( $uploaded['error'] ) || empty( $uploaded['file'] ) ) {
+			return new WP_Error( 'scc_visual_upload_storage', (string) ( $uploaded['error'] ?? 'Could not save that temporary image.' ) );
+		}
+		$attachment = array(
+			'post_mime_type' => $checked['mime'],
+			'post_title' => 'TideOrbit temporary design ' . $role,
+			'post_status' => 'inherit',
+			'post_content' => '',
+			'post_parent' => $post_id,
+		);
+		$id = wp_insert_attachment( $attachment, $uploaded['file'], $post_id, true );
+		if ( is_wp_error( $id ) || ! $id ) {
+			@unlink( $uploaded['file'] );
+			return new WP_Error( 'scc_visual_upload_attachment', 'Unable to register the temporary screenshot.' );
+		}
+		update_post_meta( (int) $id, self::TEMP_POST_META, $post_id );
+		update_post_meta( (int) $id, self::TEMP_CREATED_META, time() );
+		update_post_meta( (int) $id, self::TEMP_ROLE_META, $role );
+		wp_update_attachment_metadata( (int) $id, array(
+			'width' => $checked['width'], 'height' => $checked['height'],
+			'file' => get_post_meta( (int) $id, '_wp_attached_file', true ), 'sizes' => array(),
+		) );
+		return array( 'id' => (int) $id, 'url' => wp_get_attachment_url( (int) $id ), 'temporary' => true );
+	}
+
+	/** Only discard this plugin's explicitly tagged reference attachments. */
+	public static function delete_managed_attachment( $attachment_id, $post_id ) {
+		$attachment_id = (int) $attachment_id;
+		$post_id = (int) $post_id;
+		if ( ! self::is_managed_reference( $attachment_id, $post_id ) ) { return false; }
+		$post = get_post( $post_id );
+		$elementor = (string) get_post_meta( $post_id, '_elementor_data', true );
+		$body = $post ? (string) $post->post_content : '';
+		$url = (string) wp_get_attachment_url( $attachment_id );
+		// If the designer ever used the uploaded screenshot as real content,
+		// keep the file and release it from automatic cleanup permanently.
+		$embedded = ( $url && ( false !== strpos( $body, $url ) || false !== strpos( $elementor, $url ) ) )
+			|| ( $elementor && preg_match( '/"id"\\s*:\\s*"?'. preg_quote( (string) $attachment_id, '/' ) .'"?\\s*[,}]/', $elementor ) );
+		if ( $embedded ) {
+			delete_post_meta( $attachment_id, self::TEMP_POST_META );
+			return false;
+		}
+		return (bool) wp_delete_attachment( $attachment_id, true );
+	}
+
+	/** Returns the number deleted; preserves any pre-existing user media. */
+	public static function finish( $post_id ) {
+		$post_id = (int) $post_id;
+		if ( $post_id <= 0 ) { return array( 'deleted' => 0, 'retained' => 0 ); }
+		$ids = get_posts( array(
+			'post_type' => 'attachment', 'post_status' => 'inherit',
+			'posts_per_page' => 100, 'fields' => 'ids',
+			'meta_key' => self::TEMP_POST_META, 'meta_value' => (string) $post_id,
+		) );
+		$deleted = 0;
+		$retained = 0;
+		foreach ( (array) $ids as $id ) {
+			if ( self::delete_managed_attachment( (int) $id, $post_id ) ) { $deleted++; }
+			else { $retained++; }
+		}
+		$record = get_post_meta( $post_id, self::META, true );
+		if ( is_array( $record ) ) {
+			foreach ( array( 'reference_id', 'comparison_id' ) as $key ) {
+				$id = (int) ( $record[ $key ] ?? 0 );
+				if ( $id && ! get_post( $id ) ) { $record[ $key ] = 0; }
+			}
+			// Keep the design recipe for later edits; remove only source images.
+			update_post_meta( $post_id, self::META, $record );
+		}
+		return array( 'deleted' => $deleted, 'retained' => $retained );
+	}
+
+	/** Publish triggers cleanup ONLY after a TideOrbit visual layout applied. */
+	public static function on_published( $new, $old, $post ) {
+		if ( 'publish' !== $new || 'publish' === $old || ! $post ) { return; }
+		$last = get_post_meta( (int) $post->ID, '_scc_ai_composition_last', true );
+		$ref = get_post_meta( (int) $post->ID, self::META, true );
+		if ( empty( $last['visual_recreation'] ) || ! is_array( $ref )
+			|| (int) ( $last['applied'] ?? 0 ) < (int) ( $ref['updated'] ?? 0 ) ) { return; }
+		self::finish( (int) $post->ID );
+	}
+
+	/** Clean abandoned temporary screenshots after 14 days, max 100 per run. */
+	public static function prune_stale() {
+		$ids = get_posts( array(
+			'post_type' => 'attachment', 'post_status' => 'inherit',
+			'posts_per_page' => 100, 'fields' => 'ids',
+			'meta_query' => array(
+				array( 'key' => self::TEMP_POST_META, 'compare' => 'EXISTS' ),
+				array( 'key' => self::TEMP_CREATED_META, 'value' => time() - 14 * DAY_IN_SECONDS, 'compare' => '<', 'type' => 'NUMERIC' ),
+			),
+		) );
+		foreach ( (array) $ids as $id ) {
+			$post_id = (int) get_post_meta( $id, self::TEMP_POST_META, true );
+			self::delete_managed_attachment( $id, $post_id );
+		}
+	}
+
+	public static function register_cleanup() {
+		add_action( 'transition_post_status', array( __CLASS__, 'on_published' ), 10, 3 );
+		add_action( self::CLEANUP_HOOK, array( __CLASS__, 'prune_stale' ) );
+		add_action( 'init', array( __CLASS__, 'schedule_pruning' ) );
+	}
+
+	public static function schedule_pruning() {
+		if ( ! wp_next_scheduled( self::CLEANUP_HOOK ) ) {
+			wp_schedule_event( time() + DAY_IN_SECONDS, 'daily', self::CLEANUP_HOOK );
+		}
+	}
+
 	/** A media-library screenshot, not a remote URL or arbitrary server path. */
 	public static function image_part( $attachment_id ) {
 		$attachment_id = (int) $attachment_id;

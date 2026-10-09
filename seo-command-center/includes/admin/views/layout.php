@@ -191,7 +191,8 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 				<span class="scc-badge"><?php esc_html_e( 'No imported scripts', 'seo-command-center' ); ?></span>
 			</div>
 			<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
-				<button type="button" class="button" id="scc-visual-pick"><?php esc_html_e( 'Choose / upload reference screenshot', 'seo-command-center' ); ?></button>
+				<input type="file" id="scc-visual-file" accept="image/png,image/jpeg,image/webp" hidden>
+				<button type="button" class="button" id="scc-visual-pick"><?php esc_html_e( 'Upload temporary reference screenshot', 'seo-command-center' ); ?></button>
 				<label for="scc-visual-source">
 					<strong><?php esc_html_e( '21st.dev source URL (optional)', 'seo-command-center' ); ?></strong>
 					<input type="url" class="regular-text" id="scc-visual-source" placeholder="https://21st.dev/@designer/components/..." />
@@ -211,11 +212,16 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 			<details style="margin-top:14px">
 				<summary><?php esc_html_e( 'Compare and refine after previewing the draft', 'seo-command-center' ); ?></summary>
 				<p class="scc-note"><?php esc_html_e( 'After generating the Elementor draft, open its WordPress preview and take a screenshot. Choose that new screenshot here for an optional second vision pass. LM Studio compares the screenshots and adjusts the design recipe without adding code to your site.', 'seo-command-center' ); ?></p>
-				<button type="button" class="button" id="scc-visual-pick-rendered"><?php esc_html_e( 'Choose draft screenshot for comparison', 'seo-command-center' ); ?></button>
+				<input type="file" id="scc-visual-rendered-file" accept="image/png,image/jpeg,image/webp" hidden>
+				<button type="button" class="button" id="scc-visual-pick-rendered"><?php esc_html_e( 'Upload temporary draft screenshot for comparison', 'seo-command-center' ); ?></button>
 				<button type="button" class="button button-secondary" id="scc-visual-compare" disabled><?php esc_html_e( 'Compare & refine design', 'seo-command-center' ); ?></button>
 				<span id="scc-visual-compare-info" class="scc-note"></span>
 			</details>
-			<p class="scc-note"><?php esc_html_e( 'Screenshots are stored in your existing Media Library, not served to visitors unless you use them in page content. No npm packages, third-party scripts, React, or additional Elementor plugins are installed. Unreproducible 3D and motion effects are simplified.', 'seo-command-center' ); ?></p>
+			<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px">
+				<button type="button" class="button" id="scc-visual-finish"><?php esc_html_e( 'Finish / discard design and delete temporary screenshots', 'seo-command-center' ); ?></button>
+				<span class="scc-note"><?php esc_html_e( 'Draft screenshots remain available while you refine. They are deleted after you finish, on publication of an applied visual design, or after 14 days if abandoned.', 'seo-command-center' ); ?></span>
+			</div>
+			<p class="scc-note"><?php esc_html_e( 'Only images uploaded through these temporary screenshot buttons can be automatically deleted. Existing Media Library images and page content stay untouched. Temporary uploads are stored in WordPress media and may have public upload URLs until cleanup. No extra JS, React or Elementor plugins are installed.', 'seo-command-center' ); ?></p>
 		</div>
 
 		<div class="scc-card">
