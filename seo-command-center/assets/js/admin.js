@@ -3835,46 +3835,88 @@
 					' hero · ' + recipe.tone + ' tone · ' + recipe.width + 'px layout width · ' +
 					( recipe.card_columns || 3 ) + '-column cards. ' + ( recipe.observations || '' );
 			}
-			function chooseImage( onSelected ) {
-				if ( ! window.wp || ! wp.media ) {
-					setStatus( statusEl, 'The WordPress Media Library is unavailable. Reload the Layout Engine and try again.', 'is-error' );
-					return;
-				}
-				var frame = wp.media( {
-					title: 'Choose screenshot (PNG, JPEG or WebP under 3MB)',
-					button: { text: 'Use screenshot' },
-					library: { type: 'image' },
-					multiple: false
-				} );
-				frame.on( 'select', function () {
-					var selection = frame.state().get( 'selection' ).first();
-					if ( selection ) { onSelected( selection.toJSON() ); }
-				} );
-				frame.open();
-			}
+			// Dedicated uploads are automatically marked disposable server-side.
+			// Ordinary Media Library assets are never selected for auto-deletion.
+			var fileInput = document.getElementById( 'scc-visual-file' );
+			var renderedInput = document.getElementById( 'scc-visual-rendered-file' );
+			var finishBtn = document.getElementById( 'scc-visual-finish' );
 			function showReference( url ) {
 				if ( url ) { refImage.src = url; refImage.hidden = false; }
+				else { refImage.removeAttribute( 'src' ); refImage.hidden = true; }
 			}
-			pick.addEventListener( 'click', function () {
-				chooseImage( function ( item ) {
-					refId = item.id || 0;
-					ready = false;
-					visualModeBox.checked = false;
-					visualModeBox.disabled = true;
-					analyze.disabled = ! refId;
-					compare.disabled = true;
-					showReference( item.url );
-					recipeEl.textContent = 'Screenshot selected. Analyze it with your LM Studio vision model before regenerating.';
-					setStatus( statusEl, 'Screenshot selected from Media Library.' );
+			function uploadFile( file, role ) {
+				if ( ! file ) { return; }
+				if ( file.size > 3145728 || ! /^image\\/(png|jpeg|webp)$/.test( file.type ) ) {
+					setStatus( statusEl, 'Choose a PNG, JPEG or WebP screenshot under 3 MB.', 'is-error' );
+					return;
+				}
+				var data = new FormData();
+				data.append( 'post_id', postId );
+				data.append( 'role', role );
+				data.append( 'image', file, file.name );
+				if ( role === 'reference' ) { pick.disabled = true; }
+				else { pickRendered.disabled = true; }
+				setStatus( statusEl, 'Uploading temporary screenshot…' );
+				request( '/layout/visual-upload', { method: 'POST', body: data } )
+					.then( function ( res ) {
+						var item = res.data || {};
+						if ( role === 'reference' ) {
+							refId = item.id || 0;
+							ready = false;
+							visualModeBox.checked = false;
+							visualModeBox.disabled = true;
+							analyze.disabled = ! refId;
+							compare.disabled = true;
+							showReference( item.url );
+							recipeEl.textContent = 'Reference uploaded temporarily. Analyze with LM Studio to recreate the design.';
+						} else {
+							renderedId = item.id || 0;
+							compare.disabled = ! renderedId || ! ready;
+							compareInfo.textContent = file.name + ' (temporary)';
+						}
+						setStatus( statusEl, 'Temporary screenshot saved. It can be deleted with Finish / discard.', 'is-ok' );
+					} )
+					.catch( function ( err ) { setStatus( statusEl, ( err && err.message ) || 'Screenshot upload failed.', 'is-error' ); } )
+					.finally( function () {
+						if ( role === 'reference' ) { pick.disabled = false; }
+						else { pickRendered.disabled = false; }
+					} );
+			}
+			if ( pick && fileInput ) {
+				pick.addEventListener( 'click', function () { fileInput.click(); } );
+				fileInput.addEventListener( 'change', function () {
+					uploadFile( fileInput.files && fileInput.files[0], 'reference' );
+					fileInput.value = '';
 				} );
-			} );
-			pickRendered.addEventListener( 'click', function () {
-				chooseImage( function ( item ) {
-					renderedId = item.id || 0;
-					compare.disabled = ! renderedId || ! ready;
-					compareInfo.textContent = item.filename || 'Draft screenshot selected.';
+			}
+			if ( pickRendered && renderedInput ) {
+				pickRendered.addEventListener( 'click', function () { renderedInput.click(); } );
+				renderedInput.addEventListener( 'change', function () {
+					uploadFile( renderedInput.files && renderedInput.files[0], 'comparison' );
+					renderedInput.value = '';
 				} );
-			} );
+			}
+			if ( finishBtn ) {
+				finishBtn.addEventListener( 'click', function () {
+					if ( ! window.confirm( 'Delete temporary TideOrbit design screenshots for this page? Normal Media Library photos and Elementor content will be kept. You can retain your design recipe, but need to re-upload a screenshot to analyze or compare it again.' ) ) { return; }
+					finishBtn.disabled = true;
+					setStatus( statusEl, 'Deleting only temporary design screenshots…' );
+					request( '/layout/visual-finish', { method: 'POST', data: { post_id: postId, confirm_cleanup: true } } )
+						.then( function ( res ) {
+							var result = res.data || {};
+							refId = 0; renderedId = 0; ready = false;
+							analyze.disabled = true; compare.disabled = true;
+							visualModeBox.checked = false; visualModeBox.disabled = true;
+							showReference( '' );
+							compareInfo.textContent = '';
+							recipeEl.textContent = 'Design recipe retained. Upload another screenshot if you want to run a new vision analysis.';
+							setStatus( statusEl, 'Deleted ' + ( result.deleted || 0 ) + ' temporary screenshot(s).' +
+								( result.retained ? ' ' + result.retained + ' file(s) kept because deletion was unsafe or failed.' : '' ), 'is-ok' );
+						} )
+						.catch( function ( err ) { setStatus( statusEl, ( err && err.message ) || 'Cleanup failed.', 'is-error' ); } )
+						.finally( function () { finishBtn.disabled = false; } );
+				} );
+			}
 			function sendAnalysis( isComparison ) {
 				var button = isComparison ? compare : analyze;
 				if ( ! refId ) { return; }
