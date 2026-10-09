@@ -2611,6 +2611,21 @@ $safe_parts = SCC_LMStudio_Provider::safe_multimodal_content( array(
 ) );
 assert_eq( 2, count( $safe_parts ), 'LM Studio image requests reject remote tracking URLs while retaining data images' );
 assert_eq( 'image_url', $safe_parts[1]['type'], 'LM Studio receives OpenAI-compatible structured vision image content' );
+$visual_bento = SCC_Visual_Recreation::normalize_recipe( array( 'hero' => 'split', 'card_pattern' => 'bento', 'card_style' => 'soft', 'card_columns' => 3 ) );
+assert_eq( 'bento', $visual_bento['card_pattern'], 'vision may choose irregular native Elementor Bento grids' );
+assert_eq( 'soft', $visual_bento['card_style'], 'vision may choose native Elementor box shadow treatment' );
+$scc_bento_analysis = $scc_blueprint_analysis;
+$scc_bento_analysis['services'][] = array( 'title' => 'Local SEO', 'description' => 'Local search coverage.', 'url' => '/local-seo/' );
+$bento_result = SCC_Elementor_Design_Blueprint::from_visual_recipe( $scc_bento_analysis, $visual_bento );
+assert_true( ! is_wp_error( $bento_result ), '3 service cards build valid bento pattern without custom CSS' );
+if ( ! is_wp_error( $bento_result ) ) {
+	$bento_nodes = array_values( array_filter( $bento_result['composition']['nodes'], function ( $item ) {
+		return 'collection' === ( $item['type'] ?? '' ) && 'services.items' === ( $item['collection'] ?? '' );
+	} ) );
+	assert_true( ! empty( $bento_nodes ) && ! empty( $bento_nodes[0]['layout']['bento'] ), 'bento geometry survives the secure design validator' );
+	$bento_tree = SCC_Elementor_Composition::compile( $bento_result['composition'], $bento_result['bank'], $bento_result['profile'] );
+	assert_true( count( $bento_tree ) >= 5, 'bento compiles to native editable Elementor containers' );
+}
 $recreated = SCC_Elementor_Design_Blueprint::from_visual_recipe( $scc_blueprint_analysis, $visual_recipe );
 assert_true( ! is_wp_error( $recreated ), 'screenshot art direction composes a validated, native Elementor page' );
 if ( ! is_wp_error( $recreated ) ) {
