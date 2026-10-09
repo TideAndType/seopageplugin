@@ -653,6 +653,26 @@ class SCC_REST {
 			)
 		);
 
+		// Design Discovery: catalog read and explicit administrator-triggered scans.
+		register_rest_route(
+			self::NS,
+			'/design-discovery/catalog',
+			array(
+				'methods' => WP_REST_Server::READABLE,
+				'callback' => array( $this, 'design_discovery_catalog' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/design-discovery/scan',
+			array(
+				'methods' => WP_REST_Server::CREATABLE,
+				'callback' => array( $this, 'design_discovery_scan' ),
+				'permission_callback' => function () { return current_user_can( 'manage_options' ); },
+			)
+		);
+
 		// AI Elementor Layout Engine.
 		register_rest_route(
 			self::NS,
@@ -2596,6 +2616,33 @@ class SCC_REST {
 	 * @param WP_REST_Request $request Request.
 	 * @return WP_REST_Response|WP_Error
 	 */
+/**
+	 * GET /design-discovery/catalog — browse metadata, no executable code.
+	 */
+	public function design_discovery_catalog( WP_REST_Request $request ) {
+		return $this->ok( array(
+			'categories' => SCC_Design_Discovery::categories(),
+			'total' => count( SCC_Design_Discovery::catalog() ),
+			'items' => SCC_Design_Discovery::listing(
+				(string) $request->get_param( 'category' ),
+				(string) $request->get_param( 'search' )
+			),
+		) );
+	}
+
+	/**
+	 * POST /design-discovery/scan — incremental, fixed-domain catalog scan.
+	 * No user URL, raw code, arbitrary scraping host or script execution.
+	 */
+	public function design_discovery_scan( WP_REST_Request $request ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return $this->fail( 'scc_scan_forbidden', __( 'Only administrators can scan external component libraries.', 'seo-command-center' ), 403 );
+		}
+		$category = sanitize_key( (string) $request->get_param( 'category' ) );
+		$result = SCC_Design_Discovery::scan( $category );
+		return is_wp_error( $result ) ? $result : $this->ok( $result );
+	}
+
 	public function layout_propose( WP_REST_Request $request ) {
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged

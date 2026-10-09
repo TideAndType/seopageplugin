@@ -2510,6 +2510,29 @@ assert_true( is_wp_error( SCC_Elementor_Composition::validate( $scc_agent_unsafe
 $scc_runtime_catalog = SCC_Elementor_Widget_Schema::agent_catalog( 'bold testimonial form layout' );
 assert_true( isset( $scc_runtime_catalog['schemas']['heading'], $scc_runtime_catalog['schemas']['text-editor'] ), 'schema discovery always provides safe core widget schemas as a fallback' );
 
+
+echo "\n== 21st.dev design reference scanner ==\n";
+$dd_html = '<html><body><a href="/@maker/components/editorial-collage">Hero</a><a href="https://21st.dev/%40maker/components/editorial-collage?utm=1">Dupe</a><a href="/community/components/maker/bento-grid">Grid</a><a href="https://bad.dev/@hacker/components/steal">Off host</a><a href="/community/components/s/hero">Category</a></body></html>';
+$dd_links = SCC_Design_Discovery::discover_links( $dd_html );
+assert_eq( 2, count( $dd_links ), 'discovery deduplicates same-site component URLs and excludes non-components/off-host URLs' );
+assert_true( in_array( 'https://21st.dev/@maker/components/editorial-collage', $dd_links, true ), 'encoded Next.js @ route becomes a canonical 21st.dev component URL' );
+assert_eq( '', SCC_Design_Discovery::canonical_url( 'https://21st.dev.evil.org/@maker/components/demo' ), 'scanner rejects deceptive outside hosts' );
+assert_eq( '', SCC_Design_Discovery::canonical_url( 'http://21st.dev/@maker/components/demo' ), 'scanner requires HTTPS' );
+assert_eq( '', SCC_Design_Discovery::canonical_url( 'https://21st.dev/community/components/s/hero' ), 'category URL cannot be scanned as component source' );
+$dd_detail = '<html><head><meta name="description" content="Editorial serif split hero with image collage and CTA"></head><body><h1>Editorial Collage Hero</h1><h2>Dependencies</h2><div><a>motion</a><a>react-wrap-balancer</a></div><h2>Tags</h2><div><a>Hero</a><a>Editorial</a><a>Image Collage</a></div><h2>License</h2><div>MIT License</div><img src="https://cdn.21st.dev/preview/hero.jpg"></body></html>';
+$dd_record = SCC_Design_Discovery::parse_detail( $dd_detail, 'https://21st.dev/@maker/components/editorial-collage', 'hero' );
+assert_eq( 'Editorial Collage Hero', $dd_record['title'], 'detail metadata extracts component title' );
+assert_eq( 'maker', $dd_record['author'], 'detail metadata extracts source author' );
+assert_eq( 'reference_only', $dd_record['mode'], 'scanned component never becomes executable code' );
+assert_true( in_array( 'collage', $dd_record['signals'], true ), 'reference extracts meaningful visual pattern signal' );
+if ( class_exists( 'DOMDocument' ) ) {
+	assert_true( in_array( 'motion', $dd_record['dependencies'], true ), 'detail scanner extracts dependency names' );
+	assert_eq( 'MIT License', $dd_record['license'], 'detail scanner records explicit license' );
+}
+$GLOBALS['scc_test_options'][ SCC_Design_Discovery::OPTION ] = array( md5( $dd_record['url'] ) => $dd_record );
+assert_eq( 1, count( SCC_Design_Discovery::inspirations( 'hero' ) ), 'approved discovery catalog becomes design inspiration for LM Studio' );
+assert_eq( 0, count( SCC_Design_Discovery::inspirations( 'faq' ) ), 'design reference selection respects category' );
+
 echo "\n== LM Studio compact professional page designer ==\n";
 $scc_blueprint_analysis = $scc_variant_analysis;
 $scc_blueprint_analysis['services'] = array(

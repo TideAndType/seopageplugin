@@ -496,6 +496,7 @@ require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-layout-
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-content-mapper.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-content-bank.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-composition.php';
+require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-design-discovery.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-elementor-design-blueprint.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-native-elementor-blocks.php';
 require_once __DIR__ . '/../seo-command-center/includes/layout/class-scc-block-elementor-renderer.php';

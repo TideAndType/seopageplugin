@@ -46,6 +46,35 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 		<p class="scc-note"><?php echo esc_html( sprintf( __( 'Engine %s · Drafts are shown first. Published pages are never used as an automatic fallback.', 'seo-command-center' ), defined( 'SCC_VERSION' ) ? SCC_VERSION : '?' ) ); ?></p>
 	</div>
 
+	<div class="scc-card" id="scc-design-discovery">
+		<div class="scc-card__head">
+			<div>
+				<h2><?php esc_html_e( '21st.dev Design Discovery', 'seo-command-center' ); ?></h2>
+				<p class="scc-note"><?php esc_html_e( 'Scan component categories into your private design-reference library. LM Studio can then use discovered layouts and visual patterns as inspiration for editable Elementor pages.', 'seo-command-center' ); ?></p>
+			</div>
+			<span id="scc-dd-count" class="scc-badge"><?php esc_html_e( 'Loading library…', 'seo-command-center' ); ?></span>
+		</div>
+		<div class="scc-field" style="display:flex;align-items:end;gap:12px;flex-wrap:wrap">
+			<label for="scc-dd-category">
+				<strong><?php esc_html_e( 'Category', 'seo-command-center' ); ?></strong>
+				<select id="scc-dd-category" style="display:block;min-width:180px">
+					<?php foreach ( SCC_Design_Discovery::categories() as $slug => $name ) : ?>
+						<option value="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $name ); ?></option>
+					<?php endforeach; ?>
+				</select>
+			</label>
+			<?php if ( current_user_can( 'manage_options' ) ) : ?>
+				<button type="button" class="button button-primary" id="scc-dd-scan"><?php esc_html_e( 'Scan next components', 'seo-command-center' ); ?></button>
+				<button type="button" class="button" id="scc-dd-scan-all"><?php esc_html_e( 'Scan category in batches', 'seo-command-center' ); ?></button>
+				<button type="button" class="button" id="scc-dd-stop" hidden><?php esc_html_e( 'Stop scanning', 'seo-command-center' ); ?></button>
+			<?php endif; ?>
+			<button type="button" class="button" id="scc-dd-refresh"><?php esc_html_e( 'Refresh library', 'seo-command-center' ); ?></button>
+		</div>
+		<span id="scc-dd-message" class="scc-inline-status" role="status"></span>
+		<div id="scc-dd-results" style="margin-top:12px"></div>
+		<p class="scc-note"><?php esc_html_e( 'This scanner catalogs titles, descriptions, visual patterns, dependencies and any stated license. It does not run or install React components. Each scan fetches a small batch; repeat to discover more. Reusing source code is separate from using a design as inspiration.', 'seo-command-center' ); ?></p>
+	</div>
+
 	<?php if ( $post_id <= 0 ) : ?>
 		<div class="scc-card">
 			<div class="scc-card__head">
