@@ -229,6 +229,35 @@ class SCC_Admin {
 			return;
 		}
 
+		// Editor screens only need the SEO meta-box controller and its scoped
+		// styles. Loading the entire dashboard JS/CSS on every post edit is
+		// unnecessary and slows down Gutenberg and the classic editor.
+		if ( $on_editor && ! $on_plugin_page ) {
+			wp_enqueue_style(
+				'scc-editor',
+				SCC_PLUGIN_URL . 'assets/css/editor.css',
+				array(),
+				SCC_VERSION
+			);
+			wp_enqueue_script(
+				'scc-editor',
+				SCC_PLUGIN_URL . 'assets/js/editor.js',
+				array( 'wp-api-fetch' ),
+				SCC_VERSION,
+				true
+			);
+			wp_localize_script(
+				'scc-editor',
+				'SCC',
+				array(
+					'restUrl' => esc_url_raw( rest_url( SCC_REST::NS ) ),
+					'nonce' => wp_create_nonce( 'wp_rest' ),
+					'i18n' => array( 'error' => __( 'Something went wrong.', 'seo-command-center' ) ),
+				)
+			);
+			return;
+		}
+
 		// Visual Recreation uses WordPress's existing Media Library picker;
 		// no image-uploader frontend library is bundled with the plugin.
 		if ( false !== strpos( (string) $hook, 'seo-command-center-layout' ) ) {
