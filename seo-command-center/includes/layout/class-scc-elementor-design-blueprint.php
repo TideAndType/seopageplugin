@@ -120,6 +120,8 @@ class SCC_Elementor_Design_Blueprint {
 		$section_pad = max( 40, min( 132, (int) ( $recipe['section_padding'] ?? 82 ) ) );
 		$card_radius = max( 0, min( 48, (int) ( $recipe['card_radius'] ?? 16 ) ) );
 		$card_columns = max( 2, min( 4, (int) ( $recipe['card_columns'] ?? 3 ) ) );
+		$card_pattern = self::choice( $recipe['card_pattern'] ?? 'grid', array( 'grid', 'bento' ), 'grid' );
+		$card_style = self::choice( $recipe['card_style'] ?? 'outlined', array( 'outlined', 'soft', 'flat' ), 'outlined' );
 		$dark_hero = 'dark' === $tone || 'contrast' === $tone;
 		$heading_color = $dark_hero ? '#ffffff' : 'heading';
 		$text_color = $dark_hero ? '#e5e7eb' : 'text';
@@ -247,13 +249,21 @@ class SCC_Elementor_Design_Blueprint {
 		foreach ( $collection_order as $index => $key ) {
 			if ( ! isset( $bank[ $key ] ) ) { continue; }
 			$columns = 'faq.items' === $key ? 1 : $card_columns;
+			$item_style = array( 'border_radius' => $card_radius, 'padding' => array( 26, 26, 26, 26 ) );
+			if ( 'soft' === $card_style ) {
+				$item_style['border_width'] = 0;
+				$item_style['box_shadow'] = array( 'x' => 0, 'y' => 14, 'blur' => 40, 'spread' => -22, 'color' => 'rgba(0,0,0,0.12)' );
+			} elseif ( 'flat' === $card_style ) {
+				$item_style['border_width'] = 0;
+				$item_style['background'] = 'surface';
+			}
 			$nodes[] = array(
 				'id' => 'collection-' . str_replace( '.', '-', $key ),
 				'type' => 'collection', 'label' => ucwords( str_replace( array( '.', '-' ), ' ', $key ) ),
 				'collection' => $key,
-				'layout' => array( 'columns' => $columns, 'direction' => 'row', 'gap' => 22, 'content_width' => 'boxed', 'max_width' => $width ),
+				'layout' => array( 'columns' => $columns, 'bento' => 'bento' === $card_pattern && 'faq.items' !== $key, 'direction' => 'row', 'gap' => 22, 'content_width' => 'boxed', 'max_width' => $width ),
 				'style' => array( 'background' => $index % 2 ? 'surface' : 'card', 'padding' => array( $section_pad, 24, $section_pad, 24 ) ),
-				'item_style' => array( 'border_radius' => $card_radius, 'padding' => array( 26, 26, 26, 26 ) ),
+				'item_style' => $item_style,
 				'responsive' => array( 'mobile' => array( 'layout' => array( 'columns' => 1 ),
 					'style' => array( 'padding' => array( 48, 20, 48, 20 ) ) ) ),
 			);
