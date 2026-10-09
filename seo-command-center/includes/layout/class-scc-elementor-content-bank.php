@@ -72,6 +72,11 @@ class SCC_Elementor_Content_Bank {
 		$related = array_values( (array) ( $handoff['related'] ?? $analysis['related'] ?? array() ) );
 		$areas = array_values( (array) ( $handoff['areas'] ?? $analysis['areas'] ?? array() ) );
 
+		// Structured services are substantive content on a service page, not
+		// decorative widgets. Carry them into the immutable content bank so the
+		// professional builder cannot discard them during visual composition.
+		$services = array_values( (array) ( $analysis['services'] ?? array() ) );
+		$add( 'services.items', 'collection', $services, true, array( 'collection' => 'services' ) );
 		$add( 'stats.items', 'collection', $stats, true, array( 'collection' => 'stats' ) );
 		$add( 'steps.items', 'collection', $steps, true, array( 'collection' => 'steps' ) );
 		$add( 'faq.items', 'collection', $faqs, true, array( 'collection' => 'faq' ) );
