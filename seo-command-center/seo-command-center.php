@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO + AEO for WordPress and Elementor: analyze your site, architect future growth, improve AI citation readiness, and generate on-brand content with draft-first live-page safety.
- * Version:           1.87.0
+ * Version:           1.88.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.87.0' );
+	define( 'SCC_VERSION', '1.88.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -140,10 +140,7 @@ require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-composer.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-variant-selector.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-analyzer.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-page-architect.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-rule-provider.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-ai-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-validator.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-engine.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-content-mapper.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-native-elementor-blocks.php';
 require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-elementor-renderer.php';
