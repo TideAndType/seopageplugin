@@ -32,7 +32,9 @@ jobs:
         run: find seo-command-center tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
       - name: Admin JavaScript syntax check
-        run: node --check seo-command-center/assets/js/admin.js
+        run: |
+          node --check seo-command-center/assets/js/admin.js
+          node --check seo-command-center/assets/js/editor.js
 
       - name: Unit tests
         run: php tests/run-tests.php
@@ -40,7 +42,7 @@ jobs:
   package:
     name: Build WordPress install ZIP
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/ttgmbapp'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/ttgmbapp')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -54,9 +56,52 @@ jobs:
           test -n "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Build lean production-only plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p packaging/seo-command-center
+          cp -a seo-command-center/. packaging/seo-command-center/
+          # Documentation and the original unminified sources remain in Git,
+          # not in the WordPress installation archive.
+          rm -rf packaging/seo-command-center/docs
+          # Preserve the WordPress plugin header; safely remove PHP
+          # comment/whitespace tokens from distribution-only include files.
+          find packaging/seo-command-center/includes -type f -name '*.php' -print0 | xargs -0 -n1 php -r 'file_put_contents($argv[1], php_strip_whitespace($argv[1]));'
+          php -l packaging/seo-command-center/seo-command-center.php
+          find packaging/seo-command-center -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+          # Test compacted PHP against unchanged, readable source assets.
+          # Some tests intentionally audit JS source conventions and cannot
+          # inspect already-minified JS; the emitted JS is syntax-checked below.
+          cp -a tests packaging/tests
+          ( cd packaging && php tests/run-tests.php )
+          rm -rf packaging/tests
+          # Build-time-only tooling: no npm or React deps ship to WordPress.
+          for file in packaging/seo-command-center/assets/js/*.js; do
+            out="${file%.js}.pack.js"
+            npx --yes terser@5.44.1 "$file" --compress --mangle --output "$out"
+            node --check "$out"
+            mv "$out" "$file"
+          done
+          for file in packaging/seo-command-center/assets/css/*.css; do
+            out="${file%.css}.pack.css"
+            npx --yes clean-css-cli@5.6.3 --output "$out" "$file"
+            test -s "$out"
+            mv "$out" "$file"
+          done
+          echo "Production plugin bytes: $(du -sb packaging/seo-command-center | cut -f1)"
+
       - name: Build WordPress install ZIP
         shell: bash
-        run: zip -r "TideOrbit-${{ steps.version.outputs.version }}.zip" seo-command-center
+        run: |
+          set -euo pipefail
+          ( cd packaging && zip -qr "../TideOrbit-${{ steps.version.outputs.version }}.zip" seo-command-center )
+          unzip -tq "TideOrbit-${{ steps.version.outputs.version }}.zip"
+          if unzip -Z1 "TideOrbit-${{ steps.version.outputs.version }}.zip" | grep -E '^seo-command-center/docs/|/\.git/|/node_modules/'; then
+            echo "Developer-only files escaped into the package"
+            exit 1
+          fi
+          echo "Install ZIP bytes: $(stat -c '%s' TideOrbit-${{ steps.version.outputs.version }}.zip)"
 
       - name: Upload WordPress install ZIP
         uses: actions/upload-artifact@v4

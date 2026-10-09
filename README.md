@@ -9,6 +9,30 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## Lean installation and WordPress editor performance (1.88.0)
+
+The build removes an unused legacy layout engine and its two orphaned
+providers. Production installer ZIPs contain only runtime code and assets;
+developer documentation remains available in the GitHub repository.
+
+The TideOrbit dashboard and standard WordPress post editing screens now
+load separate assets. Post/page editors receive a small SEO-panel controller
+(`assets/js/editor.js`) and scoped styles (`assets/css/editor.css`),
+instead of the full SEO dashboard JavaScript and CSS. All SEO panel actions
+remain available. The full dashboard files continue to be used on TideOrbit
+admin screens, including Layout Engine and LM Studio Visual Recreation.
+
+GitHub Actions creates a clean staging copy, minifies both admin and editor
+JS/CSS **at build time only**, syntax-checks the generated JS, and packages
+the production copy. WordPress still loads the same asset paths. No npm
+packages, build tools, React runtimes or CSS frameworks are installed on the
+WordPress site. Previous source ZIPs are no longer committed in `dist/`;
+install ZIPs are published as GitHub Actions artifacts.
+
+Use the GitHub Actions `TideOrbit-WordPress-Install-<version>` artifact or
+the provided ZIP link for WordPress; a GitHub **Source code** archive
+includes unminified developer sources and is not the optimized installer.
+
 ## Visual Recreation Mode — zero new frontend dependencies (1.87.0)
 
 From **TideOrbit → Layout Engine → select a draft → Visual Recreation

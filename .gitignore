@@ -1,0 +1,9 @@
+# Build artifacts: created by GitHub Actions rather than committed
+/dist/
+/packaging/
+/TideOrbit-*.zip
+/seo-command-center.zip
+/node_modules/
+*.pyc
+__pycache__/
+.DS_Store
