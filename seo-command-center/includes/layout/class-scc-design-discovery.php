@@ -57,6 +57,8 @@ class SCC_Design_Discovery {
 	 */
 	public static function canonical_url( $url ) {
 		$url = html_entity_decode( trim( (string) $url ), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		// Next.js may emit @ as %40 in URLs; normalize only this pathname prefix.
+		$url = str_replace( array( '/%40', '/%2540' ), '/@', $url );
 		if ( 0 === strpos( $url, '/@' ) || 0 === strpos( $url, '/community/components/' ) ) {
 			$url = 'https://21st.dev' . $url;
 		} elseif ( 0 === strpos( $url, 'https://21st.dev/' ) ) {
@@ -219,15 +221,25 @@ class SCC_Design_Discovery {
 		if ( '21st.dev' !== $host || ( ! $category_url && ! self::canonical_url( $url ) ) ) {
 			return new WP_Error( 'scc_21st_url', 'Invalid 21st.dev marketplace URL.' );
 		}
-		$result = wp_remote_get( $url, array(
-			'timeout' => 18,
-			'redirection' => 0,
-			'limit_response_size' => 1500000,
-			'headers' => array( 'Accept' => 'text/html' ),
-			'user-agent' => 'TideOrbit-DesignDiscovery/1.0 (+WordPress; administrator-initiated)',
-		) );
-		if ( is_wp_error( $result ) ) { return $result; }
-		$code = (int) wp_remote_retrieve_response_code( $result );
+		// Handle a single 21st.dev legacy URL redirect manually, after verifying
+		// its destination is still a canonical page on the same exact host.
+		for ( $attempt = 0; $attempt < 2; $attempt++ ) {
+			$result = wp_remote_get( $url, array(
+				'timeout' => 18,
+				'redirection' => 0,
+				'limit_response_size' => 1500000,
+				'headers' => array( 'Accept' => 'text/html' ),
+				'user-agent' => 'TideOrbit-DesignDiscovery/1.0 (+WordPress; administrator-initiated)',
+			) );
+			if ( is_wp_error( $result ) ) { return $result; }
+			$code = (int) wp_remote_retrieve_response_code( $result );
+			if ( ! in_array( $code, array( 301, 302, 307, 308 ), true ) ) { break; }
+			$location = (string) wp_remote_retrieve_header( $result, 'location' );
+			$next = self::canonical_url( $location );
+			if ( ! $next ) { return new WP_Error( 'scc_21st_redirect', 'The marketplace redirected to an unapproved URL.' ); }
+			$url = $next;
+		}
+
 		if ( 200 !== $code ) {
 			return new WP_Error( 'scc_21st_http', sprintf( '21st.dev returned HTTP %d. Check your hosting outbound access or retry.', $code ) );
 		}
