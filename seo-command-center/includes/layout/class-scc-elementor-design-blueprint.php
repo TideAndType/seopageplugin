@@ -179,7 +179,7 @@ class SCC_Elementor_Design_Blueprint {
 			if ( 'split' === $variant && $has_image ) {
 				$copy = self::container( 'section-' . $i . '-copy', 'Editorial content', $parts,
 					array( 'direction' => 'column', 'gap' => 22, 'width' => '57%' ), array(),
-					array( 'mobile' => array( 'layout' => array( 'width' => '100%' ) ) );
+					array( 'mobile' => array( 'layout' => array( 'width' => '100%' ) ) ) );
 				$visual = self::container( 'section-' . $i . '-visual', 'Editorial media',
 					array( self::widget( 'section-' . $i . '-featured-image', 'image', array( 'image' => $images[0] ), array( 'image_size' => 'full' ), array( 'border_radius' => 16 ) ) ),
 					array( 'direction' => 'column', 'width' => '43%' ), array(),
