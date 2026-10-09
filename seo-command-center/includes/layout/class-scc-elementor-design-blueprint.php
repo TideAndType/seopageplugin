@@ -200,7 +200,7 @@ class SCC_Elementor_Design_Blueprint {
 			$count++;
 		}
 
-		$collection_order = array( 'stats.items', 'steps.items', 'related.items', 'areas.items', 'faq.items' );
+		$collection_order = array( 'services.items', 'stats.items', 'steps.items', 'related.items', 'areas.items', 'faq.items' );
 		foreach ( $collection_order as $index => $key ) {
 			if ( ! isset( $bank[ $key ] ) ) { continue; }
 			$columns = 'faq.items' === $key ? 1 : ( 'steps.items' === $key ? 3 : 3 );
