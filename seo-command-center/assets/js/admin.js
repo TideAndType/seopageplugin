@@ -4063,6 +4063,107 @@
 
 		if ( postId <= 0 ) { return; }
 
+		var visualModeBox = document.getElementById( 'scc-visual-use' );
+		( function bindVisualRecreation() {
+			var root = document.getElementById( 'scc-visual-recreation' );
+			if ( ! root ) { return; }
+			var pick = document.getElementById( 'scc-visual-pick' );
+			var pickRendered = document.getElementById( 'scc-visual-pick-rendered' );
+			var analyze = document.getElementById( 'scc-visual-analyze' );
+			var compare = document.getElementById( 'scc-visual-compare' );
+			var refImage = document.getElementById( 'scc-visual-reference-image' );
+			var source = document.getElementById( 'scc-visual-source' );
+			var recipeEl = document.getElementById( 'scc-visual-recipe' );
+			var statusEl = document.getElementById( 'scc-visual-message' );
+			var compareInfo = document.getElementById( 'scc-visual-compare-info' );
+			var refId = 0, renderedId = 0, ready = false;
+			function renderRecipe( recipe ) {
+				recipeEl.textContent = recipe.name + ' · ' + recipe.hero.replace( /_/g, ' ' ) +
+					' hero · ' + recipe.tone + ' tone · ' + recipe.width + 'px layout width · ' +
+					( recipe.card_columns || 3 ) + '-column cards. ' + ( recipe.observations || '' );
+			}
+			function chooseImage( onSelected ) {
+				if ( ! window.wp || ! wp.media ) {
+					setStatus( statusEl, 'The WordPress Media Library is unavailable. Reload the Layout Engine and try again.', 'is-error' );
+					return;
+				}
+				var frame = wp.media( {
+					title: 'Choose screenshot (PNG, JPEG or WebP under 3MB)',
+					button: { text: 'Use screenshot' },
+					library: { type: 'image' },
+					multiple: false
+				} );
+				frame.on( 'select', function () {
+					var selection = frame.state().get( 'selection' ).first();
+					if ( selection ) { onSelected( selection.toJSON() ); }
+				} );
+				frame.open();
+			}
+			function showReference( url ) {
+				if ( url ) { refImage.src = url; refImage.hidden = false; }
+			}
+			pick.addEventListener( 'click', function () {
+				chooseImage( function ( item ) {
+					refId = item.id || 0;
+					ready = false;
+					visualModeBox.checked = false;
+					visualModeBox.disabled = true;
+					analyze.disabled = ! refId;
+					compare.disabled = true;
+					showReference( item.url );
+					recipeEl.textContent = 'Screenshot selected. Analyze it with your LM Studio vision model before regenerating.';
+					setStatus( statusEl, 'Screenshot selected from Media Library.' );
+				} );
+			} );
+			pickRendered.addEventListener( 'click', function () {
+				chooseImage( function ( item ) {
+					renderedId = item.id || 0;
+					compare.disabled = ! renderedId || ! ready;
+					compareInfo.textContent = item.filename || 'Draft screenshot selected.';
+				} );
+			} );
+			function sendAnalysis( isComparison ) {
+				var button = isComparison ? compare : analyze;
+				if ( ! refId ) { return; }
+				button.disabled = true;
+				setStatus( statusEl, isComparison ? 'Comparing the draft to the design reference in LM Studio…' : 'Studying layout and style with LM Studio vision…' );
+				request( '/layout/visual-analyze', {
+					method: 'POST',
+					data: { post_id: postId, reference_id: refId,
+						rendered_id: isComparison ? renderedId : 0,
+						source_url: source ? source.value.trim() : '' }
+				} ).then( function ( res ) {
+					var d = res.data || {};
+					ready = !! d.recipe;
+					visualModeBox.disabled = ! ready;
+					visualModeBox.checked = ready;
+					renderRecipe( d.recipe );
+					compare.disabled = ! renderedId || ! ready;
+					setStatus( statusEl, ( isComparison ? 'Refined visual recipe saved. ' : 'Visual recipe saved. ' ) +
+						'Click Regenerate design below to compose a native Elementor page.', 'is-ok' );
+				} ).catch( function ( err ) {
+					setStatus( statusEl, ( err && err.message ) || 'LM Studio visual analysis failed.', 'is-error' );
+				} ).finally( function () { button.disabled = false; } );
+			}
+			analyze.addEventListener( 'click', function () { sendAnalysis( false ); } );
+			compare.addEventListener( 'click', function () { if ( renderedId && ready ) { sendAnalysis( true ); } } );
+			request( '/layout/visual-status?post_id=' + postId, { method: 'GET' } )
+				.then( function ( res ) {
+					var d = res.data || {};
+					if ( ! d.ready ) { return; }
+					refId = d.reference_id || 0; ready = true;
+					showReference( d.reference_url );
+					analyze.disabled = ! refId;
+					visualModeBox.disabled = false;
+					// Opt-in per visit: loading an old reference never silently
+					// switches a live page into visual regeneration mode.
+					visualModeBox.checked = false;
+					if ( d.source_url && source ) { source.value = d.source_url; }
+					renderRecipe( d.recipe );
+					setStatus( statusEl, 'Previous visual recipe loaded. Enable it to use this style.', 'is-ok' );
+				} ).catch( function () {} );
+		}() );
+
 		var preview = document.getElementById( 'scc-layout-preview' );
 		var msg = document.getElementById( 'scc-layout-msg' );
 		var metaEl = document.getElementById( 'scc-layout-meta' );
@@ -4151,6 +4252,7 @@
 				data: {
 					post_id: postId,
 					use_ai: useAgent,
+					visual_mode: !! ( visualModeBox && visualModeBox.checked ),
 					design_prompt: designPrompt ? designPrompt.value : ''
 				}
 			} )
@@ -4161,7 +4263,8 @@
 					blocks = ( d.blocks || [] ).map( function ( b ) { return { id: b.id, name: b.name }; } );
 					if ( metaEl ) {
 						metaEl.hidden = false;
-						var planner = d.source === 'ai_elementor_composition' ? 'schema-aware Elementor design agent' :
+						var planner = d.visual_recreation ? 'LM Studio Visual Recreation (native Elementor, zero React)' :
+							d.source === 'ai_elementor_composition' ? 'schema-aware Elementor design agent' :
 							d.source === 'schema_agent_fallback' ? 'smart page architect (AI design fallback)' :
 							d.source === 'ai_constrained_architect' ? 'legacy AI component architect' :
 							d.source === 'page_architect_ai_fallback' ? 'smart rules (AI fallback)' : 'smart page architect';
@@ -4174,7 +4277,8 @@
 						if ( ! d.ai_available ) { details += ' (no AI provider configured)'; }
 						metaEl.textContent = details;
 					}
-					var readyMessage = compositionMode ? 'Custom Elementor composition ready.' : ( d.agent_error ? 'AI design could not be validated, so TideOrbit used the safe Page Architect fallback.' : 'Layout preview ready.' );
+					var readyMessage = d.visual_recreation ? 'Visual style recreated with editable native Elementor elements. Review before applying.' :
+						compositionMode ? 'Custom Elementor composition ready.' : ( d.agent_error ? 'AI design could not be validated, so TideOrbit used the safe Page Architect fallback.' : 'Layout preview ready.' );
 					if ( isLive ) { readyMessage += ' Live Apply remains locked until you confirm the warning.'; }
 					setStatus( msg, readyMessage, d.agent_error ? 'is-warning' : 'is-ok' );
 					drawCritique( d.critique );
