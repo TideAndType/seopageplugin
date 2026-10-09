@@ -3939,6 +3939,9 @@
 			if ( ! panel ) { return; }
 			var category = document.getElementById( 'scc-dd-category' );
 			var scan = document.getElementById( 'scc-dd-scan' );
+			var scanAll = document.getElementById( 'scc-dd-scan-all' );
+			var stop = document.getElementById( 'scc-dd-stop' );
+			var bulkRunning = false, bulkStop = false;
 			var refresh = document.getElementById( 'scc-dd-refresh' );
 			var message = document.getElementById( 'scc-dd-message' );
 			var count = document.getElementById( 'scc-dd-count' );
@@ -3959,6 +3962,14 @@
 				items.slice( 0, 40 ).forEach( function ( item ) {
 					var tr = el( 'tr' );
 					var title = el( 'td' );
+					if ( item.preview && item.preview.indexOf( 'https://cdn.21st.dev/' ) === 0 ) {
+						var thumb = document.createElement( 'img' );
+						thumb.src = item.preview;
+						thumb.alt = '';
+						thumb.loading = 'lazy';
+						thumb.style.cssText = 'width:84px;height:64px;object-fit:cover;vertical-align:middle;margin-right:10px;border-radius:6px';
+						title.appendChild( thumb );
+					}
 					var link = el( 'a', item.title );
 					link.href = item.url;
 					link.target = '_blank';
@@ -3975,7 +3986,7 @@
 							var prompt = document.getElementById( 'scc-layout-design-prompt' );
 							if ( ! prompt ) { return; }
 							var reference = 'Visual inspiration: ' + item.title + ' (' + item.url + '). ' + ( item.description || '' );
-							prompt.value = ( ( prompt.value ? prompt.value + '\\n' : '' ) + reference ).slice( 0, 2400 );
+							prompt.value = ( ( prompt.value ? prompt.value + '\n' : '' ) + reference ).slice( 0, 2400 );
 							prompt.focus();
 							setStatus( message, 'Reference added to Design direction. Click Regenerate design to apply it.', 'is-ok' );
 						} );
@@ -4009,6 +4020,42 @@
 						.finally( function () { scan.disabled = false; } );
 				} );
 			}
+			if ( scanAll ) {
+				scanAll.addEventListener( 'click', function () {
+					if ( bulkRunning ) { return; }
+					bulkRunning = true; bulkStop = false;
+					var selected = category.value, batches = 0, added = 0;
+					category.disabled = true;
+					if ( scan ) { scan.disabled = true; }
+					scanAll.disabled = true;
+					if ( stop ) { stop.hidden = false; }
+					function finish( text, isError ) {
+						bulkRunning = false;
+						category.disabled = false;
+						if ( scan ) { scan.disabled = false; }
+						scanAll.disabled = false;
+						if ( stop ) { stop.hidden = true; }
+						setStatus( message, text, isError ? 'is-error' : 'is-ok' );
+						load();
+					}
+					function next() {
+						if ( bulkStop || batches >= 40 ) {
+							finish( ( bulkStop ? 'Scan stopped.' : 'Scan batch limit reached.' ) + ' Added ' + added + ' components in ' + batches + ' batches.' ); return;
+						}
+						setStatus( message, 'Scanning ' + selected + ': batch ' + ( batches + 1 ) + ', ' + added + ' components saved…' );
+						request( '/design-discovery/scan', { method: 'POST', data: { category: selected } } )
+							.then( function ( res ) {
+								var d = res.data || {}; batches++;
+								added += d.added || 0;
+								if ( ! d.added ) { finish( 'Category scan complete. Added ' + added + ' new components in ' + batches + ' batches.' ); }
+								else { next(); }
+							} )
+							.catch( function ( err ) { finish( ( err.message || 'Scan failed.' ) + ' Saved ' + added + ' components before stopping. You can resume.', true ); } );
+					}
+					next();
+				} );
+			}
+			if ( stop ) { stop.addEventListener( 'click', function () { bulkStop = true; setStatus( message, 'Stopping after the current batch…' ); } ); }
 			if ( refresh ) { refresh.addEventListener( 'click', load ); }
 			category.addEventListener( 'change', load );
 			load();
