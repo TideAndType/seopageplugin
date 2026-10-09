@@ -69,6 +69,8 @@ class SCC_Design_Discovery {
 			return '';
 		}
 		$path = (string) ( $parts['path'] ?? '' );
+		// /s/ is the marketplace category namespace, never a component author.
+		if ( 0 === strpos( $path, '/community/components/s/' ) ) { return ''; }
 		if ( ! preg_match( '#^/(?:@[a-zA-Z0-9_.-]+/components/[a-zA-Z0-9_./-]+|community/components/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_./-]+)$#', $path ) ) {
 			return '';
 		}
