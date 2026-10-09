@@ -3846,7 +3846,7 @@
 			}
 			function uploadFile( file, role ) {
 				if ( ! file ) { return; }
-				if ( file.size > 3145728 || ! /^image\\/(png|jpeg|webp)$/.test( file.type ) ) {
+				if ( file.size > 3145728 || [ 'image/png', 'image/jpeg', 'image/webp' ].indexOf( file.type ) === -1 ) {
 					setStatus( statusEl, 'Choose a PNG, JPEG or WebP screenshot under 3 MB.', 'is-error' );
 					return;
 				}
