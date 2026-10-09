@@ -3987,6 +3987,8 @@
 							if ( ! prompt ) { return; }
 							var reference = 'Visual inspiration: ' + item.title + ' (' + item.url + '). ' + ( item.description || '' );
 							prompt.value = ( ( prompt.value ? prompt.value + '\n' : '' ) + reference ).slice( 0, 2400 );
+							var sourceInput = document.getElementById( 'scc-visual-source' );
+							if ( sourceInput ) { sourceInput.value = item.url; }
 							prompt.focus();
 							setStatus( message, 'Reference added to Design direction. Click Regenerate design to apply it.', 'is-ok' );
 						} );
@@ -4335,6 +4337,12 @@
 					ok.appendChild( el( 'div', '✅', 'scc-empty__icon' ) );
 					ok.appendChild( el( 'h2', isLive ? 'Live Elementor page updated' : 'Elementor layout created' ) );
 					ok.appendChild( el( 'p', 'TideOrbit saved the previous state before applying this layout.', 'scc-note' ) );
+					if ( d.preview_url || d.view_url ) {
+						var pv = el( 'a', 'Preview the design', 'button button-primary' );
+						pv.href = d.preview_url || d.view_url;
+						pv.target = '_blank'; pv.rel = 'noopener noreferrer';
+						ok.appendChild( pv ); ok.appendChild( document.createTextNode( ' ' ) );
+					}
 					if ( d.elementor_url ) { var e = el( 'a', 'Edit in Elementor', 'button button-primary' ); e.href = d.elementor_url; ok.appendChild( e ); }
 					if ( d.edit_url ) { var ed = el( 'a', isLive ? ' Edit page' : ' Edit draft', 'button' ); ed.href = d.edit_url; ok.appendChild( document.createTextNode( ' ' ) ); ok.appendChild( ed ); }
 					var undo = el( 'button', 'Restore previous layout', 'button' ); undo.type = 'button'; undo.style.marginLeft = '6px'; undo.addEventListener( 'click', restore ); ok.appendChild( undo );
