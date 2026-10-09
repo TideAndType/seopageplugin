@@ -78,10 +78,19 @@ jobs:
             test -s "$out"
             mv "$out" "$file"
           done
-          # The installed plugin keeps the same normal asset filenames, so
-          # PHP enqueues and versioned browser caches need no special handling.
+          # Preserve the required WordPress plugin header and uninstall
+          # source. Strip PHP comments/whitespace in distributed includes
+          # only; source files in Git remain readable and documented.
+          find packaging/seo-command-center/includes -type f -name '*.php' -print0 \\
+            | xargs -0 -n1 php -r 'file_put_contents($argv[1], php_strip_whitespace($argv[1]));'
+          # Validate ALL production PHP files after stripping.
           php -l packaging/seo-command-center/seo-command-center.php
           find packaging/seo-command-center -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+          # Run the same regression suite against files as INSTALLED,
+          # not just the readable development sources.
+          cp -a tests packaging/tests
+          ( cd packaging && php tests/run-tests.php )
+          rm -rf packaging/tests
           echo "Production plugin bytes: $(du -sb packaging/seo-command-center | cut -f1)"
 
       - name: Build WordPress install ZIP
