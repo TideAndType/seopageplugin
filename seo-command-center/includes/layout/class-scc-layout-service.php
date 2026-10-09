@@ -204,6 +204,7 @@ class SCC_Layout_Service {
 			'composition_mode' => true,
 			'edit_url'         => get_edit_post_link( $post_id, 'raw' ),
 			'view_url'         => get_permalink( $post_id ),
+			'preview_url'      => get_preview_post_link( $post_id ),
 			'elementor_url'    => admin_url( 'post.php?post=' . $post_id . '&action=elementor' ),
 		);
 	}
