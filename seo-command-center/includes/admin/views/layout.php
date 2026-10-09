@@ -65,7 +65,7 @@ $live_pages      = (array) ( $data['live_pages'] ?? array() );
 			</label>
 			<?php if ( current_user_can( 'manage_options' ) ) : ?>
 				<button type="button" class="button button-primary" id="scc-dd-scan"><?php esc_html_e( 'Scan next components', 'seo-command-center' ); ?></button>
-				<button type="button" class="button" id="scc-dd-scan-all"><?php esc_html_e( 'Scan entire category', 'seo-command-center' ); ?></button>
+				<button type="button" class="button" id="scc-dd-scan-all"><?php esc_html_e( 'Scan category in batches', 'seo-command-center' ); ?></button>
 				<button type="button" class="button" id="scc-dd-stop" hidden><?php esc_html_e( 'Stop scanning', 'seo-command-center' ); ?></button>
 			<?php endif; ?>
 			<button type="button" class="button" id="scc-dd-refresh"><?php esc_html_e( 'Refresh library', 'seo-command-center' ); ?></button>
