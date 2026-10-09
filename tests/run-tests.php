@@ -2575,6 +2575,57 @@ assert_eq( 'layout_design', $scc_route_method->invoke( $scc_route_ai, 'elementor
 assert_eq( 'layout_design', $scc_route_method->invoke( $scc_route_ai, 'elementor-design-blueprint' ), 'compact LM Studio designer respects the Layout Design provider route' );
 
 
+
+echo "\n== Lightweight native Elementor visual recreation ==\n";
+$visual_bad = SCC_Visual_Recreation::normalize_recipe( array( 'tone' => 'dark' ) );
+assert_true( is_wp_error( $visual_bad ), 'visual recreation rejects incomplete non-vision model JSON' );
+$visual_recipe = SCC_Visual_Recreation::normalize_recipe( array(
+	'name' => 'Asymmetric layout',
+	'hero' => 'split_reverse',
+	'tone' => 'contrast',
+	'accent' => 'primary',
+	'width' => 90000,
+	'hero_font_size' => 120,
+	'hero_padding' => 200,
+	'section_padding' => -8,
+	'card_radius' => 500,
+	'card_columns' => 20,
+	'hero_background' => '#131b27',
+	'observations' => '<script>alert(1)</script>Editorial dark hero with narrow copy.',
+	'sections' => array( array( 'index' => 0, 'style' => 'spotlight' ), array( 'index' => 999, 'style' => 'unsafe' ) ),
+) );
+assert_eq( 'split_reverse', $visual_recipe['hero'], 'vision analysis supports reversed image-led hero' );
+assert_eq( 1360, $visual_recipe['width'], 'visual recipe enforces maximum layout width' );
+assert_eq( 88, $visual_recipe['hero_font_size'], 'visual recipe clamps headline size' );
+assert_eq( 48, $visual_recipe['card_radius'], 'visual recipe clamps card rounding' );
+assert_eq( 4, $visual_recipe['card_columns'], 'visual recipe bounds number of native Elementor cards' );
+assert_eq( 40, $visual_recipe['section_padding'], 'visual recipe ensures readable spacing' );
+assert_eq( 1, count( $visual_recipe['sections'] ), 'visual recipe rejects invalid section indices' );
+assert_true( false === strpos( $visual_recipe['observations'], '<script>' ), 'visual recipe strips markup from image-derived descriptions' );
+$vision_invalid_hex = SCC_Visual_Recreation::normalize_recipe( array( 'hero' => 'split', 'hero_background' => 'url(javascript:alert(1))' ) );
+assert_eq( '', $vision_invalid_hex['hero_background'], 'visual design background cannot inject raw CSS or URL' );
+$safe_parts = SCC_LMStudio_Provider::safe_multimodal_content( array(
+	array( 'type' => 'text', 'text' => 'Analyze the picture only' ),
+	array( 'type' => 'image_url', 'image_url' => array( 'url' => 'https://attacker.example/tracker.png' ) ),
+	array( 'type' => 'image_url', 'image_url' => array( 'url' => 'data:image/png;base64,' . base64_encode( 'fake_test_image_bytes' ) ) ),
+) );
+assert_eq( 2, count( $safe_parts ), 'LM Studio image requests reject remote tracking URLs while retaining data images' );
+assert_eq( 'image_url', $safe_parts[1]['type'], 'LM Studio receives OpenAI-compatible structured vision image content' );
+$recreated = SCC_Elementor_Design_Blueprint::from_visual_recipe( $scc_blueprint_analysis, $visual_recipe );
+assert_true( ! is_wp_error( $recreated ), 'screenshot art direction composes a validated, native Elementor page' );
+if ( ! is_wp_error( $recreated ) ) {
+	$nodes = $recreated['composition']['nodes'];
+	assert_eq( 'hero-visual', $nodes[0]['children'][0]['id'], 'reversed screenshot hero places visual before text using native containers' );
+	assert_eq( 1360, (int) $nodes[0]['layout']['max_width'], 'screenshot design width becomes native Elementor container setting' );
+	assert_eq( '#131b27', $nodes[0]['style']['background'], 'accessible dark visual palette passes into native Elementor background' );
+	$must = SCC_Elementor_Content_Bank::required_keys( $recreated['bank'] );
+	assert_eq( array(), array_values( array_diff( $must, $recreated['composition']['meta']['content_refs'] ) ), 'every SEO content reference survives visual reconstruction' );
+	$tree = SCC_Elementor_Composition::compile( $recreated['composition'], $recreated['bank'], $recreated['profile'] );
+	assert_true( count( $tree ) >= 5 && 'container' === $tree[0]['elType'], 'screenshot design compiles into actual native Elementor JSON' );
+}
+$light_low_contrast = SCC_Elementor_Design_Blueprint::compose( $scc_blueprint_bank, array( 'hero' => 'editorial', 'tone' => 'light', 'hero_background' => '#000000' ), $scc_profile );
+assert_eq( 'surface', $light_low_contrast['nodes'][0]['style']['background'], 'low-contrast source colors do not override readable background' );
+
 echo "\n== The SEO Framework active detection ==\n";
 if ( ! defined( 'THE_SEO_FRAMEWORK_VERSION' ) ) {
 	define( 'THE_SEO_FRAMEWORK_VERSION', '5.1.4-test' );
