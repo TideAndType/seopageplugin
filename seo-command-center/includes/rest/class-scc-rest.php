@@ -673,6 +673,24 @@ class SCC_REST {
 			)
 		);
 
+		register_rest_route(
+			self::NS,
+			'/layout/visual-analyze',
+			array(
+				'methods' => WP_REST_Server::CREATABLE,
+				'callback' => array( $this, 'layout_visual_analyze' ),
+				'permission_callback' => $perm,
+			)
+		);
+		register_rest_route(
+			self::NS,
+			'/layout/visual-status',
+			array(
+				'methods' => WP_REST_Server::READABLE,
+				'callback' => array( $this, 'layout_visual_status' ),
+				'permission_callback' => $perm,
+			)
+		);
 		// AI Elementor Layout Engine.
 		register_rest_route(
 			self::NS,
@@ -2643,6 +2661,72 @@ class SCC_REST {
 		return is_wp_error( $result ) ? $result : $this->ok( $result );
 	}
 
+	/**
+	 * Analyze a Media Library screenshot with LM Studio's vision model and
+	 * store a bounded design recipe for a single editable post. Never installs
+	 * image component code or writes to Elementor during analysis.
+	 */
+	public function layout_visual_analyze( WP_REST_Request $request ) {
+		$params = $request->get_json_params();
+		$params = is_array( $params ) ? $params : $request->get_params();
+		$post_id = (int) ( $params['post_id'] ?? 0 );
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) { return $guard; }
+		if ( ! current_user_can( 'upload_files' ) ) {
+			return $this->fail( 'scc_visual_forbidden', 'You need Media Library access to analyze screenshots.', 403 );
+		}
+		$reference_id = (int) ( $params['reference_id'] ?? 0 );
+		$rendered_id = (int) ( $params['rendered_id'] ?? 0 );
+		$previous = get_post_meta( $post_id, SCC_Visual_Recreation::META, true );
+		$previous = is_array( $previous ) ? $previous : array();
+		if ( $rendered_id ) {
+			// Visual comparison must use the reference previously approved
+			// for this page, not a substituted arbitrary attachment id.
+			if ( empty( $previous['reference_id'] ) || (int) $previous['reference_id'] !== $reference_id ) {
+				return $this->fail( 'scc_visual_mismatch', 'Select and analyze the reference screenshot before comparing a draft.', 400 );
+			}
+		}
+		$recipe = SCC_Visual_Recreation::analyze( $this->ai, $reference_id, $rendered_id,
+			(array) ( $previous['recipe'] ?? array() ) );
+		if ( is_wp_error( $recipe ) ) { return $recipe; }
+		$source_url = SCC_Design_Discovery::canonical_url( (string) ( $params['source_url'] ?? '' ) );
+		if ( ! $source_url && $rendered_id ) { $source_url = (string) ( $previous['source_url'] ?? '' ); }
+		$record = array(
+			'reference_id' => $reference_id,
+			'source_url' => $source_url,
+			'recipe' => $recipe,
+			'updated' => time(),
+			'created_by' => get_current_user_id(),
+			'comparison_id' => $rendered_id,
+		);
+		update_post_meta( $post_id, SCC_Visual_Recreation::META, $record );
+		return $this->ok( array(
+			'recipe' => $recipe,
+			'reference_id' => $reference_id,
+			'reference_url' => wp_get_attachment_url( $reference_id ),
+			'source_url' => $source_url,
+			'comparison' => (bool) $rendered_id,
+		) );
+	}
+
+	/** Restore previous design recipe without starting a second vision call. */
+	public function layout_visual_status( WP_REST_Request $request ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		$guard = $this->require_post_access( $post_id );
+		if ( $guard ) { return $guard; }
+		$record = get_post_meta( $post_id, SCC_Visual_Recreation::META, true );
+		if ( ! is_array( $record ) || empty( $record['recipe'] ) || empty( $record['reference_id'] ) ) {
+			return $this->ok( array( 'ready' => false ) );
+		}
+		return $this->ok( array(
+			'ready' => true,
+			'recipe' => $record['recipe'],
+			'reference_id' => (int) $record['reference_id'],
+			'reference_url' => wp_get_attachment_url( (int) $record['reference_id'] ),
+			'source_url' => (string) ( $record['source_url'] ?? '' ),
+		) );
+	}
+
 	public function layout_propose( WP_REST_Request $request ) {
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
@@ -2652,6 +2736,7 @@ class SCC_REST {
 		$post_id = (int) ( $params['post_id'] ?? 0 );
 		$use_ai  = ! empty( $params['use_ai'] );
 		$design_prompt = substr( sanitize_textarea_field( (string) ( $params['design_prompt'] ?? '' ) ), 0, 2400 );
+		$visual_mode = ! empty( $params['visual_mode'] );
 		if ( $post_id <= 0 ) {
 			return $this->fail( 'no_post', __( 'A post id is required.', 'seo-command-center' ), 400 );
 		}
@@ -2659,8 +2744,24 @@ class SCC_REST {
 		if ( $guard ) {
 			return $guard;
 		}
+		$visual_recipe = array();
+		if ( $visual_mode ) {
+			$visual = get_post_meta( $post_id, SCC_Visual_Recreation::META, true );
+			if ( ! is_array( $visual ) || empty( $visual['recipe'] ) ) {
+				return $this->fail( 'scc_visual_missing', 'Analyze a reference screenshot before enabling Visual Recreation Mode.', 400 );
+			}
+			$visual_recipe = (array) $visual['recipe'];
+			$use_ai = true;
+		}
 		$service = new SCC_Layout_Service( $this->ai );
-		$result  = $service->propose_for_post( $post_id, $use_ai, $design_prompt );
+		$result  = $service->propose_for_post( $post_id, $use_ai, $design_prompt, $visual_recipe );
+		if ( ! is_wp_error( $result ) && $visual_mode ) {
+			if ( empty( $result['composition_mode'] ) ) {
+				return $this->fail( 'scc_visual_compose_failed',
+					'Visual Recreation could not create a validated native Elementor composition. Check Elementor Flexbox containers and the reference screenshot before retrying.', 422 );
+			}
+			$result['visual_recreation'] = true;
+		}
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

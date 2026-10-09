@@ -66,6 +66,31 @@ class SCC_Elementor_Design_Blueprint {
 		);
 	}
 
+	/**
+	 * Visual Recreation bypasses the second LM Studio request: the screenshot
+	 * vision pass already produced a constrained, server-validated design recipe.
+	 * Content refs remain locked and validation is identical to normal pages.
+	 */
+	public static function from_visual_recipe( array $analysis, array $recipe ) {
+		$bank = SCC_Elementor_Content_Bank::build( $analysis );
+		if ( empty( $bank['hero.title'] ) ) {
+			return new WP_Error( 'scc_visual_no_content', 'Finish the page copy before recreating a visual design.' );
+		}
+		$profile = SCC_Design_Intel::profile();
+		$composition = self::compose( $bank, $recipe, $profile );
+		$valid = SCC_Elementor_Composition::validate( $composition, $bank );
+		if ( is_wp_error( $valid ) ) { return $valid; }
+		return array(
+			'composition' => $valid,
+			'bank' => $bank,
+			'profile' => $profile,
+			'catalog' => array( 'available' => SCC_Elementor_Widget_Schema::summaries(), 'schemas' => array() ),
+			'repaired' => false,
+			'blueprint_mode' => true,
+			'visual_recreation' => true,
+		);
+	}
+
 	/** Exposes semantic refs, not raw HTML or whole article bodies. */
 	public static function section_index( array $bank ) {
 		$sections = array();
@@ -85,21 +110,37 @@ class SCC_Elementor_Design_Blueprint {
 
 	/** Deterministic designer: always uses every finished content-bank item. */
 	public static function compose( array $bank, array $recipe, array $profile = array() ) {
-		$hero = self::choice( $recipe['hero'] ?? 'split', array( 'split', 'editorial', 'centered' ), 'split' );
+		$hero = self::choice( $recipe['hero'] ?? 'split', array( 'split', 'split_reverse', 'editorial', 'centered' ), 'split' );
 		$tone = self::choice( $recipe['tone'] ?? 'light', array( 'light', 'dark', 'contrast' ), 'light' );
 		$width = max( 880, min( 1360, (int) ( $recipe['width'] ?? $profile['layout']['content_width'] ?? 1140 ) ) );
 		$accent = self::choice( $recipe['accent'] ?? 'primary', array( 'primary', 'secondary', 'accent' ), 'primary' );
+		$is_split = in_array( $hero, array( 'split', 'split_reverse' ), true );
+		$hero_size = max( 42, min( 88, (int) ( $recipe['hero_font_size'] ?? 66 ) ) );
+		$hero_pad = max( 48, min( 160, (int) ( $recipe['hero_padding'] ?? 108 ) ) );
+		$section_pad = max( 40, min( 132, (int) ( $recipe['section_padding'] ?? 82 ) ) );
+		$card_radius = max( 0, min( 48, (int) ( $recipe['card_radius'] ?? 16 ) ) );
+		$card_columns = max( 2, min( 4, (int) ( $recipe['card_columns'] ?? 3 ) ) );
+		$card_pattern = self::choice( $recipe['card_pattern'] ?? 'grid', array( 'grid', 'bento' ), 'grid' );
+		$card_style = self::choice( $recipe['card_style'] ?? 'outlined', array( 'outlined', 'soft', 'flat' ), 'outlined' );
 		$dark_hero = 'dark' === $tone || 'contrast' === $tone;
 		$heading_color = $dark_hero ? '#ffffff' : 'heading';
 		$text_color = $dark_hero ? '#e5e7eb' : 'text';
 		$hero_bg = $dark_hero ? '#111827' : 'surface';
+		$requested_bg = trim( (string) ( $recipe['hero_background'] ?? '' ) );
+		if ( preg_match( '/^#[a-fA-F0-9]{6}$/', $requested_bg ) ) {
+			$rgb = array_map( 'hexdec', str_split( substr( $requested_bg, 1 ), 2 ) );
+			$brightness = ( $rgb[0] * 299 + $rgb[1] * 587 + $rgb[2] * 114 ) / 1000;
+			// Honor the reference only if the configured contrast treatment is
+			// appropriate for white-on-dark or dark-on-light copy.
+			if ( $dark_hero ? $brightness < 115 : $brightness > 200 ) { $hero_bg = strtolower( $requested_bg ); }
+		}
 		$has_media = isset( $bank['hero.media'] );
-		if ( ! $has_media && 'split' === $hero ) { $hero = 'editorial'; }
+		if ( ! $has_media && $is_split ) { $hero = 'editorial'; $is_split = false; }
 
 		$hero_stack = array();
 		if ( isset( $bank['hero.title'] ) ) {
 			$hero_stack[] = self::widget( 'hero-title', 'heading', array( 'title' => 'hero.title' ), array( 'header_size' => 'h1' ),
-				array( 'font_size' => 'centered' === $hero ? 60 : 66, 'font_weight' => 800, 'line_height' => 1.08, 'letter_spacing' => -2, 'color' => $heading_color, 'text_align' => 'centered' === $hero ? 'center' : 'left' ),
+				array( 'font_size' => 'centered' === $hero ? min( $hero_size, 76 ) : $hero_size, 'font_weight' => 800, 'line_height' => 1.08, 'letter_spacing' => -2, 'color' => $heading_color, 'text_align' => 'centered' === $hero ? 'center' : 'left' ),
 				array( 'mobile' => array( 'style' => array( 'font_size' => 38, 'letter_spacing' => -0.8 ) ) )
 			);
 		}
@@ -113,24 +154,25 @@ class SCC_Elementor_Design_Blueprint {
 		if ( $cta_button ) { $hero_stack[] = $cta_button; }
 
 		$hero_text = self::container( 'hero-copy', 'Hero content', $hero_stack,
-			array( 'direction' => 'column', 'gap' => 22, 'width' => $has_media && 'split' === $hero ? '57%' : '100%' ),
+			array( 'direction' => 'column', 'gap' => 22, 'width' => $has_media && $is_split ? '57%' : '100%' ),
 			array( 'padding' => array( 0, 0, 0, 0 ) ),
 			array( 'mobile' => array( 'layout' => array( 'width' => '100%' ) ) )
 		);
 		$hero_children = array( $hero_text );
 		if ( $has_media ) {
 			$image = self::widget( 'hero-image', 'image', array( 'image' => 'hero.media' ), array( 'image_size' => 'full' ),
-				array( 'border_radius' => 20, 'width' => '100%' ) );
-			if ( 'split' === $hero ) {
+				array( 'border_radius' => $card_radius, 'width' => '100%' ) );
+			if ( $is_split ) {
 				$hero_children[] = self::container( 'hero-visual', 'Hero visual', array( $image ),
 					array( 'direction' => 'column', 'width' => '43%' ), array( 'padding' => array( 0, 0, 0, 0 ) ),
 					array( 'mobile' => array( 'layout' => array( 'width' => '100%' ) ) )
 				);
 			} else { $hero_children[] = $image; }
 		}
+		if ( 'split_reverse' === $hero && $has_media ) { $hero_children = array_reverse( $hero_children ); }
 		$nodes = array( self::container( 'hero', 'Hero', $hero_children,
-			array( 'direction' => 'split' === $hero ? 'row' : 'column', 'gap' => 48, 'align' => 'center', 'justify' => 'space-between', 'content_width' => 'boxed', 'max_width' => $width ),
-			array( 'background' => $hero_bg, 'padding' => array( 108, 28, 104, 28 ) ),
+			array( 'direction' => $is_split ? 'row' : 'column', 'gap' => 48, 'align' => 'center', 'justify' => 'space-between', 'content_width' => 'boxed', 'max_width' => $width ),
+			array( 'background' => $hero_bg, 'padding' => array( $hero_pad, 28, max( 48, $hero_pad - 4 ), 28 ) ),
 			array( 'tablet' => array( 'layout' => array( 'gap' => 28 ) ),
 				'mobile' => array( 'layout' => array( 'direction' => 'column', 'gap' => 26 ), 'style' => array( 'padding' => array( 64, 20, 64, 20 ) ) ) )
 		) );
@@ -171,7 +213,7 @@ class SCC_Elementor_Design_Blueprint {
 			}
 			foreach ( $images as $j => $image_key ) {
 				$image_widget = self::widget( 'section-' . $i . '-image-' . $j, 'image', array( 'image' => $image_key ), array( 'image_size' => 'full' ),
-					array( 'border_radius' => 16, 'width' => '100%' ) );
+					array( 'border_radius' => $card_radius, 'width' => '100%' ) );
 				if ( 'split' === $variant && 0 === $j ) {
 					// First image lives beside copy; subsequent images remain in the section.
 					continue;
@@ -184,7 +226,7 @@ class SCC_Elementor_Design_Blueprint {
 					array( 'direction' => 'column', 'gap' => 22, 'width' => '57%' ), array(),
 					array( 'mobile' => array( 'layout' => array( 'width' => '100%' ) ) ) );
 				$visual = self::container( 'section-' . $i . '-visual', 'Editorial media',
-					array( self::widget( 'section-' . $i . '-featured-image', 'image', array( 'image' => $images[0] ), array( 'image_size' => 'full' ), array( 'border_radius' => 16 ) ) ),
+					array( self::widget( 'section-' . $i . '-featured-image', 'image', array( 'image' => $images[0] ), array( 'image_size' => 'full' ), array( 'border_radius' => $card_radius ) ) ),
 					array( 'direction' => 'column', 'width' => '43%' ), array(),
 					array( 'mobile' => array( 'layout' => array( 'width' => '100%' ) ) ) );
 				$parts = $count % 2 ? array( $visual, $copy ) : array( $copy, $visual );
@@ -192,8 +234,8 @@ class SCC_Elementor_Design_Blueprint {
 			$nodes[] = self::container( 'section-' . $i, 'Page section ' . ( $i + 1 ), $parts,
 				array( 'direction' => 'split' === $variant ? 'row' : 'column', 'gap' => 34, 'content_width' => 'boxed',
 					'max_width' => 'narrow' === $variant ? 860 : $width, 'align' => 'split' === $variant ? 'center' : 'stretch' ),
-				array( 'background' => $surface, 'padding' => array( 82, 28, 82, 28 ),
-					'border_radius' => 'spotlight' === $variant ? 18 : 0,
+				array( 'background' => $surface, 'padding' => array( $section_pad, 28, $section_pad, 28 ),
+					'border_radius' => 'spotlight' === $variant ? $card_radius : 0,
 					'border_width' => 'spotlight' === $variant ? 1 : 0,
 					'border_color' => 'border',
 					'border_style' => 'spotlight' === $variant ? 'solid' : 'none' ),
@@ -206,14 +248,22 @@ class SCC_Elementor_Design_Blueprint {
 		$collection_order = array( 'services.items', 'stats.items', 'steps.items', 'related.items', 'areas.items', 'faq.items' );
 		foreach ( $collection_order as $index => $key ) {
 			if ( ! isset( $bank[ $key ] ) ) { continue; }
-			$columns = 'faq.items' === $key ? 1 : ( 'steps.items' === $key ? 3 : 3 );
+			$columns = 'faq.items' === $key ? 1 : $card_columns;
+			$item_style = array( 'border_radius' => $card_radius, 'padding' => array( 26, 26, 26, 26 ) );
+			if ( 'soft' === $card_style ) {
+				$item_style['border_width'] = 0;
+				$item_style['box_shadow'] = array( 'x' => 0, 'y' => 14, 'blur' => 40, 'spread' => -22, 'color' => 'rgba(0,0,0,0.12)' );
+			} elseif ( 'flat' === $card_style ) {
+				$item_style['border_width'] = 0;
+				$item_style['background'] = 'surface';
+			}
 			$nodes[] = array(
 				'id' => 'collection-' . str_replace( '.', '-', $key ),
 				'type' => 'collection', 'label' => ucwords( str_replace( array( '.', '-' ), ' ', $key ) ),
 				'collection' => $key,
-				'layout' => array( 'columns' => $columns, 'direction' => 'row', 'gap' => 22, 'content_width' => 'boxed', 'max_width' => $width ),
-				'style' => array( 'background' => $index % 2 ? 'surface' : 'card', 'padding' => array( 78, 24, 78, 24 ) ),
-				'item_style' => array( 'border_radius' => 16, 'padding' => array( 26, 26, 26, 26 ) ),
+				'layout' => array( 'columns' => $columns, 'bento' => 'bento' === $card_pattern && 'faq.items' !== $key, 'direction' => 'row', 'gap' => 22, 'content_width' => 'boxed', 'max_width' => $width ),
+				'style' => array( 'background' => $index % 2 ? 'surface' : 'card', 'padding' => array( $section_pad, 24, $section_pad, 24 ) ),
+				'item_style' => $item_style,
 				'responsive' => array( 'mobile' => array( 'layout' => array( 'columns' => 1 ),
 					'style' => array( 'padding' => array( 48, 20, 48, 20 ) ) ) ),
 			);

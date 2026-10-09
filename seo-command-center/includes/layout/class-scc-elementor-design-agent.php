@@ -30,9 +30,18 @@ class SCC_Elementor_Design_Agent {
 	 * Produce and validate a page composition. Returns WP_Error so the caller
 	 * can fall back to TideOrbit's deterministic block engine.
 	 */
-	public function propose( array $analysis, $design_prompt = '' ) {
+	public function propose( array $analysis, $design_prompt = '', array $visual_recipe = array() ) {
 		if ( ! $this->is_available() ) {
 			return new WP_Error( 'scc_agent_unavailable', __( 'The schema-aware Elementor design agent is not available.', 'seo-command-center' ) );
+		}
+
+		// Screenshot vision pass has already produced a whitelisted recipe. Build
+		// directly with native Elementor widgets without another model call.
+		if ( ! empty( $visual_recipe ) && class_exists( 'SCC_Visual_Recreation' )
+			&& class_exists( 'SCC_Elementor_Design_Blueprint' ) ) {
+			$recipe = SCC_Visual_Recreation::normalize_recipe( $visual_recipe );
+			if ( is_wp_error( $recipe ) ) { return $recipe; }
+			return SCC_Elementor_Design_Blueprint::from_visual_recipe( $analysis, $recipe );
 		}
 
 		$design_prompt = substr( sanitize_textarea_field( (string) $design_prompt ), 0, 2400 );

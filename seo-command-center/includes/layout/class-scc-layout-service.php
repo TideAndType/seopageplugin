@@ -20,7 +20,7 @@ class SCC_Layout_Service {
 		$this->ai = $ai;
 	}
 
-	public function propose_for_post( $post_id, $use_ai = false, $design_prompt = '' ) {
+	public function propose_for_post( $post_id, $use_ai = false, $design_prompt = '', array $visual_recipe = array() ) {
 		$obj = SCC_Layout_Analyzer::content_object_from_post( $post_id );
 		if ( is_wp_error( $obj ) ) { return $obj; }
 
@@ -36,7 +36,7 @@ class SCC_Layout_Service {
 			$agent = new SCC_Elementor_Design_Agent( $this->ai );
 			if ( $agent->is_available() ) {
 				$agent_attempted = true;
-				$agent_result = $agent->propose( $analysis, $design_prompt );
+				$agent_result = $agent->propose( $analysis, $design_prompt, $visual_recipe );
 				if ( ! is_wp_error( $agent_result ) ) {
 					$result = $this->composition_proposal( $post_id, $obj, $analysis, $agent_result, $design_prompt );
 					if ( ! is_wp_error( $result ) ) { return $result; }
@@ -204,6 +204,7 @@ class SCC_Layout_Service {
 			'composition_mode' => true,
 			'edit_url'         => get_edit_post_link( $post_id, 'raw' ),
 			'view_url'         => get_permalink( $post_id ),
+			'preview_url'      => get_preview_post_link( $post_id ),
 			'elementor_url'    => admin_url( 'post.php?post=' . $post_id . '&action=elementor' ),
 		);
 	}

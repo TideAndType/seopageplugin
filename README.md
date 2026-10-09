@@ -9,6 +9,41 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## Visual Recreation Mode — zero new frontend dependencies (1.87.0)
+
+From **TideOrbit → Layout Engine → select a draft → Visual Recreation
+Mode**, open a 21st.dev component, take a screenshot of the component's visual
+preview and use **Choose / upload reference screenshot** to add it to the
+WordPress Media Library. TideOrbit accepts PNG, JPEG and WebP screenshots
+up to 3 MB. Screenshots stay in Media Library, are not inserted into live page
+content, and are not loaded by website visitors.
+
+Click **Analyze design with LM Studio** while a **vision-capable LM Studio
+model** is loaded. This makes one OpenAI-compatible multimodal chat call
+using a base64 screenshot sent only to the explicitly configured LM Studio
+endpoint (or its user-configured tunnel). TideOrbit rejects remote image URLs
+and limits data image size. A text-only model cannot analyze the screenshot
+and returns a clear error rather than pretending to have seen the image.
+
+The vision model generates a small validated recipe (hero layout, tone,
+site-brand accent, width, headline sizing, vertical spacing, card radius,
+columns, section treatments, safe background and observations).
+Enable **Use this visual recipe when regenerating**, then click
+**Regenerate design**. The existing composition validator compiles the recipe
+using ONLY native Elementor containers/widgets, responsive settings and the
+original immutable content bank. No TSX, React, JavaScript, remote CSS, npm
+dependencies or new Elementor add-ons are imported or enqueued.
+
+TideOrbit keeps drafts and live pages separate and preserves existing restore
+points. A reference design does not automatically publish changes. When you
+want a second visual pass, take a screenshot of the generated Elementor draft,
+choose it under **Compare and refine**, then ask LM Studio to compare the
+reference and draft images. The resulting refined recipe can be regenerated
+and reviewed before another apply. **Screenshot capture is manual; live
+browser pixel-diff testing is not claimed.** Native Elementor may approximate
+complex effects, bento arrangements and animated interactions rather than
+matching React components pixel for pixel.
+
 ## 21st.dev Design Discovery (1.86.0)
 
 Go to **TideOrbit → Layout Engine → 21st.dev Design Discovery**. Choose a
