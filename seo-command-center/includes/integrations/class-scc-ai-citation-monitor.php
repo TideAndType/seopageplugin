@@ -188,6 +188,44 @@ class SCC_AI_Citation_Monitor {
 			return is_array( $r ) && substr( (string) ( $r['captured_at'] ?? '' ), 0, 7 ) === $month;
 		} ) );
 	}
+
+	/**
+	 * Honest per-surface dashboard: only actual answer observations contribute
+	 * a citation denominator. Never mix indexed aggregate samples into ratios.
+	 */
+	public static function summary( $month ) {
+		$rows = self::monthly( $month );
+		$out = array();
+		foreach ( $rows as $row ) {
+			$surface = (string) ( $row['surface'] ?? 'unknown' );
+			if ( ! isset( $out[$surface] ) ) {
+				$out[$surface] = array(
+					'surface' => $surface, 'observations' => 0,
+					'answer_observed' => 0, 'confirmed_source_checks' => 0,
+					'own_domain_cited' => 0, 'own_brand_mentioned' => 0,
+					'unverified_citation_status' => 0, 'indexed_samples' => 0,
+					'latest_indexed_citation_count' => null,
+				);
+			}
+			$out[$surface]['observations']++;
+			if ( 'measured_sample' === ( $row['state'] ?? '' ) ) {
+				$out[$surface]['indexed_samples']++;
+				$out[$surface]['latest_indexed_citation_count'] = $row['cited_domain_mentions'] ?? null;
+				continue;
+			}
+			if ( 'measured' !== ( $row['state'] ?? '' ) && 'measured_api_observation' !== ( $row['state'] ?? '' ) ) { continue; }
+			$out[$surface]['answer_observed']++;
+			if ( ! empty( $row['brand_mentioned'] ) ) { $out[$surface]['own_brand_mentioned']++; }
+			if ( isset( $row['domain_cited'] ) && is_bool( $row['domain_cited'] ) ) {
+				$out[$surface]['confirmed_source_checks']++;
+				if ( $row['domain_cited'] ) { $out[$surface]['own_domain_cited']++; }
+			} else {
+				$out[$surface]['unverified_citation_status']++;
+			}
+		}
+		return array_values( $out );
+	}
+
 	protected static function save( array $r ) {
 		$history = self::history();
 		$history[] = $r;

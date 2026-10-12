@@ -2,8 +2,8 @@
 /**
  * Paid, on-demand, direct API observations for Perplexity Agent and Gemini.
  * Treat source retrieval separately from source actually cited in an answer.
- * No user, lead, visitor, or medical data is transmitted to model providers.
- * Only an admin-supplied, non-sensitive search question is submitted.
+ * The administrator's explicit search question is transmitted to the chosen
+ * provider. No visitor/contact records are read from WordPress or sent.
  */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 
@@ -119,6 +119,10 @@ class SCC_AI_Direct_Providers {
 	}
 	protected static function base( $platform, $query, $domain, $brand, array $cited, array $retrieved, $answer, $model, $source, $citation_status, array $competitors ) {
 		$own = self::observed_citations( $cited, $domain, $competitors );
+		if ( ! in_array( $citation_status, array( 'verified_citation_markers', 'verified_grounding_supports' ), true ) ) {
+			foreach ( $own as &$entry ) { $entry['cited'] = null; }
+			unset( $entry );
+		}
 		$citations = array();
 		foreach ( $cited as $row ) {
 			$url = (string) ( $row['url'] ?? '' );
