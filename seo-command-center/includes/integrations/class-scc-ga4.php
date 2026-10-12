@@ -101,6 +101,8 @@ class SCC_GA4 {
 		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) { return; }
 		// OAuth callback requests use state verification instead of WP REST nonces.
 		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
+		// The same admin screen hosts an independent GBP OAuth grant.
+		if ( isset( $_GET['scc_provider'] ) && 'gbp' === sanitize_key( wp_unslash( $_GET['scc_provider'] ) ) ) { return; }
 		if ( 'seo-command-center-campaign' !== $page || ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) ) ) { return; }
 		$uid = (int) get_current_user_id();
 		$state = isset( $_GET['state'] ) ? sanitize_text_field( wp_unslash( $_GET['state'] ) ) : '';
