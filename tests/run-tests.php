@@ -3133,7 +3133,7 @@ assert_eq( true, $measured['thresholded'], 'GA4 privacy thresholding disclosed' 
 assert_true( is_wp_error( SCC_GA4::normalize_report( array( 'rows' => array() ), '2026-09', $full_period, '123456789' ) ), 'missing provider envelope never becomes zero' );
 assert_true( is_wp_error( SCC_GA4::normalize_report( array( 'metricHeaders' => $headers, 'rowCount' => 1 ), '2026-09', $full_period, '123456789' ) ), 'missing reported rows never becomes zero' );
 $zero = SCC_GA4::normalize_report( array( 'metricHeaders' => $headers, 'rowCount' => 0 ), '2026-09', $full_period, '123456789' );
-assert_eq( 0.0, $zero['sessions'], 'true zero rows only accepted with valid GA4 headers and zero row count' );
+assert_eq( 0, $zero['sessions'], 'true zero rows only accepted with valid GA4 headers and zero row count' );
 assert_true( is_wp_error( SCC_GA4::normalize_report( array(
 	'metricHeaders' => $headers, 'rowCount' => 1, 'rows' => array( array( 'metricValues' => array(
 		array( 'value' => 'oops' ), array( 'value' => '10' ), array( 'value' => '1' ),

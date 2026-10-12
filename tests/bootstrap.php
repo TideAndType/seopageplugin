@@ -300,6 +300,11 @@ if ( ! function_exists( 'update_option' ) ) {
 		return true;
 	}
 }
+if ( ! function_exists( 'admin_url' ) ) {
+	function admin_url( $path = '' ) {
+		return 'https://example.com/wp-admin/' . ltrim( (string) $path, '/' );
+	}
+}
 if ( ! function_exists( 'delete_option' ) ) {
 	function delete_option( $key ) {
 		unset( $GLOBALS['scc_test_options'][ $key ] );
