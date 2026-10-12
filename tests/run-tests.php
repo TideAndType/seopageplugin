@@ -3504,6 +3504,77 @@ assert_true( false !== strpos( $handoff_source, "'status' => 'recommended'" ), '
 assert_true( false !== strpos( $handoff_source, "get_page_by_path( " ), 'content plan handoff checks WordPress URL collisions' );
 assert_true( false === strpos( $handoff_source, 'wp_update_post(' ) && false === strpos( $handoff_source, 'wp_insert_post(' ), 'AI opportunity flow never directly writes or publishes a WordPress page' );
 
+echo "\n== Page-specific AI audit and separate review draft safety ==\n";
+if ( ! function_exists( 'wp_unslash' ) ) {
+	function wp_unslash( $text ) { return is_array( $text ) ? array_map( 'wp_unslash', $text ) : stripslashes( (string) $text ); }
+}
+if ( ! function_exists( 'wp_generate_uuid4' ) ) {
+	function wp_generate_uuid4() { static $i = 0; $i++; return sprintf( '12345678-1234-1234-1234-%012d', $i ); }
+}
+$elementor_example = array(
+	array( 'id' => 'abc1234', 'elType' => 'container', 'settings' => array( 'background_color' => '#123456' ),
+		'elements' => array(
+			array( 'id' => 'hi12345', 'elType' => 'widget', 'widgetType' => 'heading',
+				'settings' => array( 'title' => 'Reliable Managed IT Support' ), 'elements' => array() ),
+			array( 'id' => 'text123', 'elType' => 'widget', 'widgetType' => 'text-editor',
+				'settings' => array( 'editor' => '<p>Our team provides proactive monitoring and business continuity.</p>' ), 'elements' => array() ),
+		) ),
+);
+$elementor_before = wp_json_encode( $elementor_example );
+$extracted = SCC_AI_Page_Improvements::elementor_text( $elementor_example );
+assert_true( false !== strpos( $extracted, 'Reliable Managed IT Support' ), 'page audit extracts Elementor heading text' );
+assert_true( false !== strpos( $extracted, 'proactive monitoring' ), 'page audit extracts Elementor editor content' );
+assert_true( false === strpos( $extracted, '#123456' ), 'page audit does not send design settings to LM Studio' );
+$audited = SCC_AI_Page_Improvements::audit_snapshot( array(
+	'source_post_id' => 7, 'source_hash' => str_repeat( 'a', 64 ),
+	'text' => 'We offer managed IT support services including proactive monitoring, data backups and support.',
+	'word_count' => 15, 'has_elementor' => true,
+), array(
+	'id' => str_repeat( 'b', 40 ), 'question' => 'How to compare managed IT providers',
+	'source' => 'gemini_developer_api', 'captured_at' => gmdate( 'c' ),
+	'evidence_state' => 'verified_grounding_supports', 'competitor_domains' => array( 'competitor.com' ),
+) );
+assert_eq( 'audit_only_not_ai_ranking', $audited['state'], 'audit signals are not claimed to be actual AI rankings' );
+assert_eq( 7, $audited['source_post_id'], 'audit binds exact existing page' );
+assert_eq( true, $audited['signals']['uses_elementor'], 'Elementor layout recognized' );
+assert_true( in_array( 'managed', $audited['signals']['question_terms_present'], true ), 'page audit recognizes observed query terms' );
+assert_true( in_array( 'compare', $audited['signals']['question_terms_not_observed'], true ), 'page audit flags missing terms as not observed, not proof of a problem' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::audit_snapshot( array(
+	'source_post_id' => 9, 'source_hash' => 'a', 'text' => '', 'word_count' => 0
+), array( 'id' => 'b', 'question' => 'Managed IT services' ) ) ), 'empty source page cannot produce made-up recommendations' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::normalize_brief( array( 'editorial_rationale' => 'Brief' ), $audited ) ), 'empty model JSON is rejected' );
+$brief = SCC_AI_Page_Improvements::normalize_brief( array(
+	'editorial_rationale' => 'Explain how businesses can review managed IT service quality using verifiable response practices and a clear scope.',
+	'recommended_headings' => array( 'Evaluation criteria', 'Evaluation criteria', 'Check for evidence' ),
+	'draft_sections' => array(
+		array( 'heading' => 'Questions to ask a provider',
+			'body' => 'Ask providers to explain their monitoring responsibilities, incident escalation practices and what is included in a service contract before choosing a support partner.' ),
+		array( 'heading' => 'Review the service agreement',
+			'body' => 'Look for plain-language descriptions of coverage, reporting, backup responsibilities and realistic response expectations that can be verified in the agreement.' ),
+	),
+	'verification_needed' => array( 'Verify support process details with the client.' ),
+), $audited );
+assert_eq( 'needs_human_review', $brief['status'], 'normalized LM Studio output remains review-only' );
+assert_eq( 'lmstudio_only', $brief['ai_provider'], 'brief cannot masquerade as a hosted AI generated response' );
+assert_eq( 2, count( $brief['recommended_headings'] ), 'duplicate model headings removed' );
+assert_eq( 2, count( $brief['draft_sections'] ), 'two bounded proposed sections retained' );
+$cloned = SCC_AI_Page_Improvements::clone_elementor_with_review( $elementor_example, $brief );
+assert_true( is_array( $cloned ) && count( $cloned ) === 2, 'safe clone appends exactly one review section to original tree' );
+assert_eq( $elementor_before, wp_json_encode( $elementor_example ), 'cloning never modifies source Elementor data in memory' );
+assert_eq( 'abc1234', $cloned[0]['id'], 'existing page design element identities preserved in copy' );
+assert_eq( '#123456', $cloned[0]['settings']['background_color'], 'cloned Elementor layout retains original design settings' );
+assert_eq( 'container', $cloned[1]['elType'], 'review proposals use real native Elementor container' );
+assert_eq( 'text-editor', $cloned[1]['elements'][1]['widgetType'], 'review proposals use editable native Elementor text editor' );
+assert_true( false !== strpos( $cloned[1]['elements'][1]['settings']['editor'], 'not approved for publication' ), 'draft copy visibly marked review-only' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::clone_elementor_with_review( 'broken JSON', $brief ) ), 'invalid existing Elementor source refuses to create broken draft' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::linked_page( 'not-an-opportunity' ) ), 'unapproved/unlinked page cannot enter AI improvement action' );
+assert_eq( null, SCC_AI_Page_Improvements::brief( 'missing' ), 'missing local brief is not assumed generated' );
+$source_code = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/agency/class-scc-ai-page-improvements.php' );
+assert_true( false !== strpos( $source_code, "$" . "manager->get_provider( 'lmstudio' )" ), 'provider is explicitly local LM Studio, not automatic hosted-model fallback' );
+assert_true( false !== strpos( $source_code, "'post_status' => 'draft'" ), 'new artifact cannot be auto-published' );
+assert_true( false !== strpos( $source_code, "hash_equals( (string) $" . "brief['source_hash']" ), 'source-change conflict guard exists before creating a draft' );
+assert_true( false === strpos( $source_code, 'wp_update_post(' ) && false === strpos( $source_code, 'delete_post_meta(' ), 'review draft never updates or removes the original page or its Elementor data' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

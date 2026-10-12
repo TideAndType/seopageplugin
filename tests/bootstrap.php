@@ -325,6 +325,7 @@ require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-g
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ai-citation-monitor.php';
 require_once __DIR__ . '/../seo-command-center/includes/agency/class-scc-ai-opportunities.php';
+require_once __DIR__ . '/../seo-command-center/includes/agency/class-scc-ai-page-improvements.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ai-direct-providers.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-competitor-analysis.php';
 
