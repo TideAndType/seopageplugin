@@ -125,6 +125,27 @@
 		node('h3', host, (c.name || 'Campaign') + ' · ' + r.month);
 		var dl = r.deliverables || {};
 		node('p', host, 'Completed deliverables: ' + dl.completed + ' / ' + dl.total);
+		var aggregates = r.ai_visibility_summary || [];
+		node('h4', host, 'AI visibility scorecard · by platform');
+		if (!aggregates.length) {
+			node('p', host, 'No verified AI provider observations saved for this reporting month.');
+		} else {
+			var overviewTable = node('table', host, null, 'widefat striped');
+			var overviewHead = node('tr', node('thead', overviewTable));
+			['Platform', 'Answers observed', 'Brand mentions', 'Citations / verified answers', 'Citation status unknown', 'Indexed sample citations'].forEach(function (h) { node('th', overviewHead, h); });
+			var overviewBody = node('tbody', overviewTable);
+			aggregates.forEach(function (summary) {
+				var row = node('tr', overviewBody);
+				[
+					summary.surface,
+					summary.answer_observed + ' / ' + summary.observations + ' checks',
+					summary.own_brand_mentioned + ' observed',
+					summary.own_domain_cited + ' / ' + summary.confirmed_source_checks,
+					summary.unverified_citation_status,
+					summary.indexed_samples ? fmt(summary.latest_indexed_citation_count) + ' · sample, not impressions' : 'Not applicable'
+				].forEach(function (t) { node('td', row, t); });
+			});
+		}
 		var ai = r.ai_citation_observations || [];
 		node('h4', host, 'Observed AI visibility and citations');
 		if (!ai.length) {
@@ -139,17 +160,24 @@
 				node('td', tr, a.surface + ' · ' + a.source);
 				node('td', tr, a.keyword ? a.keyword + ' · ' + a.market : 'US indexed response sample');
 				node('td', tr, a.brand_mentioned === undefined ? 'Not measured' : a.brand_mentioned ? 'Yes' : 'No');
-				node('td', tr, a.domain_cited === undefined ? 'Aggregate sample' : a.domain_cited ? 'Yes' : a.state === 'ai_result_not_shown' ? 'AI answer not returned' : 'No');
+				node('td', tr, a.domain_cited === undefined ? 'Aggregate sample' : a.domain_cited === null ? 'Unverified' : a.domain_cited ? 'Yes' : a.state === 'ai_result_not_shown' ? 'AI answer not returned' : 'No');
 				node('td', tr, a.cited_domain_mentions === undefined ? (a.citations || []).length : fmt(a.cited_domain_mentions));
 				var td = node('td', tr);
 				var cites = (a.citations || []).slice(0, 5);
-				if (!cites.length) { node('span', td, a.state === 'measured_sample' ? 'DataForSEO aggregate · not individual citations' : 'No matching cited URLs'); }
+				if (!cites.length) { node('span', td, a.state === 'measured_sample' ? 'DataForSEO aggregate · not individual citations' : a.domain_cited === null ? 'Citations not independently verified' : 'No matching cited URLs'); }
 				cites.forEach(function (c) {
 					if (!/^https?:\/\//i.test(c.url)) return;
 					var link = node('a', td, c.title || c.url);
 					link.href = c.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
 					node('span', td, ' · ');
 				});
+				if (a.competitor_citations && a.competitor_citations.length) {
+					var comparisons = (a.competitor_citations || []).map(function (d) {
+						return d.domain + ': ' + (d.cited === null ? 'unverified' : d.cited ? 'cited' : 'not cited');
+					});
+					var extra = node('tr', aib); var cell = node('td', extra, 'Same-answer citation comparison: ' + comparisons.join(' · '));
+					cell.colSpan = 7;
+				}
 			});
 			node('p', host, 'Live SERP checks show one observed answer. ChatGPT and Google indexed counts reflect DataForSEO samples, NOT all user responses, impressions, global market share or conversions.', 'description');
 		}
@@ -313,6 +341,12 @@
 			fillConfig(data.campaign || {});
 			var ai = data.ai_citations || {};
 			var aiCfg = ai.config || {};
+			var direct = ai.direct_providers || {};
+			byId('scc-campaign-ai-perplexity-status').textContent = direct.perplexity_connected ? 'Connected (not verified until run)' : 'Not connected';
+			byId('scc-campaign-ai-gemini-status').textContent = direct.gemini_connected ? 'Connected (not verified until run)' : 'Not connected';
+			byId('scc-campaign-ai-competitors').elements.domains.value = (direct.competitor_domains || []).join('\n');
+			byId('scc-campaign-ai-provider-perplexity').elements.api_key.value = '';
+			byId('scc-campaign-ai-provider-gemini').elements.api_key.value = '';
 			byId('scc-campaign-ai-config').elements.brand.value = aiCfg.brand || '';
 			byId('scc-campaign-ai-config').elements.aliases.value = (aiCfg.aliases || []).join('\n');
 			byId('scc-campaign-ai-domain').textContent = aiCfg.domain || 'Not configured';
@@ -480,6 +514,29 @@
 			return loadState();
 		}).catch(showFailure).finally(function () { button.disabled = false; });
 	});
+	[['perplexity', 'scc-campaign-ai-provider-perplexity'], ['gemini', 'scc-campaign-ai-provider-gemini']].forEach(function (pair) {
+		var provider = pair[0]; var form = byId(pair[1]);
+		form.addEventListener('submit', function (event) {
+			event.preventDefault();
+			request('/ai-providers/key', 'POST', {provider: provider, api_key: form.elements.api_key.value}).then(function () {
+				flash('Provider API key configured. No paid call has been made.');
+				return loadState();
+			}).catch(showFailure);
+		});
+		byId('scc-campaign-ai-disconnect-' + provider).addEventListener('click', function (event) {
+			if (!window.confirm('Remove the ' + provider + ' API credential? Previous labeled measurement history is retained.')) return;
+			var b = event.currentTarget; b.disabled = true;
+			request('/ai-providers/disconnect', 'POST', {provider: provider}).then(function () {
+				flash(provider + ' disconnected.'); return loadState();
+			}).catch(showFailure).finally(function () { b.disabled = false; });
+		});
+	});
+	byId('scc-campaign-ai-competitors').addEventListener('submit', function (event) {
+		event.preventDefault();
+		request('/ai-providers/competitors', 'POST', {domains: event.currentTarget.elements.domains.value}).then(function () {
+			flash('Competitor citation comparison domains saved.'); return loadState();
+		}).catch(showFailure);
+	});
 	byId('scc-campaign-ai-config').addEventListener('submit', function (event) {
 		event.preventDefault();
 		var form = event.currentTarget;
@@ -493,7 +550,10 @@
 		var form = event.currentTarget;
 		var surface = form.elements.surface.value;
 		var isDataset = /_dataset$/.test(surface);
-		var message = isDataset
+		var direct = surface === 'perplexity_agent_api' || surface === 'gemini_grounded_api';
+		var message = direct
+			? 'Run one potentially billed provider API observation? This sends your non-sensitive question to ' + (surface === 'perplexity_agent_api' ? 'Perplexity Agent' : 'Gemini') + '. API behavior is not the same as the consumer app; individual calls and grounding may be charged.'
+			: isDataset
 			? 'Run ONE PAID DataForSEO indexed-response citation count? This is a sampled provider dataset, not live ChatGPT consumer traffic.'
 			: 'Run ONE PAID DataForSEO live Google AI result check? Asynchronous AI Overviews may have an additional API charge.';
 		if (!window.confirm(message)) return;
