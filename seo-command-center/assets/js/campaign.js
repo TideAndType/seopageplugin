@@ -317,10 +317,108 @@
 			});
 		}
 		node('p', host, r.disclaimer, 'description');
+		renderOpportunities(r.ai_opportunities || []);
 		renderTasks(r);
 		renderPipeline('scc-campaign-citations', r.citations || [], ['unverified', 'missing', 'needs_correction', 'claimed', 'submitted', 'verified', 'not_applicable'], '/citation', 'name');
 		renderPipeline('scc-campaign-outreach', r.outreach || [], ['identified', 'qualified', 'pitched', 'responded', 'earned', 'declined', 'not_relevant'], '/outreach', 'domain');
 		renderConnections(r.connections || {});
+	}
+	/** Reviewable, source-grounded suggestions. DOM text only; no HTML injection. */
+	function renderOpportunities(items) {
+		var host = byId('scc-campaign-ai-opportunities'); clear(host);
+		if (!items.length) {
+			node('p', host, 'No reviewed opportunities for this month. Run a measured AI query first, then analyze saved evidence.');
+			return;
+		}
+		node('p', host, items.length + ' evidence-derived suggestions; nothing has been applied to live pages.');
+		items.slice(0, 35).forEach(function (item) {
+			var card = node('div', host);
+			card.style.border = '1px solid #dcdcde'; card.style.padding = '12px';
+			card.style.margin = '12px 0'; card.style.borderRadius = '5px';
+			node('h4', card, item.title);
+			node('p', card, 'Priority: ' + item.priority + ' · Review: ' + item.status + ' · ' + item.surface + ' · ' + item.captured_at);
+			node('p', card, 'Measured search question: ' + item.question + ' · ' + item.market);
+			node('p', card, 'Citation evidence: ' + (item.own_domain_cited === null ? 'unverified' : item.own_domain_cited ? 'site cited' : 'site not cited in the observed answer') + ' · Brand mentioned: ' + (item.brand_mentioned ? 'yes' : 'no'));
+			if ((item.competitor_domains || []).length) {
+				node('p', card, 'Competitors actually cited in same verified answer: ' + item.competitor_domains.join(', '));
+			}
+			var ul = node('ul', card);
+			(item.steps || []).forEach(function (step) { node('li', ul, step); });
+			if (item.review_notes) node('p', card, 'Review notes: ' + item.review_notes);
+			if (item.handoff) {
+				var handoff = node('p', card, item.handoff.notice || 'Review handoff recorded.');
+				if (item.handoff.edit_url && /^https?:\/\//.test(item.handoff.edit_url)) {
+					var a = node('a', handoff, ' Open destination'); a.href = item.handoff.edit_url;
+				}
+				return;
+			}
+			var notes = node('textarea', card);
+			notes.rows = 2; notes.style.width = '100%';
+			notes.placeholder = 'What did you verify? Review evidence before approving.';
+			notes.value = item.review_notes || '';
+			if (item.status !== 'approved') {
+				['approved', 'dismissed'].forEach(function (decision) {
+					var b = node('button', card, decision === 'approved' ? 'Approve recommendation' : 'Dismiss');
+					b.type = 'button'; b.className = 'button'; b.style.marginRight = '8px';
+					b.addEventListener('click', function () {
+						b.disabled = true;
+						request('/ai-opportunities/review', 'POST', {id: item.id, decision: decision, notes: notes.value})
+							.then(function () { flash('Opportunity ' + decision + '.'); return loadReport(); })
+							.catch(showFailure).finally(function () { b.disabled = false; });
+					});
+				});
+				return;
+			}
+			var mode = node('select', card);
+			[['existing', 'Review an existing WordPress page (no edits)'], ['content_plan', 'Suggest a NEW article in Content Plan (no generation)']].forEach(function (opt) {
+				var option = node('option', mode, opt[1]); option.value = opt[0];
+			});
+			mode.style.display = 'block'; mode.style.margin = '10px 0';
+			var existing = node('div', card), create = node('div', card);
+			var search = node('input', existing);
+			search.type = 'search'; search.placeholder = 'Find an existing page by title'; search.style.minWidth = '240px';
+			var find = node('button', existing, 'Find pages'); find.type = 'button'; find.className = 'button';
+			var select = node('select', existing); select.style.display = 'block'; select.style.maxWidth = '100%';
+			node('option', select, 'Search first').value = '';
+			find.addEventListener('click', function () {
+				if ((search.value || '').trim().length < 2) { flash('Search with at least two characters.', true); return; }
+				find.disabled = true;
+				request('/ai-opportunities/pages?search=' + encodeURIComponent(search.value), 'GET')
+					.then(function (data) {
+						clear(select);
+						if (!data.posts || !data.posts.length) {
+							node('option', select, 'No editable WordPress pages found').value = ''; return;
+						}
+						data.posts.forEach(function (p) {
+							var option = node('option', select, p.title + ' · ' + p.post_type + ' · ' + p.status + ' (#' + p.id + ')');
+							option.value = String(p.id);
+						});
+					}).catch(showFailure).finally(function () { find.disabled = false; });
+			});
+			node('p', create, 'New article requires its own non-duplicated URL slug. Check for existing relevant content first.');
+			var title = node('input', create);
+			title.type = 'text'; title.placeholder = 'Descriptive new article title'; title.maxLength = 150; title.className = 'regular-text'; title.style.display = 'block';
+			var path = node('input', create);
+			path.type = 'text'; path.placeholder = 'new-article-slug'; path.maxLength = 180; path.className = 'regular-text'; path.style.display = 'block';
+			create.style.display = 'none';
+			mode.addEventListener('change', function () {
+				existing.style.display = mode.value === 'existing' ? '' : 'none';
+				create.style.display = mode.value === 'content_plan' ? '' : 'none';
+			});
+			var submit = node('button', card, 'Send approved recommendation to workflow');
+			submit.type = 'button'; submit.className = 'button button-primary'; submit.style.marginTop = '8px';
+			submit.addEventListener('click', function () {
+				if (!window.confirm('Record this approved handoff? Existing pages will NOT be changed, and new content ideas stay in the recommended Content Plan queue.')) return;
+				submit.disabled = true;
+				request('/ai-opportunities/handoff', 'POST', {
+					id: item.id, mode: mode.value, post_id: Number(select.value || 0),
+					title: title.value, path: path.value
+				}).then(function (result) {
+					flash((result.handoff && result.handoff.notice) || 'Review handoff recorded.');
+					return loadReport();
+				}).catch(showFailure).finally(function () { submit.disabled = false; });
+			});
+		});
 	}
 	function renderConnections(c) {
 		var host = byId('scc-campaign-connections');
@@ -536,6 +634,14 @@
 		request('/ai-providers/competitors', 'POST', {domains: event.currentTarget.elements.domains.value}).then(function () {
 			flash('Competitor citation comparison domains saved.'); return loadState();
 		}).catch(showFailure);
+	});
+	byId('scc-campaign-ai-opportunities-refresh').addEventListener('click', function (event) {
+		var button = event.currentTarget; button.disabled = true;
+		request('/ai-opportunities/refresh', 'POST', {month: byId('scc-campaign-month').value || nowMonth()})
+			.then(function (data) {
+				flash('Analyzed saved evidence: ' + data.added + ' new opportunities, ' + data.updated + ' updated. No paid request.');
+				return loadReport();
+			}).catch(showFailure).finally(function () { button.disabled = false; });
 	});
 	byId('scc-campaign-ai-config').addEventListener('submit', function (event) {
 		event.preventDefault();
