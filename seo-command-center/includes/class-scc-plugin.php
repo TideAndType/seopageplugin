@@ -73,6 +73,8 @@ class SCC_Plugin {
 	 * Register hooks and run.
 	 */
 	public function run() {
+		// Lightweight per-site SEO campaign delivery & measured reporting.
+		if ( class_exists( 'SCC_Campaign_Operations' ) ) { SCC_Campaign_Operations::hooks(); }
 		// Smart component library: visual aliases stay on the controlled registry.
 		if ( class_exists( 'SCC_Page_Architect' ) ) {
 			add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
