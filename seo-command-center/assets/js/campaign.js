@@ -151,6 +151,55 @@
 		} else {
 			node('p', host, 'No GA4 API measurement stored for this month. Connect and authorize the numeric GA4 property, then refresh. This is unavailable, not zero.');
 		}
+		var bing = r.bing_webmaster;
+		node('h4', host, 'Bing Webmaster Tools');
+		if (bing && bing.status === 'measured') {
+			var bingTable = node('table', host, null, 'widefat striped');
+			var bingBody = node('tbody', bingTable);
+			[['Site', bing.site_url], ['Bing clicks', fmt(bing.clicks)], ['Bing impressions', fmt(bing.impressions)], ['Measured reporting days', bing.measured_days], ['Captured', bing.captured_at]].forEach(function (pair) {
+				var row = node('tr', bingBody); node('th', row, pair[0]); node('td', row, pair[1]);
+			});
+			node('p', host, bing.notice, 'description');
+			if (bing.query_rows && bing.query_rows.length) {
+				var queryTable = node('table', host, null, 'widefat striped');
+				var header = node('tr', node('thead', queryTable));
+				['Top Bing queries', 'Clicks', 'Impressions', 'Avg impression position'].forEach(function (h) { node('th', header, h); });
+				var rows = node('tbody', queryTable);
+				bing.query_rows.slice(0, 12).forEach(function (term) {
+					var tr = node('tr', rows);
+					[term.query, fmt(term.clicks), fmt(term.impressions), fmt(term.avg_impression_position)].forEach(function (value) { node('td', tr, value); });
+				});
+			}
+		} else {
+			node('p', host, 'No measured Bing traffic exists for this month. An absent report or unverified site is not a zero.');
+		}
+		node('h4', host, 'Microsoft Clarity · rolling behavioral snapshots');
+		var insights = r.clarity_insights || [];
+		if (!insights.length) {
+			node('p', host, 'No Clarity export snapshots stored for this month. Connect a project and capture recent insights.');
+		} else {
+			node('p', host, insights.length + ' captured rolling 24-hour windows. These are not cumulative month-to-date users or conversions.');
+			insights.slice(-12).forEach(function (snap) {
+				node('h4', host, 'Snapshot ' + snap.captured_at);
+				var keys = Object.keys(snap.metrics || {});
+				if (!keys.length) return;
+				var table = node('table', host, null, 'widefat striped'), body = node('tbody', table);
+				keys.forEach(function (name) {
+					var row = node('tr', body);
+					node('th', row, name);
+					var measured = snap.metrics[name] || {};
+					var cell = node('td', row);
+					if (!measured.rows || !measured.rows.length) {
+						node('span', cell, 'Metric category returned; no numeric value');
+					} else {
+						var pairs = Object.keys(measured.rows[0]).slice(0, 8).map(function (k) {
+							return k + ': ' + fmt(measured.rows[0][k]);
+						});
+						node('span', cell, pairs.join(' · ') + (measured.truncated ? ' · more rows in Microsoft Clarity' : ''));
+					}
+				});
+			});
+		}
 		node('h4', host, 'Exact organic SERP checks (paid DataForSEO)');
 		var serp = r.organically_measured_serps || [];
 		if (!serp.length) { node('p', host, 'No paid organic SERP measurements recorded in this month.'); }
@@ -194,7 +243,7 @@
 		var host = byId('scc-campaign-connections');
 		clear(host);
 		var tbl = node('table', host, null, 'widefat striped'), body = node('tbody', tbl);
-		[['Google Search Console', c.gsc], ['Google Business Profile', c.gbp], ['Google Analytics 4', c.ga4], ['CRM', c.crm], ['AI citation monitoring', c.ai_citations]].forEach(function (item) {
+		[['Google Search Console', c.gsc], ['Bing Webmaster', c.bing], ['Microsoft Clarity', c.clarity], ['Google Business Profile', c.gbp], ['Google Analytics 4', c.ga4], ['CRM', c.crm], ['AI citation monitoring', c.ai_citations]].forEach(function (item) {
 			var tr = node('tr', body); node('th', tr, item[0]); node('td', tr, item[1] || 'not connected');
 		});
 	}
@@ -207,6 +256,14 @@
 		return request('', 'GET').then(function (data) {
 			state = data;
 			fillConfig(data.campaign || {});
+			var bing = data.bing || {};
+			byId('scc-campaign-bing-connect').elements.site_url.value = bing.site_url || '';
+			byId('scc-campaign-bing-connect').elements.api_key.value = '';
+			byId('scc-campaign-bing-status').textContent = (bing.status || 'not_available').replace(/_/g, ' ') + (bing.has_api_key ? ' · API key saved' : '');
+			var clarity = data.clarity || {};
+			byId('scc-campaign-clarity-connect').elements.project_id.value = clarity.project_id || '';
+			byId('scc-campaign-clarity-connect').elements.api_token.value = '';
+			byId('scc-campaign-clarity-status').textContent = (clarity.status || 'not_available').replace(/_/g, ' ') + ' · ' + (clarity.requests_reserved_today || 0) + '/' + (clarity.request_limit || 8) + ' daily API requests';
 			var ga4 = data.ga4 || {};
 			var ga4Form = byId('scc-campaign-ga4-property');
 			if (ga4Form && ga4Form.elements.property_id) ga4Form.elements.property_id.value = ga4.property_id || '';
@@ -247,6 +304,46 @@
 			.catch(showFailure).finally(function () { b.disabled = false; });
 	});
 
+	function submitCredential(formId, path, keys, notice) {
+		var form = byId(formId);
+		form.addEventListener('submit', function (event) {
+			event.preventDefault();
+			var data = {};
+			keys.forEach(function (key) { data[key] = form.elements[key].value; });
+			request(path, 'POST', data).then(function () {
+				flash(notice);
+				return loadState();
+			}).catch(showFailure);
+		});
+	}
+	submitCredential('scc-campaign-bing-connect', '/bing/connect', ['site_url', 'api_key'], 'Bing connection saved. Refresh the report month to verify API access.');
+	submitCredential('scc-campaign-clarity-connect', '/clarity/connect', ['project_id', 'api_token'], 'Clarity token saved. Capture an export to verify API access.');
+	[
+		['scc-campaign-bing-refresh', '/bing/refresh', true],
+		['scc-campaign-clarity-refresh', '/clarity/refresh', false]
+	].forEach(function (entry) {
+		byId(entry[0]).addEventListener('click', function (event) {
+			var button = event.currentTarget; button.disabled = true;
+			var args = entry[2] ? {month: byId('scc-campaign-month').value || nowMonth()} : {};
+			request(entry[1], 'POST', args).then(function () {
+				flash('Microsoft measurement captured and saved with its source label.');
+				return loadState();
+			}).catch(showFailure).finally(function () { button.disabled = false; });
+		});
+	});
+	[
+		['scc-campaign-bing-disconnect', '/bing/disconnect'],
+		['scc-campaign-clarity-disconnect', '/clarity/disconnect']
+	].forEach(function (entry) {
+		byId(entry[0]).addEventListener('click', function (event) {
+			if (!window.confirm('Disconnect this Microsoft data source and delete its locally stored measurements?')) return;
+			var button = event.currentTarget; button.disabled = true;
+			request(entry[1], 'POST').then(function () {
+				flash('Microsoft data source disconnected and saved snapshots cleared.');
+				return loadState();
+			}).catch(showFailure).finally(function () { button.disabled = false; });
+		});
+	});
 	byId('scc-campaign-ga4-property').addEventListener('submit', function (evt) {
 		evt.preventDefault();
 		var property = evt.currentTarget.elements.property_id.value;
