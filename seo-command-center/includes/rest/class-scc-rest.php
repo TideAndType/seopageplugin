@@ -4217,10 +4217,13 @@ class SCC_REST {
 		if ( ! empty( $params['company_url'] ) ) {
 			return $this->fail( 'citation_spam', __( 'Unable to run this scan.', 'seo-command-center' ), 400 );
 		}
+		if ( ! (bool) get_option( 'scc_citation_public_enabled', false ) ) {
+			return $this->fail( 'citation_disabled', __( 'Public citation scans are not enabled.', 'seo-command-center' ), 403 );
+		}
 		if ( ! SCC_Citation_Scanner::public_rate_limit_ok() ) {
 			return $this->fail( 'citation_rate_limit', __( 'Scan limit reached. Please try again later.', 'seo-command-center' ), 429 );
 		}
-		$result = SCC_Citation_Scanner::scan( $params, false );
+		$result = SCC_Citation_Scanner::run_public( $params );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

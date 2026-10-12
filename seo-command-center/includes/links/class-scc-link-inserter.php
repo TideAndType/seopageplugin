@@ -44,7 +44,7 @@ class SCC_Link_Inserter {
 		$target_id = (int) $row['target_post_id'];
 		$anchor    = (string) $row['anchor'];
 
-		if ( ! current_user_can( 'edit_post', $source_id ) ) {
+		if ( ! current_user_can( 'edit_post', $source_id ) && ! ( 'autopilot' === $trigger && class_exists( 'SCC_Jobs' ) && SCC_Jobs::is_authorized_worker() ) ) {
 			return new WP_Error( 'scc_forbidden', __( 'You cannot edit the source post.', 'seo-command-center' ), array( 'status' => 403 ) );
 		}
 
@@ -111,6 +111,8 @@ class SCC_Link_Inserter {
 					'post_id'        => $source_id,
 					'change_type'    => 'internal_link',
 					'previous_value' => $content,
+					'storage_target' => 'post_content',
+					'after_hash'    => hash( 'sha256', $new_content ),
 					'new_value'      => sprintf( 'Linked “%s” -> %s', $anchor, $target_url ),
 					'reason'         => (string) ( $row['reason'] ?? '' ),
 					'confidence'     => (int) ( $row['confidence'] ?? 0 ),
@@ -195,6 +197,8 @@ class SCC_Link_Inserter {
 					'post_id'        => $source_id,
 					'change_type'    => 'internal_link',
 					'previous_value' => wp_json_encode( $data ),
+					'storage_target' => 'elementor_data',
+					'after_hash'    => hash( 'sha256', $json ),
 					'new_value'      => sprintf( 'Linked “%s” -> %s (Elementor)', $anchor, $target_url ),
 					'reason'         => (string) ( $row['reason'] ?? '' ),
 					'confidence'     => (int) ( $row['confidence'] ?? 0 ),

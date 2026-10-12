@@ -13,6 +13,7 @@ class SCC_Local_Grid {
 	const CACHE_TTL = 6 * HOUR_IN_SECONDS;
 	const GEO_CACHE_TTL = 30 * DAY_IN_SECONDS;
 	const LAST_OPTION = 'scc_local_grid_last';
+	const HISTORY_OPTION = 'scc_local_grid_history';
 
 	public static function coverage_profile( $coverage ) {
 		$coverage = sanitize_key( (string) $coverage );
@@ -163,6 +164,7 @@ class SCC_Local_Grid {
 
 		$points = self::grid_points( $args['lat'], $args['lng'], $args['size'], $args['spacing_km'] );
 		$found = 0;
+		$measured = 0;
 		$rank_sum = 0;
 		foreach ( $points as &$point ) {
 			$coordinate = $point['lat'] . ',' . $point['lng'] . ',16z';
@@ -172,6 +174,12 @@ class SCC_Local_Grid {
 				$point['error'] = $items->get_error_message();
 				continue;
 			}
+			if ( empty( $items ) ) {
+				$point['rank'] = null;
+				$point['error'] = 'No measurable listings returned for this point.';
+				continue;
+			}
+			$measured++;
 			$match = self::identify_rank( (array) $items, $args['business_name'], $args['domain'] );
 			$point['rank'] = $match['rank'];
 			$point['matched_by'] = $match['matched_by'];
@@ -196,7 +204,9 @@ class SCC_Local_Grid {
 			'points' => $points,
 			'found_points' => $found,
 			'total_points' => count( $points ),
-			'visibility_pct' => count( $points ) ? round( 100 * $found / count( $points ), 1 ) : 0,
+			'measured_points' => $measured,
+			'measurement_state' => 0 === $measured ? 'unavailable' : ( $measured === count( $points ) ? 'complete' : 'partial' ),
+			'visibility_pct' => $measured ? round( 100 * $found / $measured, 1 ) : null,
 			'average_rank' => $found ? round( $rank_sum / $found, 1 ) : null,
 			'generated_at' => current_time( 'mysql' ),
 			'cached' => false,
@@ -218,6 +228,25 @@ class SCC_Local_Grid {
 			set_transient( $cache_key, $result, self::CACHE_TTL );
 		}
 		update_option( self::LAST_OPTION, $result, false );
+		$hist = get_option( self::HISTORY_OPTION, array() );
+		$hist = is_array( $hist ) ? $hist : array();
+		$hist[] = array(
+			'keyword' => (string) ( $result['keyword'] ?? '' ),
+			'location' => (string) ( $result['resolved_location'] ?? $result['location'] ?? '' ),
+			'generated_at' => (string) ( $result['generated_at'] ?? gmdate( 'Y-m-d H:i:s' ) ),
+			'measured_points' => (int) ( $result['measured_points'] ?? 0 ),
+			'total_points' => (int) ( $result['total_points'] ?? 0 ),
+			'measurement_state' => (string) ( $result['measurement_state'] ?? 'unavailable' ),
+			'visibility_pct' => $result['visibility_pct'] ?? null,
+			'average_rank' => $result['average_rank'] ?? null,
+			'engine' => (string) ( $result['engine'] ?? '' ),
+		);
+		update_option( self::HISTORY_OPTION, array_slice( $hist, -60 ), false );
+	}
+
+	public static function history() {
+		$history = get_option( self::HISTORY_OPTION, array() );
+		return is_array( $history ) ? $history : array();
 	}
 
 	protected static function normalize_args( array $args ) {

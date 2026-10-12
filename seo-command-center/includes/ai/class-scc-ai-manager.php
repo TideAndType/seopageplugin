@@ -236,15 +236,8 @@ class SCC_AI_Manager {
 			$order[] = $fallback;
 		}
 
-		// Safety net: if the chosen provider(s) fail, try any other provider the
-		// user has actually configured. This way a connected provider (e.g. a
-		// local LM Studio server) is still used even if the primary provider is
-		// left on a default with a missing or invalid key.
-		foreach ( array_keys( $this->providers ) as $pid ) {
-			if ( ! in_array( $pid, $order, true ) ) {
-				$order[] = $pid;
-			}
-		}
+		// Provider allow-list is explicit. An empty fallback must never send
+		// a local-only request to a separately configured hosted provider.
 
 		$last          = new SCC_AI_Response();
 		$tried         = array();

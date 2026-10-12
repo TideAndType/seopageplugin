@@ -164,7 +164,9 @@ class SCC_Metadata {
 		}
 		// A normal page/post that is actually an Elementor template or is flagged
 		// as an SEO template.
-		if ( '' !== (string) get_post_meta( $post->ID, '_elementor_template_type', true ) ) {
+		$elementor_type = (string) get_post_meta( $post->ID, '_elementor_template_type', true );
+		// Elementor also stores 'wp-page'/'wp-post' on ordinary documents.
+		if ( '' !== $elementor_type && ! in_array( $elementor_type, array( 'wp-page', 'wp-post', 'page', 'post' ), true ) ) {
 			return true;
 		}
 		return '1' === get_post_meta( $post->ID, '_scc_is_seo_template', true );

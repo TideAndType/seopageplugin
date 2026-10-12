@@ -565,7 +565,7 @@ assert_eq( 'HTTP 400 — plain string err', $eerr->invoke( $lm2, array( 'error' 
 assert_eq( 'HTTP 400 — raw body here', $eerr->invoke( $lm2, null, 'raw body here', 400 ), 'raw-body fallback' );
 assert_eq( 'HTTP 400', $eerr->invoke( $lm2, null, '', 400 ), 'no detail fallback' );
 
-echo "\n== AI Manager: safety-net fallback to a configured provider ==\n";
+echo "\n== AI Manager: explicit provider allow-list ==\n";
 if ( ! class_exists( 'SCC_AI_Usage' ) ) {
 	class SCC_AI_Usage {
 		public static function record( $response, $operation = '' ) {}
@@ -607,16 +607,24 @@ class SCC_Test_Manager extends SCC_AI_Manager {
 	}
 }
 
-// Primary (claude) has a bad key; LM Studio is configured → manager should
-// fall through to LM Studio automatically instead of returning the auth error.
-$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => '' );
+// Failover is allowed only if the user explicitly selected that fallback.
+$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => 'lmstudio' );
 $mgr = new SCC_Test_Manager( array(
 	new SCC_Fake_Provider( 'claude', false, true ),
 	new SCC_Fake_Provider( 'lmstudio', true, true ),
 ) );
 $resp = $mgr->complete( array( 'messages' => array() ), 'keyword-strategy' );
-assert_true( ! $resp->is_error(), 'falls back to a configured provider when primary key is bad' );
-assert_eq( 'from:lmstudio', $resp->content, 'used LM Studio as the safety-net provider' );
+assert_true( ! $resp->is_error(), 'uses only the explicitly configured fallback when primary fails' );
+assert_eq( 'from:lmstudio', $resp->content, 'explicit LM Studio fallback used' );
+
+// With no selected fallback, do not silently contact other configured hosts.
+$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => '' );
+$local_only = new SCC_Test_Manager( array(
+	new SCC_Fake_Provider( 'claude', false, true ),
+	new SCC_Fake_Provider( 'openai', true, true ),
+) );
+$local_only_result = $local_only->complete( array( 'messages' => array() ), 'keyword-strategy' );
+assert_true( $local_only_result->is_error(), 'empty fallback never routes to another configured provider' );
 
 // When nothing succeeds, the reported error is the primary provider's, with guidance.
 $mgr2 = new SCC_Test_Manager( array(
@@ -2917,6 +2925,13 @@ assert_eq( 1, $normalized_browser['found_points'], 'browser result counts only m
 assert_eq( 2, $normalized_browser['points'][0]['rank'], 'browser point rank maps back to the correct grid coordinate' );
 assert_eq( null, $normalized_browser['points'][1]['rank'], 'a measured not-found point remains rank null rather than becoming an error rank' );
 assert_true( false !== strpos( $normalized_browser['points'][2]['error'], 'No result returned' ), 'missing browser point is explicitly marked instead of silently treated as not ranked' );
+assert_eq( 'partial', $normalized_browser['measurement_state'], 'partial browser grids disclose incomplete coverage' );
+assert_eq( 2, $normalized_browser['measured_points'], 'browser coverage only counts actual measured rows' );
+assert_eq( 50.0, $normalized_browser['visibility_pct'], 'partial visibility uses only measured points as denominator' );
+$empty_browser = SCC_Browser_Runtime::normalize_grid_result( array( 'results' => array() ), $browser_job );
+assert_eq( 'unavailable', $empty_browser['measurement_state'], 'missing grid results are unavailable, never measured zero' );
+assert_eq( null, $empty_browser['visibility_pct'], 'no measured grid points do not report zero visibility' );
+
 
 $runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php' );
 assert_true( false !== strpos( $runtime_src, "'auto' === self::mode()") && false !== strpos( $runtime_src, 'scan_dataforseo' ), 'Automatic Browser Runtime contains a DataForSEO failure fallback' );
@@ -3053,6 +3068,38 @@ $rest_temp_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/i
 assert_true( false !== strpos( $rest_temp_src, '/layout/visual-upload' ) && false !== strpos( $rest_temp_src, '/layout/visual-finish' ), 'upload and finish actions are wired through the authenticated REST API' );
 $ui_temp_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/layout.php' );
 assert_true( false !== strpos( $ui_temp_src, 'scc-visual-file' ) && false !== strpos( $ui_temp_src, 'scc-visual-finish' ), 'Layout Engine offers temporary screenshot picker and finish/cleanup action' );
+
+
+
+echo "\n== SEO campaign operations: plan limits and deliverables ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/agency/class-scc-campaign-operations.php';
+$plans = SCC_Campaign_Operations::plans();
+assert_eq( 10, $plans['local']['themes'], 'local plan caps search themes at ten' );
+assert_eq( 50, $plans['authority']['themes'], 'authority plan includes fifty search themes' );
+$input = array(
+	'name' => 'Clinic',
+	'plan' => 'local',
+	'markets' => array( 'Daytona', 'Ormond' ),
+	'themes' => array_fill( 0, 13, 'example' ),
+	'assets' => 0,
+);
+$cfg = SCC_Campaign_Operations::normalize_config( $input );
+assert_eq( array( 'Daytona' ), $cfg['markets'], 'local plan allows only one market' );
+assert_eq( 1, $cfg['assets'], 'plan enforces minimum content assets' );
+assert_eq( array( 'example' ), $cfg['themes'], 'duplicate search themes collapsed' );
+$tasks = SCC_Campaign_Operations::task_templates( $cfg );
+assert_true( count( $tasks ) >= 5, 'local plan has monthly SEO workflow' );
+$authority = SCC_Campaign_Operations::normalize_config( array( 'name' => 'Firm', 'plan' => 'authority', 'assets' => 4 ) );
+$author_tasks = SCC_Campaign_Operations::task_templates( $authority );
+$author_types = array_map( function ( $t ) { return $t[0]; }, $author_tasks );
+assert_true( in_array( 'backlinks', $author_types, true ), 'authority plan schedules digital PR' );
+assert_true( in_array( 'cro', $author_types, true ), 'authority plan schedules CRO experiment' );
+$pub = SCC_Campaign_Operations::public_citation_settings( array( 'enabled' => false, 'paid' => true ) );
+assert_eq( false, $pub['paid'], 'public paid citations cannot remain on when public endpoint disabled' );
+assert_eq( false, get_option( 'scc_citation_public_paid_enabled', true ), 'public citation paid option fails closed' );
+$gsc_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/agency/class-scc-campaign-operations.php' );
+assert_true( false !== strpos( $gsc_source, 'confirm_paid' ) && false !== strpos( $gsc_source, '20 paid organic requests' ), 'on-demand paid SERP integration requires consent and daily quota' );
+
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";

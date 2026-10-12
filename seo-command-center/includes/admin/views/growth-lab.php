@@ -285,13 +285,23 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 		<?php endif; ?>
 		<?php if ( is_array( $grid ) && ! empty( $grid['points'] ) ) : ?>
 			<?php $grid_location = (string) ( $grid['resolved_location'] ?? $grid['location'] ?? '' ); ?>
-			<h3><?php echo esc_html( sprintf( '%s · %.1f%% visible · average found rank %s', $grid['keyword'], (float) $grid['visibility_pct'], null === $grid['average_rank'] ? '—' : $grid['average_rank'] ) ); ?></h3>
+			<h3><?php echo esc_html( sprintf( '%s · %s visible · average found rank %s', $grid['keyword'], null === ( $grid['visibility_pct'] ?? null ) ? 'Not measured' : number_format( (float) $grid['visibility_pct'], 1 ) . '%', null === $grid['average_rank'] ? '—' : $grid['average_rank'] ) ); ?></h3>
+			<p class="scc-note"><?php echo esc_html( sprintf( 'Scan coverage: %d of %d points measured · %s', (int) ( $grid['measured_points'] ?? 0 ), (int) ( $grid['total_points'] ?? 0 ), (string) ( $grid['measurement_state'] ?? 'unavailable' ) ) ); ?></p>
 			<?php if ( '' !== $grid_location ) : ?><p class="scc-note"><?php echo esc_html( sprintf( __( 'Scan area: %s', 'seo-command-center' ), $grid_location ) ); ?></p><?php endif; ?>
 			<div style="display:grid;grid-template-columns:repeat(<?php echo (int) $grid['size']; ?>,minmax(72px,1fr));gap:8px;max-width:620px">
 				<?php foreach ( $grid['points'] as $point ) : $rank = $point['rank']; ?>
 					<div class="scc-card" style="margin:0;padding:14px;text-align:center"><strong style="font-size:20px"><?php echo null === $rank ? '—' : esc_html( (int) $rank ); ?></strong></div>
 				<?php endforeach; ?>
 			</div>
+		<?php endif; ?>
+		<?php $grid_history = SCC_Local_Grid::history(); ?>
+		<?php if ( $grid_history ) : ?>
+			<h3>Recent Maps measurements</h3>
+			<table class="widefat striped"><thead><tr><th>Date</th><th>Query / area</th><th>Coverage</th><th>Visibility</th></tr></thead><tbody>
+			<?php foreach ( array_reverse( array_slice( $grid_history, -10 ) ) as $h ) : ?>
+				<tr><td><?php echo esc_html( $h['generated_at'] ); ?></td><td><?php echo esc_html( $h['keyword'] . ' · ' . $h['location'] ); ?></td><td><?php echo esc_html( $h['measurement_state'] ); ?></td><td><?php echo null === $h['visibility_pct'] ? 'Not measured' : esc_html( $h['visibility_pct'] . '%' ); ?></td></tr>
+			<?php endforeach; ?>
+			</tbody></table>
 		<?php endif; ?>
 	</div>
 

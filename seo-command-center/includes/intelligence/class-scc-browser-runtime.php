@@ -236,6 +236,7 @@ class SCC_Browser_Runtime {
 
 		$points = array();
 		$found = 0;
+		$measured = 0;
 		$rank_sum = 0;
 		foreach ( $expected as $point ) {
 			$key = self::point_key( $point['lat'], $point['lng'] );
@@ -246,6 +247,7 @@ class SCC_Browser_Runtime {
 			$point['matched_by'] = '' !== (string) ( $row['placeId'] ?? '' ) ? 'place_id' : ( '' !== (string) ( $row['targetName'] ?? '' ) ? 'name' : '' );
 			$point['matched_title'] = (string) ( $row['targetName'] ?? '' );
 			$point['error'] = empty( $row ) ? 'No result returned for this point.' : ( empty( $top ) && null === $rank ? 'Browser returned no map listings for this point.' : '' );
+			if ( '' === $point['error'] ) { $measured++; }
 			if ( null !== $rank ) {
 				$found++;
 				$rank_sum += $rank;
@@ -265,7 +267,9 @@ class SCC_Browser_Runtime {
 			'points'         => $points,
 			'found_points'   => $found,
 			'total_points'   => count( $points ),
-			'visibility_pct' => count( $points ) ? round( 100 * $found / count( $points ), 1 ) : 0,
+			'measured_points' => $measured,
+			'measurement_state' => 0 === $measured ? 'unavailable' : ( $measured === count( $points ) ? 'complete' : 'partial' ),
+			'visibility_pct' => $measured ? round( 100 * $found / $measured, 1 ) : null,
 			'average_rank'   => $found ? round( $rank_sum / $found, 1 ) : null,
 			'generated_at'   => current_time( 'mysql' ),
 			'cached'         => false,
