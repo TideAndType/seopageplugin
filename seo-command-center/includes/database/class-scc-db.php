@@ -232,6 +232,8 @@ class SCC_DB {
 			change_type VARCHAR(30) NOT NULL DEFAULT '',
 			previous_value LONGTEXT NULL,
 			new_value LONGTEXT NULL,
+			storage_target VARCHAR(40) NOT NULL DEFAULT '',
+			after_hash CHAR(64) NOT NULL DEFAULT '',
 			reason TEXT NULL,
 			confidence INT NOT NULL DEFAULT 0,
 			trigger_source VARCHAR(40) NULL,
