@@ -2925,6 +2925,13 @@ assert_eq( 1, $normalized_browser['found_points'], 'browser result counts only m
 assert_eq( 2, $normalized_browser['points'][0]['rank'], 'browser point rank maps back to the correct grid coordinate' );
 assert_eq( null, $normalized_browser['points'][1]['rank'], 'a measured not-found point remains rank null rather than becoming an error rank' );
 assert_true( false !== strpos( $normalized_browser['points'][2]['error'], 'No result returned' ), 'missing browser point is explicitly marked instead of silently treated as not ranked' );
+assert_eq( 'partial', $normalized_browser['measurement_state'], 'partial browser grids disclose incomplete coverage' );
+assert_eq( 2, $normalized_browser['measured_points'], 'browser coverage only counts actual measured rows' );
+assert_eq( 50.0, $normalized_browser['visibility_pct'], 'partial visibility uses only measured points as denominator' );
+$empty_browser = SCC_Browser_Runtime::normalize_grid_result( array( 'results' => array() ), $browser_job );
+assert_eq( 'unavailable', $empty_browser['measurement_state'], 'missing grid results are unavailable, never measured zero' );
+assert_eq( null, $empty_browser['visibility_pct'], 'no measured grid points do not report zero visibility' );
+
 
 $runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php' );
 assert_true( false !== strpos( $runtime_src, "'auto' === self::mode()") && false !== strpos( $runtime_src, 'scan_dataforseo' ), 'Automatic Browser Runtime contains a DataForSEO failure fallback' );
@@ -3087,6 +3094,12 @@ $author_tasks = SCC_Campaign_Operations::task_templates( $authority );
 $author_types = array_map( function ( $t ) { return $t[0]; }, $author_tasks );
 assert_true( in_array( 'backlinks', $author_types, true ), 'authority plan schedules digital PR' );
 assert_true( in_array( 'cro', $author_types, true ), 'authority plan schedules CRO experiment' );
+$pub = SCC_Campaign_Operations::public_citation_settings( array( 'enabled' => false, 'paid' => true ) );
+assert_eq( false, $pub['paid'], 'public paid citations cannot remain on when public endpoint disabled' );
+assert_eq( false, get_option( 'scc_citation_public_paid_enabled', true ), 'public citation paid option fails closed' );
+$gsc_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/agency/class-scc-campaign-operations.php' );
+assert_true( false !== strpos( $gsc_source, 'confirm_paid' ) && false !== strpos( $gsc_source, '20 paid organic requests' ), 'on-demand paid SERP integration requires consent and daily quota' );
+
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
