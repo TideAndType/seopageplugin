@@ -300,6 +300,13 @@ if ( ! function_exists( 'update_option' ) ) {
 		return true;
 	}
 }
+if ( ! function_exists( 'delete_option' ) ) {
+	function delete_option( $key ) {
+		unset( $GLOBALS['scc_test_options'][ $key ] );
+		return true;
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ga4.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-competitor-analysis.php';
