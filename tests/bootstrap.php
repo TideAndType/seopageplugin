@@ -312,6 +312,8 @@ if ( ! function_exists( 'delete_option' ) ) {
 	}
 }
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ga4.php';
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-bing-webmaster.php';
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-clarity.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-competitor-analysis.php';
