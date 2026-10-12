@@ -17,6 +17,8 @@ class SCC_Campaign_Operations {
 	const GSC = 'scc_campaign_gsc_history';
 	const GSC_CHECK = 'scc_campaign_gsc_checked';
 	const SERP = 'scc_campaign_serp_history';
+	const CITATIONS = 'scc_campaign_citation_inventory';
+	const OUTREACH = 'scc_campaign_outreach_inventory';
 	const NS = 'seo-command/v1';
 
 	public static function plans() {
@@ -75,6 +77,9 @@ class SCC_Campaign_Operations {
 			'/campaign/metric' => array( 'POST', 'rest_metric' ),
 			'/campaign/gsc-refresh' => array( 'POST', 'rest_gsc_refresh' ),
 			'/campaign/serp-ranks' => array( 'POST', 'rest_serp_ranks' ),
+			'/campaign/citation' => array( 'POST', 'rest_citation' ),
+			'/campaign/outreach/sync' => array( 'POST', 'rest_outreach_sync' ),
+			'/campaign/outreach' => array( 'POST', 'rest_outreach' ),
 			'/campaign/report' => array( 'GET', 'rest_report' ),
 			'/campaign/public-citations' => array( 'POST', 'rest_citation_settings' ),
 		) as $route => $mapping ) {
@@ -144,6 +149,7 @@ class SCC_Campaign_Operations {
 			return new WP_Error( 'scc_campaign_name', __( 'Enter the client or campaign name.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
 		self::save( self::CONFIG, $config );
+		self::seed_citation_inventory();
 		self::seed_month( gmdate( 'Y-m' ) );
 		return $config;
 	}
@@ -244,6 +250,93 @@ class SCC_Campaign_Operations {
 		$rows[] = $entry;
 		self::save( self::METRICS, array_slice( $rows, -500 ) );
 		return $entry;
+	}
+
+	/**
+	 * A private per-site directory inventory. Discovery itself does not prove a
+	 * listing exists, is claimed or is correct. Every transition is manual.
+	 */
+	public static function seed_citation_inventory() {
+		if ( ! class_exists( 'SCC_Citation_Scanner' ) ) { return 0; }
+		$rows = self::saved( self::CITATIONS );
+		$created = 0;
+		foreach ( SCC_Citation_Scanner::directories() as $directory ) {
+			$name = sanitize_text_field( (string) ( $directory['name'] ?? '' ) );
+			$domain = strtolower( sanitize_text_field( (string) ( $directory['domain'] ?? '' ) ) );
+			if ( '' === $domain ) { continue; }
+			$id = md5( $domain );
+			if ( isset( $rows[ $id ] ) ) { continue; }
+			$rows[ $id ] = array(
+				'id' => $id, 'name' => $name, 'domain' => $domain,
+				'status' => 'unverified', 'notes' => '', 'evidence_url' => '',
+				'updated_at' => '', 'provenance' => 'manual_workflow',
+			);
+			$created++;
+		}
+		if ( $created ) { self::save( self::CITATIONS, array_slice( $rows, 0, 120, true ) ); }
+		return $created;
+	}
+	public static function citations() { return self::saved( self::CITATIONS ); }
+
+	public static function update_citation( array $raw ) {
+		$id = (string) ( $raw['id'] ?? '' );
+		$rows = self::citations();
+		if ( ! isset( $rows[ $id ] ) ) { return new WP_Error( 'scc_citation_unknown', 'Unknown directory.', array( 'status' => 404 ) ); }
+		$status = sanitize_key( (string) ( $raw['status'] ?? '' ) );
+		if ( ! in_array( $status, array( 'unverified', 'missing', 'needs_correction', 'claimed', 'submitted', 'verified', 'not_applicable' ), true ) ) {
+			return new WP_Error( 'scc_citation_bad_status', 'Invalid citation status.', array( 'status' => 400 ) );
+		}
+		$rows[ $id ]['status'] = $status;
+		$rows[ $id ]['notes'] = substr( sanitize_textarea_field( (string) ( $raw['notes'] ?? '' ) ), 0, 600 );
+		$rows[ $id ]['evidence_url'] = esc_url_raw( (string) ( $raw['evidence_url'] ?? '' ) );
+		$rows[ $id ]['updated_at'] = gmdate( 'Y-m-d H:i:s' );
+		self::save( self::CITATIONS, $rows );
+		return $rows[ $id ];
+	}
+
+	/**
+	 * Explicit import only: opportunity analysis never sends outbound mail.
+	 */
+	public static function sync_outreach() {
+		$last = class_exists( 'SCC_Backlink_Gap' ) ? SCC_Backlink_Gap::last() : null;
+		if ( ! is_array( $last ) || empty( $last['opportunities'] ) ) {
+			return new WP_Error( 'scc_outreach_no_scan', 'Run Backlink Gap in Growth Lab first.', array( 'status' => 400 ) );
+		}
+		$rows = self::saved( self::OUTREACH );
+		$created = 0;
+		foreach ( array_slice( $last['opportunities'], 0, 80 ) as $item ) {
+			$domain = strtolower( sanitize_text_field( (string) ( $item['domain'] ?? '' ) ) );
+			if ( '' === $domain ) { continue; }
+			$id = md5( $domain );
+			if ( isset( $rows[ $id ] ) ) { continue; }
+			$rows[ $id ] = array(
+				'id' => $id, 'domain' => $domain,
+				'type' => sanitize_key( (string) ( $item['type'] ?? 'website' ) ),
+				'priority' => sanitize_key( (string) ( $item['priority'] ?? 'medium' ) ),
+				'suggestion' => substr( sanitize_text_field( (string) ( $item['recommended_action'] ?? '' ) ), 0, 350 ),
+				'status' => 'identified', 'notes' => '', 'evidence_url' => '',
+				'updated_at' => '', 'provenance' => 'backlink_gap_opportunity',
+			);
+			$created++;
+		}
+		if ( $created ) { self::save( self::OUTREACH, array_slice( $rows, 0, 200, true ) ); }
+		return array( 'imported' => $created, 'total' => count( $rows ) );
+	}
+	public static function outreach() { return self::saved( self::OUTREACH ); }
+	public static function update_outreach( array $raw ) {
+		$id = (string) ( $raw['id'] ?? '' );
+		$rows = self::outreach();
+		if ( ! isset( $rows[ $id ] ) ) { return new WP_Error( 'scc_outreach_unknown', 'Unknown outreach target.', array( 'status' => 404 ) ); }
+		$status = sanitize_key( (string) ( $raw['status'] ?? '' ) );
+		if ( ! in_array( $status, array( 'identified', 'qualified', 'pitched', 'responded', 'earned', 'declined', 'not_relevant' ), true ) ) {
+			return new WP_Error( 'scc_outreach_status', 'Invalid outreach status.', array( 'status' => 400 ) );
+		}
+		$rows[ $id ]['status'] = $status;
+		$rows[ $id ]['notes'] = substr( sanitize_textarea_field( (string) ( $raw['notes'] ?? '' ) ), 0, 600 );
+		$rows[ $id ]['evidence_url'] = esc_url_raw( (string) ( $raw['evidence_url'] ?? '' ) );
+		$rows[ $id ]['updated_at'] = gmdate( 'Y-m-d H:i:s' );
+		self::save( self::OUTREACH, $rows );
+		return $rows[ $id ];
 	}
 
 	public static function public_citation_settings( array $raw ) {
@@ -358,6 +451,8 @@ class SCC_Campaign_Operations {
 			'search_console' => $history ? end( $history ) : null,
 			'organically_measured_serps' => array_slice( $serp, -10 ),
 			'connections' => self::connections(),
+			'citations' => array_values( self::citations() ),
+			'outreach' => array_values( self::outreach() ),
 			'disclaimer' => 'GSC positions are impression-weighted averages, not exact rank. Manual metrics are unverified and require independent evidence.',
 		);
 	}
@@ -400,6 +495,18 @@ class SCC_Campaign_Operations {
 	}
 	public static function rest_gsc_refresh() {
 		$result = self::refresh_gsc( true );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_citation( $request ) {
+		$result = self::update_citation( self::input( $request ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_outreach_sync() {
+		$result = self::sync_outreach();
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_outreach( $request ) {
+		$result = self::update_outreach( self::input( $request ) );
 		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
 	public static function rest_serp_ranks( $request ) {
