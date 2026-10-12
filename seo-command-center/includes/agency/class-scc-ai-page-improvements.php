@@ -35,7 +35,8 @@ class SCC_AI_Page_Improvements {
 	/** Collect only human-readable Elementor widget copy, not settings or keys. */
 	public static function elementor_text( $raw ) {
 		if ( is_string( $raw ) ) {
-			$data = json_decode( wp_unslash( $raw ), true );
+			$data = json_decode( $raw, true );
+			if ( ! is_array( $data ) ) { $data = json_decode( wp_unslash( $raw ), true ); }
 		} else {
 			$data = $raw;
 		}
@@ -249,7 +250,8 @@ class SCC_AI_Page_Improvements {
 	 * container only on the new draft. No change to original page structure.
 	 */
 	public static function clone_elementor_with_review( $raw, array $brief ) {
-		$tree = is_string( $raw ) ? json_decode( wp_unslash( $raw ), true ) : $raw;
+		$tree = is_string( $raw ) ? json_decode( $raw, true ) : $raw;
+		if ( ! is_array( $tree ) && is_string( $raw ) ) { $tree = json_decode( wp_unslash( $raw ), true ); }
 		if ( ! is_array( $tree ) || ! $tree ) {
 			return new WP_Error( 'scc_ai_elementor_data', 'Original Elementor data is empty or invalid; no design-clone draft was created.', array( 'status' => 409 ) );
 		}
