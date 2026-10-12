@@ -3210,6 +3210,65 @@ assert_eq( false, SCC_Clarity::quota_available(), 'Clarity quota blocks further 
 assert_eq( 'not_connected', SCC_Clarity::disconnect()['status'], 'Clarity disconnect is independent' );
 assert_eq( 'keep-ga4-too', get_option( 'scc_credentials' )['ga4_refresh_token'], 'Clarity disconnect preserves GA4 credentials' );
 
+echo "\n== GBP Performance and GoHighLevel attribution ==\n";
+assert_true( is_wp_error( SCC_GBP_Performance::configure( 'bad ID' ) ), 'GBP rejects malformed location IDs' );
+$configured_gbp = SCC_GBP_Performance::configure( 'locations/1234567890' );
+assert_eq( '1234567890', $configured_gbp['location_id'], 'GBP accepts strict numeric location resource' );
+assert_true( false !== strpos( $configured_gbp['redirect_uri'], 'scc_provider=gbp' ), 'GBP OAuth has a provider-scoped callback' );
+assert_true( is_wp_error( SCC_GBP_Performance::range_for_month( '2026-88' ) ), 'GBP invalid reporting date refused' );
+$metric_range = array( 'start' => '2026-09-01', 'end' => '2026-09-30' );
+assert_true( is_wp_error( SCC_GBP_Performance::normalize( array(), '1234567890', '2026-09', $metric_range ) ), 'GBP empty API response does not invent zero' );
+$profile = SCC_GBP_Performance::normalize( array( 'multiDailyMetricTimeSeries' => array(
+	array( 'dailyMetricTimeSeries' => array(
+		array( 'dailyMetric' => 'CALL_CLICKS', 'timeSeries' => array( 'datedValues' => array(
+			array( 'date' => array( 'year' => 2026, 'month' => 9, 'day' => 1 ), 'value' => '3' ),
+			array( 'date' => array( 'year' => 2026, 'month' => 9, 'day' => 2 ), 'value' => '0' ),
+		) ) ),
+		array( 'dailyMetric' => 'WEBSITE_CLICKS', 'timeSeries' => array( 'datedValues' => array(
+			array( 'date' => array( 'year' => 2026, 'month' => 9, 'day' => 1 ), 'value' => '12' ),
+		) ) ),
+	) ),
+) ), '1234567890', '2026-09', $metric_range );
+assert_eq( 3.0, $profile['metrics']['CALL_CLICKS']['total'], 'GBP call button clicks measured' );
+assert_eq( 2, $profile['metrics']['CALL_CLICKS']['measured_days'], 'GBP zero-valued day is measured, not discarded' );
+assert_eq( null, $profile['metrics']['BUSINESS_DIRECTION_REQUESTS']['total'], 'GBP missing metric stays unavailable' );
+assert_true( false !== strpos( $profile['notice'], 'not verified phone calls' ) || false !== strpos( $profile['notice'], 'not verified phone calls' ), 'GBP clicks are not counted as answered calls' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_refresh_token' => 'gsc-stays', 'ga4_refresh_token' => 'ga4-stays', 'gbp_refresh_token' => 'gbp-only' );
+assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'separate Google GSC grant retained before disconnect' );
+$after_gbp = SCC_GBP_Performance::disconnect();
+assert_eq( false, $after_gbp['has_token'], 'GBP disconnect clears only GBP OAuth token' );
+assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'GBP disconnect never removes GSC refresh token' );
+assert_eq( 'ga4-stays', get_option( 'scc_credentials' )['ga4_refresh_token'], 'GBP disconnect never removes GA4 refresh token' );
+
+assert_eq( 'organic_labeled', SCC_GHL_Attribution::classify_source( 'Google organic' ), 'explicit Google organic source counted' );
+assert_eq( 'organic_labeled', SCC_GHL_Attribution::classify_source( 'SEO' ), 'explicit SEO label counted' );
+assert_eq( 'other', SCC_GHL_Attribution::classify_source( 'Google Ads' ), 'Google Ads never attributed to organic SEO' );
+assert_eq( 'other', SCC_GHL_Attribution::classify_source( 'Non-SEO' ), 'negative SEO source text never counted as organic' );
+assert_eq( 'other', SCC_GHL_Attribution::classify_source( 'SEO paid' ), 'mixed paid SEO label not counted as organic' );
+assert_eq( 'organic_labeled', SCC_GHL_Attribution::classify_source( 'Organic' ), 'explicit standalone organic source recognized' );
+assert_eq( 'unknown', SCC_GHL_Attribution::classify_source( '' ), 'missing source not attributed to SEO' );
+$crm = SCC_GHL_Attribution::summarize( array(
+	array( 'id' => '1', 'createdAt' => '2026-09-10T08:00:00Z', 'source' => 'Google organic', 'status' => 'won', 'monetaryValue' => 1200 ),
+	array( 'id' => '1', 'createdAt' => '2026-09-10T08:00:00Z', 'source' => 'Google organic', 'status' => 'won', 'monetaryValue' => 1200 ),
+	array( 'id' => '2', 'createdAt' => '2026-09-22T08:00:00Z', 'source' => 'Google Ads', 'status' => 'open', 'monetaryValue' => 99 ),
+	array( 'id' => '3', 'createdAt' => '2026-09-25T08:00:00Z', 'source' => '', 'status' => 'lost', 'monetaryValue' => 0 ),
+	array( 'id' => '4', 'createdAt' => '2026-08-25T08:00:00Z', 'source' => 'Google organic', 'status' => 'won', 'monetaryValue' => 999 ),
+), '2026-09', 5 );
+assert_eq( 3, $crm['opportunities_created_in_month'], 'CRM unique opportunities created in requested month only' );
+assert_eq( 1, $crm['source_breakdown']['organic_labeled'], 'only explicit organic source labeled SEO' );
+assert_eq( 1, $crm['source_breakdown']['other'], 'paid label distinguished from organic' );
+assert_eq( 1, $crm['source_breakdown']['unknown'], 'missing label separate from organic' );
+assert_eq( 1200.0, $crm['current_won_opportunity_value'], 'current won opportunity value counted without duplicate or wrong month' );
+assert_true( ! isset( $crm['opportunities'] ) && ! isset( $crm['contact_ids'] ), 'CRM aggregate stores no identifiable records' );
+assert_true( is_wp_error( SCC_GHL_Attribution::summarize( array(), '2026-09', 5 ) ), 'CRM response coverage failure does not manufacture a zero' );
+assert_true( is_wp_error( SCC_GHL_Attribution::configure( 'test-token-of-sufficient-length-to-be-valid', 'no', '' ) ), 'CRM rejects malformed sub-account ID' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_refresh_token' => 'gsc-stays', 'ga4_refresh_token' => 'ga4-stays' );
+$ghl_config = SCC_GHL_Attribution::configure( 'test-token-of-sufficient-length-to-be-valid', '0123456789abcdefABC', '' );
+assert_eq( 'configured_unverified', $ghl_config['status'], 'HighLevel credentials are not represented as measured before a successful API call' );
+$ghl_disconnected = SCC_GHL_Attribution::disconnect();
+assert_eq( 'not_connected', $ghl_disconnected['status'], 'HighLevel private token removed on disconnect' );
+assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'HighLevel disconnect leaves Google Search Console grant intact' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
