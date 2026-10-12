@@ -140,6 +140,17 @@
 		} else {
 			node('p', box, 'No Search Console snapshot for this month. Connect GSC and click Refresh Search Console. An absent theme is not assumed to rank zero.');
 		}
+		var ga4 = r.google_analytics;
+		node('h4', host, 'Google Analytics 4 · Organic Search');
+		if (ga4 && ga4.state === 'measured') {
+			var ga = node('table', host, null, 'widefat striped'), gaBody = node('tbody', ga);
+			[['Organic sessions', fmt(ga4.sessions)], ['Organic total users', fmt(ga4.total_users)], ['Organic key events', fmt(ga4.key_events)], ['Reporting window', ga4.date_start + ' to ' + ga4.date_end], ['Source', 'GA4 Data API · read-only · property ' + ga4.property_id], ['Coverage', ga4.thresholded ? 'Google privacy thresholding applies' : 'Reported without indicated thresholding']].forEach(function (pair) {
+				var gaRow = node('tr', gaBody); node('th', gaRow, pair[0]); node('td', gaRow, pair[1]);
+			});
+			node('p', host, ga4.notice, 'description');
+		} else {
+			node('p', host, 'No GA4 API measurement stored for this month. Connect and authorize the numeric GA4 property, then refresh. This is unavailable, not zero.');
+		}
 		node('h4', host, 'Exact organic SERP checks (paid DataForSEO)');
 		var serp = r.organically_measured_serps || [];
 		if (!serp.length) { node('p', host, 'No paid organic SERP measurements recorded in this month.'); }
@@ -196,6 +207,10 @@
 		return request('', 'GET').then(function (data) {
 			state = data;
 			fillConfig(data.campaign || {});
+			var ga4 = data.ga4 || {};
+			var ga4Form = byId('scc-campaign-ga4-property');
+			if (ga4Form && ga4Form.elements.property_id) ga4Form.elements.property_id.value = ga4.property_id || '';
+			byId('scc-campaign-ga4-status').textContent = (ga4.status || 'not_available').replace(/_/g, ' ') + (ga4.last_capture ? ' · last captured ' + ga4.last_capture : '');
 			var marketSelect = byId('scc-campaign-serp-market'); clear(marketSelect);
 			(data.campaign && data.campaign.markets || []).forEach(function (market, i) {
 				var option = node('option', marketSelect, market); option.value = String(i);
@@ -230,6 +245,38 @@
 		var b = evt.currentTarget; b.disabled = true;
 		request('/gsc-refresh', 'POST').then(function () { flash('New Search Console snapshot recorded.'); loadReport(); })
 			.catch(showFailure).finally(function () { b.disabled = false; });
+	});
+
+	byId('scc-campaign-ga4-property').addEventListener('submit', function (evt) {
+		evt.preventDefault();
+		var property = evt.currentTarget.elements.property_id.value;
+		request('/ga4/property', 'POST', {property_id: property}).then(function () {
+			flash('GA4 property saved. Google authorization is separate from Search Console.');
+			loadState();
+		}).catch(showFailure);
+	});
+	byId('scc-campaign-ga4-connect').addEventListener('click', function (evt) {
+		var button = evt.currentTarget; button.disabled = true;
+		request('/ga4/auth-url', 'POST').then(function (result) {
+			if (result.url && /^https:\/\/accounts\.google\.com\//.test(result.url)) {
+				window.location.assign(result.url);
+			} else throw new Error('Invalid Google authorization response.');
+		}).catch(showFailure).finally(function () { button.disabled = false; });
+	});
+	byId('scc-campaign-ga4-refresh').addEventListener('click', function (evt) {
+		var button = evt.currentTarget; button.disabled = true;
+		request('/ga4/refresh', 'POST', {month: byId('scc-campaign-month').value || nowMonth()}).then(function () {
+			flash('Verified GA4 Organic Search metrics were captured for this report month.');
+			return loadState();
+		}).catch(showFailure).finally(function () { button.disabled = false; });
+	});
+	byId('scc-campaign-ga4-disconnect').addEventListener('click', function (evt) {
+		if (!window.confirm('Disconnect GA4 and delete its saved campaign analytics snapshots? Search Console will remain connected.')) return;
+		var button = evt.currentTarget; button.disabled = true;
+		request('/ga4/disconnect', 'POST').then(function () {
+			flash('GA4 token and saved GA4 snapshots removed locally. Search Console was not changed.');
+			return loadState();
+		}).catch(showFailure).finally(function () { button.disabled = false; });
 	});
 	byId('scc-campaign-serp-run').addEventListener('click', function (evt) {
 		if (!window.confirm('This runs up to FIVE PAID DataForSEO organic SERP requests. Continue?')) return;
