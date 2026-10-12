@@ -53,6 +53,32 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		<p class="description">Only actual Data API measurements appear as verified source data. Key events are Analytics-defined key events and do not automatically equal qualified leads. The Google Search Console connection is maintained separately.</p>
 	</section>
 	<section class="scc-card">
+		<h2>Bing Webmaster Tools</h2>
+		<p class="description">Use a read-only Bing Webmaster API key from the verified site owner's Bing Webmaster Tools → Settings → API Access. Existing key remains saved when the field is left blank.</p>
+		<form id="scc-campaign-bing-connect">
+			<p><label><strong>Verified site URL</strong><br><input type="url" class="regular-text" name="site_url" placeholder="https://example.com/" required></label></p>
+			<p><label><strong>Bing Webmaster API key</strong><br><input type="password" class="regular-text" name="api_key" autocomplete="off" placeholder="Keep blank to retain saved key"></label></p>
+			<p><button class="button button-primary" type="submit">Save Bing connection</button>
+				<button type="button" class="button" id="scc-campaign-bing-refresh">Measure Bing report month</button>
+				<button type="button" class="button" id="scc-campaign-bing-disconnect">Disconnect Bing</button></p>
+		</form>
+		<p><strong>Connection:</strong> <span id="scc-campaign-bing-status">Not connected</span></p>
+		<p class="description">Bing Webmaster traffic may include multiple Bing search surfaces. It is reported separately from Google and GA4.</p>
+	</section>
+	<section class="scc-card">
+		<h2>Microsoft Clarity</h2>
+		<p class="description">Generate a Data Export API token under Clarity → Settings → Data Export. Install the Clarity tracking code using its official WordPress plugin or your existing tag manager. TideOrbit does not inject a duplicate tracker.</p>
+		<form id="scc-campaign-clarity-connect">
+			<p><label><strong>Clarity Project ID</strong><br><input type="text" class="regular-text" name="project_id" maxlength="32" placeholder="Project ID" required></label></p>
+			<p><label><strong>Clarity Data Export API token</strong><br><input type="password" class="regular-text" name="api_token" autocomplete="off" placeholder="Keep blank to retain saved token"></label></p>
+			<p><button class="button button-primary" type="submit">Save Clarity connection</button>
+				<button type="button" class="button" id="scc-campaign-clarity-refresh">Capture recent Clarity insights</button>
+				<button type="button" class="button" id="scc-campaign-clarity-disconnect">Disconnect Clarity</button></p>
+		</form>
+		<p><strong>Connection:</strong> <span id="scc-campaign-clarity-status">Not connected</span></p>
+		<p class="description">Clarity exports cover only the preceding 24–72 hours and allow up to 10 API calls per project per day. TideOrbit captures one trailing 24-hour snapshot daily, keeps up to 90, and never claims they are complete monthly unique-user totals. Ensure your site's consent and privacy setup is appropriate.</p>
+	</section>
+	<section class="scc-card">
 		<h2>Monthly SEO report</h2>
 		<p><label>Report month <input type="month" id="scc-campaign-month"></label>
 			<button type="button" class="button" id="scc-campaign-load-report">Load report</button>

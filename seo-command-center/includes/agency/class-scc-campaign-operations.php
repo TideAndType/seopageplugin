@@ -80,6 +80,12 @@ class SCC_Campaign_Operations {
 			'/campaign/ga4/property' => array( 'POST', 'rest_ga4_property' ),
 			'/campaign/ga4/auth-url' => array( 'POST', 'rest_ga4_auth_url' ),
 			'/campaign/ga4/refresh' => array( 'POST', 'rest_ga4_refresh' ),
+			'/campaign/bing/connect' => array( 'POST', 'rest_bing_connect' ),
+			'/campaign/bing/refresh' => array( 'POST', 'rest_bing_refresh' ),
+			'/campaign/bing/disconnect' => array( 'POST', 'rest_bing_disconnect' ),
+			'/campaign/clarity/connect' => array( 'POST', 'rest_clarity_connect' ),
+			'/campaign/clarity/refresh' => array( 'POST', 'rest_clarity_refresh' ),
+			'/campaign/clarity/disconnect' => array( 'POST', 'rest_clarity_disconnect' ),
 			'/campaign/ga4/disconnect' => array( 'POST', 'rest_ga4_disconnect' ),
 			'/campaign/serp-ranks' => array( 'POST', 'rest_serp_ranks' ),
 			'/campaign/citation' => array( 'POST', 'rest_citation' ),
@@ -437,6 +443,8 @@ class SCC_Campaign_Operations {
 		self::seed_month( gmdate( 'Y-m' ) );
 		$result = self::refresh_gsc( false );
 		if ( class_exists( 'SCC_GA4' ) ) { SCC_GA4::maybe_capture(); }
+		if ( class_exists( 'SCC_Bing_Webmaster' ) ) { SCC_Bing_Webmaster::maybe_capture(); }
+		if ( class_exists( 'SCC_Clarity' ) ) { SCC_Clarity::maybe_capture(); }
 		if ( is_wp_error( $result ) && class_exists( 'SCC_Logger' ) ) {
 			SCC_Logger::info( 'campaign', 'GSC snapshot not refreshed: ' . $result->get_error_message() );
 		}
@@ -456,11 +464,13 @@ class SCC_Campaign_Operations {
 			'measurements' => $metrics,
 			'search_console' => $history ? end( $history ) : null,
 			'google_analytics' => class_exists( 'SCC_GA4' ) ? SCC_GA4::monthly( $month ) : null,
+			'bing_webmaster' => class_exists( 'SCC_Bing_Webmaster' ) ? SCC_Bing_Webmaster::monthly( $month ) : null,
+			'clarity_insights' => class_exists( 'SCC_Clarity' ) ? SCC_Clarity::monthly( $month ) : array(),
 			'organically_measured_serps' => array_slice( $serp, -10 ),
 			'connections' => self::connections(),
 			'citations' => array_values( self::citations() ),
 			'outreach' => array_values( self::outreach() ),
-			'disclaimer' => 'GSC positions are impression-weighted averages, not exact rank. GA4 key events represent configured key events, not necessarily qualified leads. Manual metrics are unverified and require independent evidence.',
+			'disclaimer' => 'GSC positions are average observed positions. Bing traffic is a separate multi-surface search source. GA4 key events are not necessarily qualified leads. Clarity windows are trailing 24 hours, never full-month totals. Manually entered metrics remain unverified.',
 		);
 	}
 
@@ -469,6 +479,8 @@ class SCC_Campaign_Operations {
 			'gsc' => class_exists( 'SCC_GSC' ) && SCC_GSC::is_connected() ? 'connected' : 'disconnected',
 			'gbp' => 'not_connected',
 			'ga4' => class_exists( 'SCC_GA4' ) ? SCC_GA4::status() : 'not_available',
+			'bing' => class_exists( 'SCC_Bing_Webmaster' ) ? SCC_Bing_Webmaster::status() : 'not_available',
+			'clarity' => class_exists( 'SCC_Clarity' ) ? SCC_Clarity::state()['status'] : 'not_available',
 			'crm' => 'not_connected',
 			'ai_citations' => 'not_connected',
 			'paid_citation_public' => (bool) get_option( 'scc_citation_public_paid_enabled', false ),
@@ -482,6 +494,8 @@ class SCC_Campaign_Operations {
 			'report' => self::report( gmdate( 'Y-m' ) ),
 			'history' => self::history(),
 			'ga4' => class_exists( 'SCC_GA4' ) ? SCC_GA4::state() : array( 'status' => 'not_available' ),
+			'bing' => class_exists( 'SCC_Bing_Webmaster' ) ? SCC_Bing_Webmaster::state() : array( 'status' => 'not_available' ),
+			'clarity' => class_exists( 'SCC_Clarity' ) ? SCC_Clarity::state() : array( 'status' => 'not_available' ),
 			'public_citations' => array(
 				'enabled' => (bool) get_option( 'scc_citation_public_enabled', false ),
 				'paid' => (bool) get_option( 'scc_citation_public_paid_enabled', false ),
@@ -558,6 +572,46 @@ class SCC_Campaign_Operations {
 		$allowed = self::ga4_admin_permission();
 		if ( is_wp_error( $allowed ) ) { return $allowed; }
 		return rest_ensure_response( SCC_GA4::disconnect() );
+	}
+
+
+	public static function rest_bing_connect( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$result = SCC_Bing_Webmaster::configure( $p['api_key'] ?? '', $p['site_url'] ?? '' );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_bing_refresh( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$month = sanitize_text_field( (string) ( $p['month'] ?? gmdate( 'Y-m' ) ) );
+		$result = SCC_Bing_Webmaster::capture( $month );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_bing_disconnect() {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		return rest_ensure_response( SCC_Bing_Webmaster::disconnect() );
+	}
+	public static function rest_clarity_connect( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$result = SCC_Clarity::configure( $p['api_token'] ?? '', $p['project_id'] ?? '' );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_clarity_refresh() {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$result = SCC_Clarity::capture();
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_clarity_disconnect() {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		return rest_ensure_response( SCC_Clarity::disconnect() );
 	}
 
 	public static function rest_report( $request ) {

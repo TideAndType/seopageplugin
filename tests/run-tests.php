@@ -3148,6 +3148,68 @@ $disconnected = SCC_GA4::disconnect();
 assert_eq( 'not_connected', $disconnected['status'], 'GA4 disconnect keeps its own connection state off' );
 assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'GA4 disconnect does not revoke GSC credentials' );
 
+echo "\n== Bing Webmaster and Clarity campaign integrations ==\n";
+$bing_time = SCC_Bing_Webmaster::stat_date( '/Date(1316156400000-0700)/' );
+assert_eq( '2011-09-16', $bing_time, 'Bing legacy JSON date accepted with correct UTC day' );
+assert_eq( '2026-10-12', SCC_Bing_Webmaster::stat_date( '2026-10-12T00:00:00Z' ), 'Bing ISO date recognized' );
+assert_eq( '', SCC_Bing_Webmaster::stat_date( 'not-a-date' ), 'unparseable Bing date discarded' );
+$report = SCC_Bing_Webmaster::aggregate(
+	array(
+		array( 'Date' => '2026-10-01', 'Clicks' => 5, 'Impressions' => 30 ),
+		array( 'Date' => '2026-10-02', 'Clicks' => 3, 'Impressions' => 15 ),
+		array( 'Date' => '2026-10-02', 'Clicks' => 3, 'Impressions' => 15 ),
+		array( 'Date' => '2026-09-30', 'Clicks' => 90, 'Impressions' => 100 ),
+	),
+	array(
+		array( 'Date' => '2026-10-01', 'Query' => 'agency', 'Clicks' => 2, 'Impressions' => 10, 'AvgImpressionPosition' => 6 ),
+		array( 'Date' => '2026-10-02', 'Query' => 'agency', 'Clicks' => 1, 'Impressions' => 5, 'AvgImpressionPosition' => 9 ),
+	),
+	'2026-10', 'https://example.com/'
+);
+assert_eq( 'measured', $report['status'], 'Bing snapshot reports measured when dates are present' );
+assert_eq( 8, $report['clicks'], 'Bing daily clicks sum without duplicates' );
+assert_eq( 45, $report['impressions'], 'Bing daily impressions sum without other months' );
+assert_eq( 2, $report['measured_days'], 'Bing reports measured date coverage' );
+assert_eq( 7.0, $report['query_rows'][0]['avg_impression_position'], 'Bing average query position weighted by impressions' );
+$bing_missing = SCC_Bing_Webmaster::aggregate( array(), array(), '2026-10', 'https://example.com/' );
+assert_eq( 'unavailable', $bing_missing['status'], 'absent Bing reporting dates never become zero' );
+assert_eq( null, $bing_missing['clicks'], 'unavailable Bing traffic has null clicks' );
+assert_true( is_wp_error( SCC_Bing_Webmaster::aggregate( array(), array(), '2026-19', 'https://example.com/' ) ), 'invalid Bing month rejected' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_refresh_token' => 'keep-this-google-credential', 'ga4_refresh_token' => 'keep-ga4-too' );
+assert_true( is_wp_error( SCC_Bing_Webmaster::configure( 'ABCDEF01234567890', 'https://attacker.example/' ) ), 'Bing configuration rejects a foreign host' );
+$bing_config = SCC_Bing_Webmaster::configure( 'ABCDEF01234567890', 'https://example.com/' );
+assert_eq( 'configured_unverified', $bing_config['status'], 'Bing setup does not imply verified access before measurement' );
+assert_eq( true, $bing_config['has_api_key'], 'Bing key stored securely, represented only as boolean' );
+assert_eq( 'not_connected', SCC_Bing_Webmaster::disconnect()['status'], 'Bing key can be disconnected separately' );
+assert_eq( 'keep-this-google-credential', get_option( 'scc_credentials' )['gsc_refresh_token'], 'Bing disconnect leaves Google Search Console untouched' );
+
+$clarity_raw = array(
+	array( 'metricName' => 'Traffic', 'information' => array(
+		array( 'totalSessionCount' => '11', 'totalBotSessionCount' => 0, 'OS' => 'Android', 'userIdentifier' => 'private-value' ),
+	) ),
+	array( 'metricName' => 'Rage Click Count', 'information' => array(
+		array( 'rageClickCount' => '3' ),
+	) ),
+	array( 'metricName' => 'Unsupported Metric', 'information' => array( array( 'userIdentifier' => 'private-value' ) ) ),
+);
+$clarity = SCC_Clarity::parse_insights( $clarity_raw, 'abcde12345', 1760000000 );
+assert_eq( 'measured', $clarity['state'], 'valid Clarity export identified as measured' );
+assert_eq( 'trailing_24_hours', $clarity['window'], 'Clarity captures rolling 24 hours, not monthly totals' );
+assert_eq( 11.0, $clarity['metrics']['Traffic']['rows'][0]['totalSessionCount'], 'Clarity traffic snapshot preserves numeric measurement' );
+assert_eq( 3.0, $clarity['metrics']['Rage Click Count']['rows'][0]['rageClickCount'], 'Clarity rage clicks retained' );
+assert_true( ! isset( $clarity['metrics']['Traffic']['rows'][0]['userIdentifier'] ), 'Clarity identifiable string payload is not stored' );
+assert_true( ! isset( $clarity['metrics']['Unsupported Metric'] ), 'unsupported Clarity metrics are not exported into WordPress' );
+assert_true( is_wp_error( SCC_Clarity::parse_insights( array(), 'abcde12345', 1760000000 ) ), 'empty Clarity API data never becomes zero' );
+assert_true( is_wp_error( SCC_Clarity::parse_insights( array( array( 'metricName' => 'Traffic', 'information' => array() ) ), 'abcde12345', 1760000000 ) ), 'non-numeric Clarity observations do not count as valid measurements' );
+assert_true( is_wp_error( SCC_Clarity::configure( 'long-enough-token-of-data-for-tests', 'bad!' ) ), 'Clarity invalid project ID rejected' );
+$clarity_config = SCC_Clarity::configure( 'long-enough-token-of-data-for-tests', 'abcde12345' );
+assert_eq( 'configured_unverified', $clarity_config['status'], 'Clarity configured but not claimed measured without a successful export' );
+assert_eq( 8, $clarity_config['request_limit'], 'TideOrbit Clarity calls stay below provider max ten daily' );
+$GLOBALS['scc_test_options']['scc_clarity_api_quota'] = array( 'day' => gmdate( 'Ymd' ), 'count' => 8 );
+assert_eq( false, SCC_Clarity::quota_available(), 'Clarity quota blocks further daily requests' );
+assert_eq( 'not_connected', SCC_Clarity::disconnect()['status'], 'Clarity disconnect is independent' );
+assert_eq( 'keep-ga4-too', get_option( 'scc_credentials' )['ga4_refresh_token'], 'Clarity disconnect preserves GA4 credentials' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
