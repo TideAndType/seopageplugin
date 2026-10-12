@@ -80,6 +80,9 @@ class SCC_Campaign_Operations {
 			'/campaign/gsc-refresh' => array( 'POST', 'rest_gsc_refresh' ),
 			'/campaign/ai-citations/config' => array( 'POST', 'rest_ai_citation_config' ),
 			'/campaign/ai-citations/measure' => array( 'POST', 'rest_ai_citation_measure' ),
+			'/campaign/ai-providers/key' => array( 'POST', 'rest_ai_provider_key' ),
+			'/campaign/ai-providers/disconnect' => array( 'POST', 'rest_ai_provider_disconnect' ),
+			'/campaign/ai-providers/competitors' => array( 'POST', 'rest_ai_competitors' ),
 			'/campaign/ga4/property' => array( 'POST', 'rest_ga4_property' ),
 			'/campaign/ga4/auth-url' => array( 'POST', 'rest_ga4_auth_url' ),
 			'/campaign/ga4/refresh' => array( 'POST', 'rest_ga4_refresh' ),
@@ -482,6 +485,7 @@ class SCC_Campaign_Operations {
 			'clarity_insights' => class_exists( 'SCC_Clarity' ) ? SCC_Clarity::monthly( $month ) : array(),
 			'organically_measured_serps' => array_slice( $serp, -10 ),
 			'ai_citation_observations' => class_exists( 'SCC_AI_Citation_Monitor' ) ? SCC_AI_Citation_Monitor::monthly( $month ) : array(),
+			'ai_visibility_summary' => class_exists( 'SCC_AI_Citation_Monitor' ) ? SCC_AI_Citation_Monitor::summary( $month ) : array(),
 			'connections' => self::connections(),
 			'citations' => array_values( self::citations() ),
 			'outreach' => array_values( self::outreach() ),
@@ -676,6 +680,29 @@ class SCC_Campaign_Operations {
 		$allowed = self::ga4_admin_permission();
 		if ( is_wp_error( $allowed ) ) { return $allowed; }
 		return rest_ensure_response( SCC_GHL_Attribution::disconnect() );
+	}
+
+
+	public static function rest_ai_provider_key( $request ) {
+		$allow = self::ga4_admin_permission();
+		if ( is_wp_error( $allow ) ) { return $allow; }
+		$p = self::input( $request );
+		$r = SCC_AI_Direct_Providers::update_key( sanitize_key( (string) ( $p['provider'] ?? '' ) ), (string) ( $p['api_key'] ?? '' ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_provider_disconnect( $request ) {
+		$allow = self::ga4_admin_permission();
+		if ( is_wp_error( $allow ) ) { return $allow; }
+		$p = self::input( $request );
+		$r = SCC_AI_Direct_Providers::disconnect( sanitize_key( (string) ( $p['provider'] ?? '' ) ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_competitors( $request ) {
+		$allow = self::ga4_admin_permission();
+		if ( is_wp_error( $allow ) ) { return $allow; }
+		$p = self::input( $request );
+		$r = SCC_AI_Direct_Providers::configure_competitors( (string) ( $p['domains'] ?? '' ), SCC_AI_Citation_Monitor::domain() );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
 	}
 
 	public static function rest_ai_citation_config( $request ) {

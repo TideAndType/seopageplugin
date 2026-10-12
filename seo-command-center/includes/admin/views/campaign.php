@@ -119,13 +119,37 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 	</section>
 	<section class="scc-card">
 		<h2>AI citation monitoring · paid evidence checks</h2>
-		<p class="description">Measure real observed citations using DataForSEO. Save your exact brand name and optional aliases first. Google AI Overview/AI Mode checks inspect one specific question and market; ChatGPT/Google dataset checks count domain citations in DataForSEO's indexed sample, not every public AI conversation. No automated billing or cron scans.</p>
+		<p class="description">Measure observed citations using DataForSEO, Perplexity Agent API, or Google's grounded Gemini Developer API. Set the business name and optionally competitor domains. Direct-model observations are controlled API answers, not every Perplexity/Gemini app user's experience. All calls are admin-approved and may be billed.</p>
 		<form id="scc-campaign-ai-config">
 			<p><label><strong>Business / brand name</strong><br><input name="brand" class="regular-text" required placeholder="Your business name"></label></p>
 			<p><label><strong>Optional brand aliases</strong><br><textarea name="aliases" class="large-text" rows="2" placeholder="One alias per line"></textarea></label></p>
 			<button type="submit" class="button">Save brand identification</button>
 		</form>
 		<p class="description">Target domain is automatically derived from this WordPress site: <strong id="scc-campaign-ai-domain">—</strong>.</p>
+		<fieldset style="border:1px solid #dcdcde;padding:12px;margin:12px 0">
+			<legend><strong>Direct-model API connections</strong></legend>
+			<form id="scc-campaign-ai-provider-perplexity">
+				<p><label>Perplexity Agent API key (stored privately; blank retains saved key)<br>
+					<input type="password" name="api_key" class="regular-text" autocomplete="off" placeholder="Perplexity API key"></label>
+					<button class="button" type="submit">Save Perplexity key</button>
+					<button class="button" type="button" id="scc-campaign-ai-disconnect-perplexity">Disconnect</button>
+					<span id="scc-campaign-ai-perplexity-status">Not connected</span></p>
+			</form>
+			<form id="scc-campaign-ai-provider-gemini">
+				<p><label>Gemini Developer API key (stored privately; blank retains saved key)<br>
+					<input type="password" name="api_key" class="regular-text" autocomplete="off" placeholder="Gemini API key"></label>
+					<button class="button" type="submit">Save Gemini key</button>
+					<button class="button" type="button" id="scc-campaign-ai-disconnect-gemini">Disconnect</button>
+					<span id="scc-campaign-ai-gemini-status">Not connected</span></p>
+			</form>
+			<p class="description">Perplexity uses the current Agent API; Gemini uses Search-grounded gemini-2.5-flash. Both can incur provider charges. Connecting never triggers a scan.</p>
+		</fieldset>
+		<form id="scc-campaign-ai-competitors">
+			<p><label><strong>Competitor domains</strong> (up to 4, optional, one per line)<br>
+				<textarea name="domains" class="large-text" rows="3" placeholder="competitor.com"></textarea></label></p>
+			<p><button class="button" type="submit">Save comparison websites</button></p>
+		</form>
+		<p class="description">Competitors are compared against cited URLs in the <em>same API answer</em>; unverified sources never count as confirmed citations. No competitor crawling or scripts are installed.</p>
 		<form id="scc-campaign-ai-check">
 			<p><label><strong>Measurement surface</strong><br>
 				<select name="surface" id="scc-campaign-ai-surface">
@@ -133,6 +157,8 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 					<option value="google_ai_mode">Google AI Mode · exact live query</option>
 					<option value="chatgpt_dataset">ChatGPT · sampled indexed domain citations</option>
 					<option value="google_ai_dataset">Google AI Overviews · sampled indexed domain citations</option>
+					<option value="perplexity_agent_api">Perplexity Agent · live API answer (not consumer app)</option>
+					<option value="gemini_grounded_api">Gemini + Google Search grounding · live API answer</option>
 				</select>
 			</label></p>
 			<p><label><strong>Search question / query (live query modes)</strong><br><input type="text" name="keyword" class="large-text" maxlength="180" placeholder="best managed IT support in Spokane"></label></p>
@@ -140,10 +166,11 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 			<p><button type="submit" id="scc-campaign-ai-run" class="button button-primary">Run paid AI visibility check</button></p>
 		</form>
 		<p><strong>DataForSEO:</strong> <span id="scc-campaign-ai-status">Not connected</span>. <strong>Requests:</strong> <span id="scc-campaign-ai-quota">0 / 10</span> today.</p>
-		<p class="description">Each click triggers one paid DataForSEO request. Daily site soft cap: 10 requests, without a hard billing guarantee. Some asynchronous Google AI Overviews may cost extra. Gemini and Perplexity remain unmeasured here until a supported, verified connection exists.</p>
+		<p class="description">Each click triggers one paid DataForSEO request. Daily site soft cap: 10 requests, without a hard billing guarantee. Some Google AI Overviews may cost extra. Perplexity and Gemini require your own billed API key. Enter only non-sensitive questions; they are sent to that provider. Retrieved search results are not necessarily cited in its answer.</p>
 	</section>
 	<section class="scc-card">
 		<h2>Monthly SEO report</h2>
+		<p class="description">The AI visibility scorecard below uses real observed answer/citation denominators per provider and never merges indexed ChatGPT sample counts into live-answer success rates.</p>
 		<p><label>Report month <input type="month" id="scc-campaign-month"></label>
 			<button type="button" class="button" id="scc-campaign-load-report">Load report</button>
 			<button type="button" class="button" id="scc-campaign-print">Print / save PDF</button>

@@ -324,6 +324,7 @@ require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-c
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gsc.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ai-citation-monitor.php';
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ai-direct-providers.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-competitor-analysis.php';
 
 // --- Phase 7 stubs + classes under test -----------------------------------

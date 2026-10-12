@@ -3335,6 +3335,102 @@ $ai_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/inclu
 assert_true( false !== strpos( $ai_source, '/ai_optimization/llm_mentions/target_metrics/live' ), 'LLM citations query matches provider target_metrics endpoint' );
 assert_true( false !== strpos( $ai_source, "'search_scope' => array( 'sources' )" ), 'sampled count comes from cited domains rather than raw mentions' );
 
+echo "\n== Direct Perplexity and Gemini AI citation verification ==\n";
+assert_eq( 'example.com', SCC_AI_Direct_Providers::validate_domain( 'https://www.example.com/' ), 'competitor normalized from clean URL' );
+assert_eq( '', SCC_AI_Direct_Providers::validate_domain( 'https://example.com/foo' ), 'competitor deep URL rejected' );
+assert_eq( '', SCC_AI_Direct_Providers::validate_domain( '127.0.0.1' ), 'IP address cannot be configured as competitor' );
+assert_eq( '', SCC_AI_Direct_Providers::validate_domain( 'https://example.com:1234/' ), 'domain URL with custom port rejected' );
+assert_eq( '', SCC_AI_Direct_Providers::validate_domain( 'example.com@evil.example' ), 'user-info lookalike rejected' );
+assert_true( is_wp_error( SCC_AI_Direct_Providers::configure_competitors( 'example.com', 'example.com' ) ), 'self domain rejected as competitor' );
+assert_true( is_wp_error( SCC_AI_Direct_Providers::configure_competitors( "a.com\nb.com\nc.com\nd.com\ne.com", 'example.com' ) ), 'more than four competitors rejected' );
+$cstate = SCC_AI_Direct_Providers::configure_competitors( "alpha.com\nbeta.com\nalpha.com", 'example.com' );
+assert_eq( 2, count( $cstate['competitor_domains'] ), 'competitor domains deduplicated' );
+assert_eq( false, $cstate['perplexity_connected'], 'connection does not assume Perplexity key already supplied' );
+assert_true( is_wp_error( SCC_AI_Direct_Providers::update_key( 'perplexity', 'bad' ) ), 'weak provider API key rejected' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_refresh_token' => 'keep-gsc-token' );
+$pk = SCC_AI_Direct_Providers::update_key( 'perplexity', 'test-perplexity-api-token-abcdefghijklmnop' );
+assert_eq( true, $pk['perplexity_connected'], 'Perplexity credential stored without revealing it in state' );
+assert_true( ! isset( $pk['perplexity_api_key'] ) && ! isset( $pk['gemini_api_key'] ), 'API keys never returned in REST state' );
+$gk = SCC_AI_Direct_Providers::update_key( 'gemini', 'test-gemini-api-token-abcdefghijklmnop' );
+assert_eq( true, $gk['gemini_connected'], 'Gemini credential stored separately' );
+$ds = SCC_AI_Direct_Providers::disconnect( 'perplexity' );
+assert_eq( false, $ds['perplexity_connected'], 'Perplexity disconnection removes its private token' );
+assert_eq( true, $ds['gemini_connected'], 'Perplexity disconnect does not remove Gemini' );
+assert_eq( 'keep-gsc-token', get_option( 'scc_credentials' )['gsc_refresh_token'], 'Perplexity disconnect does not remove Google Search Console' );
+assert_true( is_wp_error( SCC_AI_Direct_Providers::disconnect( 'unsupported' ) ), 'unknown provider does not alter credentials' );
+
+$perplexity_body = array(
+	'status' => 'completed', 'model' => 'sonar',
+	'output' => array(
+		array( 'type' => 'search_results', 'results' => array(
+			array( 'id' => 1, 'title' => 'Tide', 'url' => 'https://www.example.com/resource' ),
+			array( 'id' => 2, 'title' => 'Other', 'url' => 'https://beta.com/article' ),
+			array( 'id' => 3, 'title' => 'Retrieved but unused', 'url' => 'https://alpha.com/uncited' ),
+			array( 'id' => 4, 'title' => 'Phishing', 'url' => 'https://example.com.evil.net/danger' ),
+		) ),
+		array( 'type' => 'message', 'role' => 'assistant', 'content' => array(
+			array( 'type' => 'output_text', 'text' => 'Tide Type is a local agency [1][2].', 'annotations' => array() ),
+		) ),
+	),
+);
+$p = SCC_AI_Direct_Providers::normalize_perplexity( $perplexity_body, 'Best agency?', 'example.com', 'Tide Type', array( 'alpha.com', 'beta.com' ) );
+assert_eq( 'measured_api_observation', $p['state'], 'Perplexity completed answer is measured as API observation' );
+assert_eq( true, $p['brand_mentioned'], 'Perplexity answer mentions brand' );
+assert_eq( true, $p['domain_cited'], 'Perplexity explicit cited matching URL counts as citation' );
+assert_eq( 4, $p['retrieved_source_count'], 'Perplexity records provider retrieved sources separately' );
+assert_eq( 2, $p['cited_source_count'], 'Perplexity only explicitly cited numbered sources counted' );
+assert_eq( 'verified_citation_markers', $p['citation_evidence_state'], 'Perplexity markers verified with source IDs' );
+assert_eq( 1, count( $p['citations'] ), 'own domain cited URL counted once' );
+assert_eq( false, $p['competitor_citations'][1]['cited'], 'retrieved but unreferenced competitor NOT treated as cited' );
+assert_eq( true, $p['competitor_citations'][2]['cited'], 'actual referenced competitor cited in same answer' );
+$no_markers = $perplexity_body;
+$no_markers['output'][1]['content'][0]['text'] = 'Tide Type is a local agency, no inline source markers.';
+$uncited = SCC_AI_Direct_Providers::normalize_perplexity( $no_markers, 'Best agency?', 'example.com', 'Tide Type', array( 'alpha.com', 'beta.com' ) );
+assert_eq( null, $uncited['domain_cited'], 'retrieved result with no citation markers is not counted as citation OR verified absent' );
+assert_eq( null, $uncited['competitor_citations'][1]['cited'], 'unverified competitor citation remains unknown, not false' );
+assert_true( is_wp_error( SCC_AI_Direct_Providers::normalize_perplexity( array( 'status' => 'in_progress' ), 'Query', 'example.com', 'Tide', array() ) ), 'incomplete Perplexity API response is never measured' );
+
+$gemini_body = array(
+	'modelVersion' => 'gemini-2.5-flash',
+	'candidates' => array( array(
+		'finishReason' => 'STOP',
+		'content' => array( 'parts' => array( array( 'text' => 'Tide Type is a digital agency.' ) ) ),
+		'groundingMetadata' => array(
+			'groundingChunks' => array(
+				array( 'web' => array( 'uri' => 'https://example.com/seo', 'title' => 'Our SEO' ) ),
+				array( 'web' => array( 'uri' => 'https://alpha.com/services', 'title' => 'Alpha' ) ),
+				array( 'web' => array( 'uri' => 'https://beta.com/blog', 'title' => 'Retrieved but not cited' ) ),
+			),
+			'groundingSupports' => array( array( 'segment' => array( 'text' => 'Tide Type is' ), 'groundingChunkIndices' => array( 0, 1 ) ) ),
+		),
+	) ),
+);
+$gm = SCC_AI_Direct_Providers::normalize_gemini( $gemini_body, 'Best agency?', 'example.com', 'Tide Type', array( 'alpha.com', 'beta.com' ) );
+assert_eq( true, $gm['domain_cited'], 'Gemini matched grounded support index counts site citation' );
+assert_eq( true, $gm['competitor_citations'][1]['cited'], 'Gemini supported competitor domain counts' );
+assert_eq( false, $gm['competitor_citations'][2]['cited'], 'Gemini retrieved uncited competitor not credited' );
+assert_eq( 3, $gm['retrieved_source_count'], 'Gemini keeps separate retrieved evidence count' );
+assert_eq( 2, $gm['cited_source_count'], 'Gemini only groundingSupports references counted' );
+$no_supports = $gemini_body;
+unset( $no_supports['candidates'][0]['groundingMetadata']['groundingSupports'] );
+$g_unknown = SCC_AI_Direct_Providers::normalize_gemini( $no_supports, 'Best agency?', 'example.com', 'Tide Type', array( 'alpha.com', 'beta.com' ) );
+assert_eq( null, $g_unknown['domain_cited'], 'Gemini grounding chunks without referenced supports do not imply answer citation' );
+assert_eq( 'retrieved_only_or_unverified', $g_unknown['citation_evidence_state'], 'Gemini ambiguous citations labeled unverified' );
+assert_true( is_wp_error( SCC_AI_Direct_Providers::normalize_gemini( array( 'candidates' => array( array( 'finishReason' => 'MAX_TOKENS' ) ) ), 'Question?', 'example.com', 'Tide', array() ) ), 'Gemini truncated response not reported as measurement' );
+
+$GLOBALS['scc_test_options'][SCC_AI_Citation_Monitor::HISTORY] = array(
+	array( 'state' => 'measured_api_observation', 'surface' => 'gemini_grounded_api', 'captured_at' => gmdate( 'Y-m-d' ) . 'T15:00:00Z', 'domain_cited' => true, 'brand_mentioned' => true ),
+	array( 'state' => 'measured_api_observation', 'surface' => 'gemini_grounded_api', 'captured_at' => gmdate( 'Y-m-d' ) . 'T15:01:00Z', 'domain_cited' => null, 'brand_mentioned' => false ),
+	array( 'state' => 'measured_sample', 'surface' => 'chatgpt_dataset', 'captured_at' => gmdate( 'Y-m-d' ) . 'T15:02:00Z', 'cited_domain_mentions' => 44 ),
+);
+$sum = SCC_AI_Citation_Monitor::summary( gmdate( 'Y-m' ) );
+assert_eq( 2, $sum[0]['answer_observed'], 'AI dashboard counts two Gemini API answers' );
+assert_eq( 1, $sum[0]['confirmed_source_checks'], 'AI dashboard citation denominator excludes unknown evidence' );
+assert_eq( 1, $sum[0]['own_domain_cited'], 'AI dashboard verified own citation numerator correct' );
+assert_eq( 1, $sum[0]['unverified_citation_status'], 'AI dashboard separately flags uncertain citation' );
+assert_eq( 0, $sum[1]['answer_observed'], 'ChatGPT indexed samples never counted as an observed direct API answer' );
+assert_eq( 44, $sum[1]['latest_indexed_citation_count'], 'indexed sample saved separately' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
