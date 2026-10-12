@@ -233,7 +233,7 @@ class SCC_AI_Citation_Monitor {
 		return $r;
 	}
 	public static function measure( array $data ) {
-		if ( empty( $data['confirm_paid'] ) ) { return new WP_Error( 'scc_ai_confirmation', 'Confirm the paid DataForSEO API call before scanning.', array( 'status' => 400 ) ); }
+		if ( empty( $data['confirm_paid'] ) ) { return new WP_Error( 'scc_ai_confirmation', 'Explicitly confirm the paid AI provider call before scanning.', array( 'status' => 400 ) ); }
 		$surface = sanitize_key( (string) ( $data['surface'] ?? '' ) );
 		$direct = in_array( $surface, array( 'perplexity_agent_api', 'gemini_grounded_api' ), true );
 		if ( ! $direct && ( ! class_exists( 'SCC_DataForSEO' ) || ! SCC_DataForSEO::is_connected() ) ) {
@@ -255,6 +255,9 @@ class SCC_AI_Citation_Monitor {
 			if ( strlen( $keyword ) < 3 || strlen( $keyword ) > 180 || strlen( $market ) < 3 || strlen( $market ) > 120 ) {
 				return new WP_Error( 'scc_ai_query', 'Enter a keyword or question and supported Google search location.', array( 'status' => 400 ) );
 			}
+		}
+		if ( $direct && ( ! class_exists( 'SCC_AI_Direct_Providers' ) || ! SCC_AI_Direct_Providers::connected( 'perplexity_agent_api' === $surface ? 'perplexity' : 'gemini' ) ) ) {
+			return new WP_Error( 'scc_ai_direct_connection', 'Save a provider API key before requesting a potentially paid observation.', array( 'status' => 400 ) );
 		}
 		$allowed = self::reserve();
 		if ( is_wp_error( $allowed ) ) { return $allowed; }
