@@ -44,7 +44,7 @@ class SCC_Link_Inserter {
 		$target_id = (int) $row['target_post_id'];
 		$anchor    = (string) $row['anchor'];
 
-		if ( ! current_user_can( 'edit_post', $source_id ) ) {
+		if ( ! current_user_can( 'edit_post', $source_id ) && ! ( 'autopilot' === $trigger && class_exists( 'SCC_Jobs' ) && SCC_Jobs::is_authorized_worker() ) ) {
 			return new WP_Error( 'scc_forbidden', __( 'You cannot edit the source post.', 'seo-command-center' ), array( 'status' => 403 ) );
 		}
 

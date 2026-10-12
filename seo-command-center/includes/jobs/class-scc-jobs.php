@@ -28,6 +28,13 @@ class SCC_Jobs {
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
+	/** True only while an authenticated cron/loopback job is being dispatched. */
+	protected static $worker_context = false;
+
+	public static function is_authorized_worker() {
+		return self::$worker_context;
+	}
+
 	/**
 	 * Constructor.
 	 *
@@ -55,8 +62,8 @@ class SCC_Jobs {
 					'payload'      => wp_json_encode( array( 'entry_id' => $entry_id ) ),
 					'attempts'     => 0,
 					'max_attempts' => 3,
-					'scheduled_at' => current_time( 'mysql' ),
-					'created_at'   => current_time( 'mysql' ),
+					'scheduled_at' => gmdate( 'Y-m-d H:i:s' ),
+					'created_at'   => gmdate( 'Y-m-d H:i:s' ),
 				),
 				array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 			);
@@ -95,8 +102,8 @@ class SCC_Jobs {
 				'payload'      => wp_json_encode( $clean ),
 				'attempts'     => 0,
 				'max_attempts' => 1,
-				'scheduled_at' => current_time( 'mysql' ),
-				'created_at'   => current_time( 'mysql' ),
+				'scheduled_at' => gmdate( 'Y-m-d H:i:s' ),
+				'created_at'   => gmdate( 'Y-m-d H:i:s' ),
 			),
 			array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
@@ -237,7 +244,7 @@ class SCC_Jobs {
 			if ( $attempts >= (int) $job['max_attempts'] ) {
 				SCC_DB::update(
 					'jobs',
-					array( 'status' => 'failed', 'attempts' => $attempts, 'last_error' => 'Recovered stale job: worker did not finish', 'finished_at' => current_time( 'mysql' ) ),
+					array( 'status' => 'failed', 'attempts' => $attempts, 'last_error' => 'Recovered stale job: worker did not finish', 'finished_at' => gmdate( 'Y-m-d H:i:s' ) ),
 					array( 'id' => (int) $job['id'] )
 				);
 			} else {
@@ -268,14 +275,21 @@ class SCC_Jobs {
 		// running the same job twice (which would create duplicate output).
 		$claimed = SCC_DB::update(
 			'jobs',
-			array( 'status' => 'processing', 'started_at' => current_time( 'mysql' ) ),
+			array( 'status' => 'processing', 'started_at' => gmdate( 'Y-m-d H:i:s' ) ),
 			array( 'id' => $id, 'status' => 'queued' )
 		);
 		if ( ! $claimed ) {
 			return; // Someone else already claimed it.
 		}
 
-		$result = $this->dispatch( $job );
+		// A scheduled job has execution authority independently of the cookie
+		// user, but only inside the claimed worker's dispatch scope.
+		self::$worker_context = true;
+		try {
+			$result = $this->dispatch( $job );
+		} finally {
+			self::$worker_context = false;
+		}
 
 		if ( is_wp_error( $result ) ) {
 			// Budget exhaustion pauses the whole queue rather than burning retries.
@@ -294,7 +308,7 @@ class SCC_Jobs {
 					'status'      => $status,
 					'attempts'    => $attempts,
 					'last_error'  => substr( $result->get_error_message(), 0, 250 ),
-					'finished_at' => ( 'failed' === $status ) ? current_time( 'mysql' ) : null,
+					'finished_at' => ( 'failed' === $status ) ? gmdate( 'Y-m-d H:i:s' ) : null,
 				),
 				array( 'id' => $id )
 			);
@@ -302,7 +316,7 @@ class SCC_Jobs {
 			return;
 		}
 
-		SCC_DB::update( 'jobs', array( 'status' => 'completed', 'finished_at' => current_time( 'mysql' ), 'last_error' => null ), array( 'id' => $id ) );
+		SCC_DB::update( 'jobs', array( 'status' => 'completed', 'finished_at' => gmdate( 'Y-m-d H:i:s' ), 'last_error' => null ), array( 'id' => $id ) );
 	}
 
 	/**
@@ -345,8 +359,8 @@ class SCC_Jobs {
 					return true; // Post gone; nothing to do (idempotent).
 				}
 				$autopilot = new SCC_Autopilot();
-				$autopilot->run_for_post( $post_id );
-				return true;
+				$result = $autopilot->run_for_post( $post_id );
+				return is_wp_error( $result ) ? $result : true;
 
 			default:
 				return new WP_Error( 'scc_unknown_job', 'Unknown job type.' );

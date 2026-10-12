@@ -83,10 +83,12 @@ class SCC_Autopilot {
 	public function run_for_post( $post_id ) {
 		$engine = new SCC_Link_Engine();
 		$result = $engine->analyze( $post_id, true );
+		if ( is_wp_error( $result ) ) { return $result; }
 
 		$inserted = 0;
 		if ( (bool) SCC_Settings::get( 'autopilot_auto_insert', true ) ) {
 			$inserted = $this->auto_insert( $post_id );
+			if ( is_wp_error( $inserted ) ) { return $inserted; }
 		}
 
 		SCC_Logger::info( 'autopilot', 'Analyzed post', array(
@@ -122,6 +124,7 @@ class SCC_Autopilot {
 
 		$inserter   = new SCC_Link_Inserter();
 		$inserted   = 0;
+		$first_error = null;
 		$per_source = array();
 		foreach ( (array) $rows as $row ) {
 			$src = (int) $row['source_post_id'];
@@ -135,8 +138,11 @@ class SCC_Autopilot {
 			if ( ! is_wp_error( $result ) ) {
 				$inserted++;
 				$per_source[ $src ]++;
+			} elseif ( null === $first_error ) {
+				$first_error = $result;
 			}
 		}
-		return $inserted;
+		// Do not claim success if every attempted insertion failed.
+		return 0 === $inserted && $first_error ? $first_error : $inserted;
 	}
 }
