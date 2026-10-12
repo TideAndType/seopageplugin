@@ -3062,9 +3062,6 @@ assert_true( false !== strpos( $rest_temp_src, '/layout/visual-upload' ) && fals
 $ui_temp_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/layout.php' );
 assert_true( false !== strpos( $ui_temp_src, 'scc-visual-file' ) && false !== strpos( $ui_temp_src, 'scc-visual-finish' ), 'Layout Engine offers temporary screenshot picker and finish/cleanup action' );
 
-echo "\n----------------------------------------\n";
-echo "Tests: {$tests}  Failed: {$failed}\n";
-exit( $failed > 0 ? 1 : 0 );
 
 
 echo "\n== SEO campaign operations: plan limits and deliverables ==\n";
@@ -3090,3 +3087,7 @@ $author_tasks = SCC_Campaign_Operations::task_templates( $authority );
 $author_types = array_map( function ( $t ) { return $t[0]; }, $author_tasks );
 assert_true( in_array( 'backlinks', $author_types, true ), 'authority plan schedules digital PR' );
 assert_true( in_array( 'cro', $author_types, true ), 'authority plan schedules CRO experiment' );
+
+echo "\n----------------------------------------\n";
+echo "Tests: {$tests}  Failed: {$failed}\n";
+exit( $failed > 0 ? 1 : 0 );
