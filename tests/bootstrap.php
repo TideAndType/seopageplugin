@@ -311,6 +311,13 @@ if ( ! function_exists( 'delete_option' ) ) {
 		return true;
 	}
 }
+if ( ! function_exists( 'add_query_arg' ) ) {
+	function add_query_arg( $key, $value, $url ) {
+		return (string) $url . ( false !== strpos( (string) $url, '?' ) ? '&' : '?' ) . rawurlencode( $key ) . '=' . rawurlencode( $value );
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-gbp-performance.php';
+require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ghl-attribution.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-ga4.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-bing-webmaster.php';
 require_once __DIR__ . '/../seo-command-center/includes/integrations/class-scc-clarity.php';
