@@ -16,6 +16,7 @@ class SCC_Campaign_Operations {
 	const METRICS = 'scc_campaign_metrics';
 	const GSC = 'scc_campaign_gsc_history';
 	const GSC_CHECK = 'scc_campaign_gsc_checked';
+	const SERP = 'scc_campaign_serp_history';
 	const NS = 'seo-command/v1';
 
 	public static function plans() {
@@ -73,6 +74,7 @@ class SCC_Campaign_Operations {
 			'/campaign/task' => array( 'POST', 'rest_task' ),
 			'/campaign/metric' => array( 'POST', 'rest_metric' ),
 			'/campaign/gsc-refresh' => array( 'POST', 'rest_gsc_refresh' ),
+			'/campaign/serp-ranks' => array( 'POST', 'rest_serp_ranks' ),
 			'/campaign/report' => array( 'GET', 'rest_report' ),
 			'/campaign/public-citations' => array( 'POST', 'rest_citation_settings' ),
 		) as $route => $mapping ) {
@@ -287,6 +289,50 @@ class SCC_Campaign_Operations {
 		return $snapshot;
 	}
 
+	/**
+	 * Optional PAID, admin-triggered SERP scan; never run automatically.
+	 * Requires explicit click/confirmation, max five targets per call and 20
+	 * per day. WordPress option quotas are best-effort concurrency protection;
+	 * maintain a hard budget at the DataForSEO account level as well.
+	 */
+	public static function scan_serp_ranks( $market_index, $start, $confirmed ) {
+		if ( ! $confirmed ) { return new WP_Error( 'scc_serp_consent', 'Confirm paid SERP scanning before continuing.', array( 'status' => 400 ) ); }
+		$config = self::config();
+		$market_index = max( 0, (int) $market_index );
+		$start = max( 0, (int) $start );
+		if ( empty( $config['markets'][ $market_index ] ) || empty( $config['themes'] ) ) {
+			return new WP_Error( 'scc_serp_config', 'Configure the target market and search themes first.', array( 'status' => 400 ) );
+		}
+		if ( ! class_exists( 'SCC_DataForSEO' ) || ! SCC_DataForSEO::is_connected() ) {
+			return new WP_Error( 'scc_serp_provider', 'Connect DataForSEO before running paid organic SERP checks.', array( 'status' => 400 ) );
+		}
+		$themes = array_slice( $config['themes'], $start, 5 );
+		if ( empty( $themes ) ) { return new WP_Error( 'scc_serp_empty', 'No themes remain at this offset.', array( 'status' => 400 ) ); }
+		$day_key = 'scc_campaign_serp_paid_' . gmdate( 'Ymd' );
+		$used = (int) get_option( $day_key, 0 );
+		if ( $used + count( $themes ) > 20 ) { return new WP_Error( 'scc_serp_daily_limit', 'Daily limit of 20 paid organic requests reached.', array( 'status' => 429 ) ); }
+		$host = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) ) );
+		$market = $config['markets'][ $market_index ];
+		$results = array();
+		foreach ( $themes as $theme ) {
+			// Reserve a request before the network call; even a failed paid task
+			// may incur provider charges.
+			$used++;
+			update_option( $day_key, $used, false );
+			$measured = SCC_DataForSEO::domain_position( $theme, $market, $host );
+			if ( is_wp_error( $measured ) ) {
+				$results[] = array( 'keyword' => $theme, 'location' => $market, 'state' => 'unavailable', 'rank' => null, 'error' => $measured->get_error_message() );
+			} else {
+				$results[] = $measured;
+			}
+		}
+		$snap = array( 'captured_at' => gmdate( 'c' ), 'market' => $market, 'offset' => $start, 'domain' => $host, 'provider' => 'DataForSEO', 'paid_requests_reserved_today' => $used, 'results' => $results );
+		$history = self::saved( self::SERP );
+		$history[] = $snap;
+		self::save( self::SERP, array_slice( $history, -80 ) );
+		return $snap;
+	}
+
 	public static function weekly_maintenance() {
 		$config = self::config();
 		if ( empty( $config['name'] ) ) { return; }
@@ -303,12 +349,14 @@ class SCC_Campaign_Operations {
 		$metrics = array_values( array_filter( self::metrics(), function ( $m ) use ( $month ) { return ( $m['month'] ?? '' ) === $month; } ) );
 		$done = count( array_filter( $tasks, function ( $t ) { return 'done' === $t['status']; } ) );
 		$history = array_values( array_filter( self::history(), function ( $h ) use ( $month ) { return substr( (string) ( $h['captured_at'] ?? '' ), 0, 7 ) === $month; } ) );
+		$serp = array_values( array_filter( self::saved( self::SERP ), function ( $h ) use ( $month ) { return substr( (string) ( $h['captured_at'] ?? '' ), 0, 7 ) === $month; } ) );
 		return array(
 			'month' => $month,
 			'campaign' => self::config(),
 			'deliverables' => array( 'completed' => $done, 'total' => count( $tasks ), 'tasks' => $tasks ),
 			'measurements' => $metrics,
 			'search_console' => $history ? end( $history ) : null,
+			'organically_measured_serps' => array_slice( $serp, -10 ),
 			'connections' => self::connections(),
 			'disclaimer' => 'GSC positions are impression-weighted averages, not exact rank. Manual metrics are unverified and require independent evidence.',
 		);
@@ -352,6 +400,11 @@ class SCC_Campaign_Operations {
 	}
 	public static function rest_gsc_refresh() {
 		$result = self::refresh_gsc( true );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_serp_ranks( $request ) {
+		$p = self::input( $request );
+		$result = self::scan_serp_ranks( $p['market_index'] ?? 0, $p['start'] ?? 0, ! empty( $p['confirm_paid'] ) );
 		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
 	public static function rest_report( $request ) {
