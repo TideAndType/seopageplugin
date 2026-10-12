@@ -102,6 +102,21 @@
 		} else {
 			node('p', box, 'No Search Console snapshot for this month. Connect GSC and click Refresh Search Console. An absent theme is not assumed to rank zero.');
 		}
+		node('h4', host, 'Exact organic SERP checks (paid DataForSEO)');
+		var serp = r.organically_measured_serps || [];
+		if (!serp.length) { node('p', host, 'No paid organic SERP measurements recorded in this month.'); }
+		serp.forEach(function (snap) {
+			node('p', host, snap.market + ' · ' + snap.captured_at + ' · five or fewer measured targets');
+			var table = node('table', host, null, 'widefat striped'), header = node('tr', node('thead', table));
+			['Keyword', 'Status', 'Exact observed rank'].forEach(function (text) { node('th', header, text); });
+			var body = node('tbody', table);
+			(snap.results || []).forEach(function (metric) {
+				var row = node('tr', body);
+				node('td', row, metric.keyword);
+				node('td', row, metric.state === 'measured_not_found' ? 'Not found in measured top 100' : metric.state);
+				node('td', row, metric.rank === null ? '—' : fmt(metric.rank));
+			});
+		});
 		node('h4', host, 'Other evidence-based outcomes (manual, not independently verified)');
 		if (!r.measurements || !r.measurements.length) {
 			node('p', host, 'No conversion, Maps, GBP, earned-link or AI citation measurements have been recorded.');
@@ -138,9 +153,13 @@
 		return request('/report?month=' + encodeURIComponent(value), 'GET').then(renderReport).catch(showFailure);
 	}
 	function loadState() {
-		return request('/campaign'.replace('/campaign', ''), 'GET').then(function (data) {
+		return request('', 'GET').then(function (data) {
 			state = data;
 			fillConfig(data.campaign || {});
+			var marketSelect = byId('scc-campaign-serp-market'); clear(marketSelect);
+			(data.campaign && data.campaign.markets || []).forEach(function (market, i) {
+				var option = node('option', marketSelect, market); option.value = String(i);
+			});
 			var settings = byId('scc-campaign-public-citations');
 			settings.elements.enabled.checked = !!data.public_citations.enabled;
 			settings.elements.paid.checked = !!data.public_citations.paid;
@@ -170,6 +189,16 @@
 	byId('scc-campaign-gsc').addEventListener('click', function (evt) {
 		var b = evt.currentTarget; b.disabled = true;
 		request('/gsc-refresh', 'POST').then(function () { flash('New Search Console snapshot recorded.'); loadReport(); })
+			.catch(showFailure).finally(function () { b.disabled = false; });
+	});
+	byId('scc-campaign-serp-run').addEventListener('click', function (evt) {
+		if (!window.confirm('This runs up to FIVE PAID DataForSEO organic SERP requests. Continue?')) return;
+		var b = evt.currentTarget; b.disabled = true;
+		request('/serp-ranks', 'POST', {
+			market_index: Number(byId('scc-campaign-serp-market').value || 0),
+			start: Math.max(0, Number(byId('scc-campaign-serp-offset').value || 1) - 1),
+			confirm_paid: true
+		}).then(function () { flash('SERP rank check recorded.'); loadReport(); })
 			.catch(showFailure).finally(function () { b.disabled = false; });
 	});
 	byId('scc-campaign-load-report').addEventListener('click', loadReport);

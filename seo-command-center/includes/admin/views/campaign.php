@@ -2,6 +2,7 @@
 /** TideOrbit SEO Campaign Operations administrative screen. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 ?>
+<style>@media print { body * { visibility: hidden !important; } #scc-campaign-report, #scc-campaign-report * { visibility: visible !important; } #scc-campaign-report { position: absolute; top: 0; left: 0; width: 100%; } }</style>
 <div class="wrap scc-wrap" id="scc-campaign-root">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'SEO Campaign Operations', 'seo-command-center' ); ?></h1>
@@ -34,6 +35,12 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 			<button type="button" class="button" id="scc-campaign-print">Print / save PDF</button>
 			<button type="button" class="button" id="scc-campaign-gsc">Refresh Search Console</button>
 		</p>
+		<p><strong>Optional paid organic rank check</strong> (up to 5 queries per request; 20/day):
+			<label>Market <select id="scc-campaign-serp-market"></select></label>
+			<label>Start at search theme # <input type="number" id="scc-campaign-serp-offset" value="1" min="1" max="50" class="small-text"></label>
+			<button type="button" class="button" id="scc-campaign-serp-run">Run measured SERP check</button>
+		</p>
+		<p class="description">Uses paid DataForSEO live results, only after confirmation. This is separate from Search Console average position and from the Google Maps grid.</p>
 		<div id="scc-campaign-report" aria-live="polite"></div>
 	</section>
 	<section class="scc-card">
