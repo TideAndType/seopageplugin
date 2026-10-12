@@ -209,6 +209,19 @@ class SCC_AI_Page_Improvements {
 		update_option( 'scc_ai_page_improvement_briefs', array_slice( $briefs, 0, 30, true ), false );
 		return $brief;
 	}
+	public static function for_month( $month ) {
+		$stored = get_option( 'scc_ai_page_improvement_briefs', array() );
+		if ( ! is_array( $stored ) ) { return array(); }
+		$ids = array();
+		foreach ( SCC_AI_Opportunities::for_month( $month ) as $row ) {
+			if ( ! empty( $row['id'] ) ) { $ids[$row['id']] = true; }
+		}
+		$out = array();
+		foreach ( $stored as $id => $brief ) {
+			if ( isset( $ids[$id] ) && is_array( $brief ) ) { $out[$id] = $brief; }
+		}
+		return $out;
+	}
 	public static function brief( $id ) {
 		$briefs = get_option( 'scc_ai_page_improvement_briefs', array() );
 		$entry = is_array( $briefs ) ? ( $briefs[$id] ?? null ) : null;
