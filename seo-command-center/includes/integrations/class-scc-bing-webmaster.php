@@ -200,6 +200,16 @@ class SCC_Bing_Webmaster {
 		}
 		if ( ! self::connected() ) { return new WP_Error( 'scc_bing_not_connected', 'Configure Bing Webmaster first.', array( 'status' => 400 ) ); }
 		$site = self::site();
+		$verified_sites = self::sites();
+		if ( is_wp_error( $verified_sites ) ) { return $verified_sites; }
+		$verified = false;
+		foreach ( $verified_sites as $candidate ) {
+			if ( ! empty( $candidate['verified'] ) && untrailingslashit( $candidate['url'] ) === untrailingslashit( $site ) ) {
+				$verified = true;
+				break;
+			}
+		}
+		if ( ! $verified ) { return new WP_Error( 'scc_bing_verify', 'This exact URL is not a verified site for the configured Bing API key.', array( 'status' => 403 ) ); }
 		$traffic = self::request( 'GetRankAndTrafficStats', array( 'siteUrl' => $site ) );
 		if ( is_wp_error( $traffic ) ) { return $traffic; }
 		$queries = self::request( 'GetQueryStats', array( 'siteUrl' => $site ) );

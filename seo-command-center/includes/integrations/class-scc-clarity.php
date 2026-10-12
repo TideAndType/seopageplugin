@@ -15,7 +15,7 @@ class SCC_Clarity {
 	const STORE = 'scc_clarity_daily_snapshots';
 	const PROJECT = 'scc_clarity_project_id';
 	const LAST = 'scc_clarity_last_capture';
-	const QUOTA_PREFIX = 'scc_clarity_api_requests_';
+	const QUOTA_KEY = 'scc_clarity_api_quota';
 	const MAX_REQUESTS = 8; // Leave two requests of Microsoft's 10 for manual use.
 
 	protected static function creds() {
@@ -40,7 +40,7 @@ class SCC_Clarity {
 			'read_only' => true,
 			'tracking_script_installed_by_tideorbit' => false,
 			'last_capture' => (int) get_option( self::LAST, 0 ),
-			'requests_reserved_today' => (int) get_option( self::quota_key(), 0 ),
+			'requests_reserved_today' => self::quota_used(),
 			'request_limit' => self::MAX_REQUESTS,
 		);
 	}
@@ -71,20 +71,21 @@ class SCC_Clarity {
 		return self::state();
 	}
 
-	protected static function quota_key() {
-		return self::QUOTA_PREFIX . gmdate( 'Ymd' );
+	protected static function quota_used() {
+		$quota = get_option( self::QUOTA_KEY, array() );
+		return is_array( $quota ) && ( $quota['day'] ?? '' ) === gmdate( 'Ymd' ) ? (int) ( $quota['count'] ?? 0 ) : 0;
 	}
 
 	/** Best effort local quota: Microsoft still enforces its own project quota. */
 	public static function quota_available() {
-		return (int) get_option( self::quota_key(), 0 ) < self::MAX_REQUESTS;
+		return self::quota_used() < self::MAX_REQUESTS;
 	}
 
 	protected static function reserve_request() {
 		if ( ! self::quota_available() ) {
 			return new WP_Error( 'scc_clarity_quota', 'TideOrbit daily Clarity API budget reached; try tomorrow.', array( 'status' => 429 ) );
 		}
-		update_option( self::quota_key(), (int) get_option( self::quota_key(), 0 ) + 1, false );
+		update_option( self::QUOTA_KEY, array( 'day' => gmdate( 'Ymd' ), 'count' => self::quota_used() + 1 ), false );
 		return true;
 	}
 
@@ -115,7 +116,9 @@ class SCC_Clarity {
 				'truncated' => count( $block['information'] ) > 8,
 			);
 		}
-		if ( ! $metrics ) {
+		$has_numeric_measurement = false;
+		foreach ( $metrics as $record ) { if ( ! empty( $record['rows'] ) ) { $has_numeric_measurement = true; break; } }
+		if ( ! $metrics || ! $has_numeric_measurement ) {
 			return new WP_Error( 'scc_clarity_empty', 'Clarity response contained no supported measurable behavior metrics.', array( 'status' => 502 ) );
 		}
 		return array(
