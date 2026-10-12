@@ -83,6 +83,9 @@ class SCC_Campaign_Operations {
 			'/campaign/ai-opportunities/refresh' => array( 'POST', 'rest_ai_opportunities_refresh' ),
 			'/campaign/ai-opportunities/review' => array( 'POST', 'rest_ai_opportunities_review' ),
 			'/campaign/ai-opportunities/handoff' => array( 'POST', 'rest_ai_opportunities_handoff' ),
+			'/campaign/ai-page/audit' => array( 'POST', 'rest_ai_page_audit' ),
+			'/campaign/ai-page/brief' => array( 'POST', 'rest_ai_page_brief' ),
+			'/campaign/ai-page/draft' => array( 'POST', 'rest_ai_page_draft' ),
 			'/campaign/ai-opportunities/pages' => array( 'GET', 'rest_ai_opportunities_pages' ),
 			'/campaign/ai-providers/key' => array( 'POST', 'rest_ai_provider_key' ),
 			'/campaign/ai-providers/disconnect' => array( 'POST', 'rest_ai_provider_disconnect' ),
@@ -491,6 +494,7 @@ class SCC_Campaign_Operations {
 			'ai_citation_observations' => class_exists( 'SCC_AI_Citation_Monitor' ) ? SCC_AI_Citation_Monitor::monthly( $month ) : array(),
 			'ai_visibility_summary' => class_exists( 'SCC_AI_Citation_Monitor' ) ? SCC_AI_Citation_Monitor::summary( $month ) : array(),
 			'ai_opportunities' => class_exists( 'SCC_AI_Opportunities' ) ? SCC_AI_Opportunities::for_month( $month ) : array(),
+			'ai_page_briefs' => class_exists( 'SCC_AI_Page_Improvements' ) ? SCC_AI_Page_Improvements::for_month( $month ) : array(),
 			'connections' => self::connections(),
 			'citations' => array_values( self::citations() ),
 			'outreach' => array_values( self::outreach() ),
@@ -730,6 +734,31 @@ class SCC_Campaign_Operations {
 		if ( is_wp_error( $allowed ) ) { return $allowed; }
 		$p = self::input( $request );
 		$r = SCC_AI_Opportunities::handoff( (string) ( $p['id'] ?? '' ), $p );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_page_audit( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$r = SCC_AI_Page_Improvements::audit( sanitize_text_field( (string) ( $p['id'] ?? '' ) ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_page_brief( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		if ( empty( $p['confirm_local_ai'] ) ) {
+			return new WP_Error( 'scc_ai_page_consent', 'Confirm sending existing page text to your configured LM Studio endpoint.', array( 'status' => 400 ) );
+		}
+		$r = SCC_AI_Page_Improvements::generate_brief( sanitize_text_field( (string) ( $p['id'] ?? '' ) ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_page_draft( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		if ( empty( $p['confirm_draft'] ) ) { return new WP_Error( 'scc_ai_draft_consent', 'Confirm separate draft creation before writing WordPress data.', array( 'status' => 400 ) ); }
+		$r = SCC_AI_Page_Improvements::create_draft( sanitize_text_field( (string) ( $p['id'] ?? '' ) ) );
 		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
 	}
 	public static function rest_ai_opportunities_pages( $request ) {
