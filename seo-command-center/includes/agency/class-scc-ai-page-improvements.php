@@ -319,6 +319,8 @@ class SCC_AI_Page_Improvements {
 		if ( $has_elementor ) {
 			update_post_meta( $new_post, '_elementor_data', wp_slash( wp_json_encode( $tree ) ) );
 			update_post_meta( $new_post, '_elementor_edit_mode', 'builder' );
+			$type = get_post_meta( (int) $post->ID, '_elementor_template_type', true );
+			update_post_meta( $new_post, '_elementor_template_type', is_string( $type ) && '' !== $type ? $type : ( 'page' === $post->post_type ? 'wp-page' : 'wp-post' ) );
 			$version = get_post_meta( (int) $post->ID, '_elementor_version', true );
 			if ( $version ) { update_post_meta( $new_post, '_elementor_version', $version ); }
 			$settings = get_post_meta( (int) $post->ID, '_elementor_page_settings', true );
