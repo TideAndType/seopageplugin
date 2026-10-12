@@ -185,6 +185,50 @@ class SCC_DataForSEO {
 	 * @param int    $limit    Maximum organic results.
 	 * @return array|WP_Error List of {url,title,snippet}.
 	 */
+
+	/**
+	 * One paid, exact-query Google AI Overview or Google AI Mode response.
+	 * The endpoint is fixed; never accept arbitrary paths from the client.
+	 *
+	 * @return array|WP_Error DataForSEO parsed results array.
+	 */
+	public static function ai_serp_response( $keyword, $location, $surface ) {
+		$keyword = sanitize_text_field( (string) $keyword );
+		$location = sanitize_text_field( (string) $location );
+		if ( ! in_array( $surface, array( 'google_ai_overview', 'google_ai_mode' ), true ) ||
+			strlen( $keyword ) < 3 || strlen( $keyword ) > 180 || strlen( $location ) < 3 || strlen( $location ) > 120 ) {
+			return new WP_Error( 'scc_dfs_ai_parameters', 'Unsupported AI search measurement.' );
+		}
+		$path = 'google_ai_mode' === $surface ? '/serp/google/ai_mode/live/advanced' : '/serp/google/organic/live/advanced';
+		$task = array(
+			'keyword' => $keyword, 'location_name' => $location,
+			'language_code' => 'en', 'device' => 'desktop',
+		);
+		if ( 'google_ai_overview' === $surface ) {
+			$task['depth'] = 10;
+			$task['load_async_ai_overview'] = true;
+		}
+		return self::post( $path, $task );
+	}
+
+	/**
+	 * Paid indexed Google AI Overview / ChatGPT source citation count.
+	 * DataForSEO sample dataset, NOT a real-time representative audit of all
+	 * end-user AI answers. Compare time-series snapshots only with that caveat.
+	 */
+	public static function ai_cited_domain_metrics( $domain, $platform ) {
+		$domain = strtolower( preg_replace( '/^www\./', '', trim( (string) $domain ) ) );
+		if ( ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}$/', $domain ) ||
+			! in_array( $platform, array( 'google', 'chat_gpt' ), true ) ) {
+			return new WP_Error( 'scc_dfs_ai_target', 'Unsupported domain or LLM data platform.' );
+		}
+		return self::post( '/ai_optimization/llm_mentions/target_metrics/live', array(
+			'platform' => $platform, 'location_name' => 'United States',
+			'language_code' => 'en',
+			'target' => array( array( 'domain' => $domain, 'search_scope' => array( 'sources' ) ) ),
+		) );
+	}
+
 	public static function serp_search( $query, $location = 'United States', $language = 'en', $limit = 20 ) {
 		$limit = max( 1, min( 100, (int) $limit ) );
 		$result = self::post(

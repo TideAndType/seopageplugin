@@ -118,6 +118,31 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		<p class="description">Clarity exports cover only the preceding 24–72 hours and allow up to 10 API calls per project per day. TideOrbit captures one trailing 24-hour snapshot daily, keeps up to 90, and never claims they are complete monthly unique-user totals. Ensure your site's consent and privacy setup is appropriate.</p>
 	</section>
 	<section class="scc-card">
+		<h2>AI citation monitoring · paid evidence checks</h2>
+		<p class="description">Measure real observed citations using DataForSEO. Save your exact brand name and optional aliases first. Google AI Overview/AI Mode checks inspect one specific question and market; ChatGPT/Google dataset checks count domain citations in DataForSEO's indexed sample, not every public AI conversation. No automated billing or cron scans.</p>
+		<form id="scc-campaign-ai-config">
+			<p><label><strong>Business / brand name</strong><br><input name="brand" class="regular-text" required placeholder="Your business name"></label></p>
+			<p><label><strong>Optional brand aliases</strong><br><textarea name="aliases" class="large-text" rows="2" placeholder="One alias per line"></textarea></label></p>
+			<button type="submit" class="button">Save brand identification</button>
+		</form>
+		<p class="description">Target domain is automatically derived from this WordPress site: <strong id="scc-campaign-ai-domain">—</strong>.</p>
+		<form id="scc-campaign-ai-check">
+			<p><label><strong>Measurement surface</strong><br>
+				<select name="surface" id="scc-campaign-ai-surface">
+					<option value="google_ai_overview">Google AI Overview · exact live query</option>
+					<option value="google_ai_mode">Google AI Mode · exact live query</option>
+					<option value="chatgpt_dataset">ChatGPT · sampled indexed domain citations</option>
+					<option value="google_ai_dataset">Google AI Overviews · sampled indexed domain citations</option>
+				</select>
+			</label></p>
+			<p><label><strong>Search question / query (live query modes)</strong><br><input type="text" name="keyword" class="large-text" maxlength="180" placeholder="best managed IT support in Spokane"></label></p>
+			<p><label><strong>Google search location (live query modes)</strong><br><input type="text" name="market" class="regular-text" maxlength="120" placeholder="United States"></label></p>
+			<p><button type="submit" id="scc-campaign-ai-run" class="button button-primary">Run paid AI visibility check</button></p>
+		</form>
+		<p><strong>DataForSEO:</strong> <span id="scc-campaign-ai-status">Not connected</span>. <strong>Requests:</strong> <span id="scc-campaign-ai-quota">0 / 10</span> today.</p>
+		<p class="description">Each click triggers one paid DataForSEO request. Daily site soft cap: 10 requests, without a hard billing guarantee. Some asynchronous Google AI Overviews may cost extra. Gemini and Perplexity remain unmeasured here until a supported, verified connection exists.</p>
+	</section>
+	<section class="scc-card">
 		<h2>Monthly SEO report</h2>
 		<p><label>Report month <input type="month" id="scc-campaign-month"></label>
 			<button type="button" class="button" id="scc-campaign-load-report">Load report</button>
@@ -177,7 +202,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 	<section class="scc-card">
 		<h2>Connections and safety</h2>
 		<div id="scc-campaign-connections"></div>
-		<p class="description">Only authenticated, explicitly configured integrations populate verified measurements. Google Business Profile management actions, real AI citation checks and independently verified CRM attribution are not implemented.</p>
+		<p class="description">Only authenticated, explicitly configured integrations populate verified measurements. Google Business Profile management, Perplexity/Gemini AI citation measurements and independently verified CRM causation are not implemented. AI citation measurements are opt-in paid DataForSEO observations.</p>
 		<form id="scc-campaign-public-citations">
 			<p><label><input type="checkbox" name="enabled"> Enable the public citation-scan endpoint</label></p>
 			<p><label><input type="checkbox" name="paid"> Also allow paid DataForSEO public requests (maximum 10/day)</label></p>

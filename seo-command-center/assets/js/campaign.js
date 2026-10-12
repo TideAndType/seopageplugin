@@ -125,6 +125,34 @@
 		node('h3', host, (c.name || 'Campaign') + ' · ' + r.month);
 		var dl = r.deliverables || {};
 		node('p', host, 'Completed deliverables: ' + dl.completed + ' / ' + dl.total);
+		var ai = r.ai_citation_observations || [];
+		node('h4', host, 'Observed AI visibility and citations');
+		if (!ai.length) {
+			node('p', host, 'No paid AI citation measurements recorded for this month; unavailable does not mean absent.');
+		} else {
+			var ait = node('table', host, null, 'widefat striped'), aih = node('tr', node('thead', ait));
+			['Captured', 'Source/surface', 'Question or dataset', 'Brand mentioned', 'Domain cited', 'Citation count', 'Evidence'].forEach(function (x) { node('th', aih, x); });
+			var aib = node('tbody', ait);
+			ai.slice(-40).forEach(function (a) {
+				var tr = node('tr', aib);
+				node('td', tr, a.captured_at);
+				node('td', tr, a.surface + ' · ' + a.source);
+				node('td', tr, a.keyword ? a.keyword + ' · ' + a.market : 'US indexed response sample');
+				node('td', tr, a.brand_mentioned === undefined ? 'Not measured' : a.brand_mentioned ? 'Yes' : 'No');
+				node('td', tr, a.domain_cited === undefined ? 'Aggregate sample' : a.domain_cited ? 'Yes' : a.state === 'ai_result_not_shown' ? 'AI answer not returned' : 'No');
+				node('td', tr, a.cited_domain_mentions === undefined ? (a.citations || []).length : fmt(a.cited_domain_mentions));
+				var td = node('td', tr);
+				var cites = (a.citations || []).slice(0, 5);
+				if (!cites.length) { node('span', td, a.state === 'measured_sample' ? 'DataForSEO aggregate · not individual citations' : 'No matching cited URLs'); }
+				cites.forEach(function (c) {
+					if (!/^https?:\/\//i.test(c.url)) return;
+					var link = node('a', td, c.title || c.url);
+					link.href = c.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+					node('span', td, ' · ');
+				});
+			});
+			node('p', host, 'Live SERP checks show one observed answer. ChatGPT and Google indexed counts reflect DataForSEO samples, NOT all user responses, impressions, global market share or conversions.', 'description');
+		}
 		var gsc = r.search_console;
 		var box = node('div', host);
 		node('h4', box, 'Search Console measurements');
@@ -283,6 +311,13 @@
 		return request('', 'GET').then(function (data) {
 			state = data;
 			fillConfig(data.campaign || {});
+			var ai = data.ai_citations || {};
+			var aiCfg = ai.config || {};
+			byId('scc-campaign-ai-config').elements.brand.value = aiCfg.brand || '';
+			byId('scc-campaign-ai-config').elements.aliases.value = (aiCfg.aliases || []).join('\n');
+			byId('scc-campaign-ai-domain').textContent = aiCfg.domain || 'Not configured';
+			byId('scc-campaign-ai-status').textContent = ai.dataforseo_connected ? 'Connected for explicit paid scans' : 'Connect DataForSEO first';
+			byId('scc-campaign-ai-quota').textContent = (ai.paid_calls_today || 0) + ' / ' + (ai.daily_soft_cap || 10);
 			var gbp = data.gbp || {};
 			byId('scc-campaign-gbp-location').elements.location_id.value = gbp.location_id || '';
 			byId('scc-campaign-gbp-status').textContent = (gbp.status || 'not_available').replace(/_/g, ' ');
@@ -442,6 +477,34 @@
 		var button = evt.currentTarget; button.disabled = true;
 		request('/ga4/disconnect', 'POST').then(function () {
 			flash('GA4 token and saved GA4 snapshots removed locally. Search Console was not changed.');
+			return loadState();
+		}).catch(showFailure).finally(function () { button.disabled = false; });
+	});
+	byId('scc-campaign-ai-config').addEventListener('submit', function (event) {
+		event.preventDefault();
+		var form = event.currentTarget;
+		request('/ai-citations/config', 'POST', {brand: form.elements.brand.value, aliases: form.elements.aliases.value}).then(function () {
+			flash('AI search brand identity saved. Previous history is cleared if the identity changes.');
+			return loadState();
+		}).catch(showFailure);
+	});
+	byId('scc-campaign-ai-check').addEventListener('submit', function (event) {
+		event.preventDefault();
+		var form = event.currentTarget;
+		var surface = form.elements.surface.value;
+		var isDataset = /_dataset$/.test(surface);
+		var message = isDataset
+			? 'Run ONE PAID DataForSEO indexed-response citation count? This is a sampled provider dataset, not live ChatGPT consumer traffic.'
+			: 'Run ONE PAID DataForSEO live Google AI result check? Asynchronous AI Overviews may have an additional API charge.';
+		if (!window.confirm(message)) return;
+		var button = byId('scc-campaign-ai-run'); button.disabled = true;
+		request('/ai-citations/measure', 'POST', {
+			surface: surface,
+			keyword: form.elements.keyword.value,
+			market: form.elements.market.value || 'United States',
+			confirm_paid: true
+		}).then(function (result) {
+			flash('Recorded paid ' + result.source + ' result: ' + result.state);
 			return loadState();
 		}).catch(showFailure).finally(function () { button.disabled = false; });
 	});

@@ -78,6 +78,8 @@ class SCC_Campaign_Operations {
 			'/campaign/task' => array( 'POST', 'rest_task' ),
 			'/campaign/metric' => array( 'POST', 'rest_metric' ),
 			'/campaign/gsc-refresh' => array( 'POST', 'rest_gsc_refresh' ),
+			'/campaign/ai-citations/config' => array( 'POST', 'rest_ai_citation_config' ),
+			'/campaign/ai-citations/measure' => array( 'POST', 'rest_ai_citation_measure' ),
 			'/campaign/ga4/property' => array( 'POST', 'rest_ga4_property' ),
 			'/campaign/ga4/auth-url' => array( 'POST', 'rest_ga4_auth_url' ),
 			'/campaign/ga4/refresh' => array( 'POST', 'rest_ga4_refresh' ),
@@ -479,10 +481,11 @@ class SCC_Campaign_Operations {
 			'bing_webmaster' => class_exists( 'SCC_Bing_Webmaster' ) ? SCC_Bing_Webmaster::monthly( $month ) : null,
 			'clarity_insights' => class_exists( 'SCC_Clarity' ) ? SCC_Clarity::monthly( $month ) : array(),
 			'organically_measured_serps' => array_slice( $serp, -10 ),
+			'ai_citation_observations' => class_exists( 'SCC_AI_Citation_Monitor' ) ? SCC_AI_Citation_Monitor::monthly( $month ) : array(),
 			'connections' => self::connections(),
 			'citations' => array_values( self::citations() ),
 			'outreach' => array_values( self::outreach() ),
-			'disclaimer' => 'GBP clicks are interactions, not confirmed calls or leads. HighLevel opportunity sources are CRM labels, not proven SEO attribution; won value is not collected revenue. GA4 key events are not necessarily leads. GSC and Bing use separate search metrics. Manual values remain unverified.' ,
+			'disclaimer' => 'AI cited-domain counts come from DataForSEO indexed samples, not global ChatGPT impressions; live AI results vary by time and location. GBP clicks are interactions, HighLevel source labels are not proof of SEO causation, and manual metrics remain unverified.' ,
 		);
 	}
 
@@ -494,7 +497,7 @@ class SCC_Campaign_Operations {
 			'bing' => class_exists( 'SCC_Bing_Webmaster' ) ? SCC_Bing_Webmaster::status() : 'not_available',
 			'clarity' => class_exists( 'SCC_Clarity' ) ? SCC_Clarity::state()['status'] : 'not_available',
 			'crm' => class_exists( 'SCC_GHL_Attribution' ) ? SCC_GHL_Attribution::state()['status'] : 'not_available',
-			'ai_citations' => 'not_connected',
+			'ai_citations' => class_exists( 'SCC_AI_Citation_Monitor' ) ? ( SCC_DataForSEO::is_connected() ? 'paid_on_demand_ready' : 'needs_dataforseo' ) : 'not_available',
 			'paid_citation_public' => (bool) get_option( 'scc_citation_public_paid_enabled', false ),
 		);
 	}
@@ -505,6 +508,7 @@ class SCC_Campaign_Operations {
 			'campaign' => self::config(),
 			'report' => self::report( gmdate( 'Y-m' ) ),
 			'history' => self::history(),
+			'ai_citations' => class_exists( 'SCC_AI_Citation_Monitor' ) ? SCC_AI_Citation_Monitor::state() : array( 'status' => 'not_available' ),
 			'ga4' => class_exists( 'SCC_GA4' ) ? SCC_GA4::state() : array( 'status' => 'not_available' ),
 			'gbp' => class_exists( 'SCC_GBP_Performance' ) ? SCC_GBP_Performance::state() : array( 'status' => 'not_available' ),
 			'ghl' => class_exists( 'SCC_GHL_Attribution' ) ? SCC_GHL_Attribution::state() : array( 'status' => 'not_available' ),
@@ -673,6 +677,20 @@ class SCC_Campaign_Operations {
 		if ( is_wp_error( $allowed ) ) { return $allowed; }
 		return rest_ensure_response( SCC_GHL_Attribution::disconnect() );
 	}
+
+	public static function rest_ai_citation_config( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$result = SCC_AI_Citation_Monitor::configure( self::input( $request ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+	public static function rest_ai_citation_measure( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$result = SCC_AI_Citation_Monitor::measure( self::input( $request ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
 	public static function rest_report( $request ) {
 		$month = sanitize_text_field( (string) $request->get_param( 'month' ) );
 		return rest_ensure_response( self::report( $month ) );

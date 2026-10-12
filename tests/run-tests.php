@@ -3269,6 +3269,72 @@ $ghl_disconnected = SCC_GHL_Attribution::disconnect();
 assert_eq( 'not_connected', $ghl_disconnected['status'], 'HighLevel private token removed on disconnect' );
 assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'HighLevel disconnect leaves Google Search Console grant intact' );
 
+echo "\n== Actual AI search citation measurements and sample states ==\n";
+$GLOBALS['scc_test_options'][SCC_AI_Citation_Monitor::QUOTA] = array( 'day' => gmdate( 'Ymd' ), 'used' => 9 );
+assert_eq( 9, SCC_AI_Citation_Monitor::quota_used(), 'AI paid request quota tracks only current day' );
+$GLOBALS['scc_test_options'][SCC_AI_Citation_Monitor::QUOTA] = array( 'day' => '20240101', 'used' => 10 );
+assert_eq( 0, SCC_AI_Citation_Monitor::quota_used(), 'AI daily quota resets without accumulating WordPress option keys' );
+assert_eq( true, SCC_AI_Citation_Monitor::is_domain( 'news.example.com', 'example.com' ), 'cited first-party subdomains count' );
+assert_eq( true, SCC_AI_Citation_Monitor::is_domain( 'www.example.com', 'example.com' ), 'www alias counts' );
+assert_eq( false, SCC_AI_Citation_Monitor::is_domain( 'notexample.com', 'example.com' ), 'lookalike domain does not count' );
+assert_eq( false, SCC_AI_Citation_Monitor::is_domain( 'example.com.evil.net', 'example.com' ), 'suffix phishing URL does not count' );
+$invalid_ai = SCC_AI_Citation_Monitor::ai_serp_observation( array(), 'best IT', 'United States', 'example.com', array( 'Tide Type' ), 'google_ai_overview' );
+assert_true( is_wp_error( $invalid_ai ), 'missing provider SERP structure does not become no-AI claim' );
+$no_ai = SCC_AI_Citation_Monitor::ai_serp_observation(
+	array( array( 'items' => array( array( 'type' => 'organic', 'url' => 'https://example.com/' ) ) ) ),
+	'best IT', 'United States', 'example.com', array( 'Tide Type' ), 'google_ai_overview'
+);
+assert_eq( 'ai_result_not_shown', $no_ai['state'], 'valid measured organic SERP without AI answer uses not-shown state' );
+assert_eq( false, $no_ai['domain_cited'], 'organic ranked page is not counted as AI citation' );
+$mode_direct = SCC_AI_Citation_Monitor::ai_serp_observation( array( array( 'ai_overview' => array( 'markdown' => 'Tide Type was mentioned.', 'references' => array( array( 'url' => 'https://example.com/a' ) ) ) ) ), 'best IT', 'United States', 'example.com', array( 'Tide Type' ), 'google_ai_mode' );
+assert_eq( 'measured', $mode_direct['state'], 'AI Mode response with an explicit AI object can be measured without unrelated items' );
+assert_eq( true, $mode_direct['domain_cited'], 'direct AI Mode cited source counted' );
+$ai_sample = array( array( 'items' => array(
+	array( 'type' => 'organic', 'url' => 'https://example.com/', 'rank_absolute' => 1 ),
+	array( 'type' => 'ai_overview', 'markdown' => 'Tide Type is one of the firms.',
+		'references' => array(
+			array( 'url' => 'https://www.example.com/seo/', 'title' => 'Services' ),
+			array( 'url' => 'https://example.com.evil.net/seo', 'title' => 'Wrong domain' ),
+		),
+		'items' => array(
+			array( 'type' => 'ai_overview_element', 'text' => 'Tide Type can help.',
+				'references' => array( array( 'url' => 'https://www.example.com/seo/', 'title' => 'Duplicate reference' ) ) ),
+		),
+	),
+) ) );
+$observation = SCC_AI_Citation_Monitor::ai_serp_observation( $ai_sample, 'best IT', 'United States', 'example.com', array( 'Tide Type' ), 'google_ai_overview' );
+assert_eq( 'measured', $observation['state'], 'actual Google AIO is recorded as measured' );
+assert_eq( true, $observation['brand_mentioned'], 'business name detected in actual AI answer' );
+assert_eq( true, $observation['domain_cited'], 'first-party cited URLs counted' );
+assert_eq( 1, count( $observation['citations'] ), 'matching duplicate sources collapsed' );
+assert_eq( 'https://www.example.com/seo/', $observation['citations'][0]['url'], 'cited source URL preserved' );
+assert_eq( 'dataforseo_live_serp', $observation['source'], 'live AI observation retains source provenance' );
+$brand_not_cited = SCC_AI_Citation_Monitor::ai_serp_observation(
+	array( array( 'items' => array( array( 'type' => 'ai_overview', 'markdown' => 'Tide Type appears in text.', 'references' => array(
+		array( 'url' => 'https://competitor.com/' ),
+	) ) ) ) ), 'keyword', 'United States', 'example.com', array( 'Tide Type' ), 'google_ai_overview'
+);
+assert_eq( true, $brand_not_cited['brand_mentioned'], 'brand can appear even when own domain is not cited' );
+assert_eq( false, $brand_not_cited['domain_cited'], 'brand mention does not become domain citation' );
+$dataset = SCC_AI_Citation_Monitor::normalize_dataset(
+	array( array( 'aggregated_metrics' => array( 'total' => array( 'mentions' => 12, 'ai_search_volume' => 1250 ) ) ) ),
+	'chat_gpt', 'example.com'
+);
+assert_eq( 'measured_sample', $dataset['state'], 'ChatGPT dataset never reported as a census or live user query' );
+assert_eq( 12, $dataset['cited_domain_mentions'], 'indexed citation count extracted from source search_scope' );
+assert_eq( 1250.0, $dataset['ai_search_volume_estimate'], 'indexed aggregate search volume preserved as an estimate' );
+assert_true( is_wp_error( SCC_AI_Citation_Monitor::normalize_dataset( array( array( 'aggregated_metrics' => array() ) ), 'chat_gpt', 'example.com' ) ), 'missing LLM provider aggregate does not become zero' );
+$true_zero = SCC_AI_Citation_Monitor::normalize_dataset( array( array( 'aggregated_metrics' => array( 'total' => array( 'mentions' => 0 ) ) ) ), 'google', 'example.com' );
+assert_eq( 0, $true_zero['cited_domain_mentions'], 'explicit indexed zero is a valid measured dataset result' );
+assert_true( is_wp_error( SCC_AI_Citation_Monitor::measure( array( 'surface' => 'google_ai_overview', 'confirm_paid' => false ) ) ), 'paid AI check requires explicit consent even if provider configured' );
+assert_true( is_wp_error( SCC_AI_Citation_Monitor::configure( array( 'brand' => ' ' ) ) ), 'empty AI brand configuration rejected' );
+$brand = SCC_AI_Citation_Monitor::configure( array( 'brand' => 'Tide Type', 'aliases' => "TideType\nTide and Type\nTideType" ) );
+assert_eq( 2, count( $brand['aliases'] ), 'duplicate brand aliases removed' );
+assert_eq( 'example.com', $brand['domain'], 'AI target locked to actual WordPress host rather than arbitrary competitor site' );
+$ai_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/integrations/class-scc-dataforseo.php' );
+assert_true( false !== strpos( $ai_source, '/ai_optimization/llm_mentions/target_metrics/live' ), 'LLM citations query matches provider target_metrics endpoint' );
+assert_true( false !== strpos( $ai_source, "'search_scope' => array( 'sources' )" ), 'sampled count comes from cited domains rather than raw mentions' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
