@@ -125,8 +125,8 @@ class SCC_Change_History {
 					update_post_meta( $post_id, '_elementor_data', wp_slash( $restore ) );
 					$actual = (string) get_post_meta( $post_id, '_elementor_data', true );
 					if ( $actual !== $restore ) { return new WP_Error( 'scc_restore_verify', 'Elementor restore could not be verified.' ); }
-					if ( class_exists( '\\Elementor\\Plugin' ) && isset( \\Elementor\\Plugin::$instance->files_manager ) ) {
-						\\Elementor\\Plugin::$instance->files_manager->clear_cache();
+					if ( class_exists( '\\Elementor\\Plugin' ) && isset( \Elementor\Plugin::$instance->files_manager ) ) {
+						\Elementor\Plugin::$instance->files_manager->clear_cache();
 					}
 				} else {
 					if ( is_array( $previous ) ) { return new WP_Error( 'scc_bad_content_backup', 'Content backup is not a string.' ); }
