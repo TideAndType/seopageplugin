@@ -3522,6 +3522,8 @@ $elementor_example = array(
 );
 $elementor_before = wp_json_encode( $elementor_example );
 $extracted = SCC_AI_Page_Improvements::elementor_text( $elementor_example );
+$extracted_raw_json = SCC_AI_Page_Improvements::elementor_text( $elementor_before );
+assert_true( false !== strpos( $extracted_raw_json, 'Reliable Managed IT Support' ), 'valid unslashed Elementor JSON is read without destructive backslash stripping' );
 assert_true( false !== strpos( $extracted, 'Reliable Managed IT Support' ), 'page audit extracts Elementor heading text' );
 assert_true( false !== strpos( $extracted, 'proactive monitoring' ), 'page audit extracts Elementor editor content' );
 assert_true( false === strpos( $extracted, '#123456' ), 'page audit does not send design settings to LM Studio' );
@@ -3559,6 +3561,8 @@ assert_eq( 'lmstudio_only', $brief['ai_provider'], 'brief cannot masquerade as a
 assert_eq( 2, count( $brief['recommended_headings'] ), 'duplicate model headings removed' );
 assert_eq( 2, count( $brief['draft_sections'] ), 'two bounded proposed sections retained' );
 $cloned = SCC_AI_Page_Improvements::clone_elementor_with_review( $elementor_example, $brief );
+$cloned_json = SCC_AI_Page_Improvements::clone_elementor_with_review( $elementor_before, $brief );
+assert_true( is_array( $cloned_json ) && count( $cloned_json ) === 2, 'string-encoded valid Elementor source can be cloned with a review block' );
 assert_true( is_array( $cloned ) && count( $cloned ) === 2, 'safe clone appends exactly one review section to original tree' );
 assert_eq( $elementor_before, wp_json_encode( $elementor_example ), 'cloning never modifies source Elementor data in memory' );
 assert_eq( 'abc1234', $cloned[0]['id'], 'existing page design element identities preserved in copy' );
