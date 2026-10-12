@@ -235,20 +235,20 @@ class SCC_Citation_Scanner {
 		// separate opt-in and have an aggregate daily ceiling.
 		if ( ! (bool) get_option( 'scc_citation_public_enabled', false ) ) { return false; }
 		$key = 'scc_cite_rl_' . md5( $ip );
+		$count = (int) get_transient( $key );
+		if ( $count >= self::PUBLIC_RATE_LIMIT ) { return false; }
 		if ( (bool) get_option( 'scc_citation_public_paid_enabled', false ) ) {
 			$daily_key = 'scc_cite_global_' . gmdate( 'Ymd' );
 			$used = (int) get_transient( $daily_key );
 			if ( $used >= 10 ) { return false; }
 			set_transient( $daily_key, $used + 1, DAY_IN_SECONDS );
 		}
-		$count = (int) get_transient( $key );
-		if ( $count >= self::PUBLIC_RATE_LIMIT ) { return false; }
 		set_transient( $key, $count + 1, self::PUBLIC_RATE_WINDOW );
 		return true;
 	}
 
 	protected static function provider_label() {
-		return class_exists( 'SCC_DataForSEO' ) && SCC_DataForSEO::is_connected() ? 'DataForSEO' : 'DuckDuckGo (free fallback)';
+		return ( ! self::$public_request || (bool) get_option( 'scc_citation_public_paid_enabled', false ) ) && class_exists( 'SCC_DataForSEO' ) && SCC_DataForSEO::is_connected() ? 'DataForSEO' : 'DuckDuckGo (free fallback)';
 	}
 
 	protected static function search( $query, $limit ) {
