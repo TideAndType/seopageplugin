@@ -3466,7 +3466,7 @@ assert_eq( array(), $uncertain['competitor_domains'], 'retrieved competitor cann
 assert_eq( null, SCC_AI_Opportunities::from_observation( array_merge( $valid_base, array( 'state' => 'measured_sample' ) ), 'example.com' ), 'indexed ChatGPT-like samples cannot imply particular page gaps' );
 assert_eq( null, SCC_AI_Opportunities::from_observation( array_merge( $valid_base, array( 'state' => 'ai_result_not_shown' ) ), 'example.com' ), 'no AI answer is not assumed to represent competitor loss' );
 assert_eq( null, SCC_AI_Opportunities::from_observation( array_merge( $valid_base, array( 'domain_cited' => true ) ), 'example.com' ), 'site already cited is not marked as a citation gap' );
-assert_eq( null, SCC_AI_Opportunities::from_observation( $valid_base, 'attacker.net' ), 'evidence for another website cannot enter this site's SEO queue' );
+assert_eq( null, SCC_AI_Opportunities::from_observation( $valid_base, 'attacker.net' ), 'evidence for another website cannot enter this WordPress SEO queue' );
 $brandonly = SCC_AI_Opportunities::from_observation(
 	array_merge( $valid_base, array( 'brand_mentioned' => true, 'competitor_citations' => array() ) ), 'example.com'
 );
