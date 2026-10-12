@@ -3431,6 +3431,79 @@ assert_eq( 1, $sum[0]['unverified_citation_status'], 'AI dashboard separately fl
 assert_eq( 0, $sum[1]['answer_observed'], 'ChatGPT indexed samples never counted as an observed direct API answer' );
 assert_eq( 44, $sum[1]['latest_indexed_citation_count'], 'indexed sample saved separately' );
 
+echo "\n== AI evidence to human-reviewed content work ==\n";
+if ( ! function_exists( 'sanitize_textarea_field' ) ) {
+	function sanitize_textarea_field( $raw ) { return trim( strip_tags( (string) $raw ) ); }
+}
+$today = gmdate( 'Y-m-d' ) . 'T11:00:00Z';
+$valid_base = array(
+	'state' => 'measured_api_observation', 'surface' => 'gemini_grounded_api',
+	'keyword' => 'How to compare managed IT providers',
+	'market' => 'API prompt (not geolocated)',
+	'domain' => 'example.com', 'captured_at' => $today,
+	'brand_mentioned' => false, 'domain_cited' => false,
+	'citation_evidence_state' => 'verified_grounding_supports',
+	'source' => 'gemini_developer_api',
+	'competitor_citations' => array(
+		array( 'domain' => 'competitor.com', 'cited' => true ),
+		array( 'domain' => 'retrieved.com', 'cited' => false ),
+		array( 'domain' => 'maybe.com', 'cited' => null ),
+	),
+);
+$c = SCC_AI_Opportunities::from_observation( $valid_base, 'example.com' );
+assert_eq( 'competitor_citation_gap', $c['type'], 'actual cited competitor creates evidence-grounded competitor gap' );
+assert_eq( 'high', $c['priority'], 'verified cited competitor gap prioritized' );
+assert_eq( array( 'competitor.com' ), $c['competitor_domains'], 'only confirmed cited competitor domains preserved' );
+assert_eq( 'proposed', $c['status'], 'new opportunity requires human review' );
+assert_true( strlen( $c['id'] ) === 40, 'opportunity has deterministic SHA1 identity' );
+$retrieved = $valid_base;
+$retrieved['citation_evidence_state'] = 'retrieved_only_or_unverified';
+$retrieved['domain_cited'] = null;
+$uncertain = SCC_AI_Opportunities::from_observation( $retrieved, 'example.com' );
+assert_eq( 'citation_evidence_unverified', $uncertain['type'], 'uncertain grounding does not create a content gap' );
+assert_eq( 'low', $uncertain['priority'], 'unknown citation evidence is low priority' );
+assert_eq( array(), $uncertain['competitor_domains'], 'retrieved competitor cannot become verified rival citation' );
+assert_eq( null, SCC_AI_Opportunities::from_observation( array_merge( $valid_base, array( 'state' => 'measured_sample' ) ), 'example.com' ), 'indexed ChatGPT-like samples cannot imply particular page gaps' );
+assert_eq( null, SCC_AI_Opportunities::from_observation( array_merge( $valid_base, array( 'state' => 'ai_result_not_shown' ) ), 'example.com' ), 'no AI answer is not assumed to represent competitor loss' );
+assert_eq( null, SCC_AI_Opportunities::from_observation( array_merge( $valid_base, array( 'domain_cited' => true ) ), 'example.com' ), 'site already cited is not marked as a citation gap' );
+assert_eq( null, SCC_AI_Opportunities::from_observation( $valid_base, 'attacker.net' ), 'evidence for another website cannot enter this site's SEO queue' );
+$brandonly = SCC_AI_Opportunities::from_observation(
+	array_merge( $valid_base, array( 'brand_mentioned' => true, 'competitor_citations' => array() ) ), 'example.com'
+);
+assert_eq( 'brand_without_citation', $brandonly['type'], 'brand mention and site citation are distinct' );
+$GLOBALS['scc_test_options'][SCC_AI_Citation_Monitor::HISTORY] = array( $valid_base );
+$GLOBALS['scc_test_options'][SCC_AI_Opportunities::STORE] = array();
+$result = SCC_AI_Opportunities::refresh( gmdate( 'Y-m' ) );
+assert_eq( 1, $result['added'], 'saved verified observation can become one opportunity without paid API request' );
+assert_eq( 1, count( $result['opportunities'] ), 'one opportunity persisted' );
+$second = SCC_AI_Opportunities::refresh( gmdate( 'Y-m' ) );
+assert_eq( 0, $second['added'], 'reanalysis is idempotent' );
+assert_eq( 0, $second['updated'], 'unchanged observation not repeated' );
+$id = $c['id'];
+assert_true( is_wp_error( SCC_AI_Opportunities::handoff( $id, array( 'mode' => 'content_plan', 'title' => 'My new page', 'path' => 'new-page' ) ) ), 'unapproved opportunity cannot enter Content Plan' );
+assert_true( is_wp_error( SCC_AI_Opportunities::review( 'invalid', 'approved' ) ), 'invalid review identity rejected' );
+assert_true( is_wp_error( SCC_AI_Opportunities::review( $id, 'publish' ) ), 'review cannot select an auto-publish action' );
+$approved = SCC_AI_Opportunities::review( $id, 'approved', 'Verify existing pages before creating anything.' );
+assert_eq( 'approved', $approved['status'], 'review approval is saved' );
+assert_eq( 'Verify existing pages before creating anything.', $approved['review_notes'], 'editor review notes saved' );
+$still = SCC_AI_Opportunities::refresh( gmdate( 'Y-m' ) );
+assert_eq( 'approved', $still['opportunities'][0]['status'], 'reanalysis never overwrites human approval state' );
+$bad_slug = SCC_AI_Opportunities::handoff( $id, array( 'mode' => 'content_plan', 'title' => 'A valid new page title', 'path' => 'INVALID URL' ) );
+assert_true( is_wp_error( $bad_slug ), 'handoff rejects unsafe content plan URL paths before database action' );
+$bad_mode = SCC_AI_Opportunities::handoff( $id, array( 'mode' => 'publish', 'title' => 'A valid new page title', 'path' => 'new-page' ) );
+assert_true( is_wp_error( $bad_mode ), 'handoff cannot ever publish a live post' );
+$not_editable = SCC_AI_Opportunities::handoff( $id, array( 'mode' => 'existing', 'post_id' => 0 ) );
+assert_true( is_wp_error( $not_editable ), 'existing page handoff requires a real editable page' );
+$unverified_id = $uncertain['id'];
+$GLOBALS['scc_test_options'][SCC_AI_Opportunities::STORE][$unverified_id] = $uncertain;
+SCC_AI_Opportunities::review( $unverified_id, 'approved' );
+$bad_evidence = SCC_AI_Opportunities::handoff( $unverified_id, array( 'mode' => 'content_plan', 'title' => 'A valid new page title', 'path' => 'new-page' ) );
+assert_true( is_wp_error( $bad_evidence ), 'unverified citation mapping cannot justify a new content asset' );
+$handoff_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/agency/class-scc-ai-opportunities.php' );
+assert_true( false !== strpos( $handoff_source, "'status' => 'recommended'" ), 'content plan handoff remains human-review recommended only' );
+assert_true( false !== strpos( $handoff_source, "get_page_by_path( " ), 'content plan handoff checks WordPress URL collisions' );
+assert_true( false === strpos( $handoff_source, 'wp_update_post(' ) && false === strpos( $handoff_source, 'wp_insert_post(' ), 'AI opportunity flow never directly writes or publishes a WordPress page' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
