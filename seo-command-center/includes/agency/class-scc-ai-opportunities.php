@@ -164,7 +164,7 @@ class SCC_AI_Opportunities {
 		}
 		$mode = sanitize_key( (string) ( $payload['mode'] ?? '' ) );
 		if ( 'existing' === $mode ) {
-			$post_id = absint( $payload['post_id'] ?? 0 );
+			$post_id = max( 0, (int) ( $payload['post_id'] ?? 0 ) );
 			$post = $post_id ? get_post( $post_id ) : null;
 			if ( ! $post || ! in_array( (string) ( $post->post_type ?? '' ), array( 'page', 'post' ), true ) ||
 				! in_array( (string) ( $post->post_status ?? '' ), array( 'publish', 'private', 'draft', 'pending' ), true ) ||
