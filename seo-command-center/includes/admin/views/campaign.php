@@ -185,6 +185,16 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		<div id="scc-campaign-report" aria-live="polite"></div>
 	</section>
 	<section class="scc-card">
+		<h2>AI citation evidence → SEO opportunities</h2>
+		<p class="description">Build recommendations from previously recorded AI visibility measurements. No new provider calls or paid requests. Recommendations are content-review hypotheses, not automatic diagnoses of missing pages.</p>
+		<p><button id="scc-campaign-ai-opportunities-refresh" class="button button-primary" type="button">Analyze saved AI evidence for selected report month</button>
+			<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-content-plan' ) ); ?>">Open Content Plan</a>
+			<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-elementor' ) ); ?>">Open Elementor templates</a>
+		</p>
+		<div id="scc-campaign-ai-opportunities" aria-live="polite"></div>
+		<p class="description">Approve suggestions before handing them off. A new content idea becomes a <strong>recommended Content Plan entry</strong>, never an automatically generated or published page. Choosing an existing page only saves an editor link; it never modifies Elementor content.</p>
+	</section>
+	<section class="scc-card">
 		<h2>Deliverables and approvals</h2>
 		<p class="description">Change status only when work is actually performed; attach evidence links when available.</p>
 		<div id="scc-campaign-tasks"></div>
