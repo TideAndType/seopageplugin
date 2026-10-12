@@ -324,6 +324,77 @@
 		renderConnections(r.connections || {});
 	}
 	/** Reviewable, source-grounded suggestions. DOM text only; no HTML injection. */
+	function renderPageImprovement(card, opportunity) {
+		if (!opportunity.handoff || opportunity.handoff.mode !== 'existing') return;
+		var zone = node('div', card);
+		zone.style.marginTop = '12px'; zone.style.padding = '10px';
+		zone.style.borderTop = '1px solid #dcdcde';
+		node('h4', zone, 'Existing-page AI improvement · source page unchanged');
+		var brief = (currentReport && currentReport.ai_page_briefs || {})[opportunity.id];
+		var details = node('div', zone);
+		function showAudit(audit) {
+			clear(details);
+			node('p', details, 'Read-only audit · Source post #' + audit.source_post_id + ' · ' + audit.question);
+			node('p', details, 'Words observed: ' + audit.signals.word_count +
+				' · Uses Elementor: ' + (audit.signals.uses_elementor ? 'yes' : 'no') +
+				' · Question terms observed: ' + (audit.signals.question_terms_present || []).join(', '));
+			node('p', details, 'Question terms not found in supplied text (NOT proof of missing coverage): ' +
+				(audit.signals.question_terms_not_observed || []).join(', '));
+			(audit.review_checklist || []).forEach(function (step) { node('p', details, '• ' + step); });
+		}
+		function showBrief(value) {
+			brief = value;
+			clear(details);
+			node('p', details, 'LM Studio-only improvement brief · human fact-check required · ' + value.created_at);
+			node('p', details, value.editorial_rationale);
+			var list = node('ol', details);
+			(value.draft_sections || []).forEach(function (section) {
+				var li = node('li', list);
+				node('strong', li, section.heading);
+				node('p', li, section.body);
+			});
+			if ((value.verification_needed || []).length) {
+				node('strong', details, 'Verify before publishing');
+				(value.verification_needed || []).forEach(function (check) { node('p', details, '• ' + check); });
+			}
+		}
+		var auditButton = node('button', zone, 'Audit existing page');
+		auditButton.type = 'button'; auditButton.className = 'button'; auditButton.style.marginRight = '8px';
+		auditButton.addEventListener('click', function () {
+			auditButton.disabled = true;
+			request('/ai-page/audit', 'POST', {id: opportunity.id})
+				.then(showAudit).catch(showFailure).finally(function () { auditButton.disabled = false; });
+		});
+		var briefButton = node('button', zone, brief ? 'Regenerate LM Studio brief' : 'Create LM Studio improvement brief');
+		briefButton.type = 'button'; briefButton.className = 'button'; briefButton.style.marginRight = '8px';
+		briefButton.addEventListener('click', function () {
+			if (!window.confirm('Send a bounded excerpt of this existing WordPress page and its AI citation question to your configured LM Studio server? This calls LM Studio only; no hosted AI fallback.')) return;
+			briefButton.disabled = true;
+			request('/ai-page/brief', 'POST', {id: opportunity.id, confirm_local_ai: true})
+				.then(function (result) {
+					showBrief(result);
+					flash('Local LM Studio generated a review-only editorial brief. Check all suggested facts.');
+					return loadReport();
+				}).catch(showFailure).finally(function () { briefButton.disabled = false; });
+		});
+		if (brief) showBrief(brief);
+		if (brief) {
+			var draft = node('button', zone, 'Create separate Elementor/WordPress review draft');
+			draft.type = 'button'; draft.className = 'button button-primary';
+			draft.addEventListener('click', function () {
+				if (!window.confirm('Create one new DRAFT with a copy of the existing page and a clearly labeled proposed AI improvement section? The source page and its Elementor JSON will NOT change. Verify all content before manually publishing.')) return;
+				draft.disabled = true;
+				request('/ai-page/draft', 'POST', {id: opportunity.id, confirm_draft: true})
+					.then(function (result) {
+						flash(result.notice || 'Separate review draft created.');
+						var target = node('p', zone);
+						var link = node('a', target, result.has_elementor ? 'Edit separate draft in Elementor' : 'Edit separate WordPress draft');
+						link.href = result.has_elementor && result.elementor_url ? result.elementor_url : result.edit_url;
+						link.target = '_blank'; link.rel = 'noopener noreferrer';
+					}).catch(showFailure).finally(function () { draft.disabled = false; });
+			});
+		}
+	}
 	function renderOpportunities(items) {
 		var host = byId('scc-campaign-ai-opportunities'); clear(host);
 		if (!items.length) {
@@ -350,6 +421,7 @@
 				if (item.handoff.edit_url && /^https?:\/\//.test(item.handoff.edit_url)) {
 					var a = node('a', handoff, ' Open destination'); a.href = item.handoff.edit_url;
 				}
+				renderPageImprovement(card, item);
 				return;
 			}
 			var notes = node('textarea', card);
