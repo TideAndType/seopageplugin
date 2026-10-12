@@ -220,6 +220,54 @@ class SCC_DataForSEO {
 	}
 
 
+
+	/**
+	 * A measured, on-demand paid organic SERP position for one query/market.
+	 * Never equate an absent domain with a failed provider request.
+	 *
+	 * @return array|WP_Error {state, rank, depth, keyword, location, domain}
+	 */
+	public static function domain_position( $keyword, $location, $domain ) {
+		$keyword = sanitize_text_field( (string) $keyword );
+		$location = sanitize_text_field( (string) $location );
+		$domain = strtolower( preg_replace( '/^www\./', '', (string) $domain ) );
+		if ( '' === $keyword || '' === $location || ! preg_match( '/^[a-z0-9.-]+\.[a-z]{2,}$/', $domain ) ) {
+			return new WP_Error( 'scc_serp_params', 'Keyword, supported DataForSEO location and website domain are required.' );
+		}
+		$result = self::post( '/serp/google/organic/live/advanced', array(
+			'keyword' => $keyword,
+			'location_name' => $location,
+			'language_code' => 'en',
+			'device' => 'desktop',
+			'depth' => 100,
+		) );
+		if ( is_wp_error( $result ) ) { return $result; }
+		$rank = null;
+		$organic_items = 0;
+		foreach ( (array) $result as $block ) {
+			foreach ( (array) ( $block['items'] ?? array() ) as $item ) {
+				if ( 'organic' !== (string) ( $item['type'] ?? '' ) ) { continue; }
+				$organic_items++;
+				$url = (string) ( $item['url'] ?? '' );
+				$host = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( $url, PHP_URL_HOST ) ) );
+				if ( $host === $domain || ( strlen( $host ) > strlen( $domain ) && substr( $host, -strlen( '.' . $domain ) ) === '.' . $domain ) ) {
+					$rank = isset( $item['rank_group'] ) ? (int) $item['rank_group'] : ( isset( $item['rank_absolute'] ) ? (int) $item['rank_absolute'] : null );
+					break 2;
+				}
+			}
+		}
+		return array(
+			'state' => 0 === $organic_items ? 'unavailable' : ( null === $rank ? 'measured_not_found' : 'measured' ),
+			'rank' => $rank,
+			'depth' => 100,
+			'keyword' => $keyword,
+			'location' => $location,
+			'domain' => $domain,
+			'provider' => 'DataForSEO organic live',
+			'captured_at' => gmdate( 'c' ),
+		);
+	}
+
 	/**
 	 * Google Maps results for one exact map coordinate.
 	 *
