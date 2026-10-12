@@ -89,7 +89,19 @@ class SCC_DataForSEO {
 			return new WP_Error( 'scc_dfs_api', $msg, array( 'status' => 502 ) );
 		}
 
-		return isset( $body['tasks'][0]['result'] ) ? (array) $body['tasks'][0]['result'] : array();
+		// DataForSEO can return HTTP 200 and top-level 20000 while an individual
+		// paid task fails. Missing results are not a legitimate empty SERP.
+		if ( empty( $body['tasks'] ) || ! is_array( $body['tasks'][0] ) ) {
+			return new WP_Error( 'scc_dfs_no_task', __( 'DataForSEO returned no task.', 'seo-command-center' ), array( 'status' => 502 ) );
+		}
+		$first = $body['tasks'][0];
+		if ( isset( $first['status_code'] ) && 20000 !== (int) $first['status_code'] ) {
+			return new WP_Error( 'scc_dfs_task', sanitize_text_field( (string) ( $first['status_message'] ?? 'DataForSEO task failed.' ) ), array( 'status' => 502 ) );
+		}
+		if ( ! array_key_exists( 'result', $first ) || ! is_array( $first['result'] ) ) {
+			return new WP_Error( 'scc_dfs_no_result', __( 'DataForSEO task did not include usable results.', 'seo-command-center' ), array( 'status' => 502 ) );
+		}
+		return $first['result'];
 	}
 
 	/**
