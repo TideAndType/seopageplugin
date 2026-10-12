@@ -19,6 +19,14 @@ class SCC_Citation_Scanner {
 	const CACHE_TTL = DAY_IN_SECONDS;
 	const PUBLIC_RATE_LIMIT = 3;
 	const PUBLIC_RATE_WINDOW = HOUR_IN_SECONDS;
+	protected static $public_request = false;
+
+	public static function run_public( array $params ) {
+		self::$public_request = true;
+		try { return self::scan( $params, false ); }
+		finally { self::$public_request = false; }
+	}
+
 
 	public static function directories() {
 		$rows = array(
@@ -223,8 +231,16 @@ class SCC_Citation_Scanner {
 
 	public static function public_rate_limit_ok() {
 		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
-		$ua = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '';
-		$key = 'scc_cite_rl_' . md5( $ip . '|' . $ua );
+		// Public scans require administrator opt-in. Public paid scans require a
+		// separate opt-in and have an aggregate daily ceiling.
+		if ( ! (bool) get_option( 'scc_citation_public_enabled', false ) ) { return false; }
+		$key = 'scc_cite_rl_' . md5( $ip );
+		if ( (bool) get_option( 'scc_citation_public_paid_enabled', false ) ) {
+			$daily_key = 'scc_cite_global_' . gmdate( 'Ymd' );
+			$used = (int) get_transient( $daily_key );
+			if ( $used >= 10 ) { return false; }
+			set_transient( $daily_key, $used + 1, DAY_IN_SECONDS );
+		}
 		$count = (int) get_transient( $key );
 		if ( $count >= self::PUBLIC_RATE_LIMIT ) { return false; }
 		set_transient( $key, $count + 1, self::PUBLIC_RATE_WINDOW );
@@ -236,7 +252,7 @@ class SCC_Citation_Scanner {
 	}
 
 	protected static function search( $query, $limit ) {
-		if ( class_exists( 'SCC_DataForSEO' ) && SCC_DataForSEO::is_connected() && method_exists( 'SCC_DataForSEO', 'serp_search' ) ) {
+		if ( ( ! self::$public_request || (bool) get_option( 'scc_citation_public_paid_enabled', false ) ) && class_exists( 'SCC_DataForSEO' ) && SCC_DataForSEO::is_connected() && method_exists( 'SCC_DataForSEO', 'serp_search' ) ) {
 			return SCC_DataForSEO::serp_search( $query, 'United States', 'en', $limit );
 		}
 		return self::duckduckgo_search( $query, $limit );
