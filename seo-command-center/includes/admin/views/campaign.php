@@ -53,6 +53,45 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		<p class="description">Only actual Data API measurements appear as verified source data. Key events are Analytics-defined key events and do not automatically equal qualified leads. The Google Search Console connection is maintained separately.</p>
 	</section>
 	<section class="scc-card">
+		<h2>Google Business Profile — performance</h2>
+		<p class="description">Google's Business Profile API requires business.manage OAuth permission even for performance reports. TideOrbit uses GET-only reporting endpoints and does not edit your listing, publish posts or reply to reviews. Enable the Business Profile Performance API in Google Cloud and ensure the OAuth app has Google Business Profile API access.</p>
+		<?php if ( isset( $_GET['scc_gbp_notice'] ) ) : ?>
+			<?php $gbp_notice = sanitize_key( wp_unslash( $_GET['scc_gbp_notice'] ) ); ?>
+			<?php if ( 'connected' === $gbp_notice ) : ?>
+				<div class="notice notice-success inline"><p>Google Business Profile authorization saved. Run a performance refresh to verify the selected location and permissions.</p></div>
+			<?php else : ?>
+				<div class="notice notice-error inline"><p>Google Business Profile authorization failed or was declined. Check Google Cloud API access and OAuth redirect configuration.</p></div>
+			<?php endif; ?>
+		<?php endif; ?>
+		<p><strong>OAuth callback:</strong> <code><?php echo esc_html( SCC_GBP_Performance::redirect_uri() ); ?></code></p>
+		<form id="scc-campaign-gbp-location">
+			<p><label><strong>Numeric Google Business Profile location ID</strong><br>
+				<input type="text" name="location_id" class="regular-text" placeholder="locations/1234567890" required></label>
+				<button class="button" type="submit">Save location</button></p>
+		</form>
+		<p><strong>Connection:</strong> <span id="scc-campaign-gbp-status">Not connected</span></p>
+		<p>
+			<button type="button" class="button button-primary" id="scc-campaign-gbp-connect">Authorize Profile Performance</button>
+			<button type="button" class="button" id="scc-campaign-gbp-refresh">Refresh reporting month</button>
+			<button type="button" class="button" id="scc-campaign-gbp-disconnect">Disconnect GBP</button>
+		</p>
+		<p class="description">Call clicks do not equal answered calls; impressions and clicks do not equal qualified leads. No performance is shown unless Google's API returned actual dated measurements.</p>
+	</section>
+	<section class="scc-card">
+		<h2>GoHighLevel — opportunity attribution</h2>
+		<p class="description">Create a Private Integration Token in your client's HighLevel sub-account with <code>opportunities.readonly</code> permission. TideOrbit uses only the v3 opportunities search API, does not modify CRM records and stores only aggregate counts.</p>
+		<form id="scc-campaign-ghl-connect">
+			<p><label><strong>HighLevel sub-account location ID</strong><br><input name="location_id" class="regular-text" type="text" maxlength="80" required></label></p>
+			<p><label><strong>Optional pipeline ID</strong><br><input name="pipeline_id" class="regular-text" type="text" maxlength="80"></label></p>
+			<p><label><strong>Private Integration Token</strong><br><input name="token" class="regular-text" type="password" autocomplete="off" placeholder="Leave blank to keep saved token"></label></p>
+			<p><button class="button button-primary" type="submit">Save HighLevel connection</button>
+				<button class="button" type="button" id="scc-campaign-ghl-refresh">Refresh reporting month</button>
+				<button class="button" type="button" id="scc-campaign-ghl-disconnect">Disconnect HighLevel</button></p>
+		</form>
+		<p><strong>Connection:</strong> <span id="scc-campaign-ghl-status">Not connected</span></p>
+		<p class="description">Source-labeled SEO opportunities are not proof of causation. Current won opportunity value is not collected revenue. For HIPAA-sensitive sites, this report intentionally does not retain any contact identifiers or messages.</p>
+	</section>
+	<section class="scc-card">
 		<h2>Bing Webmaster Tools</h2>
 		<p class="description">Use a read-only Bing Webmaster API key from the verified site owner's Bing Webmaster Tools → Settings → API Access. Existing key remains saved when the field is left blank.</p>
 		<form id="scc-campaign-bing-connect">
@@ -138,7 +177,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 	<section class="scc-card">
 		<h2>Connections and safety</h2>
 		<div id="scc-campaign-connections"></div>
-		<p class="description">GBP management, GA4 and CRM connectors are not installed; tracked tasks and manual results do not create API connections.</p>
+		<p class="description">Only authenticated, explicitly configured integrations populate verified measurements. Google Business Profile management actions, real AI citation checks and independently verified CRM attribution are not implemented.</p>
 		<form id="scc-campaign-public-citations">
 			<p><label><input type="checkbox" name="enabled"> Enable the public citation-scan endpoint</label></p>
 			<p><label><input type="checkbox" name="paid"> Also allow paid DataForSEO public requests (maximum 10/day)</label></p>

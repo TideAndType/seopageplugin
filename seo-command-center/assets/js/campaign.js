@@ -151,6 +151,33 @@
 		} else {
 			node('p', host, 'No GA4 API measurement stored for this month. Connect and authorize the numeric GA4 property, then refresh. This is unavailable, not zero.');
 		}
+		var gbp = r.gbp_performance;
+		node('h4', host, 'Google Business Profile · Search and Maps');
+		if (gbp && gbp.metrics && gbp.state === 'measured_partial_possible') {
+			var profileTable = node('table', host, null, 'widefat striped'), profileBody = node('tbody', profileTable);
+			[['WEBSITE_CLICKS', 'Website button clicks'], ['CALL_CLICKS', 'Call button clicks'], ['BUSINESS_DIRECTION_REQUESTS', 'Direction requests'], ['BUSINESS_IMPRESSIONS_MOBILE_MAPS', 'Mobile Maps impressions'], ['BUSINESS_IMPRESSIONS_DESKTOP_MAPS', 'Desktop Maps impressions'], ['BUSINESS_IMPRESSIONS_MOBILE_SEARCH', 'Mobile Search impressions'], ['BUSINESS_IMPRESSIONS_DESKTOP_SEARCH', 'Desktop Search impressions']].forEach(function (field) {
+				var metric = gbp.metrics[field[0]] || {};
+				var tr = node('tr', profileBody);
+				node('th', tr, field[1]);
+				node('td', tr, metric.total === null || metric.total === undefined ? 'Not measured' : fmt(metric.total) + ' · ' + metric.measured_days + ' observed dates');
+			});
+			node('p', host, 'Location ' + gbp.location_id + ' · ' + gbp.start_date + ' to ' + gbp.end_date + ' · ' + gbp.captured_at);
+			node('p', host, gbp.notice, 'description');
+		} else {
+			node('p', host, 'No verified Business Profile performance for this month. Connect and authorize a location, then refresh.');
+		}
+		var ghl = r.ghl_opportunities;
+		node('h4', host, 'GoHighLevel · opportunity outcomes');
+		if (ghl && ghl.state === 'measured') {
+			var crmTable = node('table', host, null, 'widefat striped'), crmBody = node('tbody', crmTable);
+			[['Created in selected month', fmt(ghl.opportunities_created_in_month)], ['Explicitly SEO/organic-labeled sources', fmt(ghl.source_breakdown.organic_labeled)], ['Other source labels', fmt(ghl.source_breakdown.other)], ['Missing/unknown source', fmt(ghl.source_breakdown.unknown)], ['Currently open', fmt(ghl.current_pipeline_status.open)], ['Currently won', fmt(ghl.current_pipeline_status.won)], ['Currently lost', fmt(ghl.current_pipeline_status.lost)], ['Current won opportunity value (not revenue)', fmt(ghl.current_won_opportunity_value)]].forEach(function (line) {
+				var row = node('tr', crmBody);
+				node('th', row, line[0]); node('td', row, line[1]);
+			});
+			node('p', host, ghl.notice, 'description');
+		} else {
+			node('p', host, 'No complete HighLevel opportunity snapshot. Connect a read-only sub-account and refresh the reporting month.');
+		}
 		var bing = r.bing_webmaster;
 		node('h4', host, 'Bing Webmaster Tools');
 		if (bing && bing.status === 'measured') {
@@ -256,6 +283,15 @@
 		return request('', 'GET').then(function (data) {
 			state = data;
 			fillConfig(data.campaign || {});
+			var gbp = data.gbp || {};
+			byId('scc-campaign-gbp-location').elements.location_id.value = gbp.location_id || '';
+			byId('scc-campaign-gbp-status').textContent = (gbp.status || 'not_available').replace(/_/g, ' ');
+			var ghl = data.ghl || {};
+			var ghlForm = byId('scc-campaign-ghl-connect');
+			ghlForm.elements.location_id.value = ghl.location_id || '';
+			ghlForm.elements.pipeline_id.value = ghl.pipeline_id || '';
+			ghlForm.elements.token.value = '';
+			byId('scc-campaign-ghl-status').textContent = (ghl.status || 'not_available').replace(/_/g, ' ') + (ghl.has_private_token ? ' · private token saved' : '');
 			var bing = data.bing || {};
 			byId('scc-campaign-bing-connect').elements.site_url.value = bing.site_url || '';
 			byId('scc-campaign-bing-connect').elements.api_key.value = '';
@@ -316,6 +352,8 @@
 			}).catch(showFailure);
 		});
 	}
+	submitCredential('scc-campaign-ghl-connect', '/ghl/connect', ['token', 'location_id', 'pipeline_id'], 'HighLevel sub-account configured. Run a measurement to verify its read-only opportunities permission.');
+	submitCredential('scc-campaign-gbp-location', '/gbp/location', ['location_id'], 'Business Profile location saved; authorize Google and refresh to verify its performance.');
 	submitCredential('scc-campaign-bing-connect', '/bing/connect', ['site_url', 'api_key'], 'Bing connection saved. Refresh the report month to verify API access.');
 	submitCredential('scc-campaign-clarity-connect', '/clarity/connect', ['project_id', 'api_token'], 'Clarity token saved. Capture an export to verify API access.');
 	[
@@ -342,6 +380,38 @@
 				flash('Microsoft data source disconnected and saved snapshots cleared.');
 				return loadState();
 			}).catch(showFailure).finally(function () { button.disabled = false; });
+		});
+	});
+	byId('scc-campaign-gbp-connect').addEventListener('click', function (event) {
+		var button = event.currentTarget; button.disabled = true;
+		request('/gbp/auth-url', 'POST').then(function (r) {
+			if (!r.url || !/^https:\/\/accounts\.google\.com\//.test(r.url)) throw new Error('Unexpected Google authorization endpoint.');
+			window.location.assign(r.url);
+		}).catch(showFailure).finally(function () { button.disabled = false; });
+	});
+	[
+		['scc-campaign-gbp-refresh', '/gbp/refresh'],
+		['scc-campaign-ghl-refresh', '/ghl/refresh']
+	].forEach(function (pair) {
+		byId(pair[0]).addEventListener('click', function (event) {
+			var b = event.currentTarget; b.disabled = true;
+			request(pair[1], 'POST', {month: byId('scc-campaign-month').value || nowMonth()}).then(function () {
+				flash('API measurements recorded with source and coverage labels.');
+				return loadState();
+			}).catch(showFailure).finally(function () { b.disabled = false; });
+		});
+	});
+	[
+		['scc-campaign-gbp-disconnect', '/gbp/disconnect'],
+		['scc-campaign-ghl-disconnect', '/ghl/disconnect']
+	].forEach(function (pair) {
+		byId(pair[0]).addEventListener('click', function (event) {
+			if (!window.confirm('Disconnect this service and erase its saved reporting snapshots?')) return;
+			var b = event.currentTarget; b.disabled = true;
+			request(pair[1], 'POST').then(function () {
+				flash('Service disconnected; its saved reporting snapshots were cleared.');
+				return loadState();
+			}).catch(showFailure).finally(function () { b.disabled = false; });
 		});
 	});
 	byId('scc-campaign-ga4-property').addEventListener('submit', function (evt) {
