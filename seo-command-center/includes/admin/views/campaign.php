@@ -29,6 +29,30 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		</form>
 	</section>
 	<section class="scc-card">
+		<h2>Google Analytics 4 — Organic Search</h2>
+		<p class="description">Connect a separate read-only Google Analytics grant using the Google OAuth client from TideOrbit → Connections. Enable the Google Analytics Data API for that Google Cloud project and add the exact callback URL below under Authorized redirect URIs.</p>
+		<?php if ( isset( $_GET['scc_ga4_notice'] ) ) : ?>
+			<?php $ga4_notice = sanitize_key( wp_unslash( $_GET['scc_ga4_notice'] ) ); ?>
+			<?php if ( 'connected' === $ga4_notice ) : ?>
+				<div class="notice notice-success inline"><p>Google Analytics OAuth authorization saved. Click Refresh Analytics to verify access to your GA4 property.</p></div>
+			<?php elseif ( 'failed' === $ga4_notice ) : ?>
+				<div class="notice notice-error inline"><p>Google Analytics authorization was not completed. Verify the Google Cloud OAuth redirect URI and retry.</p></div>
+			<?php endif; ?>
+		<?php endif; ?>
+		<p><strong>OAuth callback:</strong> <code><?php echo esc_html( SCC_GA4::redirect_uri() ); ?></code></p>
+		<form id="scc-campaign-ga4-property">
+			<p><label><strong>GA4 numeric Property ID</strong><br><input type="text" inputmode="numeric" name="property_id" class="regular-text" maxlength="20" pattern="[0-9]{4,20}" placeholder="123456789" required></label>
+			<button type="submit" class="button">Save Property ID</button></p>
+		</form>
+		<p><strong>Connection:</strong> <span id="scc-campaign-ga4-status">Not connected</span></p>
+		<p>
+			<button type="button" class="button button-primary" id="scc-campaign-ga4-connect">Connect Google Analytics (read-only)</button>
+			<button type="button" class="button" id="scc-campaign-ga4-refresh">Refresh Analytics for report month</button>
+			<button type="button" class="button" id="scc-campaign-ga4-disconnect">Disconnect GA4</button>
+		</p>
+		<p class="description">Only actual Data API measurements appear as verified source data. Key events are Analytics-defined key events and do not automatically equal qualified leads. The Google Search Console connection is maintained separately.</p>
+	</section>
+	<section class="scc-card">
 		<h2>Monthly SEO report</h2>
 		<p><label>Report month <input type="month" id="scc-campaign-month"></label>
 			<button type="button" class="button" id="scc-campaign-load-report">Load report</button>

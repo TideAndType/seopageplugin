@@ -3101,6 +3101,53 @@ $gsc_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/incl
 assert_true( false !== strpos( $gsc_source, 'confirm_paid' ) && false !== strpos( $gsc_source, '20 paid organic requests' ), 'on-demand paid SERP integration requires consent and daily quota' );
 
 
+echo "\n== GA4 read-only reporting, failure states and OAuth separation ==\n";
+$invalid_month = SCC_GA4::date_range( '2026-22', '2026-10-12' );
+assert_true( is_wp_error( $invalid_month ), 'invalid report month rejected' );
+$full_period = SCC_GA4::date_range( '2026-09', '2026-10-12' );
+assert_eq( '2026-09-30', $full_period['end'], 'historical month spans final day' );
+$current_period = SCC_GA4::date_range( '2026-10', '2026-10-12' );
+assert_eq( '2026-10-10', $current_period['end'], 'current month excludes trailing ingestion delay' );
+$too_early = SCC_GA4::date_range( '2026-10', '2026-10-02' );
+assert_true( is_wp_error( $too_early ), 'not-yet-ingested current month is not falsely measured as zero' );
+$headers = array(
+	array( 'name' => 'sessions' ),
+	array( 'name' => 'totalUsers' ),
+	array( 'name' => 'keyEvents' ),
+);
+$raw = array(
+	'metricHeaders' => $headers,
+	'rowCount' => 1,
+	'rows' => array( array( 'metricValues' => array(
+		array( 'value' => '145.0' ), array( 'value' => '117' ), array( 'value' => '8' ),
+	) ) ),
+	'metadata' => array( 'subjectToThresholding' => true ),
+);
+$measured = SCC_GA4::normalize_report( $raw, '2026-09', $full_period, '123456789' );
+assert_eq( 'measured', $measured['state'], 'GA4 measurement records source state' );
+assert_eq( 'ga4_data_api', $measured['provenance'], 'GA4 readings explicitly distinguish their API source' );
+assert_eq( 145.0, $measured['sessions'], 'GA4 numeric organic sessions parsed' );
+assert_eq( 117.0, $measured['total_users'], 'GA4 numeric users parsed' );
+assert_eq( 8.0, $measured['key_events'], 'GA4 key events tracked separately from leads' );
+assert_eq( true, $measured['thresholded'], 'GA4 privacy thresholding disclosed' );
+assert_true( is_wp_error( SCC_GA4::normalize_report( array( 'rows' => array() ), '2026-09', $full_period, '123456789' ) ), 'missing provider envelope never becomes zero' );
+assert_true( is_wp_error( SCC_GA4::normalize_report( array( 'metricHeaders' => $headers, 'rowCount' => 1 ), '2026-09', $full_period, '123456789' ) ), 'missing reported rows never becomes zero' );
+$zero = SCC_GA4::normalize_report( array( 'metricHeaders' => $headers, 'rowCount' => 0 ), '2026-09', $full_period, '123456789' );
+assert_eq( 0, $zero['sessions'], 'true zero rows only accepted with valid GA4 headers and zero row count' );
+assert_true( is_wp_error( SCC_GA4::normalize_report( array(
+	'metricHeaders' => $headers, 'rowCount' => 1, 'rows' => array( array( 'metricValues' => array(
+		array( 'value' => 'oops' ), array( 'value' => '10' ), array( 'value' => '1' ),
+	) ) ),
+), '2026-09', $full_period, '123456789' ) ), 'nonnumeric provider metric is an error' );
+$GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'fake-client', 'gsc_client_secret' => 'fake-secret', 'gsc_refresh_token' => 'gsc-stays' );
+$property = SCC_GA4::set_property( '123456789' );
+assert_eq( '123456789', $property['property_id'], 'GA4 property ID saved separately' );
+assert_eq( 'not_connected', SCC_GA4::status(), 'a Google OAuth client alone does not mean GA4 is connected' );
+assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'GA4 configuration does not alter GSC refresh grant' );
+$disconnected = SCC_GA4::disconnect();
+assert_eq( 'not_connected', $disconnected['status'], 'GA4 disconnect keeps its own connection state off' );
+assert_eq( 'gsc-stays', get_option( 'scc_credentials' )['gsc_refresh_token'], 'GA4 disconnect does not revoke GSC credentials' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

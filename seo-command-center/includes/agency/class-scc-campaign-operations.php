@@ -34,6 +34,7 @@ class SCC_Campaign_Operations {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ), 25 );
 		add_action( 'rest_api_init', array( __CLASS__, 'routes' ), 25 );
 		add_action( 'scc_run_jobs', array( __CLASS__, 'weekly_maintenance' ), 25 );
+		add_action( 'admin_init', array( 'SCC_GA4', 'maybe_handle_callback' ), 15 );
 	}
 
 	public static function admin_menu() {
@@ -76,6 +77,10 @@ class SCC_Campaign_Operations {
 			'/campaign/task' => array( 'POST', 'rest_task' ),
 			'/campaign/metric' => array( 'POST', 'rest_metric' ),
 			'/campaign/gsc-refresh' => array( 'POST', 'rest_gsc_refresh' ),
+			'/campaign/ga4/property' => array( 'POST', 'rest_ga4_property' ),
+			'/campaign/ga4/auth-url' => array( 'POST', 'rest_ga4_auth_url' ),
+			'/campaign/ga4/refresh' => array( 'POST', 'rest_ga4_refresh' ),
+			'/campaign/ga4/disconnect' => array( 'POST', 'rest_ga4_disconnect' ),
 			'/campaign/serp-ranks' => array( 'POST', 'rest_serp_ranks' ),
 			'/campaign/citation' => array( 'POST', 'rest_citation' ),
 			'/campaign/outreach/sync' => array( 'POST', 'rest_outreach_sync' ),
@@ -431,6 +436,7 @@ class SCC_Campaign_Operations {
 		if ( empty( $config['name'] ) ) { return; }
 		self::seed_month( gmdate( 'Y-m' ) );
 		$result = self::refresh_gsc( false );
+		if ( class_exists( 'SCC_GA4' ) ) { SCC_GA4::maybe_capture(); }
 		if ( is_wp_error( $result ) && class_exists( 'SCC_Logger' ) ) {
 			SCC_Logger::info( 'campaign', 'GSC snapshot not refreshed: ' . $result->get_error_message() );
 		}
@@ -449,11 +455,12 @@ class SCC_Campaign_Operations {
 			'deliverables' => array( 'completed' => $done, 'total' => count( $tasks ), 'tasks' => $tasks ),
 			'measurements' => $metrics,
 			'search_console' => $history ? end( $history ) : null,
+			'google_analytics' => class_exists( 'SCC_GA4' ) ? SCC_GA4::monthly( $month ) : null,
 			'organically_measured_serps' => array_slice( $serp, -10 ),
 			'connections' => self::connections(),
 			'citations' => array_values( self::citations() ),
 			'outreach' => array_values( self::outreach() ),
-			'disclaimer' => 'GSC positions are impression-weighted averages, not exact rank. Manual metrics are unverified and require independent evidence.',
+			'disclaimer' => 'GSC positions are impression-weighted averages, not exact rank. GA4 key events represent configured key events, not necessarily qualified leads. Manual metrics are unverified and require independent evidence.',
 		);
 	}
 
@@ -461,7 +468,7 @@ class SCC_Campaign_Operations {
 		return array(
 			'gsc' => class_exists( 'SCC_GSC' ) && SCC_GSC::is_connected() ? 'connected' : 'disconnected',
 			'gbp' => 'not_connected',
-			'ga4' => 'not_connected',
+			'ga4' => class_exists( 'SCC_GA4' ) ? SCC_GA4::status() : 'not_available',
 			'crm' => 'not_connected',
 			'ai_citations' => 'not_connected',
 			'paid_citation_public' => (bool) get_option( 'scc_citation_public_paid_enabled', false ),
@@ -474,6 +481,7 @@ class SCC_Campaign_Operations {
 			'campaign' => self::config(),
 			'report' => self::report( gmdate( 'Y-m' ) ),
 			'history' => self::history(),
+			'ga4' => class_exists( 'SCC_GA4' ) ? SCC_GA4::state() : array( 'status' => 'not_available' ),
 			'public_citations' => array(
 				'enabled' => (bool) get_option( 'scc_citation_public_enabled', false ),
 				'paid' => (bool) get_option( 'scc_citation_public_paid_enabled', false ),
@@ -514,6 +522,44 @@ class SCC_Campaign_Operations {
 		$result = self::scan_serp_ranks( $p['market_index'] ?? 0, $p['start'] ?? 0, ! empty( $p['confirm_paid'] ) );
 		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
+
+	public static function ga4_admin_permission() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return new WP_Error( 'scc_ga4_forbidden', 'Only administrators can configure or disconnect Analytics.', array( 'status' => 403 ) );
+		}
+		return true;
+	}
+
+	public static function rest_ga4_property( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$raw = self::input( $request );
+		$result = SCC_GA4::set_property( $raw['property_id'] ?? '' );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
+	public static function rest_ga4_auth_url() {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$url = SCC_GA4::auth_url();
+		return is_wp_error( $url ) ? $url : rest_ensure_response( array( 'url' => $url ) );
+	}
+
+	public static function rest_ga4_refresh( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$raw = self::input( $request );
+		$month = sanitize_text_field( (string) ( $raw['month'] ?? gmdate( 'Y-m' ) ) );
+		$result = SCC_GA4::capture_month( $month );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
+	public static function rest_ga4_disconnect() {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		return rest_ensure_response( SCC_GA4::disconnect() );
+	}
+
 	public static function rest_report( $request ) {
 		$month = sanitize_text_field( (string) $request->get_param( 'month' ) );
 		return rest_ensure_response( self::report( $month ) );
