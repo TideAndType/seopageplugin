@@ -75,6 +75,17 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 		</form>
 	</section>
 	<section class="scc-card">
+		<h2>Local citation management</h2>
+		<p class="description">Track real listing checks, claims, corrections and verification. These statuses are updated by your team; TideOrbit does not submit directory forms or claim ownership of listings.</p>
+		<details><summary>Open citation inventory and status tracking</summary><div id="scc-campaign-citations"></div></details>
+	</section>
+	<section class="scc-card">
+		<h2>Authority outreach pipeline</h2>
+		<p class="description">Run a Backlink Gap scan in Growth Lab, then import identified prospects here. Nothing sends messages or creates backlinks automatically.</p>
+		<p><button type="button" class="button" id="scc-campaign-outreach-sync">Import Backlink Gap opportunities</button></p>
+		<details><summary>Open backlink outreach worklist</summary><div id="scc-campaign-outreach"></div></details>
+	</section>
+	<section class="scc-card">
 		<h2>Connections and safety</h2>
 		<div id="scc-campaign-connections"></div>
 		<p class="description">GBP management, GA4 and CRM connectors are not installed; tracked tasks and manual results do not create API connections.</p>
