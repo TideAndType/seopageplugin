@@ -202,9 +202,12 @@ class SCC_DataForSEO {
 		$path = 'google_ai_mode' === $surface ? '/serp/google/ai_mode/live/advanced' : '/serp/google/organic/live/advanced';
 		$task = array(
 			'keyword' => $keyword, 'location_name' => $location,
-			'language_code' => 'en', 'device' => 'desktop', 'depth' => 10,
+			'language_code' => 'en', 'device' => 'desktop',
 		);
-		if ( 'google_ai_overview' === $surface ) { $task['load_async_ai_overview'] = true; }
+		if ( 'google_ai_overview' === $surface ) {
+			$task['depth'] = 10;
+			$task['load_async_ai_overview'] = true;
+		}
 		return self::post( $path, $task );
 	}
 

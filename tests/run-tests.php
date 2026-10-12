@@ -3286,6 +3286,9 @@ $no_ai = SCC_AI_Citation_Monitor::ai_serp_observation(
 );
 assert_eq( 'ai_result_not_shown', $no_ai['state'], 'valid measured organic SERP without AI answer uses not-shown state' );
 assert_eq( false, $no_ai['domain_cited'], 'organic ranked page is not counted as AI citation' );
+$mode_direct = SCC_AI_Citation_Monitor::ai_serp_observation( array( array( 'ai_overview' => array( 'markdown' => 'Tide Type was mentioned.', 'references' => array( array( 'url' => 'https://example.com/a' ) ) ) ) ), 'best IT', 'United States', 'example.com', array( 'Tide Type' ), 'google_ai_mode' );
+assert_eq( 'measured', $mode_direct['state'], 'AI Mode response with an explicit AI object can be measured without unrelated items' );
+assert_eq( true, $mode_direct['domain_cited'], 'direct AI Mode cited source counted' );
 $ai_sample = array( array( 'items' => array(
 	array( 'type' => 'organic', 'url' => 'https://example.com/', 'rank_absolute' => 1 ),
 	array( 'type' => 'ai_overview', 'markdown' => 'Tide Type is one of the firms.',

@@ -77,13 +77,13 @@ class SCC_AI_Citation_Monitor {
 
 	/** Public, deterministic parser. Never treat ordinary organic links as AI citations. */
 	public static function ai_serp_observation( $results, $keyword, $market, $domain, array $brands, $surface ) {
-		if ( ! is_array( $results ) || ! isset( $results[0] ) || ! is_array( $results[0] ) || ! isset( $results[0]['items'] ) || ! is_array( $results[0]['items'] ) ) {
+		if ( ! is_array( $results ) || ! isset( $results[0] ) || ! is_array( $results[0] ) || ( ! isset( $results[0]['items'] ) || ! is_array( $results[0]['items'] ) ) && ! ( 'google_ai_mode' === $surface && isset( $results[0]['ai_overview'] ) && is_array( $results[0]['ai_overview'] ) ) ) {
 			return new WP_Error( 'scc_ai_serp_incomplete', 'Paid SERP response lacked structured items; no visibility measurement recorded.', array( 'status' => 502 ) );
 		}
 		$block = $results[0];
 		$ai = array();
 		if ( 'google_ai_mode' === $surface && ! empty( $block['ai_overview'] ) && is_array( $block['ai_overview'] ) ) { $ai[] = $block['ai_overview']; }
-		foreach ( $block['items'] as $item ) {
+		foreach ( (array) ( $block['items'] ?? array() ) as $item ) {
 			if ( is_array( $item ) && 'ai_overview' === ( $item['type'] ?? '' ) ) { $ai[] = $item; }
 		}
 		if ( ! $ai ) {
