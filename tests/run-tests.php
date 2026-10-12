@@ -565,7 +565,7 @@ assert_eq( 'HTTP 400 — plain string err', $eerr->invoke( $lm2, array( 'error' 
 assert_eq( 'HTTP 400 — raw body here', $eerr->invoke( $lm2, null, 'raw body here', 400 ), 'raw-body fallback' );
 assert_eq( 'HTTP 400', $eerr->invoke( $lm2, null, '', 400 ), 'no detail fallback' );
 
-echo "\n== AI Manager: safety-net fallback to a configured provider ==\n";
+echo "\n== AI Manager: explicit provider allow-list ==\n";
 if ( ! class_exists( 'SCC_AI_Usage' ) ) {
 	class SCC_AI_Usage {
 		public static function record( $response, $operation = '' ) {}
@@ -607,16 +607,24 @@ class SCC_Test_Manager extends SCC_AI_Manager {
 	}
 }
 
-// Primary (claude) has a bad key; LM Studio is configured → manager should
-// fall through to LM Studio automatically instead of returning the auth error.
-$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => '' );
+// Failover is allowed only if the user explicitly selected that fallback.
+$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => 'lmstudio' );
 $mgr = new SCC_Test_Manager( array(
 	new SCC_Fake_Provider( 'claude', false, true ),
 	new SCC_Fake_Provider( 'lmstudio', true, true ),
 ) );
 $resp = $mgr->complete( array( 'messages' => array() ), 'keyword-strategy' );
-assert_true( ! $resp->is_error(), 'falls back to a configured provider when primary key is bad' );
-assert_eq( 'from:lmstudio', $resp->content, 'used LM Studio as the safety-net provider' );
+assert_true( ! $resp->is_error(), 'uses only the explicitly configured fallback when primary fails' );
+assert_eq( 'from:lmstudio', $resp->content, 'explicit LM Studio fallback used' );
+
+// With no selected fallback, do not silently contact other configured hosts.
+$GLOBALS['scc_test_options']['scc_settings'] = array( 'default_provider' => 'claude', 'fallback_provider' => '' );
+$local_only = new SCC_Test_Manager( array(
+	new SCC_Fake_Provider( 'claude', false, true ),
+	new SCC_Fake_Provider( 'openai', true, true ),
+) );
+$local_only_result = $local_only->complete( array( 'messages' => array() ), 'keyword-strategy' );
+assert_true( $local_only_result->is_error(), 'empty fallback never routes to another configured provider' );
 
 // When nothing succeeds, the reported error is the primary provider's, with guidance.
 $mgr2 = new SCC_Test_Manager( array(
@@ -3057,3 +3065,28 @@ assert_true( false !== strpos( $ui_temp_src, 'scc-visual-file' ) && false !== st
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
+
+
+echo "\n== SEO campaign operations: plan limits and deliverables ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/agency/class-scc-campaign-operations.php';
+$plans = SCC_Campaign_Operations::plans();
+assert_eq( 10, $plans['local']['themes'], 'local plan caps search themes at ten' );
+assert_eq( 50, $plans['authority']['themes'], 'authority plan includes fifty search themes' );
+$input = array(
+	'name' => 'Clinic',
+	'plan' => 'local',
+	'markets' => array( 'Daytona', 'Ormond' ),
+	'themes' => array_fill( 0, 13, 'example' ),
+	'assets' => 0,
+);
+$cfg = SCC_Campaign_Operations::normalize_config( $input );
+assert_eq( array( 'Daytona' ), $cfg['markets'], 'local plan allows only one market' );
+assert_eq( 1, $cfg['assets'], 'plan enforces minimum content assets' );
+assert_eq( array( 'example' ), $cfg['themes'], 'duplicate search themes collapsed' );
+$tasks = SCC_Campaign_Operations::task_templates( $cfg );
+assert_true( count( $tasks ) >= 5, 'local plan has monthly SEO workflow' );
+$authority = SCC_Campaign_Operations::normalize_config( array( 'name' => 'Firm', 'plan' => 'authority', 'assets' => 4 ) );
+$author_tasks = SCC_Campaign_Operations::task_templates( $authority );
+$author_types = array_map( function ( $t ) { return $t[0]; }, $author_tasks );
+assert_true( in_array( 'backlinks', $author_types, true ), 'authority plan schedules digital PR' );
+assert_true( in_array( 'cro', $author_types, true ), 'authority plan schedules CRO experiment' );
