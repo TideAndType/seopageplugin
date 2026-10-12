@@ -80,6 +80,44 @@
 			});
 		});
 	}
+
+	function renderPipeline(hostId, entries, statuses, route, labelKey) {
+		var host = byId(hostId);
+		if (!host) return;
+		clear(host);
+		if (!entries.length) {
+			node('p', host, 'No tracked items yet. Save a campaign or import opportunities.');
+			return;
+		}
+		node('p', host, entries.length + ' tracked opportunities. Statuses are entered manually; do not imply automatic verification.');
+		var table = node('table', host, null, 'widefat striped');
+		var head = node('tr', node('thead', table));
+		['Directory / domain', 'Status', 'Notes', 'Evidence', 'Action'].forEach(function (h) { node('th', head, h); });
+		var body = node('tbody', table);
+		entries.forEach(function (item) {
+			var tr = node('tr', body);
+			var title = node('td', tr);
+			node('strong', title, item[labelKey] || item.domain);
+			if (item.priority) node('div', title, item.priority + ' · ' + (item.type || ''));
+			var status = node('select', node('td', tr));
+			statuses.forEach(function (key) {
+				var opt = node('option', status, key.replace(/_/g, ' ')); opt.value = key;
+			});
+			status.value = item.status;
+			var notes = node('input', node('td', tr));
+			notes.type = 'text'; notes.value = item.notes || ''; notes.style.maxWidth = '180px';
+			var evidence = node('input', node('td', tr));
+			evidence.type = 'url'; evidence.value = item.evidence_url || ''; evidence.style.maxWidth = '180px';
+			evidence.placeholder = 'https://';
+			var button = node('button', node('td', tr), 'Save', 'button'); button.type = 'button';
+			button.addEventListener('click', function () {
+				button.disabled = true;
+				request(route, 'POST', { id: item.id, status: status.value, notes: notes.value, evidence_url: evidence.value })
+					.then(function () { flash('Worklist updated.'); loadReport(); })
+					.catch(showFailure).finally(function () { button.disabled = false; });
+			});
+		});
+	}
 	function renderReport(r) {
 		currentReport = r;
 		var host = byId('scc-campaign-report'); clear(host);
@@ -137,6 +175,8 @@
 		}
 		node('p', host, r.disclaimer, 'description');
 		renderTasks(r);
+		renderPipeline('scc-campaign-citations', r.citations || [], ['unverified', 'missing', 'needs_correction', 'claimed', 'submitted', 'verified', 'not_applicable'], '/citation', 'name');
+		renderPipeline('scc-campaign-outreach', r.outreach || [], ['identified', 'qualified', 'pitched', 'responded', 'earned', 'declined', 'not_relevant'], '/outreach', 'domain');
 		renderConnections(r.connections || {});
 	}
 	function renderConnections(c) {
@@ -200,6 +240,12 @@
 			confirm_paid: true
 		}).then(function () { flash('SERP rank check recorded.'); loadReport(); })
 			.catch(showFailure).finally(function () { b.disabled = false; });
+	});
+	byId('scc-campaign-outreach-sync').addEventListener('click', function (evt) {
+		var button = evt.currentTarget; button.disabled = true;
+		request('/outreach/sync', 'POST').then(function (r) {
+			flash('Imported ' + r.imported + ' backlink prospects into the manual outreach pipeline.'); loadReport();
+		}).catch(showFailure).finally(function () { button.disabled = false; });
 	});
 	byId('scc-campaign-load-report').addEventListener('click', loadReport);
 	byId('scc-campaign-print').addEventListener('click', function () { if (currentReport) window.print(); });
