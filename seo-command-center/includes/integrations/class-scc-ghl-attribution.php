@@ -97,7 +97,7 @@ class SCC_GHL_Attribution {
 		$s = strtolower( trim( (string) $raw ) );
 		if ( '' === $s ) { return 'unknown'; }
 		// Tight, explicit labels, rather than guessing "Google" traffic was SEO.
-		if ( preg_match( '/\b(google|bing)\s+(organic|seo)\b|\borganic\s+(search|seo)\b|\bseo\b/', $s ) ) { return 'organic_labeled'; }
+		if ( preg_match( '/^(?:(?:google|bing|yahoo|duckduckgo)\s+(?:organic|seo)|organic(?:\s+(?:search|seo))?|seo|search engine optimization)$/', $s ) ) { return 'organic_labeled'; }
 		return 'other';
 	}
 	/** No names, phone numbers, emails, contact IDs, or individual opportunities are stored. */

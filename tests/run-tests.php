@@ -3243,6 +3243,9 @@ assert_eq( 'ga4-stays', get_option( 'scc_credentials' )['ga4_refresh_token'], 'G
 assert_eq( 'organic_labeled', SCC_GHL_Attribution::classify_source( 'Google organic' ), 'explicit Google organic source counted' );
 assert_eq( 'organic_labeled', SCC_GHL_Attribution::classify_source( 'SEO' ), 'explicit SEO label counted' );
 assert_eq( 'other', SCC_GHL_Attribution::classify_source( 'Google Ads' ), 'Google Ads never attributed to organic SEO' );
+assert_eq( 'other', SCC_GHL_Attribution::classify_source( 'Non-SEO' ), 'negative SEO source text never counted as organic' );
+assert_eq( 'other', SCC_GHL_Attribution::classify_source( 'SEO paid' ), 'mixed paid SEO label not counted as organic' );
+assert_eq( 'organic_labeled', SCC_GHL_Attribution::classify_source( 'Organic' ), 'explicit standalone organic source recognized' );
 assert_eq( 'unknown', SCC_GHL_Attribution::classify_source( '' ), 'missing source not attributed to SEO' );
 $crm = SCC_GHL_Attribution::summarize( array(
 	array( 'id' => '1', 'createdAt' => '2026-09-10T08:00:00Z', 'source' => 'Google organic', 'status' => 'won', 'monetaryValue' => 1200 ),
