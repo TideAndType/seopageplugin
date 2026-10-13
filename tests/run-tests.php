@@ -3579,6 +3579,37 @@ assert_true( false !== strpos( $source_code, "'post_status' => 'draft'" ), 'new 
 assert_true( false !== strpos( $source_code, "hash_equals( (string) $" . "brief['source_hash']" ), 'source-change conflict guard exists before creating a draft' );
 assert_true( false === strpos( $source_code, 'wp_update_post(' ) && false === strpos( $source_code, 'delete_post_meta(' ), 'review draft never updates or removes the original page or its Elementor data' );
 
+
+echo "\n== AI side-by-side section approval and selective Elementor draft ==\n";
+assert_true( is_wp_error( SCC_AI_Page_Improvements::normalized_approvals( array(), 2 ) ), 'zero approved AI sections never yields a draft' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::normalized_approvals( array( 0, 0 ), 2 ) ), 'duplicate review indices rejected' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::normalized_approvals( array( -1 ), 2 ) ), 'negative section index rejected' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::normalized_approvals( array( 2 ), 2 ) ), 'index outside brief array rejected' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::normalized_approvals( array( '0' ), 2 ) ), 'string-like selection cannot bypass strict int section matching' );
+assert_eq( array( 0, 1 ), SCC_AI_Page_Improvements::normalized_approvals( array( 1, 0 ), 2 ), 'approved indices are normalized in source order' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::selected_brief( $brief ) ), 'existing legacy brief without section approval is blocked from draft creation' );
+$selectable = $brief;
+$selectable['approved_sections'] = array( 1 );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::selected_brief( $selectable ) ), 'server requires persisted human reviewed_at marker' );
+$selectable['reviewed_at'] = gmdate( 'c' );
+$chosen = SCC_AI_Page_Improvements::selected_brief( $selectable );
+assert_true( ! is_wp_error( $chosen ), 'reviewed and selected brief can be filtered' );
+assert_eq( array( 1 ), $chosen['approved_sections'], 'selected draft includes original approved index' );
+assert_eq( 1, count( $chosen['draft_sections'] ), 'unapproved sections excluded from draft' );
+assert_eq( 'Review the service agreement', $chosen['draft_sections'][0]['heading'], 'approved section mapped to original proposal index' );
+$selected_clone = SCC_AI_Page_Improvements::clone_elementor_with_review( $elementor_example, $chosen );
+$html = $selected_clone[1]['elements'][1]['settings']['editor'];
+assert_true( false !== strpos( $html, 'Review the service agreement' ), 'approved section appears in Elementor review draft preview' );
+assert_true( false === strpos( $html, 'Questions to ask a provider' ), 'unapproved section is absent from Elementor widget HTML' );
+assert_eq( $elementor_before, wp_json_encode( $elementor_example ), 'selective draft review never mutates source Elementor JSON in memory' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::preview( 'unknown' ) ), 'preview requires a linked approved existing-page opportunity' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::approve_sections( 'unknown', array( 0 ), $brief['created_at'] ) ), 'unauthorized/unlinked opportunity cannot save section approvals' );
+$review_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/agency/class-scc-ai-page-improvements.php' );
+assert_true( false !== strpos( $review_source, 'self::selected_brief( $brief )' ), 'draft creation checks explicit approved sections on server' );
+assert_true( false !== strpos( $review_source, 'self::source_snapshot( $linked[' . "'post']" . ' )' ), 'approval rechecks page source snapshot before storing' );
+assert_true( false !== strpos( $review_source, "'post_content' => $" . "has_elementor ?" ), 'Elementor drafts do not duplicate the proposed copy into post_content' );
+assert_true( false === strpos( $review_source, 'wp_update_post(' ), 'selective approval never mutates source live post' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
