@@ -2,7 +2,20 @@
 /** TideOrbit SEO Campaign Operations administrative screen. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
 ?>
-<style>@media print { body * { visibility: hidden !important; } #scc-campaign-report, #scc-campaign-report * { visibility: visible !important; } #scc-campaign-report { position: absolute; top: 0; left: 0; width: 100%; } }</style>
+<style>@media print { body * { visibility: hidden !important; } #scc-campaign-report, #scc-campaign-report * { visibility: visible !important; } #scc-campaign-report { position: absolute; top: 0; left: 0; width: 100%; } }
+.scc-ai-improvement-zone { margin-top: 12px; padding: 14px; border-top: 1px solid #dcdcde; }
+.scc-ai-content-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; margin: 14px 0; }
+.scc-ai-content-panel { background: #fff; border: 1px solid #c3c4c7; border-radius: 7px; padding: 16px; min-width: 0; overflow-wrap: anywhere; }
+.scc-ai-content-panel h4 { margin-top: 0; font-size: 16px; }
+.scc-ai-copy-preview { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.scc-ai-content-panel > .scc-ai-copy-preview { max-height: 550px; overflow-y: auto; background: #f6f7f7; padding: 12px; border-radius: 4px; }
+.scc-ai-review-section { border-top: 1px solid #dcdcde; padding: 14px 0; }
+.scc-ai-review-section:first-of-type { border-top: none; }
+.scc-ai-review-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.scc-ai-review-buttons .button { margin: 0; }
+@media (max-width: 850px) { .scc-ai-content-compare { grid-template-columns: minmax(0, 1fr); } }
+@media print { .scc-ai-review-buttons { display: none !important; } }
+</style>
 <div class="wrap scc-wrap" id="scc-campaign-root">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'SEO Campaign Operations', 'seo-command-center' ); ?></h1>
@@ -192,7 +205,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 			<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-elementor' ) ); ?>">Open Elementor templates</a>
 		</p>
 		<div id="scc-campaign-ai-opportunities" aria-live="polite"></div>
-		<p class="description">Approve suggestions before handing them off. A new content idea becomes a <strong>recommended Content Plan entry</strong>, never an automatically generated or published page. Choosing an existing page only saves an editor link; it never modifies Elementor content.</p>
+		<p class="description">Approve opportunities before handing them off. Existing-page handoffs support a two-column read-only content comparison and individual section approvals. Only approved sections are included in a separate Elementor/WordPress draft. The visual comparison shows readable copy, not a pixel screenshot; the original live page and Elementor layout are never overwritten.</p>
 	</section>
 	<section class="scc-card">
 		<h2>Deliverables and approvals</h2>
