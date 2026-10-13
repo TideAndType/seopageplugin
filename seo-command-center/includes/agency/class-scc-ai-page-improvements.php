@@ -202,6 +202,11 @@ class SCC_AI_Page_Improvements {
 		$brief = self::normalize_brief( $r->json(), $audit );
 		if ( is_wp_error( $brief ) ) { return $brief; }
 		$brief['source_title'] = $snapshot['title'];
+		$brief['revision'] = hash( 'sha256', wp_json_encode( array(
+			$brief['opportunity_id'], $brief['source_hash'],
+			$brief['draft_sections'], $brief['created_at'],
+		) ) );
+		$brief['section_reviews'] = array_fill( 0, count( $brief['draft_sections'] ), 'pending' );
 		// Do not persist large source text or Elementor JSON in options.
 		$briefs = get_option( 'scc_ai_page_improvement_briefs', array() );
 		if ( ! is_array( $briefs ) ) { $briefs = array(); }
@@ -228,10 +233,101 @@ class SCC_AI_Page_Improvements {
 		$entry = is_array( $briefs ) ? ( $briefs[$id] ?? null ) : null;
 		return is_array( $entry ) ? $entry : null;
 	}
+
+	/**
+	 * Read-only content comparison for the linked page, never a screenshot,
+	 * remote crawl, fabricated diff, or inferred section-to-widget mapping.
+	 */
+	public static function compare( $id ) {
+		$linked = self::linked_page( $id );
+		if ( is_wp_error( $linked ) ) { return $linked; }
+		$brief = self::brief( $id );
+		if ( ! $brief ) {
+			return new WP_Error( 'scc_ai_compare_brief', 'Generate an LM Studio brief before comparing sections.', array( 'status' => 409 ) );
+		}
+		$snapshot = self::source_snapshot( $linked['post'] );
+		if ( (int) ( $brief['source_post_id'] ?? 0 ) !== $snapshot['source_post_id'] ||
+			! hash_equals( (string) ( $brief['source_hash'] ?? '' ), (string) $snapshot['source_hash'] ) ) {
+			return new WP_Error( 'scc_ai_compare_stale', 'The original page has changed. Regenerate the brief before reviewing.', array( 'status' => 409 ) );
+		}
+		return array(
+			'state' => 'read_only_content_comparison',
+			'source_title' => $snapshot['title'],
+			'source_post_id' => $snapshot['source_post_id'],
+			'source_status' => $snapshot['source_post_status'],
+			'source_url' => $snapshot['url'],
+			'source_excerpt' => substr( (string) $snapshot['text'], 0, 5500 ),
+			'source_word_count' => (int) $snapshot['word_count'],
+			'source_uses_elementor' => (bool) $snapshot['has_elementor'],
+			'brief_revision' => (string) ( $brief['revision'] ?? '' ),
+			'sections' => self::sections_for_review( $brief ),
+			'note' => 'Side-by-side copy comparison, not a pixel-accurate Elementor screenshot. Proposed sections are not mapped to existing widgets and do not replace existing copy automatically.',
+		);
+	}
+	public static function sections_for_review( array $brief ) {
+		$out = array();
+		foreach ( (array) ( $brief['draft_sections'] ?? array() ) as $index => $section ) {
+			if ( ! is_array( $section ) ) { continue; }
+			$decision = (string) ( $brief['section_reviews'][$index] ?? 'pending' );
+			$out[] = array(
+				'index' => (int) $index,
+				'heading' => (string) ( $section['heading'] ?? '' ),
+				'body' => (string) ( $section['body'] ?? '' ),
+				'decision' => in_array( $decision, array( 'approved', 'rejected', 'pending' ), true ) ? $decision : 'pending',
+			);
+		}
+		return $out;
+	}
+	/** Save an explicit, per-section editorial decision on this exact brief. */
+	public static function review_section( $id, $section_index, $decision, $expected_revision ) {
+		$linked = self::linked_page( $id );
+		if ( is_wp_error( $linked ) ) { return $linked; }
+		$all = get_option( 'scc_ai_page_improvement_briefs', array() );
+		if ( ! is_array( $all ) || ! isset( $all[$id] ) || ! is_array( $all[$id] ) ) {
+			return new WP_Error( 'scc_ai_review_brief_missing', 'Generate an improvement brief before approving a section.', array( 'status' => 409 ) );
+		}
+		$brief = $all[$id];
+		$actual_revision = (string) ( $brief['revision'] ?? '' );
+		if ( '' === $actual_revision || '' === $expected_revision ||
+			! hash_equals( $actual_revision, (string) $expected_revision ) ) {
+			return new WP_Error( 'scc_ai_review_conflict', 'This brief was replaced. Reload the comparison before approving changes.', array( 'status' => 409 ) );
+		}
+		$snapshot = self::source_snapshot( $linked['post'] );
+		if ( (int) $brief['source_post_id'] !== $snapshot['source_post_id'] ||
+			! hash_equals( (string) $brief['source_hash'], $snapshot['source_hash'] ) ) {
+			return new WP_Error( 'scc_ai_review_source_changed', 'The source page changed. Generate a new brief before reviewing sections.', array( 'status' => 409 ) );
+		}
+		if ( ! is_int( $section_index ) || $section_index < 0 ||
+			$section_index >= count( (array) ( $brief['draft_sections'] ?? array() ) ) ||
+			! in_array( $decision, array( 'approved', 'rejected', 'pending' ), true ) ) {
+			return new WP_Error( 'scc_ai_review_invalid', 'Choose an actual proposed section and an allowed editorial decision.', array( 'status' => 400 ) );
+		}
+		$reviews = array_values( (array) ( $brief['section_reviews'] ?? array() ) );
+		$reviews = array_pad( array_slice( $reviews, 0, count( $brief['draft_sections'] ) ), count( $brief['draft_sections'] ), 'pending' );
+		$reviews[$section_index] = $decision;
+		$brief['section_reviews'] = $reviews;
+		$brief['review_updated_at'] = gmdate( 'c' );
+		$all[$id] = $brief;
+		update_option( 'scc_ai_page_improvement_briefs', $all, false );
+		return array( 'opportunity_id' => $id, 'revision' => $actual_revision,
+			'sections' => self::sections_for_review( $brief ),
+			'approved_count' => count( self::approved_sections( $brief ) ),
+			'notice' => 'Editorial decision saved. Only approved sections can enter the independent WordPress review draft.',
+		);
+	}
+	public static function approved_sections( array $brief ) {
+		$out = array();
+		foreach ( (array) ( $brief['draft_sections'] ?? array() ) as $index => $section ) {
+			if ( 'approved' === ( $brief['section_reviews'][$index] ?? 'pending' ) && is_array( $section ) ) {
+				$out[] = $section;
+			}
+		}
+		return $out;
+	}
 	protected static function proposed_html( array $brief ) {
 		$html = '<h2>AI review suggestions — not approved for publication</h2>';
 		$html .= '<p>Editorial rationale: ' . esc_html( $brief['editorial_rationale'] ) . '</p>';
-		foreach ( $brief['draft_sections'] as $section ) {
+		foreach ( self::approved_sections( $brief ) as $section ) {
 			$html .= '<h2>' . esc_html( $section['heading'] ) . '</h2>';
 			$html .= '<p>' . nl2br( esc_html( $section['body'] ) ) . '</p>';
 		}
@@ -275,6 +371,9 @@ class SCC_AI_Page_Improvements {
 		$brief = self::brief( $id );
 		if ( ! $brief || 'needs_human_review' !== ( $brief['status'] ?? '' ) ) {
 			return new WP_Error( 'scc_ai_missing_brief', 'Generate and review the LM Studio improvement brief first.', array( 'status' => 409 ) );
+		}
+		if ( ! self::approved_sections( $brief ) ) {
+			return new WP_Error( 'scc_ai_no_approved_sections', 'Approve at least one proposed section in the side-by-side review before creating a draft.', array( 'status' => 409 ) );
 		}
 		$post = $linked['post'];
 		$source = self::source_snapshot( $post );
