@@ -86,6 +86,8 @@ class SCC_Campaign_Operations {
 			'/campaign/ai-page/audit' => array( 'POST', 'rest_ai_page_audit' ),
 			'/campaign/ai-page/brief' => array( 'POST', 'rest_ai_page_brief' ),
 			'/campaign/ai-page/draft' => array( 'POST', 'rest_ai_page_draft' ),
+			'/campaign/ai-page/compare' => array( 'POST', 'rest_ai_page_compare' ),
+			'/campaign/ai-page/section-review' => array( 'POST', 'rest_ai_page_section_review' ),
 			'/campaign/ai-opportunities/pages' => array( 'GET', 'rest_ai_opportunities_pages' ),
 			'/campaign/ai-providers/key' => array( 'POST', 'rest_ai_provider_key' ),
 			'/campaign/ai-providers/disconnect' => array( 'POST', 'rest_ai_provider_disconnect' ),
@@ -751,6 +753,30 @@ class SCC_Campaign_Operations {
 			return new WP_Error( 'scc_ai_page_consent', 'Confirm sending existing page text to your configured LM Studio endpoint.', array( 'status' => 400 ) );
 		}
 		$r = SCC_AI_Page_Improvements::generate_brief( sanitize_text_field( (string) ( $p['id'] ?? '' ) ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+
+	public static function rest_ai_page_compare( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$r = SCC_AI_Page_Improvements::compare( sanitize_text_field( (string) ( $p['id'] ?? '' ) ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_page_section_review( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$index = $p['section_index'] ?? null;
+		if ( ! is_int( $index ) && ! ( is_string( $index ) && ctype_digit( $index ) ) ) {
+			return new WP_Error( 'scc_ai_review_section_index', 'An integer section index is required.', array( 'status' => 400 ) );
+		}
+		$r = SCC_AI_Page_Improvements::review_section(
+			sanitize_text_field( (string) ( $p['id'] ?? '' ) ),
+			(int) $index,
+			sanitize_key( (string) ( $p['decision'] ?? '' ) ),
+			sanitize_text_field( (string) ( $p['expected_revision'] ?? '' ) )
+		);
 		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
 	}
 	public static function rest_ai_page_draft( $request ) {
