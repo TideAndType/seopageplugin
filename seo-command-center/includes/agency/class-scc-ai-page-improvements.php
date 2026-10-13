@@ -399,7 +399,8 @@ class SCC_AI_Page_Improvements {
 		$new_post = wp_insert_post( array(
 			'post_type' => (string) $post->post_type, 'post_status' => 'draft',
 			'post_title' => '[AI Review Draft] ' . (string) $post->post_title,
-			'post_content' => (string) $post->post_content . "\n" . self::proposed_html( $selected_brief ),
+			'post_content' => $has_elementor ? (string) $post->post_content
+				: (string) $post->post_content . "\n" . self::proposed_html( $selected_brief ),
 			'post_excerpt' => (string) ( $post->post_excerpt ?? '' ),
 			'post_author' => (int) get_current_user_id(),
 			'comment_status' => 'closed',
