@@ -327,11 +327,14 @@
 	function renderPageImprovement(card, opportunity) {
 		if (!opportunity.handoff || opportunity.handoff.mode !== 'existing') return;
 		var zone = node('div', card);
-		zone.style.marginTop = '12px'; zone.style.padding = '10px';
-		zone.style.borderTop = '1px solid #dcdcde';
-		node('h4', zone, 'Existing-page AI improvement · source page unchanged');
+		zone.className = 'scc-ai-improvement-zone';
+		node('h4', zone, 'Before / after editorial review · source page unchanged');
 		var brief = (currentReport && currentReport.ai_page_briefs || {})[opportunity.id];
-		var details = node('div', zone);
+		var details = node('div', zone), comparison = node('div', zone);
+		var currentCompare = null;
+		function approvedCount() {
+			return (brief && brief.section_reviews || []).filter(function (status) { return status === 'approved'; }).length;
+		}
 		function showAudit(audit) {
 			clear(details);
 			node('p', details, 'Read-only audit · Source post #' + audit.source_post_id + ' · ' + audit.question);
@@ -343,20 +346,20 @@
 			(audit.review_checklist || []).forEach(function (step) { node('p', details, '• ' + step); });
 		}
 		function showBrief(value) {
-			brief = value;
-			clear(details);
-			node('p', details, 'LM Studio-only improvement brief · human fact-check required · ' + value.created_at);
+			brief = value; clear(details); clear(comparison); currentCompare = null;
+			node('p', details, 'LM Studio editorial suggestions · human fact-check required · ' + value.created_at);
 			node('p', details, value.editorial_rationale);
 			var list = node('ol', details);
-			(value.draft_sections || []).forEach(function (section) {
+			(value.draft_sections || []).forEach(function (section, index) {
 				var li = node('li', list);
-				node('strong', li, section.heading);
+				node('strong', li, section.heading + ' · ' + ((value.section_reviews || [])[index] || 'pending'));
 				node('p', li, section.body);
 			});
 			if ((value.verification_needed || []).length) {
-				node('strong', details, 'Verify before publishing');
+				node('strong', details, 'Fact checks required before publication');
 				(value.verification_needed || []).forEach(function (check) { node('p', details, '• ' + check); });
 			}
+			if (!value.revision) node('p', details, 'This older brief needs regeneration to enable individual section approvals.');
 		}
 		var auditButton = node('button', zone, 'Audit existing page');
 		auditButton.type = 'button'; auditButton.className = 'button'; auditButton.style.marginRight = '8px';
@@ -368,34 +371,93 @@
 		var briefButton = node('button', zone, brief ? 'Regenerate LM Studio brief' : 'Create LM Studio improvement brief');
 		briefButton.type = 'button'; briefButton.className = 'button'; briefButton.style.marginRight = '8px';
 		briefButton.addEventListener('click', function () {
-			if (!window.confirm('Send a bounded excerpt of this existing WordPress page and its AI citation question to your configured LM Studio server? This calls LM Studio only; no hosted AI fallback.')) return;
+			if (!window.confirm('Send a bounded excerpt of this existing WordPress page and its AI citation question to your configured LM Studio server? Previous section approvals will reset. This calls LM Studio only; no hosted AI fallback.')) return;
 			briefButton.disabled = true;
 			request('/ai-page/brief', 'POST', {id: opportunity.id, confirm_local_ai: true})
 				.then(function (result) {
 					showBrief(result);
-					flash('Local LM Studio generated a review-only editorial brief. Check all suggested facts.');
+					flash('LM Studio generated a new editorial brief. Compare and approve individual sections before creating a draft.');
 					return loadReport();
 				}).catch(showFailure).finally(function () { briefButton.disabled = false; });
 		});
 		if (brief) showBrief(brief);
-		if (brief) {
-			var draft = node('button', zone, 'Create separate Elementor/WordPress review draft');
-			draft.type = 'button'; draft.className = 'button button-primary';
-			draft.addEventListener('click', function () {
-				if (!window.confirm('Create one new DRAFT with a copy of the existing page and a clearly labeled proposed AI improvement section? The source page and its Elementor JSON will NOT change. Verify all content before manually publishing.')) return;
-				draft.disabled = true;
-				request('/ai-page/draft', 'POST', {id: opportunity.id, confirm_draft: true})
-					.then(function (result) {
-						flash(result.notice || 'Separate review draft created.');
-						var target = node('p', zone);
-						var link = node('a', target, result.has_elementor ? 'Edit separate draft in Elementor' : 'Edit separate WordPress draft');
-						link.href = result.has_elementor && result.elementor_url ? result.elementor_url : result.edit_url;
-						link.target = '_blank'; link.rel = 'noopener noreferrer';
-					}).catch(showFailure).finally(function () { draft.disabled = false; });
+		if (!brief) return;
+		var compareButton = node('button', zone, 'Compare source vs proposed sections', 'button');
+		compareButton.type = 'button'; compareButton.style.marginLeft = '8px';
+		var draftButton = node('button', zone, 'Create draft from approved sections only', 'button button-primary');
+		draftButton.type = 'button'; draftButton.style.marginLeft = '8px';
+		var approvalsLine = node('p', zone);
+		function updateDraftButton() {
+			var total = (brief.draft_sections || []).length, count = approvedCount();
+			approvalsLine.textContent = count + ' of ' + total + ' sections approved for the draft. Rejected and pending sections will be excluded.';
+			draftButton.disabled = count < 1;
+		}
+		function renderComparison(data) {
+			currentCompare = data; clear(comparison);
+			node('p', comparison, data.note, 'description');
+			var grid = node('div', comparison); grid.className = 'scc-ai-content-compare';
+			var before = node('section', grid); before.className = 'scc-ai-content-panel';
+			node('h4', before, 'Before · current WordPress page');
+			node('p', before, data.source_title + ' · ' + data.source_word_count + ' words · ' +
+				(data.source_uses_elementor ? 'Elementor layout' : 'WordPress editor'));
+			var sourceLink = node('a', before, 'Open original page');
+			if (data.source_url && /^https?:\/\//i.test(data.source_url)) {
+				sourceLink.href = data.source_url; sourceLink.target = '_blank'; sourceLink.rel = 'noopener noreferrer';
+			}
+			var originalCopy = node('div', before, data.source_excerpt, 'scc-ai-copy-preview');
+			originalCopy.setAttribute('aria-label', 'Read-only excerpt from the original page');
+			var after = node('section', grid); after.className = 'scc-ai-content-panel';
+			node('h4', after, 'After · proposed additions (review only)');
+			node('p', after, 'Individual suggestions, not a one-to-one replacement of existing widgets.');
+			(data.sections || []).forEach(function (section) {
+				var item = node('article', after); item.className = 'scc-ai-review-section';
+				node('strong', item, 'Section ' + (section.index + 1) + ' · ' + section.heading);
+				node('p', item, section.body, 'scc-ai-copy-preview');
+				node('p', item, 'Current decision: ' + section.decision);
+				var row = node('div', item); row.className = 'scc-ai-review-buttons';
+				[['approved', 'Approve for draft'], ['rejected', 'Reject'], ['pending', 'Clear decision']].forEach(function (choice) {
+					var button = node('button', row, choice[1], 'button');
+					button.type = 'button';
+					if (section.decision === choice[0]) button.disabled = true;
+					button.addEventListener('click', function () {
+						if (choice[0] === 'approved' && !window.confirm('Approve this proposed wording for inclusion in the separate draft? Facts still require manual verification. The live page will not change.')) return;
+						button.disabled = true;
+						request('/ai-page/section-review', 'POST', {
+							id: opportunity.id, section_index: section.index,
+							decision: choice[0], expected_revision: data.brief_revision
+						}).then(function (result) {
+							data.sections = result.sections;
+							brief.section_reviews = result.sections.map(function (x) { return x.decision; });
+							renderComparison(data); updateDraftButton();
+							flash('Section review saved: ' + result.approved_count + ' approved. Nothing has changed on the live page.');
+						}).catch(showFailure).finally(function () { button.disabled = false; });
+					});
+				});
 			});
 		}
+		compareButton.addEventListener('click', function () {
+			compareButton.disabled = true;
+			request('/ai-page/compare', 'POST', {id: opportunity.id})
+				.then(function (result) { renderComparison(result); updateDraftButton(); })
+				.catch(showFailure).finally(function () { compareButton.disabled = false; });
+		});
+		draftButton.addEventListener('click', function () {
+			var count = approvedCount();
+			if (count < 1) { flash('Approve at least one section first.', true); return; }
+			if (!window.confirm('Create a new WordPress DRAFT with the existing layout and ONLY ' + count + ' approved suggested section(s)? Rejected and pending sections will be excluded. No changes to the source page.')) return;
+			draftButton.disabled = true;
+			request('/ai-page/draft', 'POST', {id: opportunity.id, confirm_draft: true})
+				.then(function (result) {
+					flash(result.notice || 'Separate draft with selected proposals created.');
+					var target = node('p', zone);
+					var link = node('a', target, result.has_elementor ? 'Edit selected-section draft in Elementor' : 'Edit selected-section WordPress draft');
+					link.href = result.has_elementor && result.elementor_url ? result.elementor_url : result.edit_url;
+					link.target = '_blank'; link.rel = 'noopener noreferrer';
+				}).catch(showFailure).finally(updateDraftButton);
+		});
+		updateDraftButton();
 	}
-	function renderOpportunities(items) {
+		function renderOpportunities(items) {
 		var host = byId('scc-campaign-ai-opportunities'); clear(host);
 		if (!items.length) {
 			node('p', host, 'No reviewed opportunities for this month. Run a measured AI query first, then analyze saved evidence.');
