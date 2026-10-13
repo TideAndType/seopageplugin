@@ -84,6 +84,8 @@ class SCC_Campaign_Operations {
 			'/campaign/ai-opportunities/review' => array( 'POST', 'rest_ai_opportunities_review' ),
 			'/campaign/ai-opportunities/handoff' => array( 'POST', 'rest_ai_opportunities_handoff' ),
 			'/campaign/ai-page/audit' => array( 'POST', 'rest_ai_page_audit' ),
+			'/campaign/ai-page/preview' => array( 'POST', 'rest_ai_page_preview' ),
+			'/campaign/ai-page/approve-sections' => array( 'POST', 'rest_ai_page_approve_sections' ),
 			'/campaign/ai-page/brief' => array( 'POST', 'rest_ai_page_brief' ),
 			'/campaign/ai-page/draft' => array( 'POST', 'rest_ai_page_draft' ),
 			'/campaign/ai-opportunities/pages' => array( 'GET', 'rest_ai_opportunities_pages' ),
@@ -734,6 +736,24 @@ class SCC_Campaign_Operations {
 		if ( is_wp_error( $allowed ) ) { return $allowed; }
 		$p = self::input( $request );
 		$r = SCC_AI_Opportunities::handoff( (string) ( $p['id'] ?? '' ), $p );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_page_preview( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$r = SCC_AI_Page_Improvements::preview( sanitize_text_field( (string) ( $p['id'] ?? '' ) ) );
+		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
+	}
+	public static function rest_ai_page_approve_sections( $request ) {
+		$allowed = self::ga4_admin_permission();
+		if ( is_wp_error( $allowed ) ) { return $allowed; }
+		$p = self::input( $request );
+		$r = SCC_AI_Page_Improvements::approve_sections(
+			sanitize_text_field( (string) ( $p['id'] ?? '' ) ),
+			$p['indices'] ?? null,
+			sanitize_text_field( (string) ( $p['brief_created_at'] ?? '' ) )
+		);
 		return is_wp_error( $r ) ? $r : rest_ensure_response( $r );
 	}
 	public static function rest_ai_page_audit( $request ) {
