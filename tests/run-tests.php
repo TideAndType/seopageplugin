@@ -3003,13 +3003,26 @@ if ( ! function_exists( 'delete_post_meta' ) ) {
 }
 if ( ! function_exists( 'get_post' ) ) {
 	function get_post( $id ) {
-		return isset( $GLOBALS['scc_test_temp_posts'][ $id ] )
-			? (object) array( 'ID' => $id, 'post_content' => $GLOBALS['scc_test_temp_posts'][ $id ]['content'] ) : null;
+		if ( ! isset( $GLOBALS['scc_test_temp_posts'][ $id ] ) ) { return null; }
+		$p = $GLOBALS['scc_test_temp_posts'][ $id ];
+		return (object) array(
+			'ID' => (int) $id, 'post_content' => $p['content'] ?? '',
+			'post_type' => $p['type'] ?? 'page', 'post_status' => $p['status'] ?? 'publish',
+			'post_title' => $p['title'] ?? 'Test Page', 'post_modified_gmt' => $p['modified'] ?? '2026-10-01 10:00:00',
+			'post_excerpt' => $p['excerpt'] ?? '',
+		);
 	}
 }
 if ( ! function_exists( 'get_posts' ) ) {
 	function get_posts( $args = array() ) {
 		$ids = array();
+		if ( isset( $args['meta_key'] ) && $args['meta_key'] === SCC_AI_Page_Improvements::META_OPPORTUNITY ) {
+			foreach ( $GLOBALS['scc_test_temp_posts'] as $id => $candidate ) {
+				if ( ! in_array( $candidate['status'] ?? '', array( 'draft', 'pending' ), true ) ) { continue; }
+				if ( get_post_meta( $id, $args['meta_key'], true ) === ( $args['meta_value'] ?? null ) ) { $ids[] = $id; }
+			}
+			return $ids;
+		}
 		foreach ( $GLOBALS['scc_test_temp_posts'] as $id => $post ) {
 			if ( 'attachment' !== $post['type'] ) { continue; }
 			$marker = get_post_meta( $id, SCC_Visual_Recreation::TEMP_POST_META, true );
@@ -3578,6 +3591,95 @@ assert_true( false !== strpos( $source_code, "$" . "manager->get_provider( 'lmst
 assert_true( false !== strpos( $source_code, "'post_status' => 'draft'" ), 'new artifact cannot be auto-published' );
 assert_true( false !== strpos( $source_code, "hash_equals( (string) $" . "brief['source_hash']" ), 'source-change conflict guard exists before creating a draft' );
 assert_true( false === strpos( $source_code, 'wp_update_post(' ) && false === strpos( $source_code, 'delete_post_meta(' ), 'review draft never updates or removes the original page or its Elementor data' );
+
+echo "\n== Side-by-side comparison, per-section approvals and approved-only drafts ==\n";
+if ( ! function_exists( 'get_permalink' ) ) {
+	function get_permalink( $id ) { return 'https://example.com/wordpress-page/' . (int) $id . '/'; }
+}
+if ( ! function_exists( 'get_edit_post_link' ) ) {
+	function get_edit_post_link( $id, $context = 'display' ) { return 'https://example.com/wp-admin/post.php?post=' . (int) $id . '&action=edit'; }
+}
+if ( ! function_exists( 'get_current_user_id' ) ) {
+	function get_current_user_id() { return 1; }
+}
+if ( ! function_exists( 'wp_slash' ) ) {
+	function wp_slash( $value ) { return is_array( $value ) ? array_map( 'wp_slash', $value ) : addslashes( (string) $value ); }
+}
+if ( ! function_exists( 'wp_insert_post' ) ) {
+	function wp_insert_post( $args, $wp_error = false ) {
+		$GLOBALS['scc_test_ai_draft_writes'][] = $args;
+		if ( ( $args['post_status'] ?? '' ) !== 'draft' ) { return new WP_Error( 'unsafe_publish', 'Draft-only test expected.' ); }
+		$id = 9900 + count( $GLOBALS['scc_test_ai_draft_writes'] );
+		$GLOBALS['scc_test_temp_posts'][$id] = array(
+			'type' => $args['post_type'] ?? 'page',
+			'status' => $args['post_status'], 'title' => $args['post_title'],
+			'content' => $args['post_content'], 'excerpt' => $args['post_excerpt'] ?? '',
+		);
+		return $id;
+	}
+}
+$GLOBALS['scc_test_ai_draft_writes'] = array();
+$review_id = sha1( 'v198 selective review fixture' );
+$GLOBALS['scc_test_temp_posts'][77] = array(
+	'type' => 'page', 'status' => 'publish', 'title' => 'Reliable Managed IT Support',
+	'content' => '<p>We offer managed IT services and proactive monitoring.</p>',
+	'modified' => '2026-10-12 20:30:00',
+);
+$GLOBALS['scc_test_temp_meta'][77]['_elementor_data'] = $elementor_before;
+$GLOBALS['scc_test_temp_meta'][77]['_elementor_version'] = '3.28.0';
+$GLOBALS['scc_test_temp_meta'][77]['_elementor_template_type'] = 'wp-page';
+$GLOBALS['scc_test_options'][SCC_AI_Opportunities::STORE][$review_id] = array(
+	'status' => 'handed_off', 'handoff' => array( 'mode' => 'existing', 'post_id' => 77 )
+);
+$post = get_post( 77 );
+$original_snapshot = SCC_AI_Page_Improvements::source_snapshot( $post );
+$review_brief = $brief;
+$review_brief['opportunity_id'] = $review_id;
+$review_brief['source_post_id'] = 77;
+$review_brief['source_hash'] = $original_snapshot['source_hash'];
+$review_brief['revision'] = hash( 'sha256', 'v198-fixture-revision' );
+$review_brief['section_reviews'] = array( 'pending', 'pending' );
+$GLOBALS['scc_test_options']['scc_ai_page_improvement_briefs'] = array( $review_id => $review_brief );
+$preview = SCC_AI_Page_Improvements::compare( $review_id );
+assert_eq( 'read_only_content_comparison', $preview['state'], 'comparison returns read-only source and proposed sections without modifying WordPress' );
+assert_eq( 77, $preview['source_post_id'], 'comparison binds reviewed real WordPress page' );
+assert_true( false !== strpos( $preview['source_excerpt'], 'proactive monitoring' ), 'original source readable content exposed for side-by-side review' );
+assert_eq( 'pending', $preview['sections'][0]['decision'], 'all model sections pending by default' );
+assert_eq( 2, count( $preview['sections'] ), 'two proposed sections shown' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::create_draft( $review_id ) ), 'cannot create a draft before explicitly approving at least one section' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::review_section( $review_id, 0, 'approved', 'wrong-revision' ) ), 'stale comparison cannot approve wrong revision' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::review_section( $review_id, 100, 'approved', $review_brief['revision'] ) ), 'out-of-range section index rejected' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::review_section( $review_id, 0, 'published', $review_brief['revision'] ) ), 'published is never a valid section decision' );
+$rejected = SCC_AI_Page_Improvements::review_section( $review_id, 1, 'rejected', $review_brief['revision'] );
+assert_eq( 'rejected', $rejected['sections'][1]['decision'], 'second section explicitly excluded' );
+assert_eq( 0, $rejected['approved_count'], 'rejected section does not count as approved' );
+$approved = SCC_AI_Page_Improvements::review_section( $review_id, 0, 'approved', $review_brief['revision'] );
+assert_eq( 1, $approved['approved_count'], 'only first approved section counts for WordPress draft' );
+$stored = SCC_AI_Page_Improvements::brief( $review_id );
+assert_eq( array( 'approved', 'rejected' ), $stored['section_reviews'], 'individual decisions persist to same saved brief' );
+assert_eq( 1, count( SCC_AI_Page_Improvements::approved_sections( $stored ) ), 'approved-only filtering excludes rejected and pending sections' );
+$selective_clone = SCC_AI_Page_Improvements::clone_elementor_with_review( $elementor_before, $stored );
+$inserted_copy = $selective_clone[1]['elements'][1]['settings']['editor'];
+assert_true( false !== strpos( $inserted_copy, 'Questions to ask a provider' ), 'approved section appears inside native Elementor review widget' );
+assert_true( false === strpos( $inserted_copy, 'Review the service agreement' ), 'rejected section omitted from generated Elementor draft' );
+$created = SCC_AI_Page_Improvements::create_draft( $review_id );
+assert_eq( 'draft_needs_review', $created['status'], 'approved subset creates independent review-only draft' );
+assert_eq( 9901, $created['draft_id'], 'draft has a distinct post ID from original' );
+assert_eq( 'draft', $GLOBALS['scc_test_temp_posts'][9901]['status'], 'inserted post status is draft, never published' );
+assert_eq( 'publish', $GLOBALS['scc_test_temp_posts'][77]['status'], 'original source remains published and untouched' );
+assert_eq( $elementor_before, get_post_meta( 77, '_elementor_data', true ), 'original Elementor JSON not changed by draft creation' );
+$draft_tree = json_decode( wp_unslash( get_post_meta( 9901, '_elementor_data', true ) ), true );
+assert_true( is_array( $draft_tree ) && count( $draft_tree ) === 2, 'new independent draft copies source layout and one review container' );
+assert_true( false !== strpos( $draft_tree[1]['elements'][1]['settings']['editor'], 'Questions to ask a provider' ), 'new draft saves only approved section copy' );
+assert_true( false === strpos( $draft_tree[1]['elements'][1]['settings']['editor'], 'Review the service agreement' ), 'new draft never stores rejected proposed text in review widget' );
+assert_eq( 'wp-page', get_post_meta( 9901, '_elementor_template_type', true ), 'new draft retains Elementor page recognition' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::create_draft( $review_id ) ), 'duplicate draft guard blocks repeated creation' );
+assert_eq( 1, count( $GLOBALS['scc_test_ai_draft_writes'] ), 'second create did not insert another draft' );
+$GLOBALS['scc_test_temp_posts'][77]['content'] .= '<p>Source edited after review.</p>';
+assert_true( is_wp_error( SCC_AI_Page_Improvements::compare( $review_id ) ), 'comparison refuses stale source when live page changes' );
+assert_true( is_wp_error( SCC_AI_Page_Improvements::review_section( $review_id, 1, 'approved', $review_brief['revision'] ) ), 'source edit blocks stale approval' );
+$GLOBALS['scc_test_temp_posts'][77]['content'] = '<p>We offer managed IT services and proactive monitoring.</p>';
+assert_eq( $original_snapshot['source_hash'], SCC_AI_Page_Improvements::source_snapshot( get_post( 77 ) )['source_hash'], 'original source hash restored after conflict test' );
 
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
