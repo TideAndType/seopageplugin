@@ -329,9 +329,11 @@
 		var zone = node('div', card);
 		zone.style.marginTop = '12px'; zone.style.padding = '10px';
 		zone.style.borderTop = '1px solid #dcdcde';
-		node('h4', zone, 'Existing-page AI improvement · source page unchanged');
+		node('h4', zone, 'Compare and approve page improvements');
+		node('p', zone, 'Source page and Elementor design stay unchanged. Only approved suggestions can enter a separate draft.');
 		var brief = (currentReport && currentReport.ai_page_briefs || {})[opportunity.id];
 		var details = node('div', zone);
+		var comparison = node('div', zone);
 		function showAudit(audit) {
 			clear(details);
 			node('p', details, 'Read-only audit · Source post #' + audit.source_post_id + ' · ' + audit.question);
@@ -345,18 +347,73 @@
 		function showBrief(value) {
 			brief = value;
 			clear(details);
-			node('p', details, 'LM Studio-only improvement brief · human fact-check required · ' + value.created_at);
+			node('p', details, 'LM Studio editorial suggestions · human verification required · ' + value.created_at);
 			node('p', details, value.editorial_rationale);
-			var list = node('ol', details);
-			(value.draft_sections || []).forEach(function (section) {
-				var li = node('li', list);
-				node('strong', li, section.heading);
-				node('p', li, section.body);
-			});
 			if ((value.verification_needed || []).length) {
 				node('strong', details, 'Verify before publishing');
 				(value.verification_needed || []).forEach(function (check) { node('p', details, '• ' + check); });
 			}
+		}
+		function sectionComparison(preview) {
+			clear(comparison);
+			node('p', comparison, preview.editor_warning, 'description');
+			if (!preview.source_unchanged) {
+				node('p', comparison, 'The original page has changed. Regenerate the LM Studio brief before approving sections.', 'notice notice-error');
+				return;
+			}
+			var columns = node('div', comparison);
+			columns.style.display = 'grid'; columns.style.gridTemplateColumns = 'repeat(auto-fit, minmax(260px, 1fr))';
+			columns.style.gap = '14px';
+			var left = node('div', columns);
+			left.style.padding = '14px'; left.style.border = '1px solid #c3c4c7';
+			left.style.borderRadius = '6px';
+			node('h4', left, 'BEFORE · existing page text excerpt');
+			node('p', left, preview.source_title || '');
+			var oldCopy = node('div', left, preview.source_excerpt || '(No extractable page text)');
+			oldCopy.style.whiteSpace = 'pre-wrap'; oldCopy.style.maxHeight = '520px'; oldCopy.style.overflow = 'auto';
+			if (preview.excerpt_truncated) node('p', left, 'Excerpt only — more content exists on this page.', 'description');
+			if (/^https?:\/\//.test(preview.source_url || '')) {
+				var original = node('a', left, 'Open existing page'); original.href = preview.source_url;
+				original.target = '_blank'; original.rel = 'noopener noreferrer';
+			}
+			var right = node('div', columns);
+			right.style.padding = '14px'; right.style.border = '1px solid #c3c4c7';
+			right.style.borderRadius = '6px';
+			node('h4', right, 'AFTER · proposed additions to review draft');
+			var checks = [];
+			(preview.proposal_sections || []).forEach(function (section, index) {
+				var item = node('div', right);
+				item.style.borderBottom = '1px solid #dcdcde'; item.style.paddingBottom = '10px'; item.style.marginBottom = '10px';
+				var label = node('label', item);
+				var checkbox = node('input', label); checkbox.type = 'checkbox'; checkbox.value = String(index);
+				checkbox.checked = (preview.approved_sections || []).indexOf(index) >= 0;
+				checkbox.style.marginRight = '6px';
+				node('strong', label, 'Include section ' + (index + 1) + ': ' + section.heading);
+				var paragraph = node('p', item, section.body);
+				paragraph.style.whiteSpace = 'pre-wrap';
+				checks.push(checkbox);
+			});
+			var count = node('p', right, '');
+			var updateCount = function () {
+				var selected = checks.filter(function (check) { return check.checked; }).length;
+				count.textContent = selected + ' of ' + checks.length + ' proposed sections selected. Unchecked sections will NOT be included.';
+			};
+			checks.forEach(function (checkbox) { checkbox.addEventListener('change', updateCount); });
+			updateCount();
+			var save = node('button', right, 'Save selected sections');
+			save.type = 'button'; save.className = 'button button-primary';
+			save.addEventListener('click', function () {
+				var indices = checks.filter(function (c) { return c.checked; }).map(function (c) { return Number(c.value); });
+				if (!indices.length) { flash('Select at least one improvement section before saving approvals.', true); return; }
+				if (!window.confirm('Approve only these ' + indices.length + ' sections for a separate REVIEW DRAFT? Source page content will not change. Verify all facts manually.')) return;
+				save.disabled = true;
+				request('/ai-page/approve-sections', 'POST', {
+					id: opportunity.id, indices: indices, brief_created_at: preview.brief_created_at
+				}).then(function (result) {
+					flash(result.notice || 'Your selection was saved.');
+					return loadReport();
+				}).catch(showFailure).finally(function () { save.disabled = false; });
+			});
 		}
 		var auditButton = node('button', zone, 'Audit existing page');
 		auditButton.type = 'button'; auditButton.className = 'button'; auditButton.style.marginRight = '8px';
@@ -368,33 +425,42 @@
 		var briefButton = node('button', zone, brief ? 'Regenerate LM Studio brief' : 'Create LM Studio improvement brief');
 		briefButton.type = 'button'; briefButton.className = 'button'; briefButton.style.marginRight = '8px';
 		briefButton.addEventListener('click', function () {
-			if (!window.confirm('Send a bounded excerpt of this existing WordPress page and its AI citation question to your configured LM Studio server? This calls LM Studio only; no hosted AI fallback.')) return;
+			if (!window.confirm('Send the existing page text excerpt and measured search question to LM Studio? Regenerating will reset your previous section approvals. No hosted AI fallback.')) return;
 			briefButton.disabled = true;
 			request('/ai-page/brief', 'POST', {id: opportunity.id, confirm_local_ai: true})
 				.then(function (result) {
 					showBrief(result);
-					flash('Local LM Studio generated a review-only editorial brief. Check all suggested facts.');
+					flash('LM Studio brief generated. Preview the comparison and explicitly approve sections.');
 					return loadReport();
 				}).catch(showFailure).finally(function () { briefButton.disabled = false; });
 		});
-		if (brief) showBrief(brief);
-		if (brief) {
-			var draft = node('button', zone, 'Create separate Elementor/WordPress review draft');
-			draft.type = 'button'; draft.className = 'button button-primary';
-			draft.addEventListener('click', function () {
-				if (!window.confirm('Create one new DRAFT with a copy of the existing page and a clearly labeled proposed AI improvement section? The source page and its Elementor JSON will NOT change. Verify all content before manually publishing.')) return;
-				draft.disabled = true;
-				request('/ai-page/draft', 'POST', {id: opportunity.id, confirm_draft: true})
-					.then(function (result) {
-						flash(result.notice || 'Separate review draft created.');
-						var target = node('p', zone);
-						var link = node('a', target, result.has_elementor ? 'Edit separate draft in Elementor' : 'Edit separate WordPress draft');
-						link.href = result.has_elementor && result.elementor_url ? result.elementor_url : result.edit_url;
-						link.target = '_blank'; link.rel = 'noopener noreferrer';
-					}).catch(showFailure).finally(function () { draft.disabled = false; });
-			});
-		}
+		if (!brief) return;
+		showBrief(brief);
+		var compareButton = node('button', zone, 'View before / after and select sections');
+		compareButton.type = 'button'; compareButton.className = 'button';
+		compareButton.style.marginRight = '8px';
+		compareButton.addEventListener('click', function () {
+			compareButton.disabled = true;
+			request('/ai-page/preview', 'POST', {id: opportunity.id})
+				.then(sectionComparison).catch(showFailure).finally(function () { compareButton.disabled = false; });
+		});
+		var approved = (brief.approved_sections || []).length;
+		var draft = node('button', zone, 'Create draft with ' + approved + ' approved section(s)');
+		draft.type = 'button'; draft.className = 'button button-primary'; draft.disabled = approved === 0;
+		draft.addEventListener('click', function () {
+			if (!window.confirm('Create a NEW separate WordPress DRAFT containing only the ' + approved + ' approved improvement sections? Original content and Elementor design will not be changed.')) return;
+			draft.disabled = true;
+			request('/ai-page/draft', 'POST', {id: opportunity.id, confirm_draft: true})
+				.then(function (result) {
+					flash(result.notice || 'Independent review draft created with selected sections.');
+					var dest = node('p', zone);
+					var link = node('a', dest, result.has_elementor ? 'Open new draft in Elementor' : 'Open new WordPress draft');
+					link.href = result.has_elementor && result.elementor_url ? result.elementor_url : result.edit_url;
+					link.target = '_blank'; link.rel = 'noopener noreferrer';
+				}).catch(showFailure).finally(function () { draft.disabled = false; });
+		});
 	}
+	
 	function renderOpportunities(items) {
 		var host = byId('scc-campaign-ai-opportunities'); clear(host);
 		if (!items.length) {
