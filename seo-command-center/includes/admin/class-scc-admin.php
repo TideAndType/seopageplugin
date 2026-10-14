@@ -528,7 +528,9 @@ class SCC_Admin {
 			return;
 		}
 		if ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) ) {
-			return;
+			// Old saved Connections bookmarks now open the canonical Settings tab.
+			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-settings&tab=seo' ) );
+			exit;
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
@@ -537,7 +539,7 @@ class SCC_Admin {
 			return;
 		}
 		set_transient( 'scc_gsc_notice_' . get_current_user_id(), $result, 60 );
-		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-connections' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-settings&tab=seo' ) );
 		exit;
 	}
 
