@@ -15,7 +15,7 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 <div class="wrap scc-wrap">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'Settings', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Defaults for AI, SEO, publishing, and spending limits. API keys live under API Connections.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Defaults for AI, SEO, publishing, and spending limits. Connect Google, Microsoft, CRM, and AI APIs using the SEO Connections, AI Connections, and Analytics & CRM tabs above.', 'seo-command-center' ); ?></p>
 		<p class="scc-note"><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-schema' ) ); ?>"><?php esc_html_e( 'View schema (structured data) reference →', 'seo-command-center' ); ?></a></p>
 	</div>
 
@@ -31,7 +31,7 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 						<option value="gemini" <?php selected( $s['default_provider'], 'gemini' ); ?>>Google Gemini</option>
 						<option value="lmstudio" <?php selected( $s['default_provider'], 'lmstudio' ); ?>>LM Studio (local)</option>
 					</select>
-					<p class="description"><?php esc_html_e( 'This provider runs every AI task (site plan, topical map, content) unless overridden per task below. Connecting a provider under API Connections is not enough — choose it here to actually use it. Pick “LM Studio (local)” to run everything on your own server.', 'seo-command-center' ); ?></p>
+					<p class="description"><?php esc_html_e( 'This provider runs every AI task (site plan, topical map, content) unless overridden per task below. Connecting a provider under Settings → AI Connections is not enough — choose it here to actually use it. Pick “LM Studio (local)” to run everything on your own server.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 			<tr>

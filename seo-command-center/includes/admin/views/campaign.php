@@ -265,7 +265,7 @@ $scc_campaign_mode = isset( $scc_campaign_mode ) && in_array( $scc_campaign_mode
 	<section class="scc-card">
 		<h2>Connections and safety</h2>
 		<div id="scc-campaign-connections"></div>
-		<p class="description">Only authenticated, explicitly configured integrations populate verified measurements. Google Business Profile management, Perplexity/Gemini AI citation measurements and independently verified CRM causation are not implemented. AI citation measurements are opt-in paid DataForSEO observations.</p>
+		<p class="description">Only authenticated integrations populate verified measurements. Google Business Profile performance and explicit Perplexity/Gemini API observations are supported; they do not represent all consumer app responses. CRM attribution shows source-labeled aggregates, not independently established causation. Manage credentials and disconnects in Settings → SEO Connections, AI Connections, or Analytics & CRM.</p>
 		<form id="scc-campaign-public-citations">
 			<p><label><input type="checkbox" name="enabled"> Enable the public citation-scan endpoint</label></p>
 			<p><label><input type="checkbox" name="paid"> Also allow paid DataForSEO public requests (maximum 10/day)</label></p>

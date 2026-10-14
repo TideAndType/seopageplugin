@@ -296,23 +296,23 @@
 			var payload = { credentials: credentials };
 			var settings = {};
 			var gscSite = document.getElementById( 'scc-gsc-site' );
-			if ( gscSite ) {
+			if ( gscSite && gscSite.offsetParent !== null ) {
 				settings.gsc_site_url = gscSite.value;
 			}
 			var lmBase = document.getElementById( 'scc-lmstudio-base' );
-			if ( lmBase ) {
+			if ( lmBase && lmBase.offsetParent !== null ) {
 				settings.lmstudio_base_url = lmBase.value;
 			}
 			var lmModel = document.getElementById( 'scc-lmstudio-model' );
-			if ( lmModel ) {
+			if ( lmModel && lmModel.offsetParent !== null ) {
 				settings.lmstudio_model = lmModel.value;
 			}
 			var browserMode = document.getElementById( 'scc-browser-runtime-mode' );
-			if ( browserMode ) {
+			if ( browserMode && browserMode.offsetParent !== null ) {
 				settings.browser_runtime_mode = browserMode.value;
 			}
 			var browserUrl = document.getElementById( 'scc-browser-runtime-url' );
-			if ( browserUrl ) {
+			if ( browserUrl && browserUrl.offsetParent !== null ) {
 				settings.browser_runtime_url = browserUrl.value;
 			}
 			payload.settings = settings;
