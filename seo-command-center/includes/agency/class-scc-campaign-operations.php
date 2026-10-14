@@ -50,7 +50,14 @@ class SCC_Campaign_Operations {
 	}
 
 	public static function assets( $hook ) {
-		if ( false === strpos( (string) $hook, 'seo-command-center-campaign' ) ) { return; }
+		$is_campaign = false !== strpos( (string) $hook, 'seo-command-center-campaign' );
+		$is_settings = false !== strpos( (string) $hook, 'seo-command-center-settings' );
+		if ( ! $is_campaign && ! $is_settings ) { return; }
+		if ( $is_settings ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only tab navigation.
+			$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'general';
+			if ( ! in_array( $tab, array( 'seo', 'ai', 'analytics' ), true ) ) { return; }
+		}
 		wp_enqueue_script(
 			'scc-campaign',
 			SCC_PLUGIN_URL . 'assets/js/campaign.js',
