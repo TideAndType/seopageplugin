@@ -3610,6 +3610,40 @@ assert_true( false !== strpos( $review_source, 'self::source_snapshot( $linked['
 assert_true( false !== strpos( $review_source, "'post_content' => $" . "has_elementor ?" ), 'Elementor drafts do not duplicate the proposed copy into post_content' );
 assert_true( false === strpos( $review_source, 'wp_update_post(' ), 'selective approval never mutates source live post' );
 
+echo "\n== Settings navigation, connection scope and Campaign separation ==\n";
+$settings_admin = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php' );
+$settings_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/settings.php' );
+$connections_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/connections.php' );
+$campaign_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/campaign.php' );
+$campaign_controller = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/agency/class-scc-campaign-operations.php' );
+$campaign_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/campaign.js' );
+$admin_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+foreach ( array( "'general' => array(", "'seo' => array(", "'ai' => array(", "'analytics' => array(" ) as $tab ) {
+	assert_true( false !== strpos( $settings_admin, $tab ), 'Settings admin registers tab: ' . $tab );
+}
+assert_true( false !== strpos( $settings_admin, "'render_settings_hub'" ), 'Settings top-level menu opens the tabbed hub' );
+assert_true( false !== strpos( $settings_admin, "'render_legacy_connections'" ), 'GSC old Connections OAuth callback route remains registered but hidden' );
+assert_true( false !== strpos( $settings_admin, "self::SLUG . '-connections' !== $" . "page" ), 'existing Google Search Console OAuth callback URL is unchanged' );
+assert_true( false !== strpos( $settings_admin, "render_connections( 'seo' )" ), 'SEO tab reuses existing stored API credential controls' );
+assert_true( false !== strpos( $settings_admin, "render_connections( 'ai' )" ), 'AI tab reuses existing stored AI credentials controls' );
+assert_true( false !== strpos( $settings_admin, "render_settings_campaign_connections( 'analytics' )" ), 'Analytics & CRM setup uses existing campaign connection endpoints' );
+assert_true( false !== strpos( $connections_view, 'scc-connection-ai-group' ), 'AI provider/LM Studio controls grouped together' );
+assert_true( false !== strpos( $connections_view, 'scc-connection-seo-group' ), 'GSC, browser runtime, DataForSEO and PageSpeed controls grouped as SEO' );
+assert_true( false !== strpos( $connections_view, 'connection_area' ), 'legacy connection screen permits independent SEO/AI selection' );
+assert_true( false !== strpos( $settings_view, 'SEO Connections' ), 'Settings description directs users to the new connection categories' );
+foreach ( array( 'scc-mode-campaign', 'scc-mode-settings-seo', 'scc-mode-settings-ai', 'scc-mode-settings-analytics' ) as $mode ) {
+	assert_true( false !== strpos( $campaign_view, $mode ), 'Campaign template supports scoped Settings mode: ' . $mode );
+}
+foreach ( array( 'scc-campaign-ai-provider-perplexity', 'scc-campaign-ai-provider-gemini', 'scc-campaign-bing-connect', 'scc-campaign-clarity-connect', 'scc-campaign-gbp-location', 'scc-campaign-ga4-property', 'scc-campaign-ghl-connect' ) as $field ) {
+	assert_true( false !== strpos( $campaign_view, $field ), 'legacy working connection form remains present for Settings: ' . $field );
+}
+assert_true( false !== strpos( $campaign_view, 'SEO Connections in Settings' ), 'Campaign gives direct navigation to new settings' );
+assert_true( false !== strpos( $campaign_controller, "in_array( $" . "tab, array( 'seo', 'ai', 'analytics' )" ), 'campaign API controller loads on relevant Settings tabs only' );
+assert_true( false !== strpos( $campaign_js, "root.classList.contains('scc-mode-campaign')" ), 'Settings connection pages skip unnecessary monthly report request' );
+assert_true( false !== strpos( $admin_js, 'offsetParent !== null' ), 'hidden connection settings cannot override values in another tab' );
+assert_true( false !== strpos( $campaign_view, 'id="scc-campaign-ai-check"' ), 'Campaign still offers paid AI citation measurements' );
+assert_true( false === strpos( $campaign_controller, 'update_option( ' . "'scc_credentials'" ), 'settings relocation adds no API credential migration or replacement' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -56,8 +56,7 @@ class SCC_Admin {
 			self::SLUG . '-optimize'       => array( __( 'Optimize', 'seo-command-center' ), 'render_optimize_hub' ),
 			self::SLUG . '-opportunities'  => array( __( 'Opportunities', 'seo-command-center' ), 'render_opportunities_hub' ),
 			self::SLUG . '-templates'      => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
-			self::SLUG . '-settings'       => array( __( 'Settings', 'seo-command-center' ), 'render_settings' ),
-			self::SLUG . '-connections'    => array( __( 'Connections', 'seo-command-center' ), 'render_connections' ),
+			self::SLUG . '-settings'       => array( __( 'Settings', 'seo-command-center' ), 'render_settings_hub' ),
 		);
 
 		foreach ( $pages as $slug => $page ) {
@@ -67,6 +66,7 @@ class SCC_Admin {
 		// Individual screens: routable but hidden from the menu. Each is reached
 		// through its hub's tabs and from in-app links (deep links keep working).
 		$hidden = array(
+			self::SLUG . '-connections' => array( __( 'Legacy API Connections', 'seo-command-center' ), 'render_legacy_connections' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
 			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
@@ -103,6 +103,15 @@ class SCC_Admin {
 	 */
 	protected function hubs() {
 		return array(
+			self::SLUG . '-settings' => array(
+				'title' => __( 'Settings', 'seo-command-center' ),
+				'tabs' => array(
+					'general' => array( __( 'General', 'seo-command-center' ), self::SLUG . '-settings', 'render_settings' ),
+					'seo' => array( __( 'SEO Connections', 'seo-command-center' ), self::SLUG . '-settings', 'render_settings_seo_connections' ),
+					'ai' => array( __( 'AI Connections', 'seo-command-center' ), self::SLUG . '-settings', 'render_settings_ai_connections' ),
+					'analytics' => array( __( 'Analytics & CRM', 'seo-command-center' ), self::SLUG . '-settings', 'render_settings_analytics_connections' ),
+				),
+			),
 			// CREATE — make something new. Blog Post generation is the simple default.
 			self::SLUG . '-create'        => array(
 				'title'   => __( 'Create', 'seo-command-center' ),
@@ -460,6 +469,39 @@ class SCC_Admin {
 	/**
 	 * Settings page.
 	 */
+	public function render_settings_hub() {
+		$this->render_hub( self::SLUG . '-settings' );
+	}
+
+	/** A single credential store serves the existing SEO integrations. */
+	public function render_settings_seo_connections() {
+		$this->render_connections( 'seo' );
+		$this->render_settings_campaign_connections( 'seo' );
+	}
+
+	public function render_settings_ai_connections() {
+		$this->render_connections( 'ai' );
+		$this->render_settings_campaign_connections( 'ai' );
+	}
+
+	public function render_settings_analytics_connections() {
+		$this->render_settings_campaign_connections( 'analytics' );
+	}
+
+	/** Reuse the real Campaign connection controls and nonce-protected routes.
+	 * The shared template hides operations on Settings and settings on Campaign;
+	 * it is never loaded twice on the same page or copied into another plugin.
+	 */
+	protected function render_settings_campaign_connections( $mode ) {
+		$scc_campaign_mode = 'settings-' . $mode;
+		$file = SCC_PLUGIN_DIR . 'includes/admin/views/campaign.php';
+		if ( file_exists( $file ) ) { include $file; }
+	}
+
+	public function render_legacy_connections() {
+		$this->render_connections();
+	}
+
 	public function render_settings() {
 		$this->view(
 			'settings',
@@ -486,7 +528,9 @@ class SCC_Admin {
 			return;
 		}
 		if ( ! isset( $_GET['code'] ) && ! isset( $_GET['error'] ) ) {
-			return;
+			// Old saved Connections bookmarks now open the canonical Settings tab.
+			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-settings&tab=seo' ) );
+			exit;
 		}
 		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 
@@ -495,14 +539,14 @@ class SCC_Admin {
 			return;
 		}
 		set_transient( 'scc_gsc_notice_' . get_current_user_id(), $result, 60 );
-		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-connections' ) );
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-settings&tab=seo' ) );
 		exit;
 	}
 
 	/**
 	 * API Connections page.
 	 */
-	public function render_connections() {
+	public function render_connections( $connection_area = 'all' ) {
 		$notice = get_transient( 'scc_gsc_notice_' . get_current_user_id() );
 		if ( $notice ) {
 			delete_transient( 'scc_gsc_notice_' . get_current_user_id() );
@@ -523,6 +567,7 @@ class SCC_Admin {
 				'gsc_has_client'=> SCC_GSC::has_client(),
 				'gsc_redirect'  => SCC_GSC::redirect_uri(),
 				'gsc_notice'    => is_array( $notice ) ? $notice : null,
+				'connection_area' => $connection_area,
 			)
 		);
 	}

@@ -1,12 +1,40 @@
 <?php
 /** TideOrbit SEO Campaign Operations administrative screen. */
 if ( ! defined( 'ABSPATH' ) ) { exit; }
+$scc_campaign_mode = isset( $scc_campaign_mode ) && in_array( $scc_campaign_mode, array( 'settings-seo', 'settings-ai', 'settings-analytics' ), true ) ? $scc_campaign_mode : 'campaign';
 ?>
 <style>@media print { body * { visibility: hidden !important; } #scc-campaign-report, #scc-campaign-report * { visibility: visible !important; } #scc-campaign-report { position: absolute; top: 0; left: 0; width: 100%; } }</style>
-<div class="wrap scc-wrap" id="scc-campaign-root">
+<style>
+/* One battle-tested connection form/controller: Settings displays the setup
+ * panels, Campaign displays measurement/work. No credentials are copied. */
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(2),
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(3),
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(4),
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(5),
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(6) { display: none; }
+#scc-campaign-root.scc-mode-campaign #scc-campaign-public-citations,
+#scc-campaign-root.scc-mode-campaign #scc-campaign-ai-config,
+#scc-campaign-root.scc-mode-campaign #scc-campaign-ai-competitors,
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(7) > fieldset,
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(7) > p.description:nth-of-type(2),
+#scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(7) > p.description:nth-of-type(3) { display: none; }
+#scc-campaign-root[class*="scc-mode-settings-"] > .scc-header,
+#scc-campaign-root[class*="scc-mode-settings-"] > section.scc-card { display: none; }
+#scc-campaign-root.scc-mode-settings-seo > section.scc-card:nth-of-type(3),
+#scc-campaign-root.scc-mode-settings-seo > section.scc-card:nth-of-type(5),
+#scc-campaign-root.scc-mode-settings-seo > section.scc-card:nth-of-type(14),
+#scc-campaign-root.scc-mode-settings-ai > section.scc-card:nth-of-type(7),
+#scc-campaign-root.scc-mode-settings-analytics > section.scc-card:nth-of-type(2),
+#scc-campaign-root.scc-mode-settings-analytics > section.scc-card:nth-of-type(4),
+#scc-campaign-root.scc-mode-settings-analytics > section.scc-card:nth-of-type(6) { display: block; }
+#scc-campaign-root.scc-mode-settings-ai #scc-campaign-ai-check,
+#scc-campaign-root.scc-mode-settings-ai > section.scc-card:nth-of-type(7) > p:last-of-type { display:none; }
+</style>
+<div class="wrap scc-wrap scc-mode-<?php echo esc_attr( $scc_campaign_mode ); ?>" id="scc-campaign-root">
 	<div class="scc-header">
 		<h1><?php esc_html_e( 'SEO Campaign Operations', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Manage your Tide & Type plan, search themes, monthly deliverables and evidence. Missing integrations never appear as measured data.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Manage your plan, monthly deliverables, campaign measurements and evidence. Connect services under TideOrbit → Settings, not here.', 'seo-command-center' ); ?></p>
+		<p><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-settings&tab=seo' ) ); ?>">SEO Connections in Settings</a> <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-settings&tab=ai' ) ); ?>">AI Connections in Settings</a> <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-settings&tab=analytics' ) ); ?>">Analytics &amp; CRM Connections</a></p>
 	</div>
 	<p class="scc-inline-status" id="scc-campaign-status" role="status" aria-live="polite"></p>
 	<section class="scc-card">
@@ -239,7 +267,7 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
 	<section class="scc-card">
 		<h2>Connections and safety</h2>
 		<div id="scc-campaign-connections"></div>
-		<p class="description">Only authenticated, explicitly configured integrations populate verified measurements. Google Business Profile management, Perplexity/Gemini AI citation measurements and independently verified CRM causation are not implemented. AI citation measurements are opt-in paid DataForSEO observations.</p>
+		<p class="description">Only authenticated integrations populate verified measurements. Google Business Profile performance and explicit Perplexity/Gemini API observations are supported; they do not represent all consumer app responses. CRM attribution shows source-labeled aggregates, not independently established causation. Manage credentials and disconnects in Settings → SEO Connections, AI Connections, or Analytics & CRM.</p>
 		<form id="scc-campaign-public-citations">
 			<p><label><input type="checkbox" name="enabled"> Enable the public citation-scan endpoint</label></p>
 			<p><label><input type="checkbox" name="paid"> Also allow paid DataForSEO public requests (maximum 10/day)</label></p>

@@ -91,7 +91,7 @@ class SCC_GBP_Performance {
 			$result = self::exchange_code( $code );
 			if ( ! is_wp_error( $result ) ) { $notice = 'connected'; }
 		}
-		wp_safe_redirect( add_query_arg( 'scc_gbp_notice', $notice, admin_url( 'admin.php?page=seo-command-center-campaign' ) ) );
+		wp_safe_redirect( add_query_arg( 'scc_gbp_notice', $notice, admin_url( 'admin.php?page=seo-command-center-settings&tab=seo' ) ) );
 		exit;
 	}
 	protected static function exchange_code( $code ) {

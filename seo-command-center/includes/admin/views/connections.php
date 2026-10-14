@@ -11,6 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 $hints = isset( $data['hints'] ) ? $data['hints'] : array();
+$connection_area = in_array( $data['connection_area'] ?? 'all', array( 'ai', 'seo', 'all' ), true ) ? $data['connection_area'] : 'all';
 
 /**
  * Render one key field.
@@ -39,13 +40,20 @@ $field = function ( $field, $label, $hints ) {
 	<?php
 };
 ?>
-<div class="wrap scc-wrap">
+<div class="wrap scc-wrap scc-connections-area-<?php echo esc_attr( $connection_area ); ?>">
+<?php if ( 'all' !== $connection_area ) : ?>
+<style>
+.scc-connections-area-ai .scc-connection-seo-group,
+.scc-connections-area-seo .scc-connection-ai-group { display: none; }
+</style>
+<?php endif; ?>
 	<div class="scc-header">
-		<h1><?php esc_html_e( 'API Connections', 'seo-command-center' ); ?></h1>
+		<h1><?php echo esc_html( 'ai' === $connection_area ? __( 'AI Connections', 'seo-command-center' ) : ( 'seo' === $connection_area ? __( 'SEO Connections', 'seo-command-center' ) : __( 'API Connections', 'seo-command-center' ) ) ); ?></h1>
 		<p class="scc-sub"><?php esc_html_e( 'Keys are stored securely and never shown again or sent to your browser. Leave a field blank to keep the existing key.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<form id="scc-connections-form" class="scc-card">
+		<div class="scc-connection-ai-group">
 		<h2><?php esc_html_e( 'AI providers', 'seo-command-center' ); ?></h2>
 		<table class="form-table" role="presentation">
 			<?php
@@ -106,6 +114,8 @@ $field = function ( $field, $label, $hints ) {
 		</table>
 		<p class="scc-note"><?php esc_html_e( 'An API key is optional; only add one if you configured LM Studio to require it. These settings also appear under Settings → AI.', 'seo-command-center' ); ?></p>
 
+		</div>
+		<div class="scc-connection-seo-group">
 		<h2><?php esc_html_e( 'Google Maps Rank Tracker / Browser Runtime', 'seo-command-center' ); ?></h2>
 		<p class="scc-note"><?php esc_html_e( 'Connect the GBP Rank Tracker desktop app through a Cloudflare Tunnel. Automatic mode uses your local Chromium scanner first and falls back to DataForSEO if the scanner is offline.', 'seo-command-center' ); ?></p>
 		<div class="notice notice-info inline" style="margin:8px 0;">
@@ -231,6 +241,7 @@ $field = function ( $field, $label, $hints ) {
 		</table>
 		<div id="scc-gsc-verify-out"></div>
 
+		</div>
 		<p class="submit">
 			<button type="submit" class="button button-primary"><?php esc_html_e( 'Save connections', 'seo-command-center' ); ?></button>
 			<span class="scc-inline-status" id="scc-connections-status"></span>

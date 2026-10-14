@@ -616,7 +616,7 @@
 			var settings = byId('scc-campaign-public-citations');
 			settings.elements.enabled.checked = !!data.public_citations.enabled;
 			settings.elements.paid.checked = !!data.public_citations.paid;
-			return loadReport();
+			return root.classList.contains('scc-mode-campaign') ? loadReport() : data;
 		}).catch(showFailure);
 	}
 	byId('scc-campaign-month').value = month;

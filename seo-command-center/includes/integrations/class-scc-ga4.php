@@ -119,7 +119,7 @@ class SCC_GA4 {
 				}
 			}
 		}
-		wp_safe_redirect( add_query_arg( 'scc_ga4_notice', $notice, self::redirect_uri() ) );
+		wp_safe_redirect( add_query_arg( 'scc_ga4_notice', $notice, admin_url( 'admin.php?page=seo-command-center-settings&tab=analytics' ) ) );
 		exit;
 	}
 
