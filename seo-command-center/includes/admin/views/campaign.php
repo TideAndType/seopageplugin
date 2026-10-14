@@ -12,6 +12,7 @@ $scc_campaign_mode = isset( $scc_campaign_mode ) && in_array( $scc_campaign_mode
 #scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(4),
 #scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(5),
 #scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(6) { display: none; }
+#scc-campaign-root.scc-mode-campaign #scc-campaign-public-citations,
 #scc-campaign-root.scc-mode-campaign #scc-campaign-ai-config,
 #scc-campaign-root.scc-mode-campaign #scc-campaign-ai-competitors,
 #scc-campaign-root.scc-mode-campaign > section.scc-card:nth-of-type(7) > fieldset,
@@ -21,6 +22,7 @@ $scc_campaign_mode = isset( $scc_campaign_mode ) && in_array( $scc_campaign_mode
 #scc-campaign-root[class*="scc-mode-settings-"] > section.scc-card { display: none; }
 #scc-campaign-root.scc-mode-settings-seo > section.scc-card:nth-of-type(3),
 #scc-campaign-root.scc-mode-settings-seo > section.scc-card:nth-of-type(5),
+#scc-campaign-root.scc-mode-settings-seo > section.scc-card:nth-of-type(14),
 #scc-campaign-root.scc-mode-settings-ai > section.scc-card:nth-of-type(7),
 #scc-campaign-root.scc-mode-settings-analytics > section.scc-card:nth-of-type(2),
 #scc-campaign-root.scc-mode-settings-analytics > section.scc-card:nth-of-type(4),
