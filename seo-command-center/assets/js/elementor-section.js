@@ -375,7 +375,18 @@
 				update();
 			},
 			onPromptChange: function () {
-				if ( previewOn ) { clearPreview(); }
+				if ( mode.value !== 'section' ) { return; }
+				// A proposal must never remain applicable after the instructions
+				// change. Invalidate an in-flight request as well; the old result
+				// is ignored by requestSeq even if its network call finishes.
+				if ( pending || busy ) {
+					reset( false );
+					busy = false;
+					update();
+					ctx.setStatus( 'Instructions changed. Generate a fresh proposal before applying.' );
+				} else if ( previewOn ) {
+					clearPreview();
+				}
 			},
 			onClose: clearPreview
 		};
