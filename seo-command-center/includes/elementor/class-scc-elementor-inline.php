@@ -19,6 +19,7 @@ class SCC_Elementor_Inline {
 		}
 		wp_enqueue_style( 'scc-elementor-inline', SCC_PLUGIN_URL . 'assets/css/elementor-inline.css', array(), SCC_VERSION );
 		wp_enqueue_script( 'scc-elementor-inline', SCC_PLUGIN_URL . 'assets/js/elementor-inline.js', array( 'elementor-editor', 'wp-api-fetch' ), SCC_VERSION, true );
+		wp_enqueue_script( 'scc-elementor-section', SCC_PLUGIN_URL . 'assets/js/elementor-section.js', array( 'scc-elementor-inline' ), SCC_VERSION, true );
 		wp_localize_script( 'scc-elementor-inline', 'SCCElementorInline', array(
 			'postId' => $post_id,
 			'nonce'  => wp_create_nonce( 'wp_rest' ),
@@ -32,6 +33,7 @@ class SCC_Elementor_Inline {
 			'callback'            => array( __CLASS__, 'suggest' ),
 			'permission_callback' => function () { return current_user_can( 'edit_posts' ); },
 		) );
+		SCC_Elementor_Section_Designer::register_route();
 	}
 
 	/** Explicit Elementor setting allowlist. No code, HTML widgets or URLs. */
