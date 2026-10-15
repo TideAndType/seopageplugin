@@ -408,6 +408,12 @@ class SCC_Schema_Engine {
         }
 		$previous = get_post_meta( $post_id, '_scc_schema', true );
 		update_post_meta( $post_id, '_scc_schema', wp_json_encode( array_values( $nodes ) ) );
+		// Explicit overrides are post-scoped and cleared by an ordinary save.
+		if ( $allow_conflicts ) {
+			update_post_meta( $post_id, '_scc_schema_allow_conflicts', 1 );
+		} else {
+			delete_post_meta( $post_id, '_scc_schema_allow_conflicts' );
+		}
 
 		SCC_Change_History::record( array(
 			'post_id'        => $post_id,
@@ -442,6 +448,7 @@ class SCC_Schema_Engine {
 			) );
 		}
 		delete_post_meta( $post_id, '_scc_schema' );
+		delete_post_meta( $post_id, '_scc_schema_allow_conflicts' );
 		return true;
 	}
 
