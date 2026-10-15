@@ -24,8 +24,19 @@ class SCC_Admin {
 	 *
 	 * @param SCC_AI_Manager $ai AI manager.
 	 */
-	public function __construct( SCC_AI_Manager $ai ) {
+	public function __construct( SCC_AI_Manager $ai = null ) {
 		$this->ai = $ai;
+	}
+
+	/**
+	 * Do not instantiate four AI provider adapters merely to register admin menus.
+	 * The model registry is only needed by Settings and Connections screens.
+	 */
+	protected function ai() {
+		if ( null === $this->ai ) {
+			$this->ai = SCC_Plugin::instance()->ai();
+		}
+		return $this->ai;
 	}
 
 	/**
@@ -290,13 +301,16 @@ class SCC_Admin {
 			true
 		);
 
-		// Provider → models map for per-operation routing dropdowns.
+		// Only the Settings controller reads SCC.providers. Avoid potentially
+		// expensive provider discovery on dashboards, reports and design pages.
 		$provider_models = array();
-		foreach ( $this->ai->get_providers() as $pid => $prov ) {
-			$provider_models[ $pid ] = array(
-				'label'  => $prov->get_label(),
-				'models' => $prov->list_models(),
-			);
+		if ( 'admin-settings.js' === $admin_script ) {
+			foreach ( $this->ai()->get_providers() as $pid => $prov ) {
+				$provider_models[ $pid ] = array(
+					'label'  => $prov->get_label(),
+					'models' => $prov->list_models(),
+				);
+			}
 		}
 
 		// Pass only non-secret bootstrap data + the REST nonce. Never keys.
@@ -476,7 +490,7 @@ class SCC_Admin {
 			'settings',
 			array(
 				'settings'  => SCC_Settings::all(),
-				'providers' => $this->ai->get_providers(),
+				'providers' => $this->ai()->get_providers(),
 			)
 		);
 	}
@@ -522,7 +536,7 @@ class SCC_Admin {
 			'connections',
 			array(
 				'hints'         => SCC_Settings::credential_hints(),
-				'providers'     => $this->ai->get_providers(),
+				'providers'     => $this->ai()->get_providers(),
 				'lmstudio_base_url' => SCC_Settings::get( 'lmstudio_base_url', 'http://localhost:1234/v1' ),
 				'lmstudio_model'    => SCC_Settings::get( 'lmstudio_model', 'local-model' ),
 				'browser_runtime_mode' => SCC_Settings::get( 'browser_runtime_mode', 'auto' ),
