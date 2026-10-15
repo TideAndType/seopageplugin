@@ -9,6 +9,28 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## TideOrbit workspace visual refresh (1.92.0)
+
+TideOrbit uses a modern, consistent WordPress-native administration experience:
+a top workspace navigation bar, a dark product dashboard hero, compact
+data-driven SEO health / issue / action / AI-spend metric cards, shortcuts,
+legible form controls, pill-style hub and settings tabs, and refined table,
+diagnostic and empty-state styling. Dashboard health metrics refresh when SEO
+Doctor finishes. The visual direction draws on dashboard/metric/bento patterns
+from [21st.dev](https://21st.dev/community/components/s/dashboard), but all
+markup is built with existing PHP views and the stylesheet is plain CSS.
+
+No 21st.dev source, external component registry, React, Tailwind, icon font,
+CDN, runtime NPM dependency, or new font file ships with the plugin. WordPress
+Dashicons provide the visual icons. Main menu, tab and REST URLs and action
+element IDs are retained to keep existing workflows and deep links working.
+Colors, controls, focus states and layouts are scoped to TideOrbit admin pages
+and responsive down to small WordPress admin viewports.
+
+CI checks the UI source contract for existing action IDs, the updated metric
+bindings, navigation, responsive layouts and lack of remote stylesheet
+dependencies in addition to syntax and unit tests.
+
 ## Fast-path loading and queue improvements (1.91.0)
 
 TideOrbit now loads AI adapters, job workers, Elementor's block design registry,
