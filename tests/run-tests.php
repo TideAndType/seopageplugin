@@ -3663,6 +3663,13 @@ assert_true( false !== strpos( $admin_js, 'offsetParent !== null' ), 'hidden con
 assert_true( false !== strpos( $campaign_view, 'id="scc-campaign-ai-check"' ), 'Campaign still offers paid AI citation measurements' );
 assert_true( false === strpos( $campaign_controller, 'update_option( ' . "'scc_credentials'" ), 'settings relocation adds no API credential migration or replacement' );
 
+echo "\n== Live WordPress bootstrap and LM Studio REST regression ==\n";
+$smoke_cmd = escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( __DIR__ . '/run-rest-bootstrap.php' ) . ' 2>&1';
+$smoke_output = array();
+$smoke_status = 1;
+exec( $smoke_cmd, $smoke_output, $smoke_status );
+assert_eq( 0, $smoke_status, 'live plugin bootstrap REST callbacks and Qwen model discovery: ' . implode( ' / ', $smoke_output ) );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
