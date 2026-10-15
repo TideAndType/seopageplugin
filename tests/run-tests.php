@@ -3084,6 +3084,55 @@ assert_true( false === strpos( $inline_js, '/layout/apply' ), 'inline editor nev
 assert_true( false !== strpos( $inline_css, '.scc-inline__panel' ), 'native editor panel CSS is present' );
 assert_true( false !== strpos( $inline_plugin, 'elementor/editor/after_enqueue_scripts' ), 'panel loaded via Elementor editor hook' );
 
+
+echo "\n== Elementor AI section designer controls ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor-section-designer.php';
+assert_true( in_array( 'flex_direction_mobile', SCC_Elementor_Section_Designer::allowed( 'container' ), true ), 'mobile flex stacking is supported for containers' );
+assert_true( in_array( 'typography_font_size_tablet', SCC_Elementor_Section_Designer::allowed( 'heading' ), true ), 'tablet heading typography is supported' );
+assert_eq( array(), SCC_Elementor_Section_Designer::allowed( 'html' ), 'HTML/code widgets are excluded from section redesign' );
+assert_eq( array(), SCC_Elementor_Section_Designer::allowed( 'image' ), 'images and media references are never modified by section AI' );
+$section_style = SCC_Elementor_Section_Designer::clean_settings( array(
+	'title_color' => '#AABBCC',
+	'typography_font_size_mobile' => array( 'size' => 24, 'unit' => 'px' ),
+	'typography_font_size_tablet' => array( 'size' => 800, 'unit' => 'px' ),
+	'content' => '<script>alert(1)</script>',
+	'custom_css' => 'body{display:none}',
+), 'heading' );
+assert_eq( '#aabbcc', $section_style['title_color'], 'header color normalized to CSS hex' );
+assert_eq( array( 'size' => 24.0, 'unit' => 'px' ), $section_style['typography_font_size_mobile'], 'valid mobile font size retained' );
+assert_true( ! isset( $section_style['content'], $section_style['custom_css'] )
+	&& ! isset( $section_style['typography_font_size_tablet'] ), 'copy/CSS injection and extreme font sizes rejected' );
+$section_container = SCC_Elementor_Section_Designer::clean_settings( array(
+	'padding_mobile' => array( 'top' => 28, 'right' => 16, 'bottom' => 28, 'left' => 16, 'unit' => 'px' ),
+	'flex_direction_mobile' => 'column',
+	'flex_direction' => 'nonsense',
+	'background_color' => 'url(javascript:alert(1))',
+), 'container' );
+assert_eq( 'column', $section_container['flex_direction_mobile'], 'mobile stack direction allowed' );
+assert_true( isset( $section_container['padding_mobile'] ) && ! isset( $section_container['flex_direction'], $section_container['background_color'] ), 'responsive padding allowed and unsafe settings rejected' );
+$section_inv = SCC_Elementor_Section_Designer::normalize_elements( array(
+	array( 'id' => 'abcd1234', 'type' => 'container', 'current' => array( 'background_color' => '#abcdef' ), 'excerpt' => 'Hero' ),
+	array( 'id' => 'abcd2345', 'type' => 'heading', 'current' => array( 'title' => 'Must not copy' ), 'excerpt' => 'Real heading' ),
+), 'abcd1234' );
+assert_true( is_array( $section_inv ) && count( $section_inv ) === 2, 'valid selected section inventory accepted' );
+assert_eq( array(), $section_inv[1]['current'], 'copy does not enter writeable style context' );
+assert_true( is_wp_error( SCC_Elementor_Section_Designer::normalize_elements( array(
+	array( 'id' => 'abcd1234', 'type' => 'heading' ),
+), 'abcd1234' ) ), 'section inventory requires a container root' );
+assert_true( is_wp_error( SCC_Elementor_Section_Designer::normalize_elements( array(
+	array( 'id' => 'abcd1234', 'type' => 'container' ),
+	array( 'id' => 'abcd1234', 'type' => 'heading' ),
+), 'abcd1234' ) ), 'duplicate element IDs rejected' );
+assert_true( is_wp_error( SCC_Elementor_Section_Designer::normalize_elements( array_fill( 0, 19, array(
+	'id' => 'unique1234', 'type' => 'container',
+) ), 'unique1234' ) ), 'section size is bounded' );
+$section_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/elementor-section.js' );
+$inline_js_v2 = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/elementor-inline.js' );
+assert_true( false !== strpos( $section_js, 'section-suggest' ), 'section mode connects to authenticated suggestion route' );
+assert_true( false !== strpos( $section_js, 'previewCss' ) && false !== strpos( $section_js, 'doc.head.appendChild( styleEl )' ), 'before/after preview uses temporary CSS in Elementor iframe' );
+assert_true( false !== strpos( $section_js, 'document/elements/settings' ) && false === strpos( $section_js, '/layout/apply' ), 'approved section edits stay in native Elementor history, no whole page writes' );
+assert_true( false !== strpos( $inline_js_v2, "window.SCCElementorSection(" ), 'section workflow extends existing assistant panel' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -11,6 +11,7 @@
 	var proposal = null;
 	var sequence = 0;
 	var busy = false;
+	var sectionBridge = null;
 	var app = window.SCCElementorInline;
 	if ( ! app || ! window.wp || ! window.wp.apiFetch ) { return; }
 
@@ -128,9 +129,9 @@
 			apply.disabled = true;
 		}
 		function refresh() {
-			var keys = allowedKeys( mode.value );
+			var keys = mode.value === 'section' && sectionBridge ? ( sectionBridge.isSupported() ? [ 'section' ] : [] ) : allowedKeys( mode.value );
 			selected.textContent = chosen ? 'Selected: ' + chosen.type + ' · ' + chosen.id : 'No element selected';
-			generate.disabled = busy || ! keys.length;
+			generate.disabled = busy || ( sectionBridge && sectionBridge.isBusy() ) || ! keys.length;
 			if ( chosen && ! keys.length ) {
 				showStatus( 'This element does not support ' + mode.value + ' editing yet. Try another element or mode.', true );
 			} else if ( ! chosen ) {
@@ -148,6 +149,7 @@
 				chosen = { id: id, type: type };
 				invalidate();
 				refresh();
+				if ( sectionBridge ) { sectionBridge.onSelection(); }
 			}
 		}
 		[ 'widget', 'container', 'section', 'column' ].forEach( function ( kind ) {
@@ -156,21 +158,23 @@
 		toggle.addEventListener( 'click', function () {
 			panel.hidden = ! panel.hidden;
 			toggle.setAttribute( 'aria-expanded', String( ! panel.hidden ) );
-			if ( ! panel.hidden ) { refresh(); }
+			if ( ! panel.hidden ) { refresh(); } else if ( sectionBridge ) { sectionBridge.onClose(); }
 		} );
 		close.addEventListener( 'click', function () {
 			panel.hidden = true;
 			toggle.setAttribute( 'aria-expanded', 'false' );
 			toggle.focus();
+			if ( sectionBridge ) { sectionBridge.onClose(); }
 		} );
 		mode.addEventListener( 'change', function () {
 			invalidate();
-			prompt.placeholder = mode.value === 'design' ? 'Use a clean modern look with centered alignment and a softer background.' : 'Improve this copy while keeping all claims accurate.';
+			prompt.placeholder = mode.value === 'section' ? 'Redesign this entire section with better visual hierarchy and intentional mobile spacing.' : ( mode.value === 'design' ? 'Use a clean modern look with centered alignment and a softer background.' : 'Improve this copy while keeping all claims accurate.' );
 			refresh();
+			if ( sectionBridge ) { sectionBridge.onModeChange(); }
 		} );
-		prompt.addEventListener( 'input', invalidate );
+		prompt.addEventListener( 'input', function () { invalidate(); if ( sectionBridge ) { sectionBridge.onPromptChange(); } } );
 		generate.addEventListener( 'click', function () {
-			if ( busy || ! chosen || ! allowedKeys( mode.value ).length ) { return; }
+			if ( mode.value === 'section' || busy || ! chosen || ! allowedKeys( mode.value ).length ) { return; }
 			if ( prompt.value.trim().length < 3 ) {
 				showStatus( 'Enter a specific change you want TideOrbit to make.', true );
 				return;
@@ -230,6 +234,7 @@
 			} );
 		} );
 		apply.addEventListener( 'click', function () {
+			if ( mode.value === 'section' ) { return; }
 			if ( ! proposal || ! chosen || proposal.target.id !== chosen.id || proposal.target.type !== chosen.type ||
 				proposal.target.mode !== mode.value ) {
 				invalidate();
@@ -264,6 +269,13 @@
 				showStatus( 'Elementor could not apply those settings: ' + ( err.message || 'unknown error' ), true );
 			}
 		} );
+		if ( window.SCCElementorSection ) {
+			sectionBridge = window.SCCElementorSection( {
+				root: root,
+				getChosen: function () { return chosen; },
+				setStatus: showStatus
+			} );
+		}
 		refresh();
 	}
 
