@@ -1,0 +1,74 @@
+name: Consolidate TideOrbit 1.99 and Elementor editor
+
+on:
+  push:
+    branches:
+      - consolidate/tideorbit-1.99-plus-editor
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile:
+    # The second push is made by GITHUB_TOKEN and should not run this job.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main-derived consolidation branch with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Merge editor and performance branch, preserving main in overlapping conflict hunks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "TideOrbit Consolidation Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main ttgmbapp
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "Branch changed unexpectedly"; exit 1; }
+          git merge --no-ff --no-edit -X ours origin/ttgmbapp
+          test -z "$(git ls-files --unmerged)"
+
+      - name: Mark consolidated release 1.99.1
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('seo-command-center/seo-command-center.php')
+          text = p.read_text()
+          assert text.count("Version:           1.99.0") == 1
+          assert text.count("define( 'SCC_VERSION', '1.99.0' )") == 1
+          text = text.replace("Version:           1.99.0", "Version:           1.99.1")
+          text = text.replace("define( 'SCC_VERSION', '1.99.0' )", "define( 'SCC_VERSION', '1.99.1' )")
+          p.write_text(text)
+          PY
+          git add seo-command-center/seo-command-center.php
+          git commit -m "Release merged TideOrbit 1.99.1 candidate"
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Syntax checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          find seo-command-center tests -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+          for file in seo-command-center/assets/js/*.js; do node --check "$file"; done
+
+      - name: Run regression suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/run-tests.php
+          test ! -f tests/run-autoloader.php || php tests/run-autoloader.php
+          test ! -f tests/run-lazy-bootstrap.php || php tests/run-lazy-bootstrap.php
+          test ! -f tests/run-ui-contract.php || php tests/run-ui-contract.php
+
+      - name: Push validated merge candidate
+        shell: bash
+        run: git push origin HEAD:refs/heads/consolidate/tideorbit-1.99-plus-editor
