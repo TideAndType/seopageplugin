@@ -164,8 +164,13 @@ class SCC_Plugin {
 		if ( ! is_array( $nodes ) || empty( $nodes ) ) {
 			return;
 		}
+		$allow_conflicts = (bool) get_post_meta( $post_id, '_scc_schema_allow_conflicts', true );
 		foreach ( $nodes as $node ) {
 			if ( ! is_array( $node ) || is_wp_error( SCC_Schema::validate( $node ) ) ) {
+				continue;
+			}
+			// Suppress stale duplicates from previous saves without deleting data.
+			if ( ! $allow_conflicts && SCC_Schema::already_provided( (string) ( $node['@type'] ?? '' ) ) ) {
 				continue;
 			}
 			// Default encoding escapes forward slashes (\/), so a "</script>"
