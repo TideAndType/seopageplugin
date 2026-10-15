@@ -9,6 +9,63 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## Elementor AI Designer 2.0 — section-level editing (1.92.2)
+
+The existing **✦ TideOrbit AI** assistant in **Edit with Elementor** now offers **Redesign selected section** for a container, section, or column. Select the parent in Elementor, describe how the whole section should look, and TideOrbit examines up to 18 supported existing descendants (container, heading, text, button, and legacy section/column). Its AI proposal can coordinate colors, alignment, spacing, and responsive desktop/tablet/mobile settings, without changing copy, images, media, URLs, or the element tree.
+
+Use **Show design preview** / **Show original design** to compare temporary CSS in Elementor's canvas. The preview never modifies Elementor document settings or WordPress post data. View tablet/mobile using Elementor's own responsive toolbar (preview CSS uses standard breakpoints, which may differ from custom site breakpoints). You can request a refinement of the last proposed section styling without starting over. **Apply to selected element** then uses native Elementor element settings commands; final publishing still requires clicking Elementor **Update / Publish**.
+
+Safeguards: per-post edit permission, REST nonce, root/ID and size validation, setting and value allowlists, stale-content checks, no PHP-side writes, and best-effort rollback when Elementor rejects a batch change. Section editing currently targets **supported v3/classic Elementor widgets and Flexbox containers**; v4 Atomic Editor classes and unsupported add-on controls are not changed. Test with Elementor on staging before using on important live pages.
+
+## Elementor inline AI assistant (1.92.1)
+
+Open a page in **Edit with Elementor**. The editor now has a floating **TideOrbit AI** control in the bottom-right corner. Select a supported Elementor widget or container, choose **Content / copy** or **Design / style**, enter a prompt, and review the suggested setting changes before clicking **Apply to selected element**. Changes use Elementor's native element settings command so they stay editable and can be undone in Elementor. **Update / Publish in Elementor** saves the page; suggestions never write or publish directly through REST.
+
+Initial supported content widgets: Heading, Text Editor, Button, Image Box, Icon Box, Testimonial. Design settings: Heading, Text Editor, Button, Container/Section/Column. The assistant refuses to overwrite dynamic content bindings, uses the existing AI provider, and does not run on the site's public pages or in the Elementor preview iframe. No cloud login or Vercel deployment is required.
+
+## TideOrbit workspace visual refresh (1.92.0)
+
+TideOrbit uses a modern, consistent WordPress-native administration experience:
+a top workspace navigation bar, a dark product dashboard hero, compact
+data-driven SEO health / issue / action / AI-spend metric cards, shortcuts,
+legible form controls, pill-style hub and settings tabs, and refined table,
+diagnostic and empty-state styling. Dashboard health metrics refresh when SEO
+Doctor finishes. The visual direction draws on dashboard/metric/bento patterns
+from [21st.dev](https://21st.dev/community/components/s/dashboard), but all
+markup is built with existing PHP views and the stylesheet is plain CSS.
+
+No 21st.dev source, external component registry, React, Tailwind, icon font,
+CDN, runtime NPM dependency, or new font file ships with the plugin. WordPress
+Dashicons provide the visual icons. Main menu, tab and REST URLs and action
+element IDs are retained to keep existing workflows and deep links working.
+Colors, controls, focus states and layouts are scoped to TideOrbit admin pages
+and responsive down to small WordPress admin viewports.
+
+CI checks the UI source contract for existing action IDs, the updated metric
+bindings, navigation, responsive layouts and lack of remote stylesheet
+dependencies in addition to syntax and unit tests.
+
+## Fast-path loading and queue improvements (1.91.0)
+
+TideOrbit now loads AI adapters, job workers, Elementor's block design registry,
+and the public citation scanner **only when they are used**. Registering
+TideOrbit's REST routes for an unrelated WordPress REST request does not create
+an AI provider or job worker. In wp-admin, provider model lists are prepared
+only on TideOrbit Settings/Connections, and healthy database table checks are
+cached for six hours (with immediate version-upgrade checks).
+
+Rapid successive post saves are coalesced into a single queued internal-link
+analysis until a worker picks it up; the worker then releases the pending
+marker so new edits can queue fresh work. The worker checks for queue existence
+instead of counting every queued record. These changes do not remove any
+models, Elementor layouts, saved settings, or historical SEO data.
+
+**Verification:** CI runs a real lazy-bootstrap contract, the existing PHP
+test suite on PHP 7.4/8.2/8.3, JavaScript syntax checks, and an optimized
+WordPress installation ZIP build. Runtime speedups still depend on the site's
+theme, plugins, server, cache and workload; benchmark on staging before
+claiming a specific percentage improvement.
+
 ## Lean installation and WordPress editor performance (1.88.0)
 
 The build removes an unused legacy layout engine and its two orphaned
@@ -19,8 +76,9 @@ The TideOrbit dashboard and standard WordPress post editing screens now
 load separate assets. Post/page editors receive a small SEO-panel controller
 (`assets/js/editor.js`) and scoped styles (`assets/css/editor.css`),
 instead of the full SEO dashboard JavaScript and CSS. All SEO panel actions
-remain available. The full dashboard files continue to be used on TideOrbit
-admin screens, including Layout Engine and LM Studio Visual Recreation.
+remain available. TideOrbit's own admin also uses screen-specific controllers for general
+screens, Settings/Connections and the Elementor Layout Engine, including
+LM Studio Visual Recreation.
 
 GitHub Actions creates a clean staging copy, minifies both admin and editor
 JS/CSS **at build time only**, syntax-checks the generated JS, and packages

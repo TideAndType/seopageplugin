@@ -391,6 +391,21 @@ $bad = SCC_Publishing::schedule( 1, 'not-a-date' );
 assert_true( $bad instanceof WP_Error, 'invalid date rejected' );
 $future = SCC_Publishing::schedule( 1, gmdate( 'Y-m-d H:i:s', time() + 86400 ) );
 assert_eq( true, $future, 'future date accepted' );
+// datetime-local is interpreted in the WordPress site's timezone, including
+// daylight saving time and non-hour timezone offsets.
+$test_year = (int) gmdate( 'Y' ) + 3;
+$GLOBALS['scc_test_timezone'] = 'America/New_York';
+$ny = SCC_Publishing::schedule( 1, $test_year . '-07-10T10:45' );
+assert_eq( true, $ny, 'HTML datetime-local accepted in site timezone' );
+assert_eq( $test_year . '-07-10 10:45:00', $GLOBALS['scc_test_last_post_update']['post_date'], 'scheduled local clock time preserved' );
+assert_eq( $test_year . '-07-10 14:45:00', $GLOBALS['scc_test_last_post_update']['post_date_gmt'], 'DST offset applied to scheduled UTC date' );
+$GLOBALS['scc_test_timezone'] = 'Asia/Kathmandu';
+$nepal = SCC_Publishing::schedule( 1, $test_year . '-07-10 10:45:00' );
+assert_eq( true, $nepal, 'fractional-hour timezone accepted' );
+assert_eq( $test_year . '-07-10 05:00:00', $GLOBALS['scc_test_last_post_update']['post_date_gmt'], '45-minute timezone offset preserved' );
+$rollover = SCC_Publishing::schedule( 1, $test_year . '-02-30T10:45' );
+assert_true( $rollover instanceof WP_Error, 'nonexistent calendar date rejected' );
+$GLOBALS['scc_test_timezone'] = 'UTC';
 
 echo "\n== Content index: tokenize + semantic relevance ==\n";
 $tk = SCC_Content_Index::tokenize( 'Local SEO services help small local businesses rank in local search' );
@@ -2945,9 +2960,13 @@ echo "\n== TideOrbit 1.84.1 Rank Tracker Connections ==\n";
 $connections_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/connections.php' );
 assert_true( false !== strpos( $connections_src, 'Google Maps Rank Tracker / Browser Runtime' ), 'Rank Tracker pairing is discoverable under Connections' );
 assert_true( false !== strpos( $connections_src, '127.0.0.1:4317' ), 'Connections screen documents the secure local bridge port' );
-$admin_js_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+$admin_js_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin-settings.js' );
 assert_true( false !== strpos( $admin_js_src, 'browser_runtime_mode' ) && false !== strpos( $admin_js_src, 'browser_runtime_url' ), 'Connections form saves Browser Runtime settings' );
 assert_true( false !== strpos( $admin_js_src, "/browser-runtime/test" ), 'Connections screen can test the Rank Tracker bridge' );
+assert_true( false !== strpos( $admin_js_src, 'bindSettingsTabs()' ), 'settings tabs initialized' );
+$layout_js_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin-layout.js' );
+assert_true( false !== strpos( $layout_js_src, 'bindLayoutEngine()' ), 'layout JS initialized separately' );
+
 $rest_src_1841 = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
 assert_true( false !== strpos( $rest_src_1841, "'/browser-runtime/test'" ) && false !== strpos( $rest_src_1841, 'browser_runtime_test' ), 'Rank Tracker test endpoint is registered' );
 

@@ -52,12 +52,14 @@ class SCC_Plugin {
 	 * Constructor.
 	 */
 	protected function __construct() {
-		$this->loader = new SCC_Loader();
-		$this->ai     = new SCC_AI_Manager();
-		$this->jobs      = new SCC_Jobs( $this->ai );
-		$this->autopilot = new SCC_Autopilot();
-		$this->admin     = new SCC_Admin( $this->ai );
-		$this->rest      = new SCC_REST( $this->ai, $this->jobs );
+		$this->loader    = new SCC_Loader();
+		// Defer model providers, workers and link automation until those features
+		// are actually used. Public page rendering requires none of them.
+		$this->ai        = null;
+		$this->jobs      = null;
+		$this->autopilot = null;
+		$this->admin     = is_admin() ? new SCC_Admin() : null;
+		$this->rest      = null;
 	}
 
 	/**
@@ -66,7 +68,30 @@ class SCC_Plugin {
 	 * @return SCC_AI_Manager
 	 */
 	public function ai() {
+		if ( null === $this->ai ) {
+			$this->ai = new SCC_AI_Manager();
+		}
 		return $this->ai;
+	}
+
+	/**
+	 * Queue runner is needed only on cron and REST requests.
+	 */
+	protected function jobs() {
+		if ( null === $this->jobs ) {
+			$this->jobs = new SCC_Jobs( $this->ai() );
+		}
+		return $this->jobs;
+	}
+
+	/**
+	 * Keep link automation inert until WordPress actually saves/deletes a post.
+	 */
+	protected function autopilot() {
+		if ( null === $this->autopilot ) {
+			$this->autopilot = new SCC_Autopilot();
+		}
+		return $this->autopilot;
 	}
 
 	/**
@@ -75,33 +100,37 @@ class SCC_Plugin {
 	public function run() {
 		// Lightweight per-site SEO campaign delivery & measured reporting.
 		if ( class_exists( 'SCC_Campaign_Operations' ) ) { SCC_Campaign_Operations::hooks(); }
-		// Smart component library: visual aliases stay on the controlled registry.
-		if ( class_exists( 'SCC_Page_Architect' ) ) {
-			add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
-			if ( class_exists( 'SCC_Block_Registry' ) ) { SCC_Block_Registry::flush(); }
-		}
+		// Register lazy callbacks without loading the layout engine on public requests.
+		add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
+		if ( class_exists( 'SCC_Block_Registry', false ) ) { SCC_Block_Registry::flush(); }
 
 		// i18n.
 		$this->loader->add_action( 'init', $this, 'load_textdomain' );
 
-		// Public local-citation lead tool. Embed with [tideorbit_citation_scan].
-		if ( class_exists( 'SCC_Citation_Scanner' ) ) {
-			add_shortcode( 'tideorbit_citation_scan', array( 'SCC_Citation_Scanner', 'shortcode' ) );
-		}
+		// Register by name: shortcode scanner is loaded only when rendered.
+		add_shortcode( 'tideorbit_citation_scan', array( 'SCC_Citation_Scanner', 'shortcode' ) );
 
 		// DB upgrade check on admin load.
 		$this->loader->add_action( 'admin_init', $this, 'maybe_upgrade_db' );
 
-		// Admin.
-		$this->loader->add_action( 'admin_menu', $this->admin, 'register_menu' );
-		$this->loader->add_action( 'admin_enqueue_scripts', $this->admin, 'enqueue_assets' );
-		$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
-		$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
-		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
-		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
+		// Register administration services only for wp-admin requests.
+		if ( $this->admin ) {
+			$this->loader->add_action( 'admin_menu', $this->admin, 'register_menu' );
+			$this->loader->add_action( 'admin_enqueue_scripts', $this->admin, 'enqueue_assets' );
+			$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
+			$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
+			$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
+			$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
+		}
+
+		// Editor-only Elementor AI assistant. No frontend or preview assets.
+		if ( $this->admin ) {
+			add_action( 'elementor/editor/after_enqueue_scripts', array( 'SCC_Elementor_Inline', 'enqueue' ) );
+		}
 
 		// REST.
-		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );
+		$this->loader->add_action( 'rest_api_init', $this, 'register_rest_routes' );
+		add_action( 'rest_api_init', array( 'SCC_Elementor_Inline', 'register_route' ) );
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
@@ -114,23 +143,55 @@ class SCC_Plugin {
 		// Background jobs dispatcher. The recurring hook provides a safety net;
 		// the kick hook is a separate near-term event so an existing hourly event
 		// never prevents newly queued work from starting promptly.
-		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
-		$this->loader->add_action( SCC_Jobs::KICK_HOOK, $this->jobs, 'run' );
+		// Keep names aligned with SCC_Jobs::CRON_HOOK / KICK_HOOK.
+		// Using the literal hook names avoids loading the queue on page views.
+		$this->loader->add_action( 'scc_run_jobs', $this, 'run_jobs' );
+		$this->loader->add_action( 'scc_run_jobs_kick', $this, 'run_jobs' );
 
 		// Intelligence layer: capture a daily health snapshot and run autopilot
 		// (safe, deterministic actions only) on the existing job cron.
-		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this, 'run_intelligence_cron' );
+		$this->loader->add_action( 'scc_run_jobs', $this, 'run_intelligence_cron' );
 
 		// Internal Link Autopilot: keep the index fresh + analyze new content.
-		$this->loader->add_action( 'save_post', $this->autopilot, 'on_save_post', 20, 3 );
-		$this->loader->add_action( 'before_delete_post', $this->autopilot, 'on_delete_post', 10, 1 );
+		$this->loader->add_action( 'save_post', $this, 'on_save_post', 20, 3 );
+		$this->loader->add_action( 'before_delete_post', $this, 'on_delete_post', 10, 1 );
 
 		$this->loader->run();
 	}
 
 	/**
-	 * Load translations.
+	 * Dispatch the queued background work only when the cron hook executes.
 	 */
+	public function run_jobs() {
+		$this->jobs()->run();
+	}
+
+	/**
+	 * Lazily create the index/autopilot controller on actual content writes.
+	 */
+	public function on_save_post( $post_id, $post, $update ) {
+		$this->autopilot()->on_save_post( $post_id, $post, $update );
+	}
+
+	/**
+	 * Remove a deleted post from the index without eager front-end loading.
+	 */
+	public function on_delete_post( $post_id ) {
+		$this->autopilot()->on_delete_post( $post_id );
+	}
+
+	/**
+	 * Instantiate the REST controller only when WordPress dispatches REST.
+	 * Avoid loading its 124 routes on normal frontend requests.
+	 */
+	public function register_rest_routes() {
+		if ( ! $this->rest ) {
+			$this->rest = new SCC_REST();
+		}
+		$this->rest->register_routes();
+	}
+
+	/** Load plugin translations. */
 	public function load_textdomain() {
 		load_plugin_textdomain( 'seo-command-center', false, dirname( SCC_PLUGIN_BASENAME ) . '/languages' );
 	}
@@ -151,8 +212,13 @@ class SCC_Plugin {
 		if ( ! is_array( $nodes ) || empty( $nodes ) ) {
 			return;
 		}
+		$allow_conflicts = (bool) get_post_meta( $post_id, '_scc_schema_allow_conflicts', true );
 		foreach ( $nodes as $node ) {
 			if ( ! is_array( $node ) || is_wp_error( SCC_Schema::validate( $node ) ) ) {
+				continue;
+			}
+			// Suppress stale duplicates from previous saves without deleting data.
+			if ( ! $allow_conflicts && SCC_Schema::already_provided( (string) ( $node['@type'] ?? '' ) ) ) {
 				continue;
 			}
 			// Default encoding escapes forward slashes (\/), so a "</script>"
@@ -418,13 +484,27 @@ CSS;
 	 * Run the DB installer if the stored version is behind.
 	 */
 	public function maybe_upgrade_db() {
-		// Re-run the installer when the version changed OR when a core table is
-		// missing (self-heals an install whose tables failed to create — e.g. an
-		// older schema a strict-mode MySQL rejected).
-		if ( get_option( 'scc_db_version' ) !== SCC_DB_VERSION || ! SCC_DB::core_tables_present() ) {
+		// Checking four custom tables requires four SHOW TABLES queries. WordPress
+		// invokes admin_init on every backend request, so cache the healthy state
+		// for six hours while still checking immediately on version changes.
+		$upgrade = get_option( 'scc_db_version' ) !== SCC_DB_VERSION;
+		$healthy = get_transient( 'scc_db_tables_ok' );
+		if ( ! $upgrade && false !== $healthy ) {
+			return;
+		}
+		$present = $upgrade ? false : SCC_DB::core_tables_present();
+		if ( $upgrade || ! $present ) {
 			SCC_DB::install();
 			$this->migrate_settings();
 			update_option( 'scc_db_version', SCC_DB_VERSION );
+			$present = SCC_DB::core_tables_present();
+		}
+		// Do not cache a failed install; a subsequent admin request should be
+		// able to retry rather than silently hiding missing database tables.
+		if ( $present ) {
+			set_transient( 'scc_db_tables_ok', 1, 6 * HOUR_IN_SECONDS );
+		} else {
+			delete_transient( 'scc_db_tables_ok' );
 		}
 	}
 
