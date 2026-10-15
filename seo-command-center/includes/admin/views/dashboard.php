@@ -16,18 +16,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 $usage  = isset( $data['usage'] ) ? $data['usage'] : array();
 $doctor = isset( $data['doctor'] ) && is_array( $data['doctor'] ) ? $data['doctor'] : null;
+$score = $doctor && isset( $doctor['score'] ) && is_numeric( $doctor['score'] ) ? max( 0, min( 100, (int) $doctor['score'] ) ) : null;
+$issues = $doctor && isset( $doctor['issues'] ) && is_array( $doctor['issues'] ) ? count( $doctor['issues'] ) : null;
+$fixable = $doctor && isset( $doctor['fixable'] ) ? (int) $doctor['fixable'] : null;
 ?>
-<div class="wrap scc-wrap">
-	<div class="scc-header">
-		<h1><?php esc_html_e( 'TideOrbit', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Your SEO, prioritized.', 'seo-command-center' ); ?></p>
-	</div>
+<div class="wrap scc-wrap scc-dashboard">
+	<section class="scc-dashboard-hero" aria-labelledby="scc-dashboard-title">
+		<div class="scc-dashboard-hero__content">
+			<p class="scc-kicker"><span class="scc-live-dot" aria-hidden="true"></span><?php esc_html_e( 'SEO COMMAND CENTER', 'seo-command-center' ); ?></p>
+			<h1 id="scc-dashboard-title"><?php esc_html_e( 'A clearer path to better rankings.', 'seo-command-center' ); ?></h1>
+			<p><?php esc_html_e( 'See where you stand, act on the biggest opportunities, and create your next great page.', 'seo-command-center' ); ?></p>
+			<div class="scc-dashboard-hero__actions">
+				<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create' ) ); ?>"><span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span><?php esc_html_e( 'Create content', 'seo-command-center' ); ?></a>
+				<a class="scc-dashboard-hero__secondary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-opportunities' ) ); ?>"><?php esc_html_e( 'Explore opportunities', 'seo-command-center' ); ?> <span class="dashicons dashicons-arrow-right-alt2" aria-hidden="true"></span></a>
+			</div>
+		</div>
+		<div class="scc-dashboard-hero__orbit" aria-hidden="true"><div class="scc-dashboard-hero__ring"></div><div class="scc-dashboard-hero__core"><span class="dashicons dashicons-chart-area"></span></div></div>
+	</section>
 
 	<div class="scc-context-bar">
 		<span class="scc-chip"><?php esc_html_e( 'SEO plugin:', 'seo-command-center' ); ?> <strong><?php echo esc_html( $data['seo_plugin'] ); ?></strong></span>
 		<span class="scc-chip"><?php esc_html_e( 'Elementor:', 'seo-command-center' ); ?> <strong><?php echo $data['elementor'] ? esc_html__( 'Detected', 'seo-command-center' ) : esc_html__( 'Not installed', 'seo-command-center' ); ?></strong></span>
 		<span class="scc-chip"><?php esc_html_e( 'AI spend (mo.):', 'seo-command-center' ); ?> <strong>$<?php echo esc_html( number_format( (float) ( $usage['cost'] ?? 0 ), 2 ) ); ?></strong></span>
 	</div>
+
+	<section class="scc-overview" aria-label="<?php esc_attr_e( 'SEO metrics at a glance', 'seo-command-center' ); ?>">
+		<div class="scc-section-heading"><div><span class="scc-kicker"><?php esc_html_e( 'OVERVIEW', 'seo-command-center' ); ?></span><h2><?php esc_html_e( 'Your site at a glance', 'seo-command-center' ); ?></h2></div><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-optimize' ) ); ?>"><?php esc_html_e( 'View action queue', 'seo-command-center' ); ?> →</a></div>
+		<div class="scc-metric-grid">
+			<div class="scc-metric-card"><div class="scc-metric-card__label"><?php esc_html_e( 'SEO health', 'seo-command-center' ); ?><span class="dashicons dashicons-chart-area" aria-hidden="true"></span></div><strong id="scc-metric-score"><?php echo null === $score ? '—' : esc_html( $score ); ?><?php if ( null !== $score ) : ?><small>/100</small><?php endif; ?></strong><p id="scc-metric-label"><?php echo $doctor ? esc_html( (string) ( $doctor['label'] ?? __( 'Latest diagnosis', 'seo-command-center' ) ) ) : esc_html__( 'Not measured yet', 'seo-command-center' ); ?></p><?php if ( null !== $score ) : ?><div id="scc-metric-track" class="scc-metric-card__track" aria-hidden="true"><span style="width:<?php echo esc_attr( (string) $score ); ?>%"></span></div><?php endif; ?></div>
+			<div class="scc-metric-card"><div class="scc-metric-card__label"><?php esc_html_e( 'Open issues', 'seo-command-center' ); ?><span class="dashicons dashicons-warning" aria-hidden="true"></span></div><strong id="scc-metric-issues"><?php echo null === $issues ? '—' : esc_html( number_format_i18n( $issues ) ); ?></strong><p><?php esc_html_e( 'From the latest SEO diagnosis', 'seo-command-center' ); ?></p></div>
+			<div class="scc-metric-card"><div class="scc-metric-card__label"><?php esc_html_e( 'Suggested fixes', 'seo-command-center' ); ?><span class="dashicons dashicons-hammer" aria-hidden="true"></span></div><strong id="scc-metric-fixable"><?php echo null === $fixable ? '—' : esc_html( number_format_i18n( $fixable ) ); ?></strong><p><?php esc_html_e( 'Problems with an available action', 'seo-command-center' ); ?></p></div>
+			<div class="scc-metric-card"><div class="scc-metric-card__label"><?php esc_html_e( 'AI usage this month', 'seo-command-center' ); ?><span class="dashicons dashicons-cloud" aria-hidden="true"></span></div><strong><small>$</small><?php echo esc_html( number_format( (float) ( $usage['cost'] ?? 0 ), 2 ) ); ?></strong><p><?php esc_html_e( 'Estimated AI API cost', 'seo-command-center' ); ?></p></div>
+		</div>
+	</section>
 
 	<?php
 	// SEO Doctor — rendered by admin.js from the stored diagnosis (embedded
@@ -89,4 +110,9 @@ $doctor = isset( $data['doctor'] ) && is_array( $data['doctor'] ) ? $data['docto
 		<span class="scc-inline-status" id="scc-copilot-msg"></span>
 		<div class="scc-copilot__result" id="scc-copilot-result" hidden></div>
 	</div>
+	<section class="scc-dashboard-shortcuts" aria-label="<?php esc_attr_e( 'Quick actions', 'seo-command-center' ); ?>">
+		<a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=ideas' ) ); ?>"><span class="dashicons dashicons-welcome-write-blog" aria-hidden="true"></span><span><strong><?php esc_html_e( 'Discover ideas', 'seo-command-center' ); ?></strong><small><?php esc_html_e( 'Find new pages worth publishing', 'seo-command-center' ); ?></small></span><span aria-hidden="true">↗</span></a>
+		<a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-optimize&tab=links' ) ); ?>"><span class="dashicons dashicons-admin-links" aria-hidden="true"></span><span><strong><?php esc_html_e( 'Strengthen internal links', 'seo-command-center' ); ?></strong><small><?php esc_html_e( 'Find useful connections', 'seo-command-center' ); ?></small></span><span aria-hidden="true">↗</span></a>
+		<a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=layout' ) ); ?>"><span class="dashicons dashicons-layout" aria-hidden="true"></span><span><strong><?php esc_html_e( 'Design with Elementor', 'seo-command-center' ); ?></strong><small><?php esc_html_e( 'Build editable page layouts', 'seo-command-center' ); ?></small></span><span aria-hidden="true">↗</span></a>
+	</section>
 </div>
