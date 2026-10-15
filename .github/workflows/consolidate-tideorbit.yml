@@ -27,7 +27,7 @@ jobs:
           git config user.name "TideOrbit Consolidation Bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main ttgmbapp
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "Branch changed unexpectedly"; exit 1; }
+          git merge-base --is-ancestor origin/main HEAD || { echo "Consolidation branch is no longer based on main"; exit 1; }
           git merge --no-ff --no-edit -X ours origin/ttgmbapp
           test -z "$(git ls-files --unmerged)"
 
