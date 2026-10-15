@@ -31,12 +31,12 @@ jobs:
       - name: PHP syntax check
         run: find seo-command-center tests -name '*.php' -print0 | xargs -0 -n1 php -l
 
-      - name: Admin JavaScript syntax check
+      - name: All plugin JavaScript syntax check
         run: |
-          node --check seo-command-center/assets/js/admin.js
-          node --check seo-command-center/assets/js/admin-settings.js
-          node --check seo-command-center/assets/js/admin-layout.js
-          node --check seo-command-center/assets/js/editor.js
+          set -euo pipefail
+          for file in seo-command-center/assets/js/*.js; do
+            node --check "$file"
+          done
 
       - name: Class autoload integrity
         run: php tests/run-autoloader.php

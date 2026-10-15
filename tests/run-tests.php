@@ -391,6 +391,21 @@ $bad = SCC_Publishing::schedule( 1, 'not-a-date' );
 assert_true( $bad instanceof WP_Error, 'invalid date rejected' );
 $future = SCC_Publishing::schedule( 1, gmdate( 'Y-m-d H:i:s', time() + 86400 ) );
 assert_eq( true, $future, 'future date accepted' );
+// datetime-local is interpreted in the WordPress site's timezone, including
+// daylight saving time and non-hour timezone offsets.
+$test_year = (int) gmdate( 'Y' ) + 3;
+$GLOBALS['scc_test_timezone'] = 'America/New_York';
+$ny = SCC_Publishing::schedule( 1, $test_year . '-07-10T10:45' );
+assert_eq( true, $ny, 'HTML datetime-local accepted in site timezone' );
+assert_eq( $test_year . '-07-10 10:45:00', $GLOBALS['scc_test_last_post_update']['post_date'], 'scheduled local clock time preserved' );
+assert_eq( $test_year . '-07-10 14:45:00', $GLOBALS['scc_test_last_post_update']['post_date_gmt'], 'DST offset applied to scheduled UTC date' );
+$GLOBALS['scc_test_timezone'] = 'Asia/Kathmandu';
+$nepal = SCC_Publishing::schedule( 1, $test_year . '-07-10 10:45:00' );
+assert_eq( true, $nepal, 'fractional-hour timezone accepted' );
+assert_eq( $test_year . '-07-10 05:00:00', $GLOBALS['scc_test_last_post_update']['post_date_gmt'], '45-minute timezone offset preserved' );
+$rollover = SCC_Publishing::schedule( 1, $test_year . '-02-30T10:45' );
+assert_true( $rollover instanceof WP_Error, 'nonexistent calendar date rejected' );
+$GLOBALS['scc_test_timezone'] = 'UTC';
 
 echo "\n== Content index: tokenize + semantic relevance ==\n";
 $tk = SCC_Content_Index::tokenize( 'Local SEO services help small local businesses rank in local search' );
@@ -3131,6 +3146,7 @@ $inline_js_v2 = (string) file_get_contents( __DIR__ . '/../seo-command-center/as
 assert_true( false !== strpos( $section_js, 'section-suggest' ), 'section mode connects to authenticated suggestion route' );
 assert_true( false !== strpos( $section_js, 'previewCss' ) && false !== strpos( $section_js, 'doc.head.appendChild( styleEl )' ), 'before/after preview uses temporary CSS in Elementor iframe' );
 assert_true( false !== strpos( $section_js, 'document/elements/settings' ) && false === strpos( $section_js, '/layout/apply' ), 'approved section edits stay in native Elementor history, no whole page writes' );
+assert_true( false !== strpos( $section_js, 'Instructions changed. Generate a fresh proposal before applying.' ), 'section proposals are invalidated when the prompt changes' );
 assert_true( false !== strpos( $inline_js_v2, "window.SCCElementorSection(" ), 'section workflow extends existing assistant panel' );
 
 echo "\n----------------------------------------\n";

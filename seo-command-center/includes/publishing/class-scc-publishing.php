@@ -112,12 +112,26 @@ class SCC_Publishing {
 		if ( is_wp_error( $preflight ) ) {
 			return $preflight;
 		}
-		$ts = strtotime( $datetime );
-		if ( ! $ts || $ts <= time() ) {
-			return new WP_Error( 'scc_bad_date', __( 'Provide a future date and time.', 'seo-command-center' ), array( 'status' => 400 ) );
+		// The editor sends datetime-local (site wall-clock time, without an
+		// offset). Parse it in WordPress's configured timezone, not PHP's
+		// server timezone. A numeric gmt_offset is wrong across DST and for
+		// zones with fractional-hour offsets.
+		$datetime = trim( (string) $datetime );
+		if ( ! preg_match( '/^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(?::\\d{2})?$/', $datetime ) ) {
+			return new WP_Error( 'scc_bad_date', __( 'Provide a valid future date and time.', 'seo-command-center' ), array( 'status' => 400 ) );
 		}
-		$gmt   = gmdate( 'Y-m-d H:i:s', $ts - ( (int) get_option( 'gmt_offset' ) * HOUR_IN_SECONDS ) );
-		$local = gmdate( 'Y-m-d H:i:s', $ts );
+		$normalized = str_replace( 'T', ' ', $datetime );
+		if ( 16 === strlen( $normalized ) ) {
+			$normalized .= ':00';
+		}
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $normalized, wp_timezone() );
+		$errors = DateTimeImmutable::getLastErrors();
+		if ( ! $date || ( $errors && ( $errors['warning_count'] || $errors['error_count'] ) )
+			|| $date->format( 'Y-m-d H:i:s' ) !== $normalized || $date->getTimestamp() <= time() ) {
+			return new WP_Error( 'scc_bad_date', __( 'Provide a valid future date and time.', 'seo-command-center' ), array( 'status' => 400 ) );
+		}
+		$local = $date->format( 'Y-m-d H:i:s' );
+		$gmt   = $date->setTimezone( new DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
 		$result = wp_update_post(
 			array(
 				'ID'            => (int) $post_id,

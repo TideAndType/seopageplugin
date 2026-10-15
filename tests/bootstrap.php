@@ -320,8 +320,14 @@ if ( ! function_exists( 'current_user_can' ) ) {
 		return true;
 	}
 }
+if ( ! function_exists( 'wp_timezone' ) ) {
+	function wp_timezone() {
+		return new DateTimeZone( $GLOBALS['scc_test_timezone'] ?? 'UTC' );
+	}
+}
 if ( ! function_exists( 'wp_update_post' ) ) {
 	function wp_update_post( $args, $wp_error = false ) {
+		$GLOBALS['scc_test_last_post_update'] = $args;
 		return is_array( $args ) && ! empty( $args['ID'] ) ? (int) $args['ID'] : 1;
 	}
 }
