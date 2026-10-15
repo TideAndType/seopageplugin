@@ -41,10 +41,10 @@ class SCC_REST {
 
 	/** AI adapters are initialized only by endpoints which actually need them. */
 	protected function ai() {
-		if ( null === $this->ai() ) {
+		if ( null === $this->ai ) {
 			$this->ai = SCC_Plugin::instance()->ai();
 		}
-		return $this->ai();
+		return $this->ai;
 	}
 
 	/** Do not initialize job workers while registering unrelated REST routes. */
