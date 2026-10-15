@@ -3663,6 +3663,13 @@ assert_true( false !== strpos( $admin_js, 'offsetParent !== null' ), 'hidden con
 assert_true( false !== strpos( $campaign_view, 'id="scc-campaign-ai-check"' ), 'Campaign still offers paid AI citation measurements' );
 assert_true( false === strpos( $campaign_controller, 'update_option( ' . "'scc_credentials'" ), 'settings relocation adds no API credential migration or replacement' );
 
+echo "\n== Production REST callback bootstrap (Detect models fatal regression) ==\n";
+$bootstrap_command = escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( __DIR__ . '/run-rest-bootstrap.php' ) . ' 2>&1';
+$bootstrap_lines = array();
+$bootstrap_exit = -1;
+exec( $bootstrap_command, $bootstrap_lines, $bootstrap_exit );
+assert_eq( 0, $bootstrap_exit, 'WordPress plugin boot registers all REST callback classes: ' . implode( ' / ', $bootstrap_lines ) );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
