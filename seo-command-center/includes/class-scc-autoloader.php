@@ -149,6 +149,7 @@ if ( ! class_exists( 'SCC_Autoloader', false ) ) {
             }
             // Interfaces and any non-conventional names must be listed here.
             self::$map['scc_ai_provider_interface'] = 'includes/ai/interface-scc-ai-provider.php';
+            self::$map['scc_renderer_interface'] = 'includes/render/interface-scc-renderer.php';
             self::$registered = true;
             spl_autoload_register( array( __CLASS__, 'load' ) );
         }

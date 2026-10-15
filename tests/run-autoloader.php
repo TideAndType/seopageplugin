@@ -21,15 +21,21 @@ foreach ( $files as $file ) {
     if ( ! preg_match( '/^(class|interface)-scc-(.+)$/', $filename, $parts ) ) { continue; }
     $name = 'SCC_' . str_replace( '-', '_', $parts[2] );
     if ( 'interface-scc-ai-provider' === $filename ) { $name = 'SCC_AI_Provider_Interface'; }
+    if ( 'interface-scc-renderer' === $filename ) { $name = 'SCC_Renderer_Interface'; }
     // The main plugin, WordPress, and DB are intentionally NOT initialized here.
-    $loaded = class_exists( $name, true ) || interface_exists( $name, true );
     $checked++;
-    if ( ! $loaded ) {
+    try {
+        $loaded = class_exists( $name, true ) || interface_exists( $name, true );
+        if ( ! $loaded ) {
+            $failed++;
+            fwrite( STDERR, 'Missing autoload declaration: ' . $name . ' (' . $file->getPathname() . ')' . PHP_EOL );
+        } elseif ( realpath( ( new ReflectionClass( $name ) )->getFileName() ) !== realpath( $file->getPathname() ) ) {
+            $failed++;
+            fwrite( STDERR, 'Autoload resolves the wrong file for ' . $name . PHP_EOL );
+        }
+    } catch ( Throwable $error ) {
         $failed++;
-        fwrite( STDERR, 'Missing autoload declaration: ' . $name . ' (' . $file->getPathname() . ')' . PHP_EOL );
-    } elseif ( realpath( ( new ReflectionClass( $name ) )->getFileName() ) !== realpath( $file->getPathname() ) ) {
-        $failed++;
-        fwrite( STDERR, 'Autoload resolves the wrong file for ' . $name . PHP_EOL );
+        fwrite( STDERR, 'Autoload exception for ' . $name . ': ' . $error->getMessage() . PHP_EOL );
     }
 }
 echo "Checked {$checked} class/interface declarations; {$failed} missing or mismatched." . PHP_EOL;
