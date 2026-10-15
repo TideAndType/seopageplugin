@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO + AEO for WordPress and Elementor: analyze your site, architect future growth, improve AI citation readiness, and generate on-brand content with draft-first live-page safety.
- * Version:           1.89.0
+ * Version:           1.90.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.89.0' );
+	define( 'SCC_VERSION', '1.90.0' );
 	define( 'SCC_DB_VERSION', '1.20.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -45,153 +45,11 @@ if ( ! defined( 'SCC_VERSION' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// Autoload-free, explicit includes (predictable load order, no dependencies).
+// Lazy class loading. Hooks and public APIs remain unchanged; unused feature
+// classes are not parsed on every visitor request.
 // ---------------------------------------------------------------------------
-require_once SCC_PLUGIN_DIR . 'includes/class-scc-loader.php';
-require_once SCC_PLUGIN_DIR . 'includes/database/class-scc-db.php';
-require_once SCC_PLUGIN_DIR . 'includes/security/class-scc-security.php';
-require_once SCC_PLUGIN_DIR . 'includes/net/class-scc-url.php';
-require_once SCC_PLUGIN_DIR . 'includes/net/class-scc-robots.php';
-require_once SCC_PLUGIN_DIR . 'includes/logging/class-scc-logger.php';
-require_once SCC_PLUGIN_DIR . 'includes/class-scc-activator.php';
-require_once SCC_PLUGIN_DIR . 'includes/class-scc-deactivator.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-response.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/interface-scc-ai-provider.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-usage.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-claude-provider.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-openai-provider.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-gemini-provider.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-lmstudio-provider.php';
-require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-manager.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-seo-meta.php';
-require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-crawler.php';
-require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-analyzer.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-keyword-strategy.php';
-require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-topical-authority.php';
-require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-architecture.php';
-require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-content-plan.php';
-require_once SCC_PLUGIN_DIR . 'includes/strategy/class-scc-cannibalization.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-content-brief.php';
-require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-schema.php';
-require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-metadata.php';
-require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-quality-score.php';
-require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-generator.php';
-require_once SCC_PLUGIN_DIR . 'includes/generation/class-scc-content-ideas.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-elementor.php';
-require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-placeholders.php';
-require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-template-mapping.php';
-require_once SCC_PLUGIN_DIR . 'includes/elementor/class-scc-elementor-builder.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-content-index.php';
-require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-change-history.php';
-require_once SCC_PLUGIN_DIR . 'includes/index/class-scc-seo-report.php';
-
-// Site-aware planning foundation.
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-brand-brain.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-site-knowledge.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-brain.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-graph.php';
-require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-recommender.php';
-require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-inserter.php';
-require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-anchor-engine.php';
-require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-link-engine.php';
-require_once SCC_PLUGIN_DIR . 'includes/links/class-scc-autopilot.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-history.php';
-require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-optimizer.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/schema/class-scc-schema-engine.php';
-
-// CMS-agnostic template + renderer layers.
-require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-content-object.php';
-require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-variables.php';
-require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template.php';
-require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-store.php';
-require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-map.php';
-require_once SCC_PLUGIN_DIR . 'includes/template/class-scc-template-selector.php';
-require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-content-presenter.php';
-require_once SCC_PLUGIN_DIR . 'includes/render/interface-scc-renderer.php';
-require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-wordpress-renderer.php';
-require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-gutenberg-renderer.php';
-require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-elementor-renderer.php';
-require_once SCC_PLUGIN_DIR . 'includes/render/class-scc-renderer-manager.php';
-
-// AI Elementor Layout Engine — controlled block registry + layout decisioning
-// (deterministic rules, optional AI) + content mapping + Elementor rendering.
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-registry.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-capabilities.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-widget-catalog.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-widget-schema.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-content-bank.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-composition.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-discovery.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-visual-recreation.php';
-SCC_Visual_Recreation::register_cleanup();
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-design-blueprint.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-elementor-design-agent.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-intel.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-handoff.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-design-composer.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-variant-selector.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-analyzer.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-page-architect.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-validator.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-content-mapper.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-native-elementor-blocks.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-block-elementor-renderer.php';
-require_once SCC_PLUGIN_DIR . 'includes/layout/class-scc-layout-service.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-gsc.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-gsc-learning.php';
-require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-dataforseo.php';
-require_once SCC_PLUGIN_DIR . 'includes/integrations/class-scc-competitor-analysis.php';
-require_once SCC_PLUGIN_DIR . 'includes/local/class-scc-citation-scanner.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-gsc-cannibalization.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-link-boost.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-preflight.php';
-require_once SCC_PLUGIN_DIR . 'includes/local/class-scc-local-grid.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-browser-runtime.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-backlink-gap.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/jobs/class-scc-jobs.php';
-require_once SCC_PLUGIN_DIR . 'includes/publishing/class-scc-publishing.php';
-
-// Unified intelligence layer (Opportunity Engine + Action Queue + signals).
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-content-decay.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-intent-drift.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-opportunity-engine.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-action-queue.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-optimizer.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-technical-seo.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-pagespeed.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-seo-doctor.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-doctor-fixer.php';
-require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-social-tags.php';
-require_once SCC_PLUGIN_DIR . 'includes/meta/class-scc-meta-tags.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-architecture-brain.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-architecture-expansion.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-aeo-expert.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-seo-growth-architect.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-topic-coverage.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-tidescore.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-page-critic.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-health-timeline.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-experiments.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-entity-graph.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-ai-visibility.php';
-require_once SCC_PLUGIN_DIR . 'includes/intelligence/class-scc-copilot.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-settings.php';
-require_once SCC_PLUGIN_DIR . 'includes/admin/class-scc-admin.php';
-require_once SCC_PLUGIN_DIR . 'includes/rest/class-scc-rest.php';
-
-require_once SCC_PLUGIN_DIR . 'includes/class-scc-plugin.php';
+require_once SCC_PLUGIN_DIR . 'includes/class-scc-autoloader.php';
+SCC_Autoloader::register();
 
 // ---------------------------------------------------------------------------
 // Activation / deactivation lifecycle.
