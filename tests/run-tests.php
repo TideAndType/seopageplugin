@@ -3058,6 +3058,32 @@ assert_true( false !== strpos( $rest_temp_src, '/layout/visual-upload' ) && fals
 $ui_temp_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/layout.php' );
 assert_true( false !== strpos( $ui_temp_src, 'scc-visual-file' ) && false !== strpos( $ui_temp_src, 'scc-visual-finish' ), 'Layout Engine offers temporary screenshot picker and finish/cleanup action' );
 
+echo "\n== Elementor inline assistant safeguards ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/elementor/class-scc-elementor-inline.php';
+assert_eq( array( 'title' ), SCC_Elementor_Inline::allowed( 'heading', 'content' ), 'heading content changes only title' );
+assert_eq( array(), SCC_Elementor_Inline::allowed( 'html', 'content' ), 'HTML/code widget cannot be edited by AI' );
+assert_eq( array(), SCC_Elementor_Inline::allowed( 'container', 'content' ), 'container does not permit copy injection' );
+assert_eq( array( 'align', 'title_color', 'typography_font_size' ), SCC_Elementor_Inline::allowed( 'heading', 'design' ), 'heading design fields are explicit' );
+assert_eq( array( 'title' => 'A safe headline' ), SCC_Elementor_Inline::clean_settings(
+	array( 'title' => 'A safe headline', 'link' => array( 'url' => 'https://attacker.invalid' ), 'custom_css' => 'evil' ),
+	SCC_Elementor_Inline::allowed( 'heading', 'content' )
+), 'non-allowlisted links and CSS are discarded' );
+assert_eq( array( 'title_color' => '#abcdef' ), SCC_Elementor_Inline::clean_settings(
+	array( 'title_color' => '#ABCDEF', 'typography_font_size' => array( 'size' => 900, 'unit' => 'px' ) ),
+	SCC_Elementor_Inline::allowed( 'heading', 'design' )
+), 'colors sanitized and absurd typography rejected' );
+assert_eq( array(), SCC_Elementor_Inline::clean_settings(
+	array( 'background_color' => 'javascript:alert(1)', 'padding' => array( 'top' => -1, 'right' => 5, 'bottom' => 5, 'left' => 5 ) ),
+	SCC_Elementor_Inline::allowed( 'container', 'design' )
+), 'unsafe background/padding values rejected' );
+$inline_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/elementor-inline.js' );
+$inline_css = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/css/elementor-inline.css' );
+$inline_plugin = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/class-scc-plugin.php' );
+assert_true( false !== strpos( $inline_js, 'document/elements/settings' ), 'edits use Elementor command history' );
+assert_true( false === strpos( $inline_js, '/layout/apply' ), 'inline editor never rewrites whole pages' );
+assert_true( false !== strpos( $inline_css, '.scc-inline__panel' ), 'native editor panel CSS is present' );
+assert_true( false !== strpos( $inline_plugin, 'elementor/editor/after_enqueue_scripts' ), 'panel loaded via Elementor editor hook' );
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

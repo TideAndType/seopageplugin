@@ -126,8 +126,14 @@ class SCC_Plugin {
 			$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
 		}
 
+		// Editor-only Elementor AI assistant. No frontend or preview assets.
+		if ( $this->admin ) {
+			add_action( 'elementor/editor/after_enqueue_scripts', array( 'SCC_Elementor_Inline', 'enqueue' ) );
+		}
+
 		// REST.
 		$this->loader->add_action( 'rest_api_init', $this, 'register_rest_routes' );
+		add_action( 'rest_api_init', array( 'SCC_Elementor_Inline', 'register_route' ) );
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );

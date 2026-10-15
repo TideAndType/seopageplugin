@@ -49,6 +49,7 @@ if ( ! class_exists( 'SCC_Autoloader', false ) ) {
                 'includes/generation/class-scc-generator.php',
                 'includes/generation/class-scc-content-ideas.php',
                 'includes/elementor/class-scc-elementor.php',
+                'includes/elementor/class-scc-elementor-inline.php',
                 'includes/elementor/class-scc-placeholders.php',
                 'includes/elementor/class-scc-template-mapping.php',
                 'includes/elementor/class-scc-elementor-builder.php',
