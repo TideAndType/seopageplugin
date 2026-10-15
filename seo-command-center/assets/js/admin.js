@@ -1746,6 +1746,32 @@
 			if ( ! r ) {
 				return; // Server-rendered empty state stays.
 			}
+			// The overview tiles must reflect newly scanned data without a reload.
+			var metricScore = document.getElementById( 'scc-metric-score' );
+			var metricLabel = document.getElementById( 'scc-metric-label' );
+			var metricIssues = document.getElementById( 'scc-metric-issues' );
+			var metricFixable = document.getElementById( 'scc-metric-fixable' );
+			var metricTrack = document.getElementById( 'scc-metric-track' );
+			if ( metricScore ) {
+				metricScore.textContent = r.score == null ? '—' : String( r.score );
+				if ( r.score != null ) {
+					var denominator = document.createElement( 'small' );
+					denominator.textContent = '/100';
+					metricScore.appendChild( denominator );
+					if ( ! metricTrack ) {
+						metricTrack = document.createElement( 'div' );
+						metricTrack.className = 'scc-metric-card__track';
+						metricTrack.id = 'scc-metric-track';
+						metricTrack.setAttribute( 'aria-hidden', 'true' );
+						metricTrack.appendChild( document.createElement( 'span' ) );
+						metricScore.parentNode.appendChild( metricTrack );
+					}
+					metricTrack.firstElementChild.style.width = Math.max( 0, Math.min( 100, Number( r.score ) || 0 ) ) + '%';
+				}
+			}
+			if ( metricLabel ) { metricLabel.textContent = String( r.label || 'Latest diagnosis' ); }
+			if ( metricIssues ) { metricIssues.textContent = String( ( r.issues || [] ).length ); }
+			if ( metricFixable ) { metricFixable.textContent = String( r.fixable || 0 ); }
 			if ( refreshBtn ) { refreshBtn.disabled = false; }
 			if ( runBtn ) { runBtn.textContent = 'Run full check-up'; }
 			var html = '';
