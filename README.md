@@ -9,6 +9,12 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## Elementor inline AI assistant (1.92.1)
+
+Open a page in **Edit with Elementor**. The editor now has a floating **TideOrbit AI** control in the bottom-right corner. Select a supported Elementor widget or container, choose **Content / copy** or **Design / style**, enter a prompt, and review the suggested setting changes before clicking **Apply to selected element**. Changes use Elementor's native element settings command so they stay editable and can be undone in Elementor. **Update / Publish in Elementor** saves the page; suggestions never write or publish directly through REST.
+
+Initial supported content widgets: Heading, Text Editor, Button, Image Box, Icon Box, Testimonial. Design settings: Heading, Text Editor, Button, Container/Section/Column. The assistant refuses to overwrite dynamic content bindings, uses the existing AI provider, and does not run on the site's public pages or in the Elementor preview iframe. No cloud login or Vercel deployment is required.
+
 ## TideOrbit workspace visual refresh (1.92.0)
 
 TideOrbit uses a modern, consistent WordPress-native administration experience:
