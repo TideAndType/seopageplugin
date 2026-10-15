@@ -52,12 +52,13 @@ class SCC_Plugin {
 	 * Constructor.
 	 */
 	protected function __construct() {
-		$this->loader = new SCC_Loader();
-		$this->ai     = new SCC_AI_Manager();
-		$this->jobs      = new SCC_Jobs( $this->ai );
-		$this->autopilot = new SCC_Autopilot();
-		// Admin and REST have no reason to initialize during ordinary page views.
-		$this->admin     = is_admin() ? new SCC_Admin( $this->ai ) : null;
+		$this->loader    = new SCC_Loader();
+		// Defer model providers, workers and link automation until those features
+		// are actually used. Public page rendering requires none of them.
+		$this->ai        = null;
+		$this->jobs      = null;
+		$this->autopilot = null;
+		$this->admin     = is_admin() ? new SCC_Admin( $this->ai() ) : null;
 		$this->rest      = null;
 	}
 
@@ -67,26 +68,45 @@ class SCC_Plugin {
 	 * @return SCC_AI_Manager
 	 */
 	public function ai() {
+		if ( null === $this->ai ) {
+			$this->ai = new SCC_AI_Manager();
+		}
 		return $this->ai;
+	}
+
+	/**
+	 * Queue runner is needed only on cron and REST requests.
+	 */
+	protected function jobs() {
+		if ( null === $this->jobs ) {
+			$this->jobs = new SCC_Jobs( $this->ai() );
+		}
+		return $this->jobs;
+	}
+
+	/**
+	 * Keep link automation inert until WordPress actually saves/deletes a post.
+	 */
+	protected function autopilot() {
+		if ( null === $this->autopilot ) {
+			$this->autopilot = new SCC_Autopilot();
+		}
+		return $this->autopilot;
 	}
 
 	/**
 	 * Register hooks and run.
 	 */
 	public function run() {
-		// Smart component library: visual aliases stay on the controlled registry.
-		if ( class_exists( 'SCC_Page_Architect' ) ) {
-			add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
-			if ( class_exists( 'SCC_Block_Registry' ) ) { SCC_Block_Registry::flush(); }
-		}
+		// WordPress can register lazy static callbacks without loading their
+		// classes. Elementor's full design registry is only parsed if requested.
+		add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
 
 		// i18n.
 		$this->loader->add_action( 'init', $this, 'load_textdomain' );
 
-		// Public local-citation lead tool. Embed with [tideorbit_citation_scan].
-		if ( class_exists( 'SCC_Citation_Scanner' ) ) {
-			add_shortcode( 'tideorbit_citation_scan', array( 'SCC_Citation_Scanner', 'shortcode' ) );
-		}
+		// Register by name: shortcode scanner is loaded only when rendered.
+		add_shortcode( 'tideorbit_citation_scan', array( 'SCC_Citation_Scanner', 'shortcode' ) );
 
 		// DB upgrade check on admin load.
 		$this->loader->add_action( 'admin_init', $this, 'maybe_upgrade_db' );
@@ -115,23 +135,42 @@ class SCC_Plugin {
 		// Background jobs dispatcher. The recurring hook provides a safety net;
 		// the kick hook is a separate near-term event so an existing hourly event
 		// never prevents newly queued work from starting promptly.
-		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this->jobs, 'run' );
-		$this->loader->add_action( SCC_Jobs::KICK_HOOK, $this->jobs, 'run' );
+		// Keep names aligned with SCC_Jobs::CRON_HOOK / KICK_HOOK.
+		// Using the literal hook names avoids loading the queue on page views.
+		$this->loader->add_action( 'scc_run_jobs', $this, 'run_jobs' );
+		$this->loader->add_action( 'scc_run_jobs_kick', $this, 'run_jobs' );
 
 		// Intelligence layer: capture a daily health snapshot and run autopilot
 		// (safe, deterministic actions only) on the existing job cron.
-		$this->loader->add_action( SCC_Jobs::CRON_HOOK, $this, 'run_intelligence_cron' );
+		$this->loader->add_action( 'scc_run_jobs', $this, 'run_intelligence_cron' );
 
 		// Internal Link Autopilot: keep the index fresh + analyze new content.
-		$this->loader->add_action( 'save_post', $this->autopilot, 'on_save_post', 20, 3 );
-		$this->loader->add_action( 'before_delete_post', $this->autopilot, 'on_delete_post', 10, 1 );
+		$this->loader->add_action( 'save_post', $this, 'on_save_post', 20, 3 );
+		$this->loader->add_action( 'before_delete_post', $this, 'on_delete_post', 10, 1 );
 
 		$this->loader->run();
 	}
 
 	/**
-	 * Load translations.
+	 * Dispatch the queued background work only when the cron hook executes.
 	 */
+	public function run_jobs() {
+		$this->jobs()->run();
+	}
+
+	/**
+	 * Lazily create the index/autopilot controller on actual content writes.
+	 */
+	public function on_save_post( $post_id, $post, $update ) {
+		$this->autopilot()->on_save_post( $post_id, $post, $update );
+	}
+
+	/**
+	 * Remove a deleted post from the index without eager front-end loading.
+	 */
+	public function on_delete_post( $post_id ) {
+		$this->autopilot()->on_delete_post( $post_id );
+	}
 
 	/**
 	 * Instantiate the REST controller only when WordPress dispatches REST.
@@ -139,11 +178,12 @@ class SCC_Plugin {
 	 */
 	public function register_rest_routes() {
 		if ( ! $this->rest ) {
-			$this->rest = new SCC_REST( $this->ai, $this->jobs );
+			$this->rest = new SCC_REST( $this->ai(), $this->jobs() );
 		}
 		$this->rest->register_routes();
 	}
 
+	/** Load plugin translations. */
 	public function load_textdomain() {
 		load_plugin_textdomain( 'seo-command-center', false, dirname( SCC_PLUGIN_BASENAME ) . '/languages' );
 	}
