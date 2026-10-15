@@ -9,6 +9,14 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## Elementor AI Designer 2.0 — section-level editing (1.92.2)
+
+The existing **✦ TideOrbit AI** assistant in **Edit with Elementor** now offers **Redesign selected section** for a container, section, or column. Select the parent in Elementor, describe how the whole section should look, and TideOrbit examines up to 18 supported existing descendants (container, heading, text, button, and legacy section/column). Its AI proposal can coordinate colors, alignment, spacing, and responsive desktop/tablet/mobile settings, without changing copy, images, media, URLs, or the element tree.
+
+Use **Show design preview** / **Show original design** to compare temporary CSS in Elementor's canvas. The preview never modifies Elementor document settings or WordPress post data. View tablet/mobile using Elementor's own responsive toolbar (preview CSS uses standard breakpoints, which may differ from custom site breakpoints). You can request a refinement of the last proposed section styling without starting over. **Apply to selected element** then uses native Elementor element settings commands; final publishing still requires clicking Elementor **Update / Publish**.
+
+Safeguards: per-post edit permission, REST nonce, root/ID and size validation, setting and value allowlists, stale-content checks, no PHP-side writes, and best-effort rollback when Elementor rejects a batch change. Section editing currently targets **supported v3/classic Elementor widgets and Flexbox containers**; v4 Atomic Editor classes and unsupported add-on controls are not changed. Test with Elementor on staging before using on important live pages.
+
 ## Elementor inline AI assistant (1.92.1)
 
 Open a page in **Edit with Elementor**. The editor now has a floating **TideOrbit AI** control in the bottom-right corner. Select a supported Elementor widget or container, choose **Content / copy** or **Design / style**, enter a prompt, and review the suggested setting changes before clicking **Apply to selected element**. Changes use Elementor's native element settings command so they stay editable and can be undone in Elementor. **Update / Publish in Elementor** saves the page; suggestions never write or publish directly through REST.
