@@ -44,6 +44,9 @@ jobs:
       - name: Public frontend lazy bootstrap
         run: php tests/run-lazy-bootstrap.php
 
+      - name: Native UI contracts
+        run: php tests/run-ui-contract.php
+
       - name: Unit tests
         run: php tests/run-tests.php
 
