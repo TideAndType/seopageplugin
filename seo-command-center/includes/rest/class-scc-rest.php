@@ -3884,7 +3884,7 @@ class SCC_REST {
 			$gen   = SCC_Schema_Engine::generate( $post_id, $types );
 			$nodes = $gen['nodes'];
 		}
-		$result = SCC_Schema_Engine::save( $post_id, $nodes );
+		$result = SCC_Schema_Engine::save( $post_id, $nodes, ! empty( $params['force_duplicates'] ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
 		}

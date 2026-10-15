@@ -56,8 +56,9 @@ class SCC_Plugin {
 		$this->ai     = new SCC_AI_Manager();
 		$this->jobs      = new SCC_Jobs( $this->ai );
 		$this->autopilot = new SCC_Autopilot();
-		$this->admin     = new SCC_Admin( $this->ai );
-		$this->rest      = new SCC_REST( $this->ai, $this->jobs );
+		// Admin and REST have no reason to initialize during ordinary page views.
+		$this->admin     = is_admin() ? new SCC_Admin( $this->ai ) : null;
+		$this->rest      = null;
 	}
 
 	/**
@@ -90,16 +91,18 @@ class SCC_Plugin {
 		// DB upgrade check on admin load.
 		$this->loader->add_action( 'admin_init', $this, 'maybe_upgrade_db' );
 
-		// Admin.
-		$this->loader->add_action( 'admin_menu', $this->admin, 'register_menu' );
-		$this->loader->add_action( 'admin_enqueue_scripts', $this->admin, 'enqueue_assets' );
-		$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
-		$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
-		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
-		$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
+		// Register administration services only for wp-admin requests.
+		if ( $this->admin ) {
+			$this->loader->add_action( 'admin_menu', $this->admin, 'register_menu' );
+			$this->loader->add_action( 'admin_enqueue_scripts', $this->admin, 'enqueue_assets' );
+			$this->loader->add_action( 'add_meta_boxes', $this->admin, 'register_meta_boxes' );
+			$this->loader->add_action( 'save_post', $this->admin, 'save_meta_box' );
+			$this->loader->add_action( 'admin_init', $this->admin, 'maybe_handle_gsc_oauth' );
+			$this->loader->add_action( 'admin_init', $this->admin, 'maybe_redirect_legacy_screens' );
+		}
 
 		// REST.
-		$this->loader->add_action( 'rest_api_init', $this->rest, 'register_routes' );
+		$this->loader->add_action( 'rest_api_init', $this, 'register_rest_routes' );
 
 		// Front-end: output stored JSON-LD schema for generated posts.
 		$this->loader->add_action( 'wp_head', $this, 'output_schema', 20 );
@@ -129,6 +132,18 @@ class SCC_Plugin {
 	/**
 	 * Load translations.
 	 */
+
+	/**
+	 * Instantiate the REST controller only when WordPress dispatches REST.
+	 * Avoid loading its 124 routes on normal frontend requests.
+	 */
+	public function register_rest_routes() {
+		if ( ! $this->rest ) {
+			$this->rest = new SCC_REST( $this->ai, $this->jobs );
+		}
+		$this->rest->register_routes();
+	}
+
 	public function load_textdomain() {
 		load_plugin_textdomain( 'seo-command-center', false, dirname( SCC_PLUGIN_BASENAME ) . '/languages' );
 	}
@@ -149,8 +164,13 @@ class SCC_Plugin {
 		if ( ! is_array( $nodes ) || empty( $nodes ) ) {
 			return;
 		}
+		$allow_conflicts = (bool) get_post_meta( $post_id, '_scc_schema_allow_conflicts', true );
 		foreach ( $nodes as $node ) {
 			if ( ! is_array( $node ) || is_wp_error( SCC_Schema::validate( $node ) ) ) {
+				continue;
+			}
+			// Suppress stale duplicates from previous saves without deleting data.
+			if ( ! $allow_conflicts && SCC_Schema::already_provided( (string) ( $node['@type'] ?? '' ) ) ) {
 				continue;
 			}
 			// Default encoding escapes forward slashes (\/), so a "</script>"

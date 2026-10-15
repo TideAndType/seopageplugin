@@ -361,7 +361,7 @@ class SCC_Schema_Engine {
 	 * @param array $nodes   Validated nodes.
 	 * @return true|WP_Error
 	 */
-	public static function save( $post_id, array $nodes ) {
+	public static function save( $post_id, array $nodes, $allow_conflicts = false ) {
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return new WP_Error( 'scc_forbidden', __( 'You cannot edit this post.', 'seo-command-center' ), array( 'status' => 403 ) );
 		}
@@ -372,8 +372,48 @@ class SCC_Schema_Engine {
 				return $valid;
 			}
 		}
+        // A warning in the editor is not sufficient: enforce it when writing.
+        // Exclude the previous TideOrbit schema from the page-level check so a
+        // user can safely regenerate their own markup without a false conflict.
+        if ( ! $allow_conflicts ) {
+            $types = array_values( array_unique( array_filter( array_map(
+                function ( $node ) { return is_array( $node ) ? (string) ( $node['@type'] ?? '' ) : ''; },
+                $nodes
+            ) ) ) );
+            if ( $types ) {
+                $existing_raw = get_post_meta( $post_id, '_scc_schema', true );
+                $owned_nodes = json_decode( (string) $existing_raw, true );
+                $owned_types = is_array( $owned_nodes )
+                    ? array_values( array_filter( array_map( function ( $node ) {
+                        return is_array( $node ) ? (string) ( $node['@type'] ?? '' ) : '';
+                    }, $owned_nodes ) ) ) : array();
+                $report = self::detect_conflicts( $post_id, $types );
+                $external_types = array_values( array_unique( array_merge(
+                    (array) ( $report['plugin_types'] ?? array() ),
+                    array_diff( (array) ( $report['page_types'] ?? array() ), $owned_types )
+                ) ) );
+                // Article-family nodes are alternative descriptions of the same entity.
+                if ( in_array( 'Article', $external_types, true ) ) {
+                    $external_types = array_merge( $external_types, array( 'BlogPosting', 'NewsArticle' ) );
+                }
+                $conflicts = array_values( array_intersect( $types, $external_types ) );
+                if ( $conflicts ) {
+                    return new WP_Error(
+                        'scc_duplicate_schema',
+                        sprintf( __( 'Schema already exists on this page (%s). Remove the duplicate or explicitly allow an override.', 'seo-command-center' ), implode( ', ', $conflicts ) ),
+                        array( 'status' => 409, 'types' => $conflicts )
+                    );
+                }
+            }
+        }
 		$previous = get_post_meta( $post_id, '_scc_schema', true );
 		update_post_meta( $post_id, '_scc_schema', wp_json_encode( array_values( $nodes ) ) );
+		// Explicit overrides are post-scoped and cleared by an ordinary save.
+		if ( $allow_conflicts ) {
+			update_post_meta( $post_id, '_scc_schema_allow_conflicts', 1 );
+		} else {
+			delete_post_meta( $post_id, '_scc_schema_allow_conflicts' );
+		}
 
 		SCC_Change_History::record( array(
 			'post_id'        => $post_id,
@@ -408,6 +448,7 @@ class SCC_Schema_Engine {
 			) );
 		}
 		delete_post_meta( $post_id, '_scc_schema' );
+		delete_post_meta( $post_id, '_scc_schema_allow_conflicts' );
 		return true;
 	}
 

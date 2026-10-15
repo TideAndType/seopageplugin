@@ -34,7 +34,12 @@ jobs:
       - name: Admin JavaScript syntax check
         run: |
           node --check seo-command-center/assets/js/admin.js
+          node --check seo-command-center/assets/js/admin-settings.js
+          node --check seo-command-center/assets/js/admin-layout.js
           node --check seo-command-center/assets/js/editor.js
+
+      - name: Class autoload integrity
+        run: php tests/run-autoloader.php
 
       - name: Unit tests
         run: php tests/run-tests.php
