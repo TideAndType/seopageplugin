@@ -573,6 +573,11 @@
 	}
 	function loadState() {
 		return request('', 'GET').then(function (data) {
+			// An unexpected/incomplete REST payload must never be treated as a
+			// successful settings snapshot or reset the existing form values.
+			if (!data || typeof data !== 'object' || Array.isArray(data)) {
+				throw new Error('TideOrbit Campaign API returned an invalid response. Check the WordPress REST request and server logs.');
+			}
 			state = data;
 			fillConfig(data.campaign || {});
 			var ai = data.ai_citations || {};
@@ -614,8 +619,16 @@
 				var option = node('option', marketSelect, market); option.value = String(i);
 			});
 			var settings = byId('scc-campaign-public-citations');
-			settings.elements.enabled.checked = !!data.public_citations.enabled;
-			settings.elements.paid.checked = !!data.public_citations.paid;
+			var citations = data.public_citations;
+			if (settings && citations && typeof citations.enabled === 'boolean' && typeof citations.paid === 'boolean') {
+				settings.elements.enabled.checked = citations.enabled;
+				settings.elements.paid.checked = citations.paid;
+			} else {
+				// Never silently uncheck paid/public options when API state is absent.
+				// Older/filtered/cached REST responses may omit this field; leave the
+				// form unchanged and show a precise, nonfatal diagnostic.
+				flash('Campaign API response is missing public citation scanner settings. Other data can still load. Check the WordPress REST response and clear any REST/CDN cache.', true);
+			}
 			return root.classList.contains('scc-mode-campaign') ? loadReport() : data;
 		}).catch(showFailure);
 	}

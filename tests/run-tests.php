@@ -3670,6 +3670,19 @@ $bootstrap_exit = -1;
 exec( $bootstrap_command, $bootstrap_lines, $bootstrap_exit );
 assert_eq( 0, $bootstrap_exit, 'WordPress plugin boot registers all REST callback classes: ' . implode( ' / ', $bootstrap_lines ) );
 
+echo "\n== Campaign Settings JavaScript state contract ==\n";
+// CI and plugin packager include Node.js. On PHP-only development hosts this
+// browser-only smoke can be run explicitly: node tests/run-campaign-state.js.
+$node_path = function_exists( 'shell_exec' ) ? trim( (string) @shell_exec( 'command -v node 2>/dev/null' ) ) : '';
+if ( '' !== $node_path && function_exists( 'exec' ) ) {
+    $campaign_output = array();
+    $campaign_status = 1;
+    exec( escapeshellarg( $node_path ) . ' ' . escapeshellarg( __DIR__ . '/run-campaign-state.js' ) . ' 2>&1', $campaign_output, $campaign_status );
+    assert_eq( 0, $campaign_status, 'Campaign Settings handles missing and malformed REST responses without resetting saved booleans: ' . implode( ' / ', $campaign_output ) );
+} else {
+    echo "Node.js unavailable; run node tests/run-campaign-state.js separately.\n";
+}
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );
