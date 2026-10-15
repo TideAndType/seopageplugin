@@ -61,5 +61,29 @@ foreach ( array( 'scc_run_jobs', 'scc_run_jobs_kick', 'save_post', 'before_delet
         $failed++;
     }
 }
+// Route discovery also happens on every WordPress REST request, including
+// endpoints owned by other plugins. Register TideOrbit's routes without AI.
+class WP_REST_Server {
+    const READABLE = 'GET';
+    const CREATABLE = 'POST';
+    const EDITABLE = 'POST, PUT, PATCH';
+    const DELETABLE = 'DELETE';
+}
+$GLOBALS['scc_runtime_routes'] = array();
+function register_rest_route( $namespace, $route, $options ) {
+    $GLOBALS['scc_runtime_routes'][] = $namespace . $route;
+}
+$plugin->register_rest_routes();
+if ( count( $GLOBALS['scc_runtime_routes'] ) < 100 ) {
+    fwrite( STDERR, "TideOrbit REST routes were not all registered.\n" );
+    $failed++;
+}
+foreach ( array( 'SCC_AI_Manager', 'SCC_Jobs' ) as $name ) {
+    if ( class_exists( $name, false ) ) {
+        fwrite( STDERR, "REST route registration initialized {$name}.\n" );
+        $failed++;
+    }
+}
+
 echo "Public-request lazy bootstrap: " . ( $failed ? "{$failed} failures" : 'PASS' ) . PHP_EOL;
 exit( $failed ? 1 : 0 );
