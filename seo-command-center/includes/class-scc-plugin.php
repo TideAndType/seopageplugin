@@ -58,7 +58,7 @@ class SCC_Plugin {
 		$this->ai        = null;
 		$this->jobs      = null;
 		$this->autopilot = null;
-		$this->admin     = is_admin() ? new SCC_Admin( $this->ai() ) : null;
+		$this->admin     = is_admin() ? new SCC_Admin() : null;
 		$this->rest      = null;
 	}
 
@@ -476,13 +476,25 @@ CSS;
 	 * Run the DB installer if the stored version is behind.
 	 */
 	public function maybe_upgrade_db() {
-		// Re-run the installer when the version changed OR when a core table is
-		// missing (self-heals an install whose tables failed to create — e.g. an
-		// older schema a strict-mode MySQL rejected).
-		if ( get_option( 'scc_db_version' ) !== SCC_DB_VERSION || ! SCC_DB::core_tables_present() ) {
+		// Checking four custom tables requires four SHOW TABLES queries. WordPress
+		// invokes admin_init on every backend request, so cache the healthy state
+		// for six hours while still checking immediately on version changes.
+		$upgrade = get_option( 'scc_db_version' ) !== SCC_DB_VERSION;
+		$healthy = get_transient( 'scc_db_tables_ok' );
+		if ( ! $upgrade && false !== $healthy ) {
+			return;
+		}
+		if ( $upgrade || ! SCC_DB::core_tables_present() ) {
 			SCC_DB::install();
 			$this->migrate_settings();
 			update_option( 'scc_db_version', SCC_DB_VERSION );
+		}
+		// Do not cache a failed install; a subsequent admin request should be
+		// able to retry rather than silently hiding missing database tables.
+		if ( SCC_DB::core_tables_present() ) {
+			set_transient( 'scc_db_tables_ok', 1, 6 * HOUR_IN_SECONDS );
+		} else {
+			delete_transient( 'scc_db_tables_ok' );
 		}
 	}
 
