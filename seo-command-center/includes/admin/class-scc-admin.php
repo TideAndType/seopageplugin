@@ -16,6 +16,9 @@ class SCC_Admin {
 
 	const SLUG = 'seo-command-center';
 
+	/** @var bool Prevent duplicate primary navigation inside a tabbed hub. */
+	protected $primary_nav_rendered = false;
+
 	/** @var SCC_AI_Manager */
 	protected $ai;
 
@@ -185,6 +188,7 @@ class SCC_Admin {
 		$requested = isset( $_GET['tab'] ) ? wp_unslash( $_GET['tab'] ) : '';
 		$active    = self::hub_active_tab( $keys, $requested );
 
+		$this->render_primary_navigation();
 		echo '<div class="wrap scc-wrap scc-hub"><nav class="nav-tab-wrapper scc-hub-tabs">';
 		foreach ( $hub['tabs'] as $key => $tab ) {
 			$url = add_query_arg(
@@ -440,6 +444,51 @@ class SCC_Admin {
 	}
 
 	/**
+	 * Lightweight app navigation shared across all TideOrbit screens.
+	 * Reuses WordPress pages and existing deep links; no frontend framework.
+	 */
+	protected function render_primary_navigation() {
+		if ( $this->primary_nav_rendered ) {
+			return;
+		}
+		$this->primary_nav_rendered = true;
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page highlighting.
+		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : self::SLUG;
+		$items = array(
+			array( self::SLUG, __( 'Overview', 'seo-command-center' ), 'dashicons-chart-area', array( self::SLUG ) ),
+			array( self::SLUG . '-create', __( 'Create', 'seo-command-center' ), 'dashicons-edit-page', array( 'create', 'generate', 'ideas', 'layout', 'content-plan', 'publishing', 'elementor' ) ),
+			array( self::SLUG . '-optimize', __( 'Optimize', 'seo-command-center' ), 'dashicons-admin-tools', array( 'optimize', 'action-queue', 'internal-links', 'meta-editor', 'seo-audit' ) ),
+			array( self::SLUG . '-opportunities', __( 'Opportunities', 'seo-command-center' ), 'dashicons-chart-line', array( 'opportunities', 'insights', 'keyword-strategy', 'topical-authority', 'competitors', 'citation-scanner', 'growth-lab', 'aeo', 'architecture', 'site-analysis' ) ),
+			array( self::SLUG . '-templates', __( 'Templates', 'seo-command-center' ), 'dashicons-layout', array( 'templates' ) ),
+			array( self::SLUG . '-settings', __( 'Settings', 'seo-command-center' ), 'dashicons-admin-generic', array( 'settings', 'connections', 'schema' ) ),
+		);
+		echo '<div class="wrap scc-wrap scc-app-nav">';
+		echo '<div class="scc-app-brand"><span class="scc-app-brand__mark" aria-hidden="true"></span>';
+		echo '<span class="scc-app-brand__name">TideOrbit<small>' . esc_html__( 'SEO workspace', 'seo-command-center' ) . '</small></span></div>';
+		echo '<nav class="scc-app-nav__links" aria-label="' . esc_attr__( 'TideOrbit primary navigation', 'seo-command-center' ) . '">';
+		foreach ( $items as $item ) {
+			$active = false;
+			foreach ( $item[3] as $suffix ) {
+				$slug = self::SLUG === $suffix ? self::SLUG : self::SLUG . '-' . $suffix;
+				if ( $page === $slug ) {
+					$active = true;
+					break;
+				}
+			}
+			$url = add_query_arg( 'page', $item[0], admin_url( 'admin.php' ) );
+			printf(
+				'<a href="%1$s" class="scc-app-nav__link%2$s"%3$s><span class="dashicons %4$s" aria-hidden="true"></span>%5$s</a>',
+				esc_url( $url ),
+				$active ? ' is-current' : '',
+				$active ? ' aria-current="page"' : '',
+				esc_attr( $item[2] ),
+				esc_html( $item[1] )
+			);
+		}
+		echo '</nav></div>';
+	}
+
+	/**
 	 * Render a view file with escaped, prepared data.
 	 *
 	 * @param string $view View filename (without extension).
@@ -451,6 +500,7 @@ class SCC_Admin {
 		}
 		$file = SCC_PLUGIN_DIR . 'includes/admin/views/' . $view . '.php';
 		if ( file_exists( $file ) ) {
+			$this->render_primary_navigation();
 			include $file;
 		}
 	}
