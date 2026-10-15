@@ -240,6 +240,10 @@ class SCC_Schema {
 		if ( in_array( $plugin, array( SCC_SEO_Meta::PLUGIN_YOAST, SCC_SEO_Meta::PLUGIN_RANKMATH ), true ) && in_array( $type, $auto, true ) ) {
 			return true;
 		}
+		// AIOSEO supplies basic page/organization schema nodes by default.
+		if ( SCC_SEO_Meta::PLUGIN_AIOSEO === $plugin && in_array( $type, array( 'WebPage', 'BreadcrumbList', 'Organization' ), true ) ) {
+			return true;
+		}
 		return false;
 	}
 }
