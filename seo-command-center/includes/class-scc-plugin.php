@@ -101,6 +101,11 @@ class SCC_Plugin {
 		// WordPress can register lazy static callbacks without loading their
 		// classes. Elementor's full design registry is only parsed if requested.
 		add_filter( 'scc_layout_blocks', array( 'SCC_Page_Architect', 'register_blocks' ) );
+		// If an add-on already populated the registry at an earlier hook
+		// priority, invalidate it without forcing its class to autoload.
+		if ( class_exists( 'SCC_Block_Registry', false ) ) {
+			SCC_Block_Registry::flush();
+		}
 
 		// i18n.
 		$this->loader->add_action( 'init', $this, 'load_textdomain' );
@@ -484,14 +489,16 @@ CSS;
 		if ( ! $upgrade && false !== $healthy ) {
 			return;
 		}
-		if ( $upgrade || ! SCC_DB::core_tables_present() ) {
+		$present = $upgrade ? false : SCC_DB::core_tables_present();
+		if ( $upgrade || ! $present ) {
 			SCC_DB::install();
 			$this->migrate_settings();
 			update_option( 'scc_db_version', SCC_DB_VERSION );
+			$present = SCC_DB::core_tables_present();
 		}
 		// Do not cache a failed install; a subsequent admin request should be
 		// able to retry rather than silently hiding missing database tables.
-		if ( SCC_DB::core_tables_present() ) {
+		if ( $present ) {
 			set_transient( 'scc_db_tables_ok', 1, 6 * HOUR_IN_SECONDS );
 		} else {
 			delete_transient( 'scc_db_tables_ok' );
