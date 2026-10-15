@@ -9,6 +9,27 @@ templates — always as **drafts you approve**, never auto-published by default.
 > `seo-command-center` text domain are intentionally retained for backward
 > compatibility with existing installs.
 
+## Fast-path loading and queue improvements (1.91.0)
+
+TideOrbit now loads AI adapters, job workers, Elementor's block design registry,
+and the public citation scanner **only when they are used**. Registering
+TideOrbit's REST routes for an unrelated WordPress REST request does not create
+an AI provider or job worker. In wp-admin, provider model lists are prepared
+only on TideOrbit Settings/Connections, and healthy database table checks are
+cached for six hours (with immediate version-upgrade checks).
+
+Rapid successive post saves are coalesced into a single queued internal-link
+analysis until a worker picks it up; the worker then releases the pending
+marker so new edits can queue fresh work. The worker checks for queue existence
+instead of counting every queued record. These changes do not remove any
+models, Elementor layouts, saved settings, or historical SEO data.
+
+**Verification:** CI runs a real lazy-bootstrap contract, the existing PHP
+test suite on PHP 7.4/8.2/8.3, JavaScript syntax checks, and an optimized
+WordPress installation ZIP build. Runtime speedups still depend on the site's
+theme, plugins, server, cache and workload; benchmark on staging before
+claiming a specific percentage improvement.
+
 ## Lean installation and WordPress editor performance (1.88.0)
 
 The build removes an unused legacy layout engine and its two orphaned
@@ -19,8 +40,9 @@ The TideOrbit dashboard and standard WordPress post editing screens now
 load separate assets. Post/page editors receive a small SEO-panel controller
 (`assets/js/editor.js`) and scoped styles (`assets/css/editor.css`),
 instead of the full SEO dashboard JavaScript and CSS. All SEO panel actions
-remain available. The full dashboard files continue to be used on TideOrbit
-admin screens, including Layout Engine and LM Studio Visual Recreation.
+remain available. TideOrbit's own admin also uses screen-specific controllers for general
+screens, Settings/Connections and the Elementor Layout Engine, including
+LM Studio Visual Recreation.
 
 GitHub Actions creates a clean staging copy, minifies both admin and editor
 JS/CSS **at build time only**, syntax-checks the generated JS, and packages

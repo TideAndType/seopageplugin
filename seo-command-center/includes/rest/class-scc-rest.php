@@ -34,9 +34,25 @@ class SCC_REST {
 	 * @param SCC_AI_Manager $ai   AI manager.
 	 * @param SCC_Jobs|null  $jobs Job queue.
 	 */
-	public function __construct( SCC_AI_Manager $ai, $jobs = null ) {
+	public function __construct( SCC_AI_Manager $ai = null, $jobs = null ) {
 		$this->ai   = $ai;
 		$this->jobs = $jobs;
+	}
+
+	/** AI adapters are initialized only by endpoints which actually need them. */
+	protected function ai() {
+		if ( null === $this->ai ) {
+			$this->ai = SCC_Plugin::instance()->ai();
+		}
+		return $this->ai;
+	}
+
+	/** Do not initialize job workers while registering unrelated REST routes. */
+	protected function jobs() {
+		if ( null === $this->jobs ) {
+			$this->jobs = new SCC_Jobs( $this->ai() );
+		}
+		return $this->jobs;
 	}
 
 	/**
@@ -1244,7 +1260,7 @@ class SCC_REST {
 	 */
 	public function get_status() {
 		$providers = array();
-		foreach ( $this->ai->get_providers() as $id => $provider ) {
+		foreach ( $this->ai()->get_providers() as $id => $provider ) {
 			$providers[ $id ] = array(
 				'label'      => $provider->get_label(),
 				'configured' => $provider->is_configured(),
@@ -1328,7 +1344,7 @@ class SCC_REST {
 	 */
 	public function test_ai( WP_REST_Request $request ) {
 		$provider_id = $request->get_param( 'provider' );
-		$provider    = $this->ai->get_provider( $provider_id );
+		$provider    = $this->ai()->get_provider( $provider_id );
 
 		if ( ! $provider ) {
 			return $this->fail( 'unknown_provider', __( 'Unknown provider.', 'seo-command-center' ), 400 );
@@ -1387,7 +1403,7 @@ class SCC_REST {
 		$params = is_array( $params ) ? $params : array();
 		$base   = isset( $params['base_url'] ) ? esc_url_raw( trim( (string) $params['base_url'] ) ) : '';
 
-		$provider = $this->ai->get_provider( 'lmstudio' );
+		$provider = $this->ai()->get_provider( 'lmstudio' );
 		if ( ! $provider ) {
 			return $this->fail( 'no_provider', __( 'LM Studio provider unavailable.', 'seo-command-center' ), 500 );
 		}
@@ -1505,7 +1521,7 @@ class SCC_REST {
 		$issue_id = (string) $request->get_param( 'issue_id' );
 		$apply    = SCC_Security::sanitize_bool( $request->get_param( 'apply' ) );
 
-		$fixer  = new SCC_Doctor_Fixer( $this->ai );
+		$fixer  = new SCC_Doctor_Fixer( $this->ai() );
 		$result = $fixer->run( $fix, $post_id, $apply );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -1618,7 +1634,7 @@ class SCC_REST {
 	public function generate_keywords( WP_REST_Request $request ) {
 		$params  = $request->get_json_params();
 		$params  = is_array( $params ) ? $params : $request->get_params();
-		$service = new SCC_Keyword_Strategy( $this->ai );
+		$service = new SCC_Keyword_Strategy( $this->ai() );
 		$result  = $service->generate( is_array( $params ) ? $params : array() );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -1663,7 +1679,7 @@ class SCC_REST {
 			}
 		}
 
-		$service = new SCC_Keyword_Strategy( $this->ai );
+		$service = new SCC_Keyword_Strategy( $this->ai() );
 		$result  = $service->generate( $inputs );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -1720,7 +1736,7 @@ class SCC_REST {
 			}
 		}
 
-		$service = new SCC_Keyword_Strategy( $this->ai );
+		$service = new SCC_Keyword_Strategy( $this->ai() );
 		$result  = $service->generate( $inputs );
 
 		if ( is_wp_error( $result ) ) {
@@ -1829,11 +1845,8 @@ class SCC_REST {
 	 * @return WP_REST_Response
 	 */
 	public function run_jobs_worker( WP_REST_Request $request ) {
-		if ( ! $this->jobs ) {
-			return $this->ok( array( 'ran' => false ) );
-		}
 		$secret = (string) $request->get_param( 'secret' );
-		$ran    = $this->jobs->run_authenticated( $secret );
+		$ran    = $this->jobs()->run_authenticated( $secret );
 		return $this->ok( array( 'ran' => (bool) $ran ) );
 	}
 
@@ -1992,7 +2005,7 @@ class SCC_REST {
 			return $this->fail( 'not_expandable', __( 'This recommendation is not an existing-page expansion.', 'seo-command-center' ), 409 );
 		}
 
-		$service = new SCC_Architecture_Expansion( $this->ai );
+		$service = new SCC_Architecture_Expansion( $this->ai() );
 		$draft   = $service->generate( $node );
 		if ( is_wp_error( $draft ) ) {
 			return $draft;
@@ -2195,7 +2208,7 @@ class SCC_REST {
 		}
 		$params  = $request->get_json_params();
 		$params  = is_array( $params ) ? $params : $request->get_params();
-		$service = new SCC_Content_Ideas( $this->ai );
+		$service = new SCC_Content_Ideas( $this->ai() );
 		$result  = $service->suggest(
 			(string) ( $params['question'] ?? '' ),
 			(int) ( $params['count'] ?? 8 ),
@@ -2562,7 +2575,7 @@ class SCC_REST {
 			'urls'   => $urls_norm,
 		) );
 
-		$service = new SCC_Competitor_Analysis( $this->ai );
+		$service = new SCC_Competitor_Analysis( $this->ai() );
 		$result  = $service->gap_map( is_array( $urls ) ? $urls : array() );
 
 		if ( is_wp_error( $result ) ) {
@@ -2736,7 +2749,7 @@ class SCC_REST {
 				return $this->fail( 'scc_visual_mismatch', 'Select and analyze the reference screenshot before comparing a draft.', 400 );
 			}
 		}
-		$recipe = SCC_Visual_Recreation::analyze( $this->ai, $reference_id, $rendered_id,
+		$recipe = SCC_Visual_Recreation::analyze( $this->ai(), $reference_id, $rendered_id,
 			(array) ( $previous['recipe'] ?? array() ) );
 		if ( is_wp_error( $recipe ) ) { return $recipe; }
 		$source_url = SCC_Design_Discovery::canonical_url( (string) ( $params['source_url'] ?? '' ) );
@@ -2803,7 +2816,7 @@ class SCC_REST {
 			$visual_recipe = (array) $visual['recipe'];
 			$use_ai = true;
 		}
-		$service = new SCC_Layout_Service( $this->ai );
+		$service = new SCC_Layout_Service( $this->ai() );
 		$result  = $service->propose_for_post( $post_id, $use_ai, $design_prompt, $visual_recipe );
 		if ( ! is_wp_error( $result ) && $visual_mode ) {
 			if ( empty( $result['composition_mode'] ) ) {
@@ -2850,7 +2863,7 @@ class SCC_REST {
 				409
 			);
 		}
-		$service = new SCC_Layout_Service( $this->ai );
+		$service = new SCC_Layout_Service( $this->ai() );
 		$result = '' !== $composition_token
 			? $service->apply_composition( $post_id, $composition_token )
 			: $service->apply( $post_id, $layout );
@@ -2946,7 +2959,7 @@ class SCC_REST {
 		if ( ! $entry ) {
 			return $this->fail( 'no_entry', __( 'Content plan entry not found.', 'seo-command-center' ), 404 );
 		}
-		$service = new SCC_Content_Brief( $this->ai );
+		$service = new SCC_Content_Brief( $this->ai() );
 		$brief   = $service->generate( $entry );
 		if ( is_wp_error( $brief ) ) {
 			return $brief;
@@ -2986,7 +2999,7 @@ class SCC_REST {
 			'word_count'      => (int) SCC_Settings::get( 'default_word_count', 1200 ),
 		);
 
-		$service = new SCC_Content_Brief( $this->ai );
+		$service = new SCC_Content_Brief( $this->ai() );
 		$brief   = $service->generate( $entry );
 		if ( is_wp_error( $brief ) ) {
 			return $brief;
@@ -3044,7 +3057,7 @@ class SCC_REST {
 		$brief  = ( is_array( $params ) && ! empty( $params['brief'] ) && is_array( $params['brief'] ) ) ? $params['brief'] : null;
 
 		try {
-			$generator = new SCC_Generator( $this->ai );
+			$generator = new SCC_Generator( $this->ai() );
 			$result    = $generator->generate( $entry, $brief );
 		} catch ( \Throwable $e ) {
 			SCC_Logger::error( 'generate', 'Fatal during generation: ' . $e->getMessage() );
@@ -3142,7 +3155,7 @@ class SCC_REST {
 		);
 
 		try {
-			$generator = new SCC_Generator( $this->ai );
+			$generator = new SCC_Generator( $this->ai() );
 			$result    = $generator->generate( $entry );
 		} catch ( \Throwable $e ) {
 			SCC_Logger::error( 'generate', 'Fatal during quick generation: ' . $e->getMessage() );
@@ -3205,7 +3218,7 @@ class SCC_REST {
 		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return $this->fail( 'forbidden', __( 'You cannot edit this post.', 'seo-command-center' ), 403 );
 		}
-		$generator = new SCC_Generator( $this->ai );
+		$generator = new SCC_Generator( $this->ai() );
 		$result    = $generator->regenerate_section( $post_id, $request->get_param( 'section' ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -3520,10 +3533,7 @@ class SCC_REST {
 				$max
 			), 400 );
 		}
-		if ( ! $this->jobs ) {
-			return $this->fail( 'no_queue', __( 'Job queue unavailable.', 'seo-command-center' ), 500 );
-		}
-		$result = $this->jobs->enqueue_generation_batch( $ids );
+		$result = $this->jobs()->enqueue_generation_batch( $ids );
 		return $this->ok( array_merge( $result, array( 'jobs' => SCC_Jobs::status() ) ) );
 	}
 
@@ -3638,7 +3648,7 @@ class SCC_REST {
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
-		$engine = new SCC_Link_Engine( $this->ai );
+		$engine = new SCC_Link_Engine( $this->ai() );
 		$result = $engine->analyze( (int) $request->get_param( 'post_id' ), true );
 		return $this->ok( $result );
 	}
@@ -3708,7 +3718,7 @@ class SCC_REST {
 		if ( function_exists( 'set_time_limit' ) ) {
 			@set_time_limit( 0 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		}
-		$engine = new SCC_Link_Engine( $this->ai );
+		$engine = new SCC_Link_Engine( $this->ai() );
 		return $this->ok( $engine->scan_site( 500 ) );
 	}
 
@@ -3723,7 +3733,7 @@ class SCC_REST {
 		if ( $guard ) {
 			return $guard;
 		}
-		$optimizer = new SCC_Meta_Optimizer( $this->ai );
+		$optimizer = new SCC_Meta_Optimizer( $this->ai() );
 		$result    = $optimizer->generate_variants( (int) $request->get_param( 'post_id' ) );
 		if ( is_wp_error( $result ) ) {
 			return $result;
@@ -3784,7 +3794,7 @@ class SCC_REST {
 		}
 		$params = $request->get_json_params();
 		$params = is_array( $params ) ? $params : $request->get_params();
-		$optimizer = new SCC_Meta_Optimizer( $this->ai );
+		$optimizer = new SCC_Meta_Optimizer( $this->ai() );
 		$result = $optimizer->apply(
 			(int) $request->get_param( 'post_id' ),
 			array(
@@ -3806,7 +3816,7 @@ class SCC_REST {
 	 * @return WP_REST_Response|WP_Error
 	 */
 	public function meta_opportunities() {
-		$optimizer = new SCC_Meta_Optimizer( $this->ai );
+		$optimizer = new SCC_Meta_Optimizer( $this->ai() );
 		$ops = $optimizer->opportunities();
 		if ( is_wp_error( $ops ) ) {
 			return $ops;

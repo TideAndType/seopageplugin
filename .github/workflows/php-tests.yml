@@ -41,6 +41,9 @@ jobs:
       - name: Class autoload integrity
         run: php tests/run-autoloader.php
 
+      - name: Public frontend lazy bootstrap
+        run: php tests/run-lazy-bootstrap.php
+
       - name: Unit tests
         run: php tests/run-tests.php
 

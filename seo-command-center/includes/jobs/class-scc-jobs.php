@@ -208,8 +208,9 @@ class SCC_Jobs {
 		}
 
 		// Reschedule if more work remains.
-		$remaining = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE status = 'queued'" ); // phpcs:ignore WordPress.DB
-		if ( $remaining > 0 && ! self::is_paused() ) {
+		// Only existence matters here: LIMIT 1 avoids counting a large queue.
+		$remaining = $wpdb->get_var( "SELECT id FROM {$table} WHERE status = 'queued' LIMIT 1" ); // phpcs:ignore WordPress.DB
+		if ( $remaining && ! self::is_paused() ) {
 			self::ensure_scheduled();
 		}
 	}
@@ -341,6 +342,10 @@ class SCC_Jobs {
 
 			case 'link_autopilot':
 				$post_id = (int) ( $payload['post_id'] ?? 0 );
+				// Allow a new edit to queue a follow-up scan even while this one runs.
+				if ( $post_id ) {
+					delete_transient( 'scc_link_autopilot_pending_' . $post_id );
+				}
 				if ( ! $post_id || ! get_post( $post_id ) ) {
 					return true; // Post gone; nothing to do (idempotent).
 				}
