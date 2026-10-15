@@ -48,8 +48,16 @@ class SCC_Autopilot {
 			return;
 		}
 
+		// WordPress and Elementor can fire several save_post hooks for the same
+		// edit. All queued jobs read the latest post state; coalesce bursts.
+		// The worker clears this flag when it begins, so later edits are queued.
+		$pending_key = 'scc_link_autopilot_pending_' . (int) $post_id;
+		if ( get_transient( $pending_key ) ) {
+			return;
+		}
+
 		// Defer the heavier link analysis to the background queue.
-		SCC_DB::insert(
+		$job_id = SCC_DB::insert(
 			'jobs',
 			array(
 				'type'         => 'link_autopilot',
@@ -62,7 +70,10 @@ class SCC_Autopilot {
 			),
 			array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
-		SCC_Jobs::ensure_scheduled();
+		if ( $job_id ) {
+			set_transient( $pending_key, 1, 10 * MINUTE_IN_SECONDS );
+			SCC_Jobs::ensure_scheduled();
+		}
 	}
 
 	/**
