@@ -105,3 +105,40 @@
 	.scc-inline__panel { max-width: calc(100vw - 16px); max-height: calc(100vh - 100px); }
 }
 @media (prefers-reduced-motion: reduce) { .scc-inline * { transition: none !important; } }
+
+/* AI Designer 2.0 — the same native assistant, now with a section workflow. */
+.scc-inline__section-help {
+	padding: 10px 12px;
+	margin-top: 12px !important;
+	border-radius: 9px;
+	background: #f6f5ff;
+	border: 1px solid #e1defc;
+	color: #4b477e !important;
+}
+.scc-inline__section-help[hidden],
+.scc-inline__preview-controls[hidden] { display: none !important; }
+.scc-inline__preview-controls {
+	margin: 12px 0;
+	padding: 12px;
+	border: 1px solid #dfe3ed;
+	border-radius: 10px;
+	background: #f9fafc;
+}
+.scc-inline__preview-btn {
+	width: 100%;
+	min-height: 38px;
+	padding: 8px 12px;
+	border: 1px solid #c3bbfa;
+	border-radius: 8px;
+	background: #eeecff;
+	color: #4438a8;
+	font-weight: 750 !important;
+}
+.scc-inline__preview-btn:hover,
+.scc-inline__preview-btn[aria-pressed="true"] {
+	background: #dcd8fc;
+	border-color: #8d81f1;
+}
+.scc-inline__preview-controls .scc-inline__help {
+	margin: 10px 0 0;
+}
