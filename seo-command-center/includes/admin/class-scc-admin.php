@@ -271,9 +271,20 @@ class SCC_Admin {
 			SCC_VERSION
 		);
 
+		// Only enqueue the controller used by this WordPress admin screen.
+		$admin_script = 'admin.js';
+		$admin_handle = 'scc-admin';
+		if ( false !== strpos( (string) $hook, 'seo-command-center-settings' )
+			|| false !== strpos( (string) $hook, 'seo-command-center-connections' ) ) {
+			$admin_script = 'admin-settings.js';
+			$admin_handle = 'scc-admin-settings';
+		} elseif ( false !== strpos( (string) $hook, 'seo-command-center-layout' ) ) {
+			$admin_script = 'admin-layout.js';
+			$admin_handle = 'scc-admin-layout';
+		}
 		wp_enqueue_script(
-			'scc-admin',
-			SCC_PLUGIN_URL . 'assets/js/admin.js',
+			$admin_handle,
+			SCC_PLUGIN_URL . 'assets/js/' . $admin_script,
 			array( 'wp-api-fetch' ),
 			SCC_VERSION,
 			true
@@ -290,7 +301,7 @@ class SCC_Admin {
 
 		// Pass only non-secret bootstrap data + the REST nonce. Never keys.
 		wp_localize_script(
-			'scc-admin',
+			$admin_handle,
 			'SCC',
 			array(
 				'restUrl'   => esc_url_raw( rest_url( SCC_REST::NS ) ),
