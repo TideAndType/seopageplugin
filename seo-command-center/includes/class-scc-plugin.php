@@ -183,7 +183,7 @@ class SCC_Plugin {
 	 */
 	public function register_rest_routes() {
 		if ( ! $this->rest ) {
-			$this->rest = new SCC_REST( $this->ai(), $this->jobs() );
+			$this->rest = new SCC_REST();
 		}
 		$this->rest->register_routes();
 	}
