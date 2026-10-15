@@ -45,7 +45,8 @@ if ( ! defined( 'SCC_VERSION' ) ) {
 }
 
 // ---------------------------------------------------------------------------
-// Autoload-free, explicit includes (predictable load order, no dependencies).
+// Lazy class loading. Hooks and public APIs remain unchanged; unused feature
+// classes are not parsed on every visitor request.
 // ---------------------------------------------------------------------------
 require_once SCC_PLUGIN_DIR . 'includes/class-scc-loader.php';
 require_once SCC_PLUGIN_DIR . 'includes/database/class-scc-db.php';
