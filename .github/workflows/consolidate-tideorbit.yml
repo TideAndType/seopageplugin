@@ -28,8 +28,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main ttgmbapp
           git merge-base --is-ancestor origin/main HEAD || { echo "Consolidation branch is no longer based on main"; exit 1; }
-          git merge --no-ff --no-edit -X ours origin/ttgmbapp
+          # Squash: preserve all feature code without importing changes to
+          # historical GitHub workflow files that GITHUB_TOKEN cannot push.
+          git merge --squash -X ours origin/ttgmbapp
           test -z "$(git ls-files --unmerged)"
+          git restore --source=origin/main --staged --worktree .github/workflows/php-tests.yml
+          git add -A
+          git commit -m "Consolidate Elementor AI designer, performance and reliability into TideOrbit 1.99"
 
       - name: Mark consolidated release 1.99.1
         shell: bash
