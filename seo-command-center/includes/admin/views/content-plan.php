@@ -15,14 +15,16 @@ $statuses = isset( $data['statuses'] ) ? $data['statuses'] : array();
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
-		<h1><?php esc_html_e( 'Content Plan', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Your recommended pages and articles. Click “Brief” to see an outline, or “Generate draft” to create it — every page is saved as a WordPress draft for your review. Nothing is published automatically.', 'seo-command-center' ); ?></p>
+		<h1><?php esc_html_e( 'Planned Content', 'seo-command-center' ); ?></h1>
+		<p class="scc-sub"><?php esc_html_e( 'Ideas saved from the Topical Map, Site Structure, or Content Ideas appear here. These are plans, NOT WordPress pages or posts. Click “Generate draft” to create a real draft, then review it before publishing.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<div class="scc-card">
+		<p class="scc-next-actions"><strong><?php esc_html_e( 'Next step:', 'seo-command-center' ); ?></strong> <?php esc_html_e( 'Choose a planned topic and click Generate draft.', 'seo-command-center' ); ?> <a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=publishing' ) ); ?>"><?php esc_html_e( 'Review generated drafts →', 'seo-command-center' ); ?></a></p>
 		<?php if ( empty( $entries ) ) : ?>
-			<p class="scc-note"><?php esc_html_e( 'No content plan entries yet. Build a keyword strategy and send its architecture here from the Site Architecture page.', 'seo-command-center' ); ?></p>
-			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-architecture' ) ); ?>"><?php esc_html_e( 'Go to Site Architecture', 'seo-command-center' ); ?></a>
+			<p class="scc-note"><?php esc_html_e( 'Nothing planned yet. Start with Topical Map, then open Site Structure and choose the pages or articles you want. They will show up here.', 'seo-command-center' ); ?></p>
+			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-opportunities&tab=keywords' ) ); ?>"><?php esc_html_e( 'Start with Topical Map →', 'seo-command-center' ); ?></a>
+			<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-opportunities&tab=architecture' ) ); ?>"><?php esc_html_e( 'Review Site Structure', 'seo-command-center' ); ?></a>
 		<?php else : ?>
 			<table class="widefat striped scc-table" id="scc-plan-table">
 				<thead>
@@ -71,10 +73,10 @@ $statuses = isset( $data['statuses'] ) ? $data['statuses'] : array();
 		<?php endif; ?>
 	</div>
 
-	<div class="scc-card">
-		<h2><?php esc_html_e( 'Generation debug', 'seo-command-center' ); ?></h2>
+	<details class="scc-card scc-tech-details">
+		<summary><?php esc_html_e( 'Advanced troubleshooting: generation log', 'seo-command-center' ); ?></summary>
 		<p class="scc-note"><?php esc_html_e( 'A step-by-step trace of the most recent draft generation, captured inside the plugin (no WordPress debug log needed). If a draft did not appear, click Refresh right after generating and copy everything below.', 'seo-command-center' ); ?></p>
 		<p><button type="button" class="button" id="scc-debug-refresh"><?php esc_html_e( 'Refresh debug', 'seo-command-center' ); ?></button></p>
 		<div id="scc-gen-debug"><p class="scc-note"><?php esc_html_e( 'No generation traced yet.', 'seo-command-center' ); ?></p></div>
-	</div>
+	</details>
 </div>
