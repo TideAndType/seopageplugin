@@ -20,9 +20,10 @@ $examples = array(
 	<div class="scc-header">
 		<span class="scc-phase-badge">✦ <?php esc_html_e( 'AI Content Strategist', 'seo-command-center' ); ?></span>
 		<h1><?php esc_html_e( 'Content Ideas', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Ask in plain language and get concrete pages to create — grounded in your real pages, Search Console demand, and business, optimized for SEO and click-through. Add any to your Content Plan or generate a draft on the spot.', 'seo-command-center' ); ?></p>
+		<p class="scc-sub"><?php esc_html_e( 'Ask in plain language for SEO content ideas. Save promising ideas to Planned Content (not yet a WordPress page), or generate a draft immediately. Every saved idea is accessible under Create Content → Planned Content.', 'seo-command-center' ); ?></p>
 	</div>
 
+	<p class="scc-next-actions"><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=plan' ) ); ?>"><?php esc_html_e( 'View saved ideas → Planned Content', 'seo-command-center' ); ?></a></p>
 	<div class="scc-card">
 		<div class="scc-field">
 			<label for="scc-ideas-q" class="scc-label"><?php esc_html_e( 'What would you like ideas for?', 'seo-command-center' ); ?></label>

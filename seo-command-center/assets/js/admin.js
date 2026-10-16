@@ -34,6 +34,19 @@
 		}
 	}
 
+	// Every save to the Content Plan needs a visible destination. Saving a topic
+	// does not generate a WordPress page; that is the next, explicit action.
+	function showPlanDestination( el, message ) {
+		setStatus( el, message || 'Saved to Planned Content.', 'is-ok' );
+		if ( ! el ) { return; }
+		el.appendChild( document.createTextNode( ' ' ) );
+		var link = document.createElement( 'a' );
+		link.className = 'scc-plan-destination';
+		link.href = window.location.pathname + '?page=seo-command-center-create&tab=plan';
+		link.textContent = 'Open Planned Content →';
+		el.appendChild( link );
+	}
+
 	// Shared HTML escaper for any screen that builds markup from API data.
 	// (Some screens keep a local copy; this guarantees one always exists.)
 	function esc( s ) {
@@ -701,7 +714,7 @@
 			} } )
 				.then( function () {
 					btn.textContent = 'Added ✓';
-					setStatus( status, 'In your Content Plan.', 'is-ok' );
+					showPlanDestination( status, 'Idea saved. This is not a WordPress draft yet.' );
 				} )
 				.catch( function ( err ) {
 					btn.disabled = false;
@@ -825,7 +838,7 @@
 			request( '/content-plan/seed', { method: 'POST', data: { urls: urls } } )
 				.then( function ( res ) {
 					var created = ( res.data && res.data.created ) || 0;
-					setStatus( status, created + ' page(s) added to your content plan.', 'is-ok' );
+					showPlanDestination( status, created > 0 ? created + ' idea(s) saved. No WordPress drafts were created.' : 'No new ideas were added; check your existing plan.' );
 					refreshCount();
 				} )
 				.catch( function ( err ) {
@@ -894,7 +907,11 @@
 			request( '/architecture/action', { method: 'POST', data: data } )
 				.then( function ( res ) {
 					var message = ( res.data && res.data.message ) || 'Saved.';
-					setStatus( status, message, 'is-ok' );
+					if ( action === 'add_to_plan' ) {
+						showPlanDestination( status, 'Saved this idea. You can generate a draft from Planned Content.' );
+					} else {
+						setStatus( status, message, 'is-ok' );
+					}
 					if ( action === 'ignore' || action === 'mark_covered' || action === 'restore' || action === 'reparent' ) {
 						window.location.reload();
 					} else {
@@ -1946,8 +1963,9 @@
 					status: 'recommended'
 				}
 			} ).then( function () {
-				button.textContent = 'Added to plan ✓';
+				button.textContent = 'Saved ✓';
 				button.classList.add( 'button-disabled' );
+				showPlanDestination( status, 'Competitor gap saved as an idea; draft not yet created.' );
 			} ).catch( function ( err ) {
 				button.disabled = false;
 				button.textContent = 'Add to plan';
@@ -2972,7 +2990,7 @@
 					request( '/content-plan', { method: 'POST', data: planData( idea ) } )
 						.then( function () {
 							add.textContent = 'Added ✓';
-							setStatus( st, 'Added to Content Plan.', 'is-ok' );
+							showPlanDestination( st, 'Idea saved. Generate a draft from Planned Content.' );
 							gen.disabled = true;
 							card.classList.add( 'is-added' );
 							// Drop it from the working set so a later Refine never

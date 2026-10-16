@@ -3683,6 +3683,25 @@ if ( '' !== $node_path && function_exists( 'exec' ) ) {
     echo "Node.js unavailable; run node tests/run-campaign-state.js separately.\n";
 }
 
+echo "\n== Beginner-friendly navigation and content destinations ==\n";
+$flow_admin = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php' );
+$flow_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/content-plan.php' );
+$flow_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+foreach ( array( 'Planned Content', 'Write a Draft', 'Review Drafts', 'render_content_workflow(', 'More creation tools', 'Advanced research tools' ) as $phrase ) {
+    assert_true( false !== strpos( $flow_admin, $phrase ), 'Guided content navigation: ' . $phrase );
+}
+assert_true( false !== strpos( $flow_view, 'NOT WordPress pages' ), 'Planned ideas are explicitly distinct from WordPress drafts' );
+assert_true( false !== strpos( $flow_view, 'seo-command-center-opportunities&tab=keywords' ), 'Empty content plan links to topical map' );
+assert_true( false !== strpos( $flow_js, 'showPlanDestination( status' ), 'Successful content saves link directly to Planned Content' );
+if ( isset( $node_path ) && '' !== $node_path && function_exists( 'exec' ) ) {
+    $flow_output = array();
+    $flow_result = 1;
+    exec( escapeshellarg( $node_path ) . ' ' . escapeshellarg( __DIR__ . '/run-ux-flow.js' ) . ' 2>&1', $flow_output, $flow_result );
+    assert_eq( 0, $flow_result, 'UX direct-link DOM regression: ' . implode( ' / ', $flow_output ) );
+} else {
+    echo "Node.js unavailable; run node tests/run-ux-flow.js separately.\n";
+}
+
 echo "\n----------------------------------------\n";
 echo "Tests: {$tests}  Failed: {$failed}\n";
 exit( $failed > 0 ? 1 : 0 );

@@ -51,7 +51,8 @@ $val = function ( $inputs, $key ) {
 			</label>
 		</div>
 		<span class="scc-inline-status" id="scc-keyword-auto-status"></span>
-		<p class="scc-note"><?php esc_html_e( 'Reads your site name, tagline, and existing page/post titles, infers your services and locations, and builds the topical map automatically — no manual input needed. You can still refine it with the form below. Then open Site Architecture to see the structure and send pages to your Content Plan.', 'seo-command-center' ); ?></p>
+		<p class="scc-next-actions"><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-opportunities&tab=architecture' ) ); ?>"><?php esc_html_e( 'Next: Choose topics in Site Structure →', 'seo-command-center' ); ?></a><a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=plan' ) ); ?>"><?php esc_html_e( 'See saved ideas', 'seo-command-center' ); ?></a></p>
+		<p class="scc-note"><?php esc_html_e( 'Reads your site name, tagline, and existing page/post titles, infers your services and locations, and builds the topical map automatically — no manual input needed. You can still refine it with the form below. Next open Site Structure to choose which new pages or blog posts to plan. Saving those ideas sends them to Create Content → Planned Content; it does not publish anything.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<div class="scc-columns">

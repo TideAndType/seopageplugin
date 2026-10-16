@@ -66,10 +66,9 @@ class SCC_Admin {
 		// route (reached via its hub tab and in-app links), so nothing breaks.
 		$pages = array(
 			self::SLUG                     => array( __( 'Dashboard', 'seo-command-center' ), 'render_dashboard' ),
-			self::SLUG . '-create'         => array( __( 'Create', 'seo-command-center' ), 'render_create_hub' ),
-			self::SLUG . '-optimize'       => array( __( 'Optimize', 'seo-command-center' ), 'render_optimize_hub' ),
-			self::SLUG . '-opportunities'  => array( __( 'Opportunities', 'seo-command-center' ), 'render_opportunities_hub' ),
-			self::SLUG . '-templates'      => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
+			self::SLUG . '-create'         => array( __( 'Create Content', 'seo-command-center' ), 'render_create_hub' ),
+			self::SLUG . '-optimize'       => array( __( 'Improve Site', 'seo-command-center' ), 'render_optimize_hub' ),
+			self::SLUG . '-opportunities'  => array( __( 'Plan SEO', 'seo-command-center' ), 'render_opportunities_hub' ),
 			self::SLUG . '-settings'       => array( __( 'Settings', 'seo-command-center' ), 'render_settings_hub' ),
 		);
 
@@ -81,6 +80,7 @@ class SCC_Admin {
 		// through its hub's tabs and from in-app links (deep links keep working).
 		$hidden = array(
 			self::SLUG . '-connections' => array( __( 'Legacy API Connections', 'seo-command-center' ), 'render_legacy_connections' ),
+			self::SLUG . '-templates' => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
 			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
@@ -128,18 +128,19 @@ class SCC_Admin {
 			),
 			// CREATE — make something new. Blog Post generation is the simple default.
 			self::SLUG . '-create'        => array(
-				'title'   => __( 'Create', 'seo-command-center' ),
+				'title'   => __( 'Create Content', 'seo-command-center' ),
 				'tabs'    => array(
-					'generate'   => array( __( 'Generate', 'seo-command-center' ), self::SLUG . '-generate', 'render_generate' ),
-					'ideas'      => array( __( 'Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
-					'layout'     => array( __( 'Elementor Layout', 'seo-command-center' ), self::SLUG . '-layout', 'render_layout' ),
-					'plan'       => array( __( 'Content Plan', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
-					'publishing' => array( __( 'Publishing', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
+					'generate'   => array( __( 'Write a Draft', 'seo-command-center' ), self::SLUG . '-generate', 'render_generate' ),
+					'plan'       => array( __( 'Planned Content', 'seo-command-center' ), self::SLUG . '-content-plan', 'render_content_plan' ),
+					'publishing' => array( __( 'Review Drafts', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
+					'ideas'      => array( __( 'Find Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
+					'layout'     => array( __( 'Design Pages', 'seo-command-center' ), self::SLUG . '-layout', 'render_layout' ),
+					'templates' => array( __( 'Design Templates', 'seo-command-center' ), self::SLUG . '-templates', 'render_templates' ),
 				),
 			),
 			// OPTIMIZE — fix what exists. The Action Queue is the apply/verify centre.
 			self::SLUG . '-optimize'      => array(
-				'title'   => __( 'Optimize', 'seo-command-center' ),
+				'title'   => __( 'Improve Site', 'seo-command-center' ),
 				'tabs'    => array(
 					'actions' => array( __( 'Action Queue', 'seo-command-center' ), self::SLUG . '-action-queue', 'render_action_queue' ),
 					'links'   => array( __( 'Internal Links', 'seo-command-center' ), self::SLUG . '-internal-links', 'render_internal_links' ),
@@ -148,16 +149,16 @@ class SCC_Admin {
 			),
 			// OPPORTUNITIES — where's the upside. The ranked opportunity list leads.
 			self::SLUG . '-opportunities' => array(
-				'title'   => __( 'Opportunities', 'seo-command-center' ),
+				'title'   => __( 'Plan SEO', 'seo-command-center' ),
 				'tabs'    => array(
-					'all'          => array( __( 'All Opportunities', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
-					'keywords'     => array( __( 'Keywords', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
-					'topical'      => array( __( 'Topical Authority', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
+					'all'          => array( __( 'Recommended Work', 'seo-command-center' ), self::SLUG . '-insights', 'render_insights' ),
+					'keywords'     => array( __( 'Topical Map', 'seo-command-center' ), self::SLUG . '-keyword-strategy', 'render_keyword_strategy' ),
+					'topical'      => array( __( 'Topic Coverage', 'seo-command-center' ), self::SLUG . '-topical-authority', 'render_topical_authority' ),
 					'competitors'  => array( __( 'Competitors', 'seo-command-center' ), self::SLUG . '-competitors', 'render_competitors' ),
 					'citations'    => array( __( 'Local Citations', 'seo-command-center' ), self::SLUG . '-citation-scanner', 'render_citation_scanner' ),
 					'growth'       => array( __( 'Growth Lab', 'seo-command-center' ), self::SLUG . '-growth-lab', 'render_growth_lab' ),
 					'aeo'          => array( __( 'AEO / AI Citations', 'seo-command-center' ), self::SLUG . '-aeo', 'render_aeo' ),
-					'architecture' => array( __( 'Site Architecture', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
+					'architecture' => array( __( 'Site Structure', 'seo-command-center' ), self::SLUG . '-architecture', 'render_architecture' ),
 				),
 			),
 		);
@@ -198,8 +199,17 @@ class SCC_Admin {
 		$active    = self::hub_active_tab( $keys, $requested );
 
 		$this->render_primary_navigation();
-		echo '<div class="wrap scc-wrap scc-hub"><nav class="nav-tab-wrapper scc-hub-tabs">';
+		$advanced_keys = array();
+		if ( self::SLUG . '-opportunities' === $hub_slug ) {
+			$advanced_keys = array( 'competitors', 'citations', 'growth', 'aeo' );
+		} elseif ( self::SLUG . '-create' === $hub_slug ) {
+			$advanced_keys = array( 'ideas', 'layout', 'templates' );
+		}
+		echo '<div class="wrap scc-wrap scc-hub"><nav class="nav-tab-wrapper scc-hub-tabs" aria-label="' . esc_attr__( 'Section navigation', 'seo-command-center' ) . '">';
 		foreach ( $hub['tabs'] as $key => $tab ) {
+			if ( in_array( $key, $advanced_keys, true ) ) {
+				continue;
+			}
 			$url = add_query_arg(
 				array( 'page' => $hub_slug, 'tab' => $key ),
 				admin_url( 'admin.php' )
@@ -211,13 +221,51 @@ class SCC_Admin {
 				esc_html( $tab[0] )
 			);
 		}
-		echo '</nav></div>';
+		echo '</nav>';
+		if ( $advanced_keys ) {
+			echo '<details class="scc-hub-advanced"' . ( in_array( $active, $advanced_keys, true ) ? ' open' : '' ) . '><summary>' . esc_html( self::SLUG . '-create' === $hub_slug ? __( 'More creation tools', 'seo-command-center' ) : __( 'Advanced research tools', 'seo-command-center' ) ) . '</summary><div class="scc-hub-advanced__links">';
+			foreach ( $advanced_keys as $key ) {
+				$tab = $hub['tabs'][ $key ];
+				$url = add_query_arg( array( 'page' => $hub_slug, 'tab' => $key ), admin_url( 'admin.php' ) );
+				printf( '<a href="%1$s" class="button%2$s"%3$s>%4$s</a>', esc_url( $url ), $key === $active ? ' button-primary' : '', $key === $active ? ' aria-current="page"' : '', esc_html( $tab[0] ) );
+			}
+			echo '</div></details>';
+		}
+		if ( in_array( $hub_slug, array( self::SLUG . '-create', self::SLUG . '-opportunities' ), true ) ) {
+			$this->render_content_workflow( $hub_slug, $active );
+		}
+		echo '</div>';
 
 		// Delegate to the existing screen's render method (unchanged view).
 		$method = isset( $hub['tabs'][ $active ][2] ) ? $hub['tabs'][ $active ][2] : '';
 		if ( $method && method_exists( $this, $method ) ) {
 			$this->{$method}();
 		}
+	}
+
+	/**
+	 * One recognizable journey, regardless of which tool found the topic.
+	 * Linking to canonical hub tabs keeps existing bookmarks and REST endpoints.
+	 *
+	 * @param string $hub_slug Current hub.
+	 * @param string $active Current hub tab.
+	 */
+	protected function render_content_workflow( $hub_slug, $active ) {
+		$steps = array(
+			array( __( '1. Find topics', 'seo-command-center' ), self::SLUG . '-opportunities', 'keywords' ),
+			array( __( '2. Choose pages', 'seo-command-center' ), self::SLUG . '-opportunities', 'architecture' ),
+			array( __( '3. Planned Content', 'seo-command-center' ), self::SLUG . '-create', 'plan' ),
+			array( __( '4. Write & review', 'seo-command-center' ), self::SLUG . '-create', 'generate' ),
+		);
+		echo '<section class="scc-content-workflow" aria-label="' . esc_attr__( 'Content creation steps', 'seo-command-center' ) . '">';
+		echo '<p><strong>' . esc_html__( 'Your content workflow', 'seo-command-center' ) . '</strong> <span>' . esc_html__( 'Ideas are saved to Planned Content first; a WordPress draft is only made when you choose Generate draft.', 'seo-command-center' ) . '</span></p>';
+		echo '<div class="scc-content-workflow__steps">';
+		foreach ( $steps as $step ) {
+			$url = add_query_arg( array( 'page' => $step[1], 'tab' => $step[2] ), admin_url( 'admin.php' ) );
+			$is_current = $hub_slug === $step[1] && $active === $step[2];
+			printf( '<a href="%1$s" class="%2$s"%3$s>%4$s</a>', esc_url( $url ), $is_current ? 'is-current' : '', $is_current ? ' aria-current="step"' : '', esc_html( $step[0] ) );
+		}
+		echo '</div></section>';
 	}
 
 	/**
@@ -465,10 +513,9 @@ class SCC_Admin {
 		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : self::SLUG;
 		$items = array(
 			array( self::SLUG, __( 'Overview', 'seo-command-center' ), 'dashicons-chart-area', array( self::SLUG ) ),
-			array( self::SLUG . '-create', __( 'Create', 'seo-command-center' ), 'dashicons-edit-page', array( 'create', 'generate', 'ideas', 'layout', 'content-plan', 'publishing', 'elementor' ) ),
-			array( self::SLUG . '-optimize', __( 'Optimize', 'seo-command-center' ), 'dashicons-admin-tools', array( 'optimize', 'action-queue', 'internal-links', 'meta-editor', 'seo-audit' ) ),
-			array( self::SLUG . '-opportunities', __( 'Opportunities', 'seo-command-center' ), 'dashicons-chart-line', array( 'opportunities', 'insights', 'keyword-strategy', 'topical-authority', 'competitors', 'citation-scanner', 'growth-lab', 'aeo', 'architecture', 'site-analysis' ) ),
-			array( self::SLUG . '-templates', __( 'Templates', 'seo-command-center' ), 'dashicons-layout', array( 'templates' ) ),
+			array( self::SLUG . '-create', __( 'Create Content', 'seo-command-center' ), 'dashicons-edit-page', array( 'create', 'generate', 'ideas', 'layout', 'content-plan', 'publishing', 'elementor', 'templates' ) ),
+			array( self::SLUG . '-optimize', __( 'Improve', 'seo-command-center' ), 'dashicons-admin-tools', array( 'optimize', 'action-queue', 'internal-links', 'meta-editor', 'seo-audit' ) ),
+			array( self::SLUG . '-opportunities', __( 'Plan SEO', 'seo-command-center' ), 'dashicons-chart-line', array( 'opportunities', 'insights', 'keyword-strategy', 'topical-authority', 'competitors', 'citation-scanner', 'growth-lab', 'aeo', 'architecture', 'site-analysis' ) ),
 			array( self::SLUG . '-settings', __( 'Settings', 'seo-command-center' ), 'dashicons-admin-generic', array( 'settings', 'connections', 'schema' ) ),
 		);
 		echo '<div class="wrap scc-wrap scc-app-nav">';
@@ -494,7 +541,7 @@ class SCC_Admin {
 				esc_html( $item[1] )
 			);
 		}
-		echo '</nav></div>';
+		echo '</nav><a class="scc-app-nav__shortcut" href="' . esc_url( add_query_arg( array( 'page' => self::SLUG . '-create', 'tab' => 'plan' ), admin_url( 'admin.php' ) ) ) . '">' . esc_html__( 'My planned content →', 'seo-command-center' ) . '</a></div>';
 	}
 
 	/**

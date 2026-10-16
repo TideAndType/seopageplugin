@@ -93,7 +93,7 @@ $node_line = function ( $node, $draggable = true ) {
 
 			<div class="scc-arch-node__actions">
 				<?php if ( in_array( $action, array( 'create_page', 'create_article', 'create_location' ), true ) && $page_candidate ) : ?>
-					<button type="button" class="button button-small scc-arch-action" data-action="add_to_plan"><?php esc_html_e( 'Add to Content Plan', 'seo-command-center' ); ?></button>
+					<button type="button" class="button button-small scc-arch-action" data-action="add_to_plan"><?php esc_html_e( 'Save idea', 'seo-command-center' ); ?></button>
 				<?php endif; ?>
 				<?php if ( 'expand_existing' === $action ) : ?>
 					<button type="button" class="button button-primary button-small scc-arch-draft-generate"><?php esc_html_e( 'Draft missing section', 'seo-command-center' ); ?></button>
@@ -257,11 +257,11 @@ $render_branch = function ( $node, $depth = 1 ) use ( &$render_branch, $node_lin
 					<label class="scc-toggle" title="<?php esc_attr_e( 'Hide pages that need no structural work.', 'seo-command-center' ); ?>">
 						<input type="checkbox" id="scc-arch-gaps-only"> <span><?php esc_html_e( 'Only show work', 'seo-command-center' ); ?></span>
 					</label>
-					<button class="button button-primary" id="scc-seed-plan"><?php esc_html_e( 'Send selected new pages to Content Plan', 'seo-command-center' ); ?></button>
+					<button class="button button-primary" id="scc-seed-plan"><?php esc_html_e( 'Save selected ideas to Planned Content', 'seo-command-center' ); ?></button>
 				</div>
 			</div>
 			<p class="scc-note">
-				<?php esc_html_e( 'Only true new-page decisions can enter Content Plan. Existing-page expansions and merge reviews go to Action Queue instead.', 'seo-command-center' ); ?>
+				<?php esc_html_e( 'This saves ideas to Create Content → Planned Content; it does not create WordPress pages yet. From there you can generate drafts. Improvements to existing pages go to Improve Site → Action Queue.', 'seo-command-center' ); ?>
 				<label class="scc-arch-selectall"><input type="checkbox" id="scc-seed-selectall" checked> <?php esc_html_e( 'Select all new pages', 'seo-command-center' ); ?></label>
 				<span id="scc-seed-count"></span>
 			</p>
