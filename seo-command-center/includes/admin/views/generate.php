@@ -21,8 +21,8 @@ $categories   = isset( $data['categories'] ) ? $data['categories'] : array();
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
-		<h1><?php esc_html_e( 'Create', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Enter a topic and generate a draft.', 'seo-command-center' ); ?></p>
+		<h1><?php esc_html_e( 'Write a Draft', 'seo-command-center' ); ?></h1>
+		<p class="scc-sub"><?php esc_html_e( 'Enter a topic to create a WordPress draft immediately, or choose an idea you previously saved under Planned Content. Drafts appear under Review Drafts and in WordPress Posts or Pages.', 'seo-command-center' ); ?></p>
 	</div>
 
 	<?php if ( $auto_publish ) : ?>
@@ -107,10 +107,10 @@ $categories   = isset( $data['categories'] ) ? $data['categories'] : array();
 	</div>
 
 	<div class="scc-card">
-		<h2><?php esc_html_e( 'From your Content Plan', 'seo-command-center' ); ?></h2>
+		<div class="scc-card__head"><h2><?php esc_html_e( 'From Planned Content', 'seo-command-center' ); ?></h2><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=plan' ) ); ?>"><?php esc_html_e( 'View all planned content →', 'seo-command-center' ); ?></a></div>
 		<?php if ( empty( $entries ) ) : ?>
-			<p class="scc-note"><?php esc_html_e( 'No approved plan entries waiting. Add ideas in the Content Plan, or use the quick form above.', 'seo-command-center' ); ?></p>
-			<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-content-plan' ) ); ?>"><?php esc_html_e( 'Open Content Plan', 'seo-command-center' ); ?></a>
+			<p class="scc-note"><?php esc_html_e( 'No approved ideas waiting. Open Planned Content to approve and generate an idea, or use the quick form above.', 'seo-command-center' ); ?></p>
+			<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-content-plan' ) ); ?>"><?php esc_html_e( 'Open Planned Content', 'seo-command-center' ); ?></a>
 		<?php else : ?>
 			<table class="widefat striped scc-table" id="scc-generate-table">
 				<thead>
