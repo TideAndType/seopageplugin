@@ -69,7 +69,6 @@ class SCC_Admin {
 			self::SLUG . '-create'         => array( __( 'Create Content', 'seo-command-center' ), 'render_create_hub' ),
 			self::SLUG . '-optimize'       => array( __( 'Improve Site', 'seo-command-center' ), 'render_optimize_hub' ),
 			self::SLUG . '-opportunities'  => array( __( 'Plan SEO', 'seo-command-center' ), 'render_opportunities_hub' ),
-			self::SLUG . '-templates'      => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-settings'       => array( __( 'Settings', 'seo-command-center' ), 'render_settings_hub' ),
 		);
 
@@ -81,6 +80,7 @@ class SCC_Admin {
 		// through its hub's tabs and from in-app links (deep links keep working).
 		$hidden = array(
 			self::SLUG . '-connections' => array( __( 'Legacy API Connections', 'seo-command-center' ), 'render_legacy_connections' ),
+			self::SLUG . '-templates' => array( __( 'Templates', 'seo-command-center' ), 'render_templates' ),
 			self::SLUG . '-content-plan'     => array( __( 'Content Plan', 'seo-command-center' ), 'render_content_plan' ),
 			self::SLUG . '-ideas'            => array( __( 'Content Ideas', 'seo-command-center' ), 'render_ideas' ),
 			self::SLUG . '-generate'         => array( __( 'Generate Content', 'seo-command-center' ), 'render_generate' ),
@@ -135,6 +135,7 @@ class SCC_Admin {
 					'publishing' => array( __( 'Review Drafts', 'seo-command-center' ), self::SLUG . '-publishing', 'render_publishing' ),
 					'ideas'      => array( __( 'Find Ideas', 'seo-command-center' ), self::SLUG . '-ideas', 'render_ideas' ),
 					'layout'     => array( __( 'Design Pages', 'seo-command-center' ), self::SLUG . '-layout', 'render_layout' ),
+					'templates' => array( __( 'Design Templates', 'seo-command-center' ), self::SLUG . '-templates', 'render_templates' ),
 				),
 			),
 			// OPTIMIZE — fix what exists. The Action Queue is the apply/verify centre.
@@ -198,7 +199,12 @@ class SCC_Admin {
 		$active    = self::hub_active_tab( $keys, $requested );
 
 		$this->render_primary_navigation();
-		$advanced_keys = self::SLUG . '-opportunities' === $hub_slug ? array( 'competitors', 'citations', 'growth', 'aeo' ) : array();
+		$advanced_keys = array();
+		if ( self::SLUG . '-opportunities' === $hub_slug ) {
+			$advanced_keys = array( 'competitors', 'citations', 'growth', 'aeo' );
+		} elseif ( self::SLUG . '-create' === $hub_slug ) {
+			$advanced_keys = array( 'ideas', 'layout', 'templates' );
+		}
 		echo '<div class="wrap scc-wrap scc-hub"><nav class="nav-tab-wrapper scc-hub-tabs" aria-label="' . esc_attr__( 'Section navigation', 'seo-command-center' ) . '">';
 		foreach ( $hub['tabs'] as $key => $tab ) {
 			if ( in_array( $key, $advanced_keys, true ) ) {
@@ -217,7 +223,7 @@ class SCC_Admin {
 		}
 		echo '</nav>';
 		if ( $advanced_keys ) {
-			echo '<details class="scc-hub-advanced"' . ( in_array( $active, $advanced_keys, true ) ? ' open' : '' ) . '><summary>' . esc_html__( 'Advanced research tools', 'seo-command-center' ) . '</summary><div class="scc-hub-advanced__links">';
+			echo '<details class="scc-hub-advanced"' . ( in_array( $active, $advanced_keys, true ) ? ' open' : '' ) . '><summary>' . esc_html( self::SLUG . '-create' === $hub_slug ? __( 'More creation tools', 'seo-command-center' ) : __( 'Advanced research tools', 'seo-command-center' ) ) . '</summary><div class="scc-hub-advanced__links">';
 			foreach ( $advanced_keys as $key ) {
 				$tab = $hub['tabs'][ $key ];
 				$url = add_query_arg( array( 'page' => $hub_slug, 'tab' => $key ), admin_url( 'admin.php' ) );
@@ -507,10 +513,9 @@ class SCC_Admin {
 		$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : self::SLUG;
 		$items = array(
 			array( self::SLUG, __( 'Overview', 'seo-command-center' ), 'dashicons-chart-area', array( self::SLUG ) ),
-			array( self::SLUG . '-create', __( 'Create Content', 'seo-command-center' ), 'dashicons-edit-page', array( 'create', 'generate', 'ideas', 'layout', 'content-plan', 'publishing', 'elementor' ) ),
+			array( self::SLUG . '-create', __( 'Create Content', 'seo-command-center' ), 'dashicons-edit-page', array( 'create', 'generate', 'ideas', 'layout', 'content-plan', 'publishing', 'elementor', 'templates' ) ),
 			array( self::SLUG . '-optimize', __( 'Improve', 'seo-command-center' ), 'dashicons-admin-tools', array( 'optimize', 'action-queue', 'internal-links', 'meta-editor', 'seo-audit' ) ),
 			array( self::SLUG . '-opportunities', __( 'Plan SEO', 'seo-command-center' ), 'dashicons-chart-line', array( 'opportunities', 'insights', 'keyword-strategy', 'topical-authority', 'competitors', 'citation-scanner', 'growth-lab', 'aeo', 'architecture', 'site-analysis' ) ),
-			array( self::SLUG . '-templates', __( 'Templates', 'seo-command-center' ), 'dashicons-layout', array( 'templates' ) ),
 			array( self::SLUG . '-settings', __( 'Settings', 'seo-command-center' ), 'dashicons-admin-generic', array( 'settings', 'connections', 'schema' ) ),
 		);
 		echo '<div class="wrap scc-wrap scc-app-nav">';
