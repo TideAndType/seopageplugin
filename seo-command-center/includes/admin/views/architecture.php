@@ -93,7 +93,7 @@ $node_line = function ( $node, $draggable = true ) {
 
 			<div class="scc-arch-node__actions">
 				<?php if ( in_array( $action, array( 'create_page', 'create_article', 'create_location' ), true ) && $page_candidate ) : ?>
-					<button type="button" class="button button-small scc-arch-action" data-action="add_to_plan"><?php esc_html_e( 'Add to Content Plan', 'seo-command-center' ); ?></button>
+					<button type="button" class="button button-small scc-arch-action" data-action="add_to_plan"><?php esc_html_e( 'Save idea', 'seo-command-center' ); ?></button>
 				<?php endif; ?>
 				<?php if ( 'expand_existing' === $action ) : ?>
 					<button type="button" class="button button-primary button-small scc-arch-draft-generate"><?php esc_html_e( 'Draft missing section', 'seo-command-center' ); ?></button>
