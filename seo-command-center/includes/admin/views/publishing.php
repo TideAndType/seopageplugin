@@ -17,10 +17,11 @@ $budget = isset( $data['budget'] ) ? (float) $data['budget'] : 0;
 ?>
 <div class="wrap scc-wrap">
 	<div class="scc-header">
-		<h1><?php esc_html_e( 'Publishing Queue', 'seo-command-center' ); ?></h1>
-		<p class="scc-sub"><?php esc_html_e( 'Review generated drafts and publish when you are ready. Batch generation runs in the background so it never ties up your site.', 'seo-command-center' ); ?></p>
+		<h1><?php esc_html_e( 'Review Drafts', 'seo-command-center' ); ?></h1>
+		<p class="scc-sub"><?php esc_html_e( 'This is where generated WordPress drafts appear for editing, approval and publishing. Ideas that have NOT been generated are under Create Content → Planned Content.', 'seo-command-center' ); ?></p>
 	</div>
 
+	<p class="scc-next-actions"><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-create&tab=plan' ) ); ?>"><?php esc_html_e( 'See planned (not yet generated) content →', 'seo-command-center' ); ?></a></p>
 	<div class="scc-grid scc-stats">
 		<div class="scc-stat"><div class="scc-stat__num"><?php echo esc_html( (int) ( $jobs['queued'] ?? 0 ) ); ?></div><div class="scc-stat__label"><?php esc_html_e( 'Jobs queued', 'seo-command-center' ); ?></div></div>
 		<div class="scc-stat"><div class="scc-stat__num"><?php echo esc_html( (int) ( $jobs['completed'] ?? 0 ) ); ?></div><div class="scc-stat__label"><?php esc_html_e( 'Completed', 'seo-command-center' ); ?></div></div>
