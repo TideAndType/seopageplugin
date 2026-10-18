@@ -612,6 +612,15 @@ assert_eq( 'HTTP 400 — plain string err', $eerr->invoke( $lm2, array( 'error' 
 assert_eq( 'HTTP 400 — raw body here', $eerr->invoke( $lm2, null, 'raw body here', 400 ), 'raw-body fallback' );
 assert_eq( 'HTTP 400', $eerr->invoke( $lm2, null, '', 400 ), 'no detail fallback' );
 
+echo "\n== AI Manager: explicit provider allow-list ==\n";
+if ( ! class_exists( 'SCC_AI_Usage' ) ) {
+	class SCC_AI_Usage {
+		public static function record( $response, $operation = '' ) {}
+		public static function month_to_date_cost() { return 0.0; }
+	}
+}
+require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php';
+
 echo "\n== TideBridge Mac: no-tunnel authenticated job contract ==\n";
 // The bridge is intentionally only loaded after the AI manager interface.
 if ( ! class_exists( 'SCC_Local_Bridge' ) ) {
@@ -636,14 +645,7 @@ assert_true( false !== strpos( $bridge_source, '/mac/pair' ), 'Pairing endpoint 
 assert_true( false !== strpos( $bridge_source, 'hash_equals' ), 'Mac secret and pairing checks are timing-safe' );
 assert_true( false !== strpos( $bridge_source, 'intercept_generate' ), 'Native generate route can enqueue Mac job without Cloudflare request' );
 
-echo "\n== AI Manager: explicit provider allow-list ==\n";
-if ( ! class_exists( 'SCC_AI_Usage' ) ) {
-	class SCC_AI_Usage {
-		public static function record( $response, $operation = '' ) {}
-		public static function month_to_date_cost() { return 0.0; }
-	}
-}
-require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php';
+
 
 /**
  * Fake provider for manager routing tests. `$ok` decides success vs error.
