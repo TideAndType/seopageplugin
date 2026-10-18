@@ -72,6 +72,7 @@ require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-gemini-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-lmstudio-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-manager.php';
 require_once SCC_PLUGIN_DIR . 'includes/bridge/class-scc-local-bridge-async.php';
+require_once SCC_PLUGIN_DIR . 'includes/bridge/class-scc-local-bridge-browser.php';
 require_once SCC_PLUGIN_DIR . 'includes/bridge/class-scc-local-bridge.php';
 SCC_Local_Bridge::register();
 
