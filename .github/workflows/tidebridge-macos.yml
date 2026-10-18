@@ -47,8 +47,8 @@ jobs:
           </plist>
           PLIST
           SDK="$(xcrun --sdk macosx --show-sdk-path)"
-          swiftc -O -target arm64-apple-macos13 -sdk "$SDK" mac/TideBridgeApp.swift -o build/TideBridge-arm64
-          swiftc -O -target x86_64-apple-macos13 -sdk "$SDK" mac/TideBridgeApp.swift -o build/TideBridge-intel
+          swiftc -parse-as-library -O -target arm64-apple-macos13 -sdk "$SDK" mac/TideBridgeApp.swift -o build/TideBridge-arm64
+          swiftc -parse-as-library -O -target x86_64-apple-macos13 -sdk "$SDK" mac/TideBridgeApp.swift -o build/TideBridge-intel
           lipo -create -output build/TideBridge.app/Contents/MacOS/TideBridge build/TideBridge-arm64 build/TideBridge-intel
           chmod +x build/TideBridge.app/Contents/MacOS/TideBridge
           plutil -lint build/TideBridge.app/Contents/Info.plist
