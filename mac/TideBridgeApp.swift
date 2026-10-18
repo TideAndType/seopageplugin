@@ -352,7 +352,15 @@ final class BridgeAgent: ObservableObject {
         conf.timeoutIntervalForResource = 7200
         let localSession = URLSession(configuration: conf, delegate: redirects, delegateQueue: nil)
         defer { localSession.invalidateAndCancel() }
-        let (data, response) = try await localSession.data(for: req)
+        var (data, response) = try await localSession.data(for: req)
+        // Older LM Studio models sometimes reject sampling options. The
+        // WordPress provider already retries without them, so keep parity.
+        if let http = response as? HTTPURLResponse, http.statusCode == 400,
+           payload["temperature"] != nil {
+            payload.removeValue(forKey: "temperature")
+            req.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            (data, response) = try await localSession.data(for: req)
+        }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let msg = String(data: data.prefix(450), encoding: .utf8) ?? "No response"
             throw BridgeProblem.message("LM Studio failed: \(msg)")
