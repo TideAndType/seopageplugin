@@ -142,6 +142,9 @@ class SCC_Local_Bridge_Async {
     /** Called after validating the per-site Mac token. */
     public static function complete_job( WP_REST_Request $request ) {
         $id = sanitize_key( (string) $request->get_param( 'id' ) );
+        if ( 0 === strpos( $id, 'br_' ) ) {
+            return SCC_Local_Bridge_Browser::status( $request );
+        }
         if ( ! preg_match( '/^ai_[a-f0-9]{32}$/', $id ) ) {
             return new WP_Error( 'scc_mac_job_id', 'Invalid AI job identifier.', array( 'status' => 400 ) );
         }
