@@ -98,6 +98,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/local-grid/start',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'local_grid_start' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/browser-runtime/test',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1318,6 +1328,33 @@ class SCC_REST {
 				'saved'       => true,
 			)
 		);
+	}
+
+	/**
+	 * Start a local Maps grid through TideBridge's short, resumable REST jobs.
+	 * Uses exactly the same argument sanitization as the legacy Growth Lab form.
+	 * The shared admin client retries this request after each local scanner
+	 * response until the grid is submitted (or DataForSEO handles a fallback).
+	 */
+	public function local_grid_start( WP_REST_Request $request ) {
+		if ( ! class_exists( 'SCC_Local_Grid' ) ) {
+			return $this->fail( 'scc_grid_unavailable', __( 'Local Maps Grid is unavailable.', 'seo-command-center' ), 500 );
+		}
+		$p = $request->get_json_params();
+		$p = is_array( $p ) ? $p : $request->get_params();
+		$r = SCC_Local_Grid::scan(
+			array(
+				'keyword'       => sanitize_text_field( (string) ( $p['keyword'] ?? '' ) ),
+				'business_name' => sanitize_text_field( (string) ( $p['business_name'] ?? '' ) ),
+				'location'      => sanitize_text_field( (string) ( $p['location'] ?? '' ) ),
+				'coverage'      => sanitize_key( (string) ( $p['coverage'] ?? 'city' ) ),
+				'domain'        => sanitize_text_field( (string) ( $p['domain'] ?? '' ) ),
+				'place_id'      => sanitize_text_field( (string) ( $p['place_id'] ?? '' ) ),
+			),
+			true
+		);
+		if ( is_wp_error( $r ) ) { return $r; }
+		return $this->ok( $r );
 	}
 
 	/**
