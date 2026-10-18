@@ -215,6 +215,13 @@ class SCC_Local_Bridge {
         foreach ( self::job_ids() as $id ) {
             $job = self::job( $id );
             if ( ! $job ) { continue; }
+            // Completed local inference should be finalized without re-running
+            // the model if the Mac lost its connection during the save step.
+            if ( 'ready' === ( $job['state'] ?? '' ) && ! empty( $job['result'] ) && ! empty( $job['lease'] ) ) {
+                return self::response( array( 'job' => array(
+                    'id' => $id, 'lease' => $job['lease'], 'finalize_only' => true,
+                ) ) );
+            }
             if ( 'working' === ( $job['state'] ?? '' ) && time() > (int) ( $job['lease_until'] ?? 0 ) ) {
                 $job['state'] = 'queued'; // Mac closed; return work to queue.
             }
@@ -277,10 +284,18 @@ class SCC_Local_Bridge {
         if ( 'done' === ( $job['state'] ?? '' ) ) {
             return self::response( array( 'state' => 'done', 'post_id' => (int) ( $job['post_id'] ?? 0 ) ) );
         }
-        if ( 'ready' !== ( $job['state'] ?? '' ) ) {
-            return new WP_Error( 'scc_mac_state', 'Model result not ready.', array( 'status' => 409 ) );
-        }
         $entry = SCC_Content_Plan::find( $id );
+        if ( 'finalizing' === ( $job['state'] ?? '' ) && $entry && ! empty( $entry['post_id'] ) && get_post( (int) $entry['post_id'] ) ) {
+            $job['state'] = 'done';
+            $job['post_id'] = (int) $entry['post_id'];
+            $job['result'] = ''; $job['request'] = array();
+            self::save_job( $id, $job );
+            delete_option( 'scc_mac_finalize_' . $id );
+            return self::response( array( 'state' => 'done', 'post_id' => $job['post_id'] ) );
+        }
+        if ( 'ready' !== ( $job['state'] ?? '' ) ) {
+            return new WP_Error( 'scc_mac_state', 'Model result is still being saved (or is not ready).', array( 'status' => 409 ) );
+        }
         if ( ! $entry ) { return new WP_Error( 'scc_mac_entry', 'Content plan entry deleted.', array( 'status' => 404 ) ); }
         if ( ! empty( $entry['post_id'] ) && get_post( (int) $entry['post_id'] ) ) {
             $job['state'] = 'done'; $job['post_id'] = (int) $entry['post_id'];
