@@ -3030,7 +3030,8 @@ class SCC_REST {
 				'post_type' => $post ? (string) $post->post_type : '',
 			) );
 		}
-		return $this->ok( array( 'done' => false ) );
+		$bridge = class_exists( 'SCC_Local_Bridge' ) ? SCC_Local_Bridge::status_for_entry( $id ) : array();
+		return $this->ok( array_merge( array( 'done' => false ), $bridge ) );
 	}
 
 	public function generate( WP_REST_Request $request ) {
