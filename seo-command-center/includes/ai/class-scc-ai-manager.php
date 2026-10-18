@@ -274,7 +274,7 @@ class SCC_AI_Manager {
 
 			// Once paired, the first-party TideBridge Mac app owns every LM Studio
 			// operation, not just article generation. Never send AI prompts to an
-			// old public Cloudflare URL in the background.
+			// obsolete public LM Studio URL in the background.
 			if ( 'lmstudio' === $pid && class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured() ) {
 				return SCC_Local_Bridge_Async::complete( $req, $operation, (string) $req['model'] );
 			}
