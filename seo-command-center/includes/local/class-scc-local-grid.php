@@ -57,6 +57,10 @@ class SCC_Local_Grid {
 				set_transient( $cache_key, $resolved, self::GEO_CACHE_TTL );
 				return $resolved;
 			}
+			// The paired Mac is processing this geocode request. Do not treat
+			// an in-flight TideBridge job as scanner downtime or charge for a
+			// DataForSEO fallback before the local scanner has replied.
+			if ( 'scc_browser_pending' === $resolved->get_error_code() ) { return $resolved; }
 			$browser_error = $resolved;
 		}
 
@@ -125,6 +129,7 @@ class SCC_Local_Grid {
 				if ( ! is_wp_error( $browser ) ) {
 					return $browser;
 				}
+				if ( 'scc_browser_pending' === $browser->get_error_code() ) { return $browser; }
 				if ( 'browser' === SCC_Browser_Runtime::mode() ) {
 					return $browser;
 				}
