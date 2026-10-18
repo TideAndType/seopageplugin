@@ -619,7 +619,7 @@ if ( ! class_exists( 'SCC_Local_Bridge' ) ) {
 }
 $first_party_bridge = new SCC_Local_Bridge_Capture_Manager();
 $queue_answer = $first_party_bridge->complete( array(
-    'system' => 'Only the WordPress site's selected prompt',
+    'system' => "Only the WordPress site's selected prompt",
     'messages' => array( array( 'role' => 'user', 'content' => 'Write an article' ) ),
 ), 'content-generation' );
 assert_eq( 'scc_mac_queued', $queue_answer->error->get_error_code(), 'Capturing a TideOrbit generation never calls a remote AI server' );
