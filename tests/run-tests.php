@@ -3108,6 +3108,22 @@ assert_eq(
 	'business schema address becomes the default human-friendly Local Grid location'
 );
 $grid_view_simple = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/growth-lab.php' );
+
+assert_true( false === strpos( $grid_view_simple, 'trycloudflare.com' ) &&
+    false === strpos( $grid_view_simple, 'Cloudflare Tunnel URL' ), 'Growth Lab has no Cloudflare URL field or instructions' );
+assert_true( false !== strpos( $grid_view_simple, 'scc-growth-grid-form' ) &&
+    false !== strpos( $grid_view_simple, 'scc-growth-runtime-test-form' ),
+    'Growth Lab scanner forms have async TideBridge hooks' );
+$admin_growth_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+assert_true( false !== strpos( $admin_growth_js, '/local-grid/start' ), 'Growth Lab invokes async REST endpoint instead of blocking full page POST' );
+$rest_growth_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+assert_true( false !== strpos( $rest_growth_src, "'/local-grid/start'" ) &&
+    false !== strpos( $rest_growth_src, 'public function local_grid_start(' ), 'Local grid REST route and handler are registered' );
+$grid_runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/local/class-scc-local-grid.php' );
+assert_true( false !== strpos( $grid_runtime_src, "'scc_browser_pending' === \$browser->get_error_code()" ) &&
+    false !== strpos( $grid_runtime_src, "'scc_browser_pending' === \$resolved->get_error_code()" ),
+    'In-flight local scanner jobs never trigger premature DataForSEO fallback' );
+
 assert_true( false !== strpos( $grid_view_simple, 'Where should we scan?' ), 'Local Grid asks for a human-friendly scan area' );
 assert_true( false !== strpos( $grid_view_simple, 'Check my map rankings' ), 'Local Grid has a simple action label' );
 assert_true( false === strpos( $grid_view_simple, "name=\"lat\"" ) && false === strpos( $grid_view_simple, "name=\"lng\"" ), 'Local Grid no longer exposes latitude/longitude inputs' );
