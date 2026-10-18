@@ -312,10 +312,6 @@
 			if ( gscSite && gscSite.offsetParent !== null ) {
 				settings.gsc_site_url = gscSite.value;
 			}
-			var lmBase = document.getElementById( 'scc-lmstudio-base' );
-			if ( lmBase && lmBase.offsetParent !== null ) {
-				settings.lmstudio_base_url = lmBase.value;
-			}
 			var lmModel = document.getElementById( 'scc-lmstudio-model' );
 			if ( lmModel && lmModel.offsetParent !== null ) {
 				settings.lmstudio_model = lmModel.value;
@@ -323,10 +319,6 @@
 			var browserMode = document.getElementById( 'scc-browser-runtime-mode' );
 			if ( browserMode && browserMode.offsetParent !== null ) {
 				settings.browser_runtime_mode = browserMode.value;
-			}
-			var browserUrl = document.getElementById( 'scc-browser-runtime-url' );
-			if ( browserUrl && browserUrl.offsetParent !== null ) {
-				settings.browser_runtime_url = browserUrl.value;
 			}
 			payload.settings = settings;
 			setStatus( status, '…' );
@@ -3682,8 +3674,53 @@
 		}
 	}
 
+    // Growth Lab's local rank tracker forms use authenticated REST so the
+    // first-party Mac's async scanner jobs can complete without a page timeout.
+    function bindGrowthBridge() {
+        var testForm = document.getElementById( 'scc-growth-runtime-test-form' );
+        if ( testForm ) {
+            testForm.addEventListener( 'submit', function ( e ) {
+                e.preventDefault();
+                var btn = testForm.querySelector( 'button' );
+                var status = document.getElementById( 'scc-growth-runtime-status' );
+                if ( btn ) { btn.disabled = true; }
+                setStatus( status, 'Checking local scanner through TideBridge…' );
+                request( '/browser-runtime/test', { method: 'POST', data: {} } )
+                    .then( function () { setStatus( status, 'Connected. The local scanner is reachable through TideBridge.', 'is-ok' ); } )
+                    .catch( function ( err ) { setStatus( status, ( err && err.message ) || 'Scanner unavailable.', 'is-error' ); } )
+                    .then( function () { if ( btn ) { btn.disabled = false; } } );
+            } );
+        }
+        var gridForm = document.getElementById( 'scc-growth-grid-form' );
+        if ( gridForm ) {
+            gridForm.addEventListener( 'submit', function ( e ) {
+                e.preventDefault();
+                var btn = gridForm.querySelector( 'button.button-primary' );
+                var status = document.getElementById( 'scc-growth-grid-status' );
+                var args = {};
+                [ 'keyword', 'business_name', 'location', 'coverage', 'domain', 'place_id' ].forEach( function ( key ) {
+                    var input = gridForm.querySelector( '[name="' + key + '"]' );
+                    if ( input ) { args[ key ] = input.value; }
+                } );
+                if ( btn ) { btn.disabled = true; }
+                setStatus( status, 'Checking map rankings through TideBridge…' );
+                request( '/local-grid/start', { method: 'POST', data: args } )
+                    .then( function ( res ) {
+                        var data = res && res.data ? res.data : {};
+                        setStatus( status, data.message || 'Map rankings scan submitted. Refreshing results…', 'is-ok' );
+                        window.location.reload();
+                    } )
+                    .catch( function ( err ) {
+                        setStatus( status, ( err && err.message ) || 'Map scan unavailable.', 'is-error' );
+                        if ( btn ) { btn.disabled = false; }
+                    } );
+            } );
+        }
+    }
+
 	document.addEventListener( 'DOMContentLoaded', function () {
 		bindAnalysis();
+		bindGrowthBridge();
 		bindKeywordStrategy();
 		bindTopicBriefs();
 		bindGscWinsPlanButtons();
