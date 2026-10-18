@@ -1,34 +1,33 @@
-# TideBridge — your own Mac connection (no tunnel)
+# TideBridge 1.1.0 — your first-party Mac connection
 
-TideBridge connects the LM Studio already running on your Mac to TideOrbit installed on your WordPress site. It is a **native first-party Mac app**, not a Cloudflare/Tailscale/Nginx tunnel. There is no VPS, router configuration, domain to purchase, or third-party network agent.
+**No Cloudflare, Tailscale, ngrok, VPS, public tunnel address or router port forwarding.** TideBridge is a native macOS app. Your existing WordPress site stores pending jobs, and the Mac polls WordPress securely to collect work and deliver results.
 
-**How it works:** TideOrbit places a draft-generation request into its own WordPress database. TideBridge running on your Mac makes a short outbound HTTPS call every five seconds, claims the request, runs LM Studio at \`127.0.0.1:1234\` entirely on the Mac, and returns the result so the existing WordPress draft-generation pipeline can save a draft.
+## One-time setup
 
-## Setup
+1. Install **TideOrbit 1.99.9** on your WordPress site.
+2. Install **TideBridge 1.1.0** on the Mac that runs LM Studio.
+3. In WordPress: **TideOrbit → Settings → Connect my Mac**. Generate a six-digit pairing code.
+4. In TideBridge: paste the website's HTTPS URL, the code, and click **Connect Mac**. The app stores its token in macOS Keychain; no code is needed next time.
+5. In LM Studio: **Developer → Start Server**, choose/load a model, and click **Test LM Studio** in TideBridge. **Test WordPress Connection** should also pass.
+6. From TideOrbit choose LM Studio as the primary or per-feature AI provider and select your local model. **Detect models** now reads the Mac's heartbeat, rather than contacting the Mac from WordPress.
 
-1. Upgrade TideOrbit to **1.99.8** in WordPress.
-2. Download **TideBridge-Mac-1.0.0.dmg** and drag the app to **Applications**. It is currently an **ad-hoc signed, not notarized** build. The first launch may require **Control-click → Open**, or **System Settings → Privacy & Security → Open Anyway**. Do not disable Gatekeeper globally.
-3. Start LM Studio's local server in **Developer → Start Server** with your desired model loaded. It can listen only on localhost; the default \`http://127.0.0.1:1234/v1\` is correct.
-4. In WordPress open **TideOrbit → Settings → Connect my Mac** and select **Generate connection code**.
-5. In TideBridge paste your WordPress site URL (HTTPS) and six-digit code, then press **Connect Mac**. The private pairing secret is saved in your Mac's Keychain. The code expires in ten minutes and is one-time use.
-6. Open **TideOrbit → Create Content → Planned Content**, choose a topic and click **Generate draft**. You will see **Waiting for Mac → Mac generating → ready/finalizing → draft**. The browser may be closed while the Mac finishes. TideOrbit saves a WordPress draft after the model returns.
+## What runs through TideBridge
 
-## Supported in this first version
+- **Content Plan → Generate draft** still uses its existing durable queue and WordPress draft pipeline.
+- **Other TideOrbit admin AI tasks that call the shared LM Studio AI manager** (content briefs, site planning, AI writing/revisions, metadata, Elementor design, etc.) enqueue an AI request when invoked from the WordPress admin. The browser waits for the Mac to finish and then retries the original request using a signed, user-scoped idempotency key. Other provider choices (Claude/OpenAI/Gemini) are unchanged.
+- **Google Maps Rank Tracker:** if its own desktop scanner runs on the same Mac, TideBridge sends scanner calls only to \`http://127.0.0.1:4317\`. WordPress retains the *Rank Tracker* pairing key, but has no scanner tunnel URL. **Automatic mode** can still fall back to DataForSEO if the scanner is offline.
 
-- Planned Content → Generate draft using the installed Mac app and local LM Studio.
-- Automatic retrieval of full long-form output through the existing WordPress site, avoiding any Cloudflare tunnel's 524 proxy timeout on the LM Studio connection.
-- Secret is per WordPress site, hashed server-side, stored in macOS Keychain on the Mac. Revoke from the Connect my Mac page.
-- 90-minute browser polling window (the Mac can keep working if the browser closes).
-- Normal TideOrbit operation if the Mac is not paired. Other AI tools keep their existing provider setup.
+## Important boundaries
 
-## Important limitations
+- TideBridge is **not a public-purpose tunnel**. It is an authenticated pull-based job runner for TideOrbit.
+- The Mac must be awake, TideBridge open, and LM Studio's server running. Add TideBridge under macOS **System Settings → General → Login Items** if desired.
+- The WordPress admin async continuation is not yet a general-purpose queue for independent WordPress cron jobs or third-party plugins that invoke TideOrbit outside its admin UI. Those tasks receive an explicit error instead of silently using an old public endpoint.
+- A WordPress request may perform preliminary processing before yielding the AI task. TideBridge retries the same REST action after the result is available. Test this on staging for content that writes data or modifies an existing page.
+- Browser status waits can last up to 90 minutes. An interrupted connection, Mac sleep, server outage or expired WordPress session can still interrupt the original action; it cannot trigger a Cloudflare LM Studio proxy timeout because LM Studio runs entirely on the Mac.
+- The Mac app is ad-hoc signed, not Apple-notarized. On first launch, use **Control-click → Open** or **System Settings → Privacy & Security → Open Anyway** if macOS blocks it; do not disable Gatekeeper globally.
 
-- **No general-purpose public HTTP tunnel.** Our pull bridge supports TideOrbit jobs without exposing your Mac, which is safer and simpler for this use case.
-- The Mac must remain awake, TideBridge must stay running and LM Studio's server must be started. To start TideBridge at login, go to **System Settings → General → Login Items** and add TideBridge.
-- Content generation waits for LM Studio **on the Mac**, not through Cloudflare's request to LM Studio. However WordPress hosting/network failures or Mac sleep can still interrupt a job.
-- It doesn't yet route the rest of TideOrbit's AI operations (Topical Map, Design, Copilot) through the Mac. Those continue using current connections until supported in future revisions.
-- This is a first integration: test in WordPress staging, especially if you've had prior PHP plugin fatals. The Mac app's compiled build and PHP automated tests do not substitute for testing with your real WordPress and LM Studio.
+## Security and privacy
 
-## Security
+WordPress pairing is one-time, expires after 10 minutes and is rate limited. Subsequent requests use an encrypted HTTPS connection and a random per-site secret held in macOS Keychain and hashed server-side. The local LM Studio API is called exclusively over loopback. The Rank Tracker pairing key is passed only to the paired Mac and its local scanner. WordPress admin queue status is restricted to the authenticated user. No inbound port is opened on your Mac.
 
-The Mac makes outbound HTTPS requests only to the site address you provide; LM Studio requests go only to \`127.0.0.1\` or \`localhost\`. Network redirects are not followed; there are no open inbound ports. WordPress pairing codes expire in ten minutes with rate limiting. Successful pairing replaces the previous secret. Do not share the pairing code or the Mac's Keychain contents.
+The WordPress PHP CI and native macOS builds validate packaging and code contracts, **not** a real WordPress ↔ Mac ↔ LM Studio / Rank Tracker deployment. Verify end-to-end on staging before production.
