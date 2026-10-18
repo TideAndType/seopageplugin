@@ -95,6 +95,10 @@ class SCC_Local_Bridge {
         register_rest_route( self::NS, '/mac/pair', array(
             'methods' => 'POST', 'callback' => array( __CLASS__, 'pair' ), 'permission_callback' => '__return_true',
         ) );
+        register_rest_route( self::NS, '/mac/async-status', array(
+            'methods' => 'POST', 'callback' => array( 'SCC_Local_Bridge_Async', 'status' ),
+            'permission_callback' => array( 'SCC_Security', 'rest_permission' ),
+        ) );
         foreach ( array( 'next', 'complete', 'finalize', 'status' ) as $name ) {
             register_rest_route( self::NS, '/mac/' . $name, array(
                 'methods' => 'POST', 'callback' => array( __CLASS__, $name ), 'permission_callback' => array( __CLASS__, 'mac_permission' ),
@@ -212,6 +216,10 @@ class SCC_Local_Bridge {
 
     public static function next( WP_REST_Request $request ) {
         update_option( 'scc_mac_last_seen', time(), false );
+        $generic = SCC_Local_Bridge_Async::next();
+        if ( $generic ) {
+            return self::response( array( 'job' => $generic ) );
+        }
         foreach ( self::job_ids() as $id ) {
             $job = self::job( $id );
             if ( ! $job ) { continue; }
@@ -247,7 +255,11 @@ class SCC_Local_Bridge {
     }
 
     public static function complete( WP_REST_Request $request ) {
-        $id = absint( $request->get_param( 'id' ) );
+        $raw_id = (string) $request->get_param( 'id' );
+        if ( 0 === strpos( $raw_id, 'ai_' ) ) {
+            return SCC_Local_Bridge_Async::complete_job( $request );
+        }
+        $id = absint( $raw_id );
         $lease = (string) $request->get_param( 'lease' );
         $job = self::job( $id );
         if ( ! $job || ! $lease || ! hash_equals( (string) ( $job['lease'] ?? '' ), $lease ) ) {
