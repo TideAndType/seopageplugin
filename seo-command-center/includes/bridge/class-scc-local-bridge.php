@@ -216,6 +216,17 @@ class SCC_Local_Bridge {
 
     public static function next( WP_REST_Request $request ) {
         update_option( 'scc_mac_last_seen', time(), false );
+        // TideBridge discovers models on the same Mac, never via a public
+        // WordPress-to-LM-Studio URL. Cache the list for the Settings dropdown.
+        $models = $request->get_param( 'models' );
+        if ( is_array( $models ) && count( $models ) <= 100 ) {
+            $models = array_values( array_filter( array_unique( array_map( 'sanitize_text_field', $models ) ) ) );
+            $saved = get_option( 'scc_mac_models_cache', array() );
+            if ( ! is_array( $saved ) || $models !== (array) ( $saved['models'] ?? array() ) ||
+                time() - (int) ( $saved['updated'] ?? 0 ) > 45 ) {
+                update_option( 'scc_mac_models_cache', array( 'models' => $models, 'updated' => time() ), false );
+            }
+        }
         $generic = SCC_Local_Bridge_Async::next();
         if ( $generic ) {
             return self::response( array( 'job' => $generic ) );
