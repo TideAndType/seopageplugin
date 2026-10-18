@@ -1331,6 +1331,9 @@ class SCC_REST {
 		}
 		$result = SCC_Browser_Runtime::health();
 		if ( is_wp_error( $result ) ) {
+			// Preserve the job id and 503 status so the TideBridge admin client
+			// can resume the scanner health test after the Mac replies.
+			if ( 'scc_browser_pending' === $result->get_error_code() ) { return $result; }
 			return $this->fail( $result->get_error_code(), $result->get_error_message(), 502 );
 		}
 		return $this->ok( $result );
@@ -1344,6 +1347,18 @@ class SCC_REST {
 	 */
 	public function test_ai( WP_REST_Request $request ) {
 		$provider_id = $request->get_param( 'provider' );
+		if ( 'lmstudio' === $provider_id && class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured() ) {
+			$cache = get_option( 'scc_mac_models_cache', array() );
+			$active = time() - (int) ( is_array( $cache ) ? ( $cache['updated'] ?? 0 ) : 0 ) < 90;
+			if ( ! $active ) {
+				return $this->fail( 'scc_mac_offline', __( 'TideBridge Mac is not reporting its local model. Open TideBridge and select Test LM Studio.', 'seo-command-center' ), 503 );
+			}
+			return $this->ok( array(
+				'reply' => 'TideBridge is connected to your Mac. Models are discovered locally.',
+				'model' => implode( ', ', (array) ( $cache['models'] ?? array() ) ),
+				'latency_ms' => 0,
+			) );
+		}
 		$provider    = $this->ai()->get_provider( $provider_id );
 
 		if ( ! $provider ) {
