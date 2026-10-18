@@ -187,7 +187,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			'model'      => $model,
 			'messages'   => $messages,
 			'max_tokens' => $mt,
-			'stream'     => false,
+			'stream'     => ! empty( $request['stream'] ),
 		);
 		if ( isset( $request['temperature'] ) ) {
 			$body['temperature'] = (float) $request['temperature'];
@@ -201,6 +201,10 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		// round-trip. See $request['json'] handling above (adds the instruction).
 
 		$headers = array( 'content-type' => 'application/json' );
+		if ( ! empty( $body['stream'] ) ) {
+			$headers['accept'] = 'text/event-stream';
+			$headers['cache-control'] = 'no-cache';
+		}
 		$key     = $this->get_key();
 		if ( '' !== $key ) {
 			$headers['authorization'] = 'Bearer ' . $key;
@@ -310,9 +314,24 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			return $response;
 		}
 
-		$response->content       = isset( $data['choices'][0]['message']['content'] ) ? (string) $data['choices'][0]['message']['content'] : '';
-		$response->input_tokens  = isset( $data['usage']['prompt_tokens'] ) ? (int) $data['usage']['prompt_tokens'] : 0;
-		$response->output_tokens = isset( $data['usage']['completion_tokens'] ) ? (int) $data['usage']['completion_tokens'] : 0;
+		if ( ! empty( $body['stream'] ) ) {
+			$streamed = self::parse_streamed_chat( (string) wp_remote_retrieve_body( $http ) );
+			if ( ! $streamed['complete'] || '' === trim( $streamed['content'] ) ) {
+				$response->error = new WP_Error(
+					'scc_stream_incomplete',
+					__( 'LM Studio streaming did not return a complete answer. If Cloudflare is still timing out, the model may be taking too long to produce its first token (disable thinking or use a faster model). No partial WordPress draft was saved.', 'seo-command-center' ),
+					array( 'status' => 502 )
+				);
+				return $response;
+			}
+			$response->content = $streamed['content'];
+			$response->input_tokens = $streamed['input_tokens'];
+			$response->output_tokens = $streamed['output_tokens'];
+		} else {
+			$response->content       = isset( $data['choices'][0]['message']['content'] ) ? (string) $data['choices'][0]['message']['content'] : '';
+			$response->input_tokens  = isset( $data['usage']['prompt_tokens'] ) ? (int) $data['usage']['prompt_tokens'] : 0;
+			$response->output_tokens = isset( $data['usage']['completion_tokens'] ) ? (int) $data['usage']['completion_tokens'] : 0;
+		}
 		$response->cost          = 0.0;
 
 		return $response;
@@ -379,16 +398,89 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * @return array|WP_Error wp_remote_post result.
 	 */
 	protected function post_chat( $url, array $headers, array $body ) {
-		return wp_remote_post(
-			$url,
-			array(
-				'timeout'   => self::request_timeout(),
-				'headers'   => $headers,
-				'body'      => wp_json_encode( $body ),
-				// Local endpoints are typically plain HTTP; only verify for HTTPS.
-				'sslverify' => ( 0 === strpos( $url, 'https://' ) ),
-			)
+		$args = array(
+			'timeout'       => self::request_timeout(),
+			'headers'       => $headers,
+			'body'          => wp_json_encode( $body ),
+			'httpversion'   => '1.1',
+			'redirection'   => 0,
+			// Local endpoints are typically plain HTTP; verify HTTPS certificates.
+			'sslverify'     => ( 0 === strpos( $url, 'https://' ) ),
 		);
+		if ( empty( $body['stream'] ) ) {
+			return wp_remote_post( $url, $args );
+		}
+
+		// WP HTTP can stream an SSE response to a temporary file using its own
+		// validated transport. This avoids buffering every token at LM Studio
+		// before the Cloudflare proxy receives a single response byte, while
+		// preserving the existing synchronous WordPress create-draft contract.
+		$tmp = wp_tempnam( 'tideorbit-lmstudio-stream' );
+		if ( ! $tmp ) {
+			return new WP_Error( 'scc_stream_temp', __( 'Could not create a temporary file for LM Studio streaming.', 'seo-command-center' ) );
+		}
+		$args['stream'] = true;
+		$args['filename'] = $tmp;
+		$result = wp_remote_post( $url, $args );
+		if ( is_wp_error( $result ) ) {
+			if ( is_file( $tmp ) ) { wp_delete_file( $tmp ); }
+			return $result;
+		}
+		$raw = is_file( $tmp ) ? file_get_contents( $tmp ) : false;
+		if ( is_file( $tmp ) ) { wp_delete_file( $tmp ); }
+		if ( false === $raw ) {
+			return new WP_Error( 'scc_stream_read', __( 'Could not read the completed LM Studio stream.', 'seo-command-center' ) );
+		}
+		$result['body'] = $raw;
+		return $result;
+	}
+
+	/**
+	 * Reconstruct a complete OpenAI-compatible server-sent-events response.
+	 * Reasoning tokens are intentionally excluded from the published article.
+	 * If transport stops before a finish event, never treat partial JSON as
+	 * a successful post (even when WordPress received HTTP 200).
+	 *
+	 * @param string $raw Captured text/event-stream payload.
+	 * @return array {content, input_tokens, output_tokens, complete}
+	 */
+	public static function parse_streamed_chat( $raw ) {
+		$out = array( 'content' => '', 'input_tokens' => 0, 'output_tokens' => 0, 'complete' => false );
+		// Some OpenAI-compatible servers ignore stream=true and return regular
+		// chat JSON; preserve compatibility without another outbound request.
+		$full = json_decode( $raw, true );
+		if ( is_array( $full ) && isset( $full['choices'][0]['message']['content'] ) ) {
+			$out['content'] = (string) $full['choices'][0]['message']['content'];
+			$out['input_tokens'] = (int) ( $full['usage']['prompt_tokens'] ?? 0 );
+			$out['output_tokens'] = (int) ( $full['usage']['completion_tokens'] ?? 0 );
+			$out['complete'] = ! empty( $out['content'] );
+			return $out;
+		}
+
+		foreach ( preg_split( '/\\r\\n|\\r|\\n/', (string) $raw ) as $line ) {
+			$line = trim( $line );
+			if ( 0 !== strpos( $line, 'data:' ) ) { continue; }
+			$payload = trim( substr( $line, 5 ) );
+			if ( '[DONE]' === $payload ) {
+				$out['complete'] = true;
+				continue;
+			}
+			$event = json_decode( $payload, true );
+			if ( ! is_array( $event ) ) { continue; }
+			if ( isset( $event['choices'][0]['delta']['content'] ) && is_string( $event['choices'][0]['delta']['content'] ) ) {
+				$out['content'] .= $event['choices'][0]['delta']['content'];
+			}
+			$finish = $event['choices'][0]['finish_reason'] ?? null;
+			if ( 'stop' === $finish ) { $out['complete'] = true; }
+			if ( 'length' === $finish ) { $out['complete'] = false; }
+			if ( isset( $event['usage']['prompt_tokens'] ) ) {
+				$out['input_tokens'] = (int) $event['usage']['prompt_tokens'];
+			}
+			if ( isset( $event['usage']['completion_tokens'] ) ) {
+				$out['output_tokens'] = (int) $event['usage']['completion_tokens'];
+			}
+		}
+		return $out;
 	}
 
 	/**
