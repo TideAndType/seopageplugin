@@ -2,9 +2,9 @@
 /**
  * TideOrbit Browser Runtime.
  *
- * Routes browser-capable jobs to a paired Google-Maps-SERP instance (normally
- * exposed through a Cloudflare Tunnel) and falls back to DataForSEO in
- * Automatic mode when that browser runtime is unavailable.
+ * Routes browser-capable jobs to the local Rank Tracker through our paired
+ * TideBridge Mac app, without exposing any scanner endpoint to the internet.
+ * Falls back to DataForSEO in Automatic mode when the scanner is offline.
  *
  * @package SEO_Command_Center
  */
@@ -35,7 +35,8 @@ class SCC_Browser_Runtime {
 	}
 
 	public static function configured() {
-		return '' !== self::url() && '' !== self::key();
+		return class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured()
+			&& '' !== self::key();
 	}
 
 	public static function last_status() {
@@ -74,10 +75,11 @@ class SCC_Browser_Runtime {
 
 	public static function health() {
 		if ( ! self::configured() ) {
-			return new WP_Error( 'scc_browser_not_configured', __( 'Add your Cloudflare Tunnel URL and TideOrbit pairing key first.', 'seo-command-center' ) );
+			return new WP_Error( 'scc_browser_not_configured', __( 'Connect TideBridge on your Mac and enter the local Rank Tracker pairing key first.', 'seo-command-center' ) );
 		}
 		$result = self::request( 'GET', '/api/tideorbit/health' );
 		if ( is_wp_error( $result ) ) {
+			if ( 'scc_browser_pending' === $result->get_error_code() ) { return $result; }
 			self::set_status( 'offline', $result->get_error_message() );
 			return $result;
 		}
@@ -169,6 +171,13 @@ class SCC_Browser_Runtime {
 
 		$response = self::request( 'GET', '/api/tideorbit/scans/' . rawurlencode( $scan_id ) );
 		if ( is_wp_error( $response ) ) {
+			if ( 'scc_browser_pending' === $response->get_error_code() ) {
+				$job['next_poll'] = time() + self::POLL_SECONDS;
+				$jobs[ $scan_id ] = $job;
+				update_option( self::JOBS_OPTION, $jobs, false );
+				self::schedule_poll( $scan_id, self::POLL_SECONDS );
+				return;
+			}
 			$job['connection_errors'] = (int) ( $job['connection_errors'] ?? 0 ) + 1;
 			$job['status'] = 'bridge_unreachable';
 			$jobs[ $scan_id ] = $job;
@@ -273,7 +282,7 @@ class SCC_Browser_Runtime {
 			'average_rank'   => $found ? round( $rank_sum / $found, 1 ) : null,
 			'generated_at'   => current_time( 'mysql' ),
 			'cached'         => false,
-			'provider'       => 'TideOrbit Browser via Cloudflare Tunnel',
+			'provider'       => 'TideOrbit Browser via TideBridge Mac',
 			'engine'         => 'browser',
 			'scan_id'        => (string) ( $scan['id'] ?? $job['scan_id'] ?? '' ),
 		);
@@ -295,48 +304,14 @@ class SCC_Browser_Runtime {
 	}
 
 	protected static function request( $method, $path, array $body = null ) {
-		$base = self::url();
-		$key  = self::key();
-		if ( '' === $base || '' === $key ) {
-			return new WP_Error( 'scc_browser_not_configured', __( 'Browser Runtime is not paired.', 'seo-command-center' ) );
+		// No public local-scanner URL is used. The paired Mac calls its
+		// 127.0.0.1:4317 endpoint and returns the JSON via short HTTPS requests.
+		// This works with both dashboard retries and background cron polling.
+		if ( ! self::configured() ) {
+			return new WP_Error( 'scc_browser_not_configured',
+				__( 'Open TideBridge on your Mac, then connect the local Rank Tracker pairing key. No public tunnel is needed.', 'seo-command-center' ) );
 		}
-		$url = $base . '/' . ltrim( $path, '/' );
-		if ( class_exists( 'SCC_URL' ) ) {
-			$safe = SCC_URL::is_safe_outbound_url( $url );
-			if ( is_wp_error( $safe ) ) {
-				return $safe;
-			}
-		}
-
-		$args = array(
-			'method'      => strtoupper( (string) $method ),
-			'timeout'     => 15,
-			'redirection' => 2,
-			'headers'     => array(
-				'Accept'          => 'application/json',
-				'Content-Type'    => 'application/json',
-				'X-TideOrbit-Key' => $key,
-				'User-Agent'      => 'TideOrbit/' . ( defined( 'SCC_VERSION' ) ? SCC_VERSION : 'unknown' ),
-			),
-		);
-		if ( null !== $body ) {
-			$args['body'] = wp_json_encode( $body );
-		}
-
-		$response = wp_safe_remote_request( $url, $args );
-		if ( is_wp_error( $response ) ) {
-			return $response;
-		}
-		$code = (int) wp_remote_retrieve_response_code( $response );
-		$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
-		if ( $code < 200 || $code >= 300 ) {
-			$message = is_array( $decoded ) && ! empty( $decoded['error'] ) ? (string) $decoded['error'] : sprintf( 'Browser bridge returned HTTP %d.', $code );
-			return new WP_Error( 'scc_browser_http', $message, array( 'status' => $code ) );
-		}
-		if ( ! is_array( $decoded ) ) {
-			return new WP_Error( 'scc_browser_json', __( 'Browser bridge returned invalid JSON.', 'seo-command-center' ) );
-		}
-		return $decoded;
+		return SCC_Local_Bridge_Browser::request( $method, $path, (array) $body, self::key() );
 	}
 
 	protected static function schedule_poll( $scan_id, $delay ) {
