@@ -18,7 +18,8 @@ class SCC_Elementor_Inline {
 			return;
 		}
 		wp_enqueue_style( 'scc-elementor-inline', SCC_PLUGIN_URL . 'assets/css/elementor-inline.css', array(), SCC_VERSION );
-		wp_enqueue_script( 'scc-elementor-inline', SCC_PLUGIN_URL . 'assets/js/elementor-inline.js', array( 'elementor-editor', 'wp-api-fetch' ), SCC_VERSION, true );
+		wp_enqueue_script( 'scc-tidebridge-client', SCC_PLUGIN_URL . 'assets/js/tidebridge-client.js', array( 'wp-api-fetch' ), SCC_VERSION, true );
+		wp_enqueue_script( 'scc-elementor-inline', SCC_PLUGIN_URL . 'assets/js/elementor-inline.js', array( 'elementor-editor', 'scc-tidebridge-client' ), SCC_VERSION, true );
 		wp_enqueue_script( 'scc-elementor-section', SCC_PLUGIN_URL . 'assets/js/elementor-section.js', array( 'scc-elementor-inline' ), SCC_VERSION, true );
 		wp_localize_script( 'scc-elementor-inline', 'SCCElementorInline', array(
 			'postId' => $post_id,
