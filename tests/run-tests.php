@@ -583,6 +583,10 @@ assert_eq( true, $regular['complete'], 'streaming transport tolerates servers th
 assert_eq( 'normal JSON', $regular['content'], 'regular JSON compatibility preserves generated text' );
 $manager_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php' );
 assert_true( false !== strpos( $manager_source, "if ( 'content-generation' === " ), 'LM Studio content generation enables streaming by default' );
+$lm_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/ai/class-scc-lmstudio-provider.php' );
+assert_true( false !== strpos( $lm_source, "tempnam( get_temp_dir()," ), 'LM Studio stream creates temp file without wp-admin-only helper' );
+assert_true( false === strpos( $lm_source, 'wp_tempnam(' ), 'REST stream transport never depends on admin-only wp_tempnam function' );
+
 
 echo "\n== GSC field-status diagnostics ==\n";
 $GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'x' );

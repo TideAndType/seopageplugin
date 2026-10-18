@@ -415,7 +415,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		// validated transport. This avoids buffering every token at LM Studio
 		// before the Cloudflare proxy receives a single response byte, while
 		// preserving the existing synchronous WordPress create-draft contract.
-		$tmp = wp_tempnam( 'tideorbit-lmstudio-stream' );
+		$tmp = tempnam( get_temp_dir(), 'tideorbit-sse-' );
 		if ( ! $tmp ) {
 			return new WP_Error( 'scc_stream_temp', __( 'Could not create a temporary file for LM Studio streaming.', 'seo-command-center' ) );
 		}
