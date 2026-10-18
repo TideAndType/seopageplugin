@@ -35,7 +35,7 @@ class SCC_Local_Bridge_Browser {
         $now = time();
         // Reuse a recent response when a browser/cron callback is retried,
         // while ensuring subsequent scan-status polls fetch fresh data.
-        $interval = 'GET' === $method ? 15 : 300;
+        $interval = 'GET' === $method ? 60 : 300;
         $bucket = (int) floor( $now / $interval );
         $id = 'br_' . substr( hash_hmac( 'sha256',
             wp_json_encode( array( $method, $path, $body, $bucket ) ), wp_salt( 'auth' ) ), 0, 32 );
