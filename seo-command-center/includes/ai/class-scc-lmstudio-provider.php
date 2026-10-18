@@ -43,9 +43,15 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * @return string
 	 */
 	protected function base_url() {
-		$base = (string) SCC_Settings::get( 'lmstudio_base_url', self::DEFAULT_BASE );
-		$base = trim( $base );
-		return '' !== $base ? untrailingslashit( $base ) : self::DEFAULT_BASE;
+		// WordPress never contacts remote/local-model tunnel URLs. When LM Studio
+		// runs on another machine, the paired TideBridge Mac app is required.
+		// Retain loopback compatibility for a genuine co-hosted WordPress install.
+		$base = trim( (string) SCC_Settings::get( 'lmstudio_base_url', self::DEFAULT_BASE ) );
+		$host = wp_parse_url( $base, PHP_URL_HOST );
+		if ( ! in_array( strtolower( (string) $host ), array( 'localhost', '127.0.0.1', '::1' ), true ) ) {
+			return self::DEFAULT_BASE;
+		}
+		return untrailingslashit( $base );
 	}
 
 	/**
