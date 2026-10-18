@@ -71,7 +71,6 @@ class SCC_Activator {
 			'openai_model'          => 'gpt-4o',
 			'gemini_model'          => 'gemini-flash-latest',
 			'lmstudio_model'        => 'local-model',
-			'lmstudio_base_url'     => 'http://localhost:1234/v1',
 			'lmstudio_timeout'      => 600,
 			'competitor_crawl_budget' => 45,
 			'generation_unlimited_tokens' => false,
@@ -111,7 +110,6 @@ class SCC_Activator {
 			'gsc_site_url'           => '',
 			// Browser Runtime: Automatic prefers paired Chromium and falls back to DataForSEO.
 			'browser_runtime_mode'    => 'auto',
-			'browser_runtime_url'     => '',
 			// Publishing.
 			'draft_by_default'      => true,
 			'auto_publish'          => false,
