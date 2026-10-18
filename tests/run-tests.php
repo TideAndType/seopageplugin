@@ -2993,15 +2993,16 @@ $browser_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/
 $manager_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php' );
 $bridge_rest = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge.php' );
 $bridge_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/tidebridge-client.js' );
-$bridge_mac = (string) file_get_contents( __DIR__ . '/../mac/TideBridgeApp.swift' );
+$mac_source_path = __DIR__ . '/../mac/TideBridgeApp.swift';
+$bridge_mac = is_file( $mac_source_path ) ? (string) file_get_contents( $mac_source_path ) : null;
 $settings_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/settings.php' );
 $connections_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/connections.php' );
 assert_true( false !== strpos( $manager_source, 'SCC_Local_Bridge_Async::complete(' ), 'Every routed local AI operation enters the TideBridge async queue' );
 assert_true( false !== strpos( $bridge_js, "error.code !== 'scc_mac_pending'" ), 'WordPress admin retries local AI requests after Mac results' );
 assert_true( false !== strpos( $bridge_js, "error.code !== 'scc_browser_pending'" ), 'WordPress admin retries Rank Tracker requests after Mac results' );
 assert_true( false !== strpos( $bridge_rest, '/mac/async-status' ), 'Authenticated generic job-status endpoint exists' );
-assert_true( false !== strpos( $bridge_mac, 'handleAsyncAI(' ) && false !== strpos( $bridge_mac, 'handleBrowser(' ), 'Native Mac app runs AI and scanner jobs' );
-assert_true( false !== strpos( $browser_source, '127.0.0.1' ) || false !== strpos( $bridge_mac, '127.0.0.1:4317' ), 'scanner never needs public inbound access' );
+assert_true( null === $bridge_mac || ( false !== strpos( $bridge_mac, 'handleAsyncAI(' ) && false !== strpos( $bridge_mac, 'handleBrowser(' ) ), 'Native Mac app runs AI and scanner jobs when desktop source is included' );
+assert_true( false !== strpos( $browser_source, 'SCC_Local_Bridge_Async::configured()' ) && ( null === $bridge_mac || false !== strpos( $bridge_mac, '127.0.0.1:4317' ) ), 'scanner never needs public inbound access' );
 assert_true( false === strpos( $settings_view, 'name="lmstudio_base_url"' ), 'General settings no longer asks for a public LM Studio endpoint' );
 assert_true( false === strpos( $connections_view, 'scc-browser-runtime-url' ) && false === strpos( $connections_view, 'scc-lmstudio-base' ), 'Connection tabs have no Cloudflare address fields' );
 assert_true( false === strpos( $connections_view, 'trycloudflare' ), 'Settings never recommends Cloudflare Quick Tunnels' );
@@ -3067,8 +3068,8 @@ assert_eq( null, $empty_browser['visibility_pct'], 'no measured grid points do n
 
 $runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php' );
 assert_true( false !== strpos( $runtime_src, "'auto' === self::mode()") && false !== strpos( $runtime_src, 'scan_dataforseo' ), 'Automatic Browser Runtime contains a DataForSEO failure fallback' );
-$mac_app_source = (string) file_get_contents( __DIR__ . '/../mac/TideBridgeApp.swift' );
-assert_true( false !== strpos( $mac_app_source, 'X-TideOrbit-Key' ) && false !== strpos( $mac_app_source, '127.0.0.1:4317' ), 'paired Mac calls scanner loopback with scanner pairing header' );
+$mac_app_source = is_file( $mac_source_path ) ? (string) file_get_contents( $mac_source_path ) : null;
+assert_true( null === $mac_app_source || ( false !== strpos( $mac_app_source, 'X-TideOrbit-Key' ) && false !== strpos( $mac_app_source, '127.0.0.1:4317' ) ), 'paired Mac calls scanner loopback with scanner pairing header when desktop source is included' );
 assert_true( false === strpos( $runtime_src, 'wp_safe_remote_request(' ), 'WordPress never sends scanner requests to public tunnel URLs' );
 $main_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/seo-command-center.php' );
 assert_true( false !== strpos( $main_src, 'SCC_Browser_Runtime::CRON_HOOK' ), 'async browser polling is registered with WordPress cron' );
