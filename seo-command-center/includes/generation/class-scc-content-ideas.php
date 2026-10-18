@@ -97,6 +97,7 @@ class SCC_Content_Ideas {
 			'pillars'          => array_values( array_unique( $pillars ) ),
 			'gsc_top_queries'  => array_slice( (array) ( $gsc['top_queries'] ?? array() ), 0, 40 ),
 			'gsc_quick_wins'   => array_slice( (array) ( $gsc['quick_wins'] ?? array() ), 0, 25 ),
+			'gsc_ranking_pages' => array_slice( (array) ( $gsc['ranking_pages'] ?? array() ), 0, 30 ),
 			'gsc_untapped'     => array_slice( (array) ( $gsc['untapped'] ?? array() ), 0, 25 ),
 			'count'            => $count,
 		);
@@ -119,6 +120,7 @@ class SCC_Content_Ideas {
 			. $refine_rule
 			. 'GROUND every idea in the provided context: infer the real business from existing_pages + business; '
 			. 'reuse REAL demand from gsc_top_queries / gsc_quick_wins / gsc_untapped for keywords where relevant; '
+			. 'gsc_ranking_pages identifies the actual URL ranking for a query. Improve that page for the same intent instead of creating another competing page; '
 			. 'and NEVER duplicate a page already in existing_pages OR planned_pages. If the request names a page TYPE (e.g. industry '
 			. 'pages, location pages, service pages, comparison pages), produce that type. For each page give: a '
 			. 'natural H1-style title; a click-optimized meta_title (<=60 chars, earns the click, no clickbait); a '
@@ -181,6 +183,7 @@ class SCC_Content_Ideas {
 			'gsc'              => ! empty( $gsc['connected'] ),
 			'gsc_status'       => (string) ( $gsc['status'] ?? 'not_connected' ),
 			'gsc_query_count'  => count( (array) ( $gsc['top_queries'] ?? array() ) ),
+			'gsc_ranking_pages' => count( (array) ( $gsc['ranking_pages'] ?? array() ) ),
 			'existing_pages'   => count( $existing ),
 			'planned_pages'    => count( $planned_ctx ),
 			'duplicates_removed' => $filtered,
