@@ -556,6 +556,34 @@ $lbase = new ReflectionMethod( 'SCC_LMStudio_Provider', 'base_url' );
 $lbase->setAccessible( true );
 assert_eq( 'http://localhost:1234/v1', $lbase->invoke( $lm ), 'default base url, trailing slash trimmed' );
 
+echo "\n== LM Studio streamed article transport ==\n";
+$make_sse = function ( array $delta, $finish = null ) {
+    return 'data: ' . wp_json_encode( array(
+        'choices' => array( array( 'delta' => $delta, 'finish_reason' => $finish ) ),
+    ) ) . "\n\n";
+};
+$event_chunks = $make_sse( array( 'content' => '{"title":"A",' ) )
+    . $make_sse( array( 'reasoning_content' => 'thinking stays private' ) )
+    . $make_sse( array( 'content' => '"content_html":"<p>Body</p>"}' ), 'stop' )
+    . 'data: ' . wp_json_encode( array( 'usage' => array( 'prompt_tokens' => 77, 'completion_tokens' => 130 ), 'choices' => array() ) ) . "\n\n"
+    . "data: [DONE]\n\n";
+$parsed_stream = SCC_LMStudio_Provider::parse_streamed_chat( $event_chunks );
+assert_eq( true, $parsed_stream['complete'], 'streamed content assembled only after finished response' );
+assert_eq( '{"title":"A","content_html":"<p>Body</p>"}', $parsed_stream['content'], 'streaming assembles JSON without including reasoning content' );
+assert_eq( 77, $parsed_stream['input_tokens'], 'streaming usage reads final prompt tokens' );
+assert_eq( 130, $parsed_stream['output_tokens'], 'streaming usage reads final output tokens' );
+$incomplete = SCC_LMStudio_Provider::parse_streamed_chat( $make_sse( array( 'content' => 'half an article' ) ) );
+assert_eq( false, $incomplete['complete'], 'incomplete SSE response can never become a published page' );
+$length = SCC_LMStudio_Provider::parse_streamed_chat( $make_sse( array( 'content' => 'truncated' ), 'length' ) . "data: [DONE]\n" );
+assert_eq( false, $length['complete'], 'token-limited response remains incomplete even with DONE event' );
+$regular = SCC_LMStudio_Provider::parse_streamed_chat( wp_json_encode( array(
+    'choices' => array( array( 'message' => array( 'content' => 'normal JSON' ) ) ),
+) ) );
+assert_eq( true, $regular['complete'], 'streaming transport tolerates servers that return regular chat JSON' );
+assert_eq( 'normal JSON', $regular['content'], 'regular JSON compatibility preserves generated text' );
+$manager_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php' );
+assert_true( false !== strpos( $manager_source, "if ( 'content-generation' === " ), 'LM Studio content generation enables streaming by default' );
+
 echo "\n== GSC field-status diagnostics ==\n";
 $GLOBALS['scc_test_options']['scc_credentials'] = array( 'gsc_client_id' => 'x' );
 $fs = SCC_GSC::field_status();

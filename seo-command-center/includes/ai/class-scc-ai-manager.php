@@ -263,6 +263,13 @@ class SCC_AI_Manager {
 			// every LM Studio operation regardless of any step-specific budget.
 			if ( 'lmstudio' === $pid ) {
 				$req['max_tokens'] = -1;
+				// Long article generation must not wait to return a complete JSON
+				// response before Cloudflare sees any bytes. LM Studio supports
+				// OpenAI-compatible SSE streaming; WordPress captures the stream
+				// until it finishes and only then saves the draft as before.
+				if ( 'content-generation' === $operation ) {
+					$req['stream'] = true;
+				}
 			}
 
 			$response = $provider->complete( $req );
