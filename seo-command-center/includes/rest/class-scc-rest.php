@@ -1403,6 +1403,19 @@ class SCC_REST {
 		$params = is_array( $params ) ? $params : array();
 		$base   = isset( $params['base_url'] ) ? esc_url_raw( trim( (string) $params['base_url'] ) ) : '';
 
+		// When paired, models are discovered locally by the native Mac agent.
+		// Never contact an old public LM Studio endpoint from WordPress.
+		if ( class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured() ) {
+			$cache = get_option( 'scc_mac_models_cache', array() );
+			$models = is_array( $cache ) ? (array) ( $cache['models'] ?? array() ) : array();
+			$recent = is_array( $cache ) && time() - (int) ( $cache['updated'] ?? 0 ) < 90;
+			return $this->ok( array(
+					'ok' => (bool) $recent,
+					'models' => $recent ? $models : array(),
+					'base' => 'TideBridge Mac',
+					'error' => $recent ? '' : __( 'Open TideBridge on your Mac and select Test LM Studio to refresh the available models.', 'seo-command-center' ),
+			) );
+		}
 		$provider = $this->ai()->get_provider( 'lmstudio' );
 		if ( ! $provider ) {
 			return $this->fail( 'no_provider', __( 'LM Studio provider unavailable.', 'seo-command-center' ), 500 );
