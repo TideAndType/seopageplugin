@@ -123,15 +123,22 @@ class SCC_Keyword_Strategy {
 	 * @return array {connected:bool, top_queries:array, quick_wins:array}
 	 */
 	public static function gsc_signals() {
-		$out = array( 'connected' => false, 'top_queries' => array(), 'quick_wins' => array(), 'untapped' => array() );
+		$out = array( 'connected' => false, 'status' => 'not_connected', 'top_queries' => array(), 'quick_wins' => array(), 'untapped' => array() );
 		if ( ! class_exists( 'SCC_GSC' ) || ! SCC_GSC::is_connected() ) {
 			return $out;
 		}
+		$out['connected'] = true;
 		$rows = SCC_GSC::query( '', array( 'query' ), 90, 500 );
-		if ( is_wp_error( $rows ) || empty( $rows ) ) {
+		if ( is_wp_error( $rows ) ) {
+			$out['status'] = 'query_failed';
+			$out['error'] = $rows->get_error_message();
 			return $out;
 		}
-		$out['connected'] = true;
+		if ( empty( $rows ) ) {
+			$out['status'] = 'no_query_data';
+			return $out;
+		}
+		$out['status'] = 'ready';
 
 		$queries = array();
 		foreach ( $rows as $row ) {
@@ -198,7 +205,13 @@ class SCC_Keyword_Strategy {
 			if ( ! $post || ! in_array( $post->post_type, array( 'page', 'post' ), true ) ) { continue; }
 			$title = trim( (string) get_the_title( $pid ) );
 			$path  = self::normalize_site_path( (string) wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH ) );
-			if ( '' === $title || '' === $path || isset( $seen[ $path ] ) ) { continue; }
+			if ( '' === $title ) { continue; }
+			// Unsaved permalink structures can return /?p=ID for a draft.
+			// Never merge unrelated draft ideas into one '/' inventory entry.
+			if ( '/' === $path && 'publish' !== $post->post_status ) {
+				$path = '/__draft-' . (int) $pid . '/';
+			}
+			if ( '' === $path || isset( $seen[ $path ] ) ) { continue; }
 			$seen[ $path ] = true;
 			$pages[] = array(
 				'title' => $title, 'path' => $path,
@@ -538,6 +551,9 @@ class SCC_Keyword_Strategy {
 		// Attach the real Search Console quick-win opportunities (measured data)
 		// so the map can surface them alongside the AI suggestions.
 		$map['gsc_connected']  = ! empty( $gsc['connected'] );
+		$map['gsc_status']     = (string) ( $gsc['status'] ?? 'not_connected' );
+		$map['gsc_error']      = isset( $gsc['error'] ) ? (string) $gsc['error'] : '';
+		$map['gsc_queries_used'] = count( (array) ( $gsc['top_queries'] ?? array() ) );
 		$map['gsc_quick_wins'] = isset( $gsc['quick_wins'] ) ? $gsc['quick_wins'] : array();
 
 		$strategy_id = SCC_DB::insert(
@@ -675,6 +691,7 @@ class SCC_Keyword_Strategy {
 				$c['matched_existing_title'] = $match['title'];
 				$c['coverage_match']         = $match['match_type'];
 				$c['wp_post_type']           = $by_path[ $match['path'] ]['post_type'] ?? 'unknown';
+				if ( 'post' === $c['wp_post_type'] ) { $c['page_type'] = 'article'; }
 				$c['wp_post_status']         = $by_path[ $match['path'] ]['post_status'] ?? 'publish';
 				$seen[ $match['path'] ]      = true;
 			} else {
