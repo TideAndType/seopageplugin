@@ -13,6 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 $clusters = isset( $map['clusters'] ) ? (array) $map['clusters'] : array();
 $existing_count = isset( $map['existing_count'] ) ? (int) $map['existing_count'] : count( array_filter( $clusters, function ( $c ) { return isset( $c['status'] ) && 'existing' === $c['status']; } ) );
 $new_count      = isset( $map['new_count'] ) ? (int) $map['new_count'] : ( count( $clusters ) - $existing_count );
+$planned_count  = isset( $map['planned_count'] ) ? (int) $map['planned_count'] : 0;
 ?>
 <?php
 $provider_labels = array( 'lmstudio' => 'LM Studio', 'gemini' => 'Google Gemini', 'claude' => 'Anthropic Claude', 'openai' => 'OpenAI' );
@@ -29,9 +30,10 @@ if ( '' !== $gen_by ) :
 		<?php
 		echo esc_html( sprintf(
 			/* translators: 1: new count, 2: existing count */
-			__( 'Showing %1$d new opportunity(ies). Your %2$d existing page(s) were used to avoid duplicates and aren’t listed here.', 'seo-command-center' ),
+			__( '%1$d genuinely new opportunities. %2$d already on the site; %3$d already saved to Planned Content.', 'seo-command-center' ),
 			$new_count,
-			$existing_count
+			$existing_count,
+			$planned_count
 		) );
 		?>
 	</p>
@@ -40,12 +42,20 @@ if ( '' !== $gen_by ) :
 	<p class="scc-note"><?php echo esc_html( $map['notes'] ); ?></p>
 <?php endif; ?>
 
+<?php if ( 'ready' === ( $map['gsc_status'] ?? '' ) ) : ?>
+	<p class="scc-note"><strong><?php esc_html_e( 'Google Search Console:', 'seo-command-center' ); ?></strong>
+		<?php echo esc_html( sprintf( __( 'Read %d real search queries (last 90 days); demand is used as evidence, not an automatic reason to create another page.', 'seo-command-center' ), (int) ( $map['gsc_queries_used'] ?? 0 ) ) ); ?></p>
+<?php elseif ( 'query_failed' === ( $map['gsc_status'] ?? '' ) ) : ?>
+	<p class="scc-note"><strong><?php esc_html_e( 'Search Console query failed:', 'seo-command-center' ); ?></strong> <?php echo esc_html( (string) ( $map['gsc_error'] ?? '' ) ); ?> <a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-settings&tab=seo' ) ); ?>"><?php esc_html_e( 'Check connection', 'seo-command-center' ); ?></a></p>
+<?php elseif ( 'no_query_data' === ( $map['gsc_status'] ?? '' ) ) : ?>
+	<p class="scc-note"><?php esc_html_e( 'Search Console is connected but returned no queries in the last 90 days. Recommendations used site content, not measured query demand.', 'seo-command-center' ); ?></p>
+<?php else : ?>
+	<p class="scc-note"><?php esc_html_e( 'Google Search Console not connected. Recommendations use site content; connect Search Console for measured queries.', 'seo-command-center' ); ?> <a href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-settings&tab=seo' ) ); ?>"><?php esc_html_e( 'Connect now', 'seo-command-center' ); ?></a></p>
+<?php endif; ?>
 <?php if ( ! empty( $map['gsc_connected'] ) ) : ?>
-	<p class="scc-note"><strong><?php esc_html_e( 'Grounded in Google Search Console:', 'seo-command-center' ); ?></strong>
-		<?php esc_html_e( 'suggestions below use your real search queries and impressions.', 'seo-command-center' ); ?></p>
 	<?php if ( ! empty( $map['gsc_quick_wins'] ) ) : ?>
 		<details class="scc-gsc-wins" open>
-			<summary><strong><?php esc_html_e( 'Search Console quick wins', 'seo-command-center' ); ?></strong> — <?php esc_html_e( 'queries you already rank on page 1-2 for (real data). Great candidates for a dedicated page.', 'seo-command-center' ); ?></summary>
+			<summary><strong><?php esc_html_e( 'Search Console quick wins', 'seo-command-center' ); ?></strong> — <?php esc_html_e( 'queries you already rank for. Usually optimize the page Google knows first, rather than creating a competing URL.', 'seo-command-center' ); ?></summary>
 			<table class="widefat striped scc-gsc-table" id="scc-gsc-wins-table">
 				<thead><tr>
 					<th><?php esc_html_e( 'Query', 'seo-command-center' ); ?></th>
@@ -63,14 +73,14 @@ if ( '' !== $gen_by ) :
 						<td><?php echo esc_html( number_format_i18n( (int) ( $w['clicks'] ?? 0 ) ) ); ?></td>
 						<td><?php echo esc_html( $w['position'] ?? '' ); ?></td>
 						<td>
-							<button type="button" class="button button-small button-primary scc-gsc-plan-btn" data-query="<?php echo esc_attr( $q ); ?>"><?php esc_html_e( 'Create page', 'seo-command-center' ); ?></button>
+							<a class="button button-small" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-opportunities&tab=architecture' ) ); ?>"><?php esc_html_e( 'Review existing coverage', 'seo-command-center' ); ?></a>
 							<span class="scc-inline-status scc-gsc-plan-status"></span>
 						</td>
 					</tr>
 				<?php endforeach; ?>
 				</tbody>
 			</table>
-			<p class="scc-note"><?php esc_html_e( '“Create page” adds this query to your Content Plan as a new article; open Content Plan to generate the draft.', 'seo-command-center' ); ?></p>
+			<p class="scc-note"><?php esc_html_e( 'These are queries where Google already shows your site. Review the current ranking page and strengthen it. Only make a new URL if Site Structure finds a genuinely different search intent.', 'seo-command-center' ); ?></p>
 		</details>
 	<?php endif; ?>
 <?php endif; ?>
@@ -103,7 +113,8 @@ $brief_button = function ( $node ) {
 <?php
 $any_shown = false;
 foreach ( $clusters as $c ) :
-	$is_existing = isset( $c['status'] ) && 'existing' === $c['status'];
+	$is_planned  = 'planned' === ( $c['status'] ?? '' );
+	$is_existing = 'existing' === ( $c['status'] ?? '' ) || $is_planned;
 	$priority    = isset( $c['priority'] ) ? $c['priority'] : 'medium';
 	$score       = isset( $c['authority_score'] ) ? (int) $c['authority_score'] : 0;
 
@@ -111,7 +122,7 @@ foreach ( $clusters as $c ) :
 	// not displayed. Keep an existing pillar only if it has new subtopics.
 	$new_subs = array();
 	foreach ( (array) ( $c['subtopics'] ?? array() ) as $s ) {
-		if ( ! ( isset( $s['status'] ) && 'existing' === $s['status'] ) ) {
+		if ( ! in_array( (string) ( $s['status'] ?? '' ), array( 'existing', 'planned' ), true ) ) {
 			$new_subs[] = $s;
 		}
 	}
@@ -124,7 +135,7 @@ foreach ( $clusters as $c ) :
 		<div class="scc-cluster__head">
 			<strong><?php echo esc_html( $c['service'] ); ?><?php echo ! empty( $c['location'] ) ? ' — ' . esc_html( $c['location'] ) : ''; ?></strong>
 			<?php if ( $is_existing ) : ?>
-				<span class="scc-badge"><?php esc_html_e( 'Your page', 'seo-command-center' ); ?></span>
+				<span class="scc-badge"><?php echo $is_planned ? esc_html__( 'Already planned', 'seo-command-center' ) : esc_html__( 'Your page', 'seo-command-center' ); ?></span>
 			<?php else : ?>
 				<span class="scc-badge"><?php esc_html_e( 'Gap · new', 'seo-command-center' ); ?></span>
 			<?php endif; ?>
