@@ -1,0 +1,66 @@
+name: Build TideBridge Mac App
+on:
+  push:
+    branches: [main, "feature/tidebridge-native-mac-pull-1998"]
+    paths:
+      - "mac/**"
+      - ".github/workflows/tidebridge-macos.yml"
+  pull_request:
+    paths:
+      - "mac/**"
+      - ".github/workflows/tidebridge-macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Native Mac app (no third-party runtime)
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build universal native Swift app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/TideBridge.app/Contents/MacOS
+          cat > build/TideBridge.app/Contents/Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>TideBridge</string>
+            <key>CFBundleDisplayName</key><string>TideBridge</string>
+            <key>CFBundleIdentifier</key><string>com.tideandtype.TideBridge</string>
+            <key>CFBundleExecutable</key><string>TideBridge</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>1.0.0</string>
+            <key>CFBundleVersion</key><string>1</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>NSAppTransportSecurity</key>
+            <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+          </dict>
+          </plist>
+          PLIST
+          SDK="$(xcrun --sdk macosx --show-sdk-path)"
+          swiftc -O -target arm64-apple-macos13 -sdk "$SDK" mac/TideBridgeApp.swift -o build/TideBridge-arm64
+          swiftc -O -target x86_64-apple-macos13 -sdk "$SDK" mac/TideBridgeApp.swift -o build/TideBridge-intel
+          lipo -create -output build/TideBridge.app/Contents/MacOS/TideBridge build/TideBridge-arm64 build/TideBridge-intel
+          chmod +x build/TideBridge.app/Contents/MacOS/TideBridge
+          plutil -lint build/TideBridge.app/Contents/Info.plist
+          codesign --force --deep --sign - build/TideBridge.app
+          codesign --verify --verbose=2 build/TideBridge.app
+          ditto -c -k --sequesterRsrc --keepParent build/TideBridge.app build/TideBridge-Mac-1.0.0.zip
+          hdiutil create -volname TideBridge -srcfolder build/TideBridge.app -ov -format UDZO build/TideBridge-Mac-1.0.0.dmg
+      - name: Upload installable Mac app
+        uses: actions/upload-artifact@v4
+        with:
+          name: TideBridge-Mac-App-1.0.0
+          path: |
+            build/TideBridge-Mac-1.0.0.zip
+            build/TideBridge-Mac-1.0.0.dmg
+          if-no-files-found: error
