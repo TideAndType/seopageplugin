@@ -261,13 +261,31 @@ final class BridgeAgent: ObservableObject {
 
     private func handle(_ job: [String: Any], root: URL, token: String) async {
         guard let id = job["id"] as? Int,
-              let lease = job["lease"] as? String,
-              let request = job["request"] as? [String: Any] else {
+              let lease = job["lease"] as? String else {
             status = "WordPress returned an invalid job."
             return
         }
-        status = "LM Studio is writing article #\(id)…"
         let base: [String: Any] = ["id": id, "lease": lease]
+        if job["finalize_only"] as? Bool == true {
+            status = "Finishing article #\(id) previously written on this Mac…"
+            do {
+                let saved = try await post(root: root, path: "finalize", values: base, secret: token)
+                if saved["state"] as? String == "done" {
+                    lastJob = "Article #\(id) saved to WordPress as post #\(saved["post_id"] ?? 0)."
+                    status = "Connected. Waiting for another TideOrbit article…"
+                } else {
+                    status = (saved["error"] as? String) ?? "WordPress did not finish saving the article."
+                }
+            } catch {
+                status = "Saving article #\(id): \(error.localizedDescription). Retrying…"
+            }
+            return
+        }
+        guard let request = job["request"] as? [String: Any] else {
+            status = "WordPress returned a job without an AI prompt."
+            return
+        }
+        status = "LM Studio is writing article #\(id)…"
         do {
             let result = try await generate(request)
             var complete = base
