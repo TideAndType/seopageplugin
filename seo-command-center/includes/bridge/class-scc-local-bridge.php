@@ -22,20 +22,23 @@ class SCC_Local_Bridge {
     const MAX_JOBS = 30;
 
     public static function register() {
-        // One-time cleanup of obsolete public tunnel endpoints when this
-        // site's first-party Mac connection already exists. Never delete
-        // unrelated Cloudflare/CDN configuration or any Rank Tracker secret.
-        if ( get_option( self::TOKEN_KEY, '' ) ) {
-            $settings = get_option( 'scc_settings', array() );
-            if ( is_array( $settings ) &&
-                ( isset( $settings['lmstudio_base_url'] ) || isset( $settings['browser_runtime_url'] ) ) ) {
-                unset( $settings['lmstudio_base_url'], $settings['browser_runtime_url'] );
-                update_option( 'scc_settings', $settings, false );
-            }
-        }
+        // Keep bootstrap hook-only: REST and WP options APIs are not guaranteed
+        // to exist during the lazy-boot contract test or early WP plugin load.
+        add_action( 'init', array( __CLASS__, 'cleanup_legacy_urls' ), 30 );
         add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
         add_filter( 'rest_pre_dispatch', array( __CLASS__, 'intercept_generate' ), 30, 3 );
         add_action( 'admin_menu', array( __CLASS__, 'admin_menu' ), 99 );
+    }
+
+    /** Remove obsolete public AI and scanner addresses after WordPress loads. */
+    public static function cleanup_legacy_urls() {
+        if ( ! get_option( self::TOKEN_KEY, '' ) ) { return; }
+        $settings = get_option( 'scc_settings', array() );
+        if ( is_array( $settings ) &&
+            ( isset( $settings['lmstudio_base_url'] ) || isset( $settings['browser_runtime_url'] ) ) ) {
+            unset( $settings['lmstudio_base_url'], $settings['browser_runtime_url'] );
+            update_option( 'scc_settings', $settings, false );
+        }
     }
 
     public static function admin_menu() {
