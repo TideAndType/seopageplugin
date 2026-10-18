@@ -289,6 +289,73 @@ final class BridgeAgent: ObservableObject {
         }
     }
 
+    private func handleBrowser(_ job: [String: Any], root: URL, token: String) async {
+        guard let id = job["id"] as? String, id.hasPrefix("br_"),
+              let lease = job["lease"] as? String,
+              let request = job["request"] as? [String: Any] else {
+            status = "Invalid local Rank Tracker request from WordPress."
+            return
+        }
+        status = "TideBridge is contacting the local Google Maps Rank Tracker…"
+        var reply: [String: Any] = ["id": id, "lease": lease]
+        do {
+            reply["content"] = try await fetchLocalScanner(request)
+            _ = try await post(root: root, path: "complete", values: reply, secret: token)
+            status = "Local Rank Tracker response delivered."
+        } catch {
+            status = "Local Rank Tracker: " + error.localizedDescription
+            lastJob = status
+            reply["error"] = status
+            _ = try? await post(root: root, path: "complete", values: reply, secret: token)
+        }
+    }
+
+    private func fetchLocalScanner(_ request: [String: Any]) async throws -> String {
+        guard let path = request["path"] as? String,
+              path.hasPrefix("/api/tideorbit/"),
+              !path.contains(".."),
+              let components = URLComponents(string: "http://127.0.0.1:4317" + path),
+              components.host == "127.0.0.1",
+              let url = components.url,
+              let method = request["method"] as? String,
+              method == "GET" || method == "POST",
+              let key = request["key"] as? String,
+              !key.isEmpty else {
+            throw BridgeProblem.message("Invalid local scanner job, path or pairing key.")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(key, forHTTPHeaderField: "X-TideOrbit-Key")
+        if method == "POST" {
+            req.httpBody = try JSONSerialization.data(withJSONObject: request["body"] ?? [:])
+        }
+        let conf = URLSessionConfiguration.ephemeral
+        conf.timeoutIntervalForRequest = 25
+        conf.timeoutIntervalForResource = 40
+        let client = URLSession(configuration: conf, delegate: redirects, delegateQueue: nil)
+        defer { client.invalidateAndCancel() }
+        let body: Data
+        let response: URLResponse
+        do {
+            (body, response) = try await client.data(for: req)
+        } catch {
+            throw BridgeProblem.message(describeConnectionError(error, service: "Rank Tracker on your Mac (127.0.0.1:4317)", address: url.absoluteString))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw BridgeProblem.message("Rank Tracker did not return an HTTP response on localhost:4317.")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw BridgeProblem.message("Rank Tracker on localhost:4317 returned HTTP \(http.statusCode). Check the desktop scanner and pairing key.")
+        }
+        guard let value = try? JSONSerialization.jsonObject(with: body), JSONSerialization.isValidJSONObject(value),
+              let result = String(data: body, encoding: .utf8) else {
+            throw BridgeProblem.message("Rank Tracker returned invalid JSON.")
+        }
+        return result
+    }
+
     private func handleAsyncAI(_ job: [String: Any], root: URL, token: String) async {
         guard let id = job["id"] as? String, id.hasPrefix("ai_"),
               let lease = job["lease"] as? String,
@@ -315,6 +382,10 @@ final class BridgeAgent: ObservableObject {
     }
 
     private func handle(_ job: [String: Any], root: URL, token: String) async {
+        if job["kind"] as? String == "browser" {
+            await handleBrowser(job, root: root, token: token)
+            return
+        }
         if job["kind"] as? String == "ai" {
             await handleAsyncAI(job, root: root, token: token)
             return
