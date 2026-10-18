@@ -25,8 +25,9 @@ class SCC_Browser_Runtime {
 		return in_array( $mode, array( 'auto', 'browser', 'dataforseo' ), true ) ? $mode : 'auto';
 	}
 
+	/** No public scanner URL: TideBridge Mac owns local loopback access. */
 	public static function url() {
-		return untrailingslashit( trim( (string) SCC_Settings::get( 'browser_runtime_url', '' ) ) );
+		return '';
 	}
 
 	public static function key() {
