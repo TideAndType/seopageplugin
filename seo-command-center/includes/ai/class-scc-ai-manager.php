@@ -264,12 +264,19 @@ class SCC_AI_Manager {
 			if ( 'lmstudio' === $pid ) {
 				$req['max_tokens'] = -1;
 				// Long article generation must not wait to return a complete JSON
-				// response before Cloudflare sees any bytes. LM Studio supports
+				// response before a proxy receives data. LM Studio supports
 				// OpenAI-compatible SSE streaming; WordPress captures the stream
 				// until it finishes and only then saves the draft as before.
 				if ( 'content-generation' === $operation ) {
 					$req['stream'] = true;
 				}
+			}
+
+			// Once paired, the first-party TideBridge Mac app owns every LM Studio
+			// operation, not just article generation. Never send AI prompts to an
+			// old public Cloudflare URL in the background.
+			if ( 'lmstudio' === $pid && class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured() ) {
+				return SCC_Local_Bridge_Async::complete( $req, $operation, (string) $req['model'] );
 			}
 
 			$response = $provider->complete( $req );
