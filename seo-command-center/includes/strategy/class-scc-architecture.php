@@ -94,6 +94,12 @@ class SCC_Architecture {
 				);
 				$subnode = $this->resolve_existing( $subnode, $existing );
 
+				if ( 'planned' === ( $subnode['status'] ?? '' ) ) {
+					// The plan entry already exists. Do not downgrade it to a new page
+					// or permit another seed operation for the same topic.
+					$services[ $service ]['articles'][] = $subnode;
+					continue;
+				}
 				if ( $subnode['exists'] ) {
 					// Existing commercial pages are respected as existing pages;
 					// we simply stop recommending a duplicate.
@@ -219,6 +225,12 @@ class SCC_Architecture {
 		}
 
 		$node['exists'] = false;
+		if ( 'planned' === ( $node['status'] ?? '' ) ) {
+			$node['action'] = 'planned';
+			$node['page_candidate'] = false;
+			$node['rationale'] = __( 'Already saved under Create Content → Planned Content; generate the draft there rather than making another plan entry.', 'seo-command-center' );
+			return $node;
+		}
 		$node['status'] = 'new';
 		$node['action'] = 'create_page';
 		return $node;
