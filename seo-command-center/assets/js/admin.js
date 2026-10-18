@@ -1500,8 +1500,18 @@
 				// A returned error (bad AI output, transport error, etc.) is captured
 				// and surfaced instead of being hidden behind a generic timeout.
 				var genError = null;
+				var bridgeQueued = false;
 				request( '/generate', { method: 'POST', data: { entry_id: id } } )
-					.then( function ( res ) { showDone( res.data || {} ); } )
+					.then( function ( res ) {
+						var data = res.data || {};
+						if ( data.queued ) {
+							bridgeQueued = true;
+							setStatus( msg, 'Sent to TideBridge. Your Mac is generating this article; it will save as a WordPress draft when finished.' );
+							if ( statusCell ) { statusCell.textContent = 'Waiting for Mac'; }
+							return;
+						}
+						showDone( data );
+					} )
 					.catch( function ( err ) { genError = err && err.message ? err.message : null; loadGenDebug(); } );
 
 				// Poll until the plan entry gets its post_id (generation complete).
@@ -1510,7 +1520,7 @@
 				// because the server may still be finishing the draft.
 				var started = Date.now();
 				( function poll() {
-					var deadline = genError ? 90 * 1000 : 12 * 60 * 1000;
+					var deadline = bridgeQueued ? 90 * 60 * 1000 : ( genError ? 90 * 1000 : 12 * 60 * 1000 );
 					if ( settled || Date.now() - started > deadline ) {
 						if ( ! settled ) {
 							settled = true;
@@ -1526,6 +1536,17 @@
 						.then( function ( res ) {
 							var d = res.data || {};
 							if ( d.done ) { showDone( d ); return; }
+							if ( d.bridge_state === 'error' ) {
+								settled = true;
+								if ( statusCell ) { statusCell.textContent = 'error'; }
+								setStatus( msg, 'TideBridge: ' + ( d.bridge_error || 'Generation failed. Check the Mac app.' ), 'is-error' );
+								e.target.disabled = false;
+								return;
+							}
+							if ( d.bridge_state ) {
+								bridgeQueued = true;
+								if ( statusCell ) { statusCell.textContent = d.bridge_state === 'working' ? 'Mac generating' : d.bridge_state; }
+							}
 							window.setTimeout( poll, 4000 );
 						} )
 						.catch( function () { window.setTimeout( poll, 5000 ); } );
