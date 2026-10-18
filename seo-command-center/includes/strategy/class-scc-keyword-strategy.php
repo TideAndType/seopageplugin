@@ -757,10 +757,38 @@ class SCC_Keyword_Strategy {
 			$clusters[] = $injected;
 		}
 
-		// Existing pages first, then recommended gaps.
+		// A content plan entry is not another SEO gap. Distinguish planned
+		// content from live pages so the user never sees the same "new" suggestion
+		// simply because the draft has not been published.
+		if ( class_exists( 'SCC_Content_Plan' ) ) {
+			$taken = SCC_Content_Plan::taken_signatures();
+			foreach ( $clusters as &$cluster ) {
+				if ( 'new' === ( $cluster['status'] ?? '' ) && SCC_Content_Plan::is_taken( array(
+					'title' => $cluster['service'] ?? '',
+					'primary_keyword' => $cluster['primary_keyword'] ?? '',
+					'url' => $cluster['recommended_url'] ?? '',
+				), $taken ) ) {
+					$cluster['status'] = 'planned';
+					$cluster['rationale'] = __( 'Already saved in Planned Content; no duplicate needed.', 'seo-command-center' );
+				}
+				foreach ( (array) ( $cluster['subtopics'] ?? array() ) as $j => $subtopic ) {
+					if ( 'new' === ( $subtopic['status'] ?? '' ) && SCC_Content_Plan::is_taken( array(
+						'title' => $subtopic['title'] ?? '',
+						'primary_keyword' => $subtopic['primary_keyword'] ?? '',
+						'url' => $subtopic['recommended_url'] ?? '',
+					), $taken ) ) {
+						$cluster['subtopics'][ $j ]['status'] = 'planned';
+					}
+				}
+			}
+			unset( $cluster );
+		}
+
+		// Existing pages first, then planned entries, then genuinely new gaps.
 		usort( $clusters, function ( $a, $b ) {
-			$ax = ( 'existing' === $a['status'] ) ? 0 : 1;
-			$bx = ( 'existing' === $b['status'] ) ? 0 : 1;
+			$order = array( 'existing' => 0, 'planned' => 1, 'new' => 2 );
+			$ax = isset( $order[ $a['status'] ] ) ? $order[ $a['status'] ] : 2;
+			$bx = isset( $order[ $b['status'] ] ) ? $order[ $b['status'] ] : 2;
 			return $ax <=> $bx;
 		} );
 
@@ -768,21 +796,27 @@ class SCC_Keyword_Strategy {
 
 		// Counts span pillars AND subtopics (topicalmap-style topic totals).
 		$existing = 0;
+		$planned = 0;
 		$total    = 0;
 		foreach ( $clusters as $c ) {
 			$total++;
 			if ( 'existing' === $c['status'] ) {
 				$existing++;
+			} elseif ( 'planned' === $c['status'] ) {
+				$planned++;
 			}
 			foreach ( (array) ( $c['subtopics'] ?? array() ) as $s ) {
 				$total++;
 				if ( isset( $s['status'] ) && 'existing' === $s['status'] ) {
 					$existing++;
+				} elseif ( 'planned' === ( $s['status'] ?? '' ) ) {
+					$planned++;
 				}
 			}
 		}
 		$map['existing_count'] = $existing;
-		$map['new_count']      = $total - $existing;
+		$map['planned_count']  = $planned;
+		$map['new_count']      = $total - $existing - $planned;
 		$map['pillar_count']   = count( $clusters );
 		return $map;
 	}
