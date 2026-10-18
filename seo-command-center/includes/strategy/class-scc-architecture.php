@@ -134,6 +134,18 @@ class SCC_Architecture {
 		$tree = array();
 		foreach ( $services as $service_name => $group ) {
 			$seed = $group['seed'];
+			// An article-only cluster that is itself already planned must not
+			// spawn a synthetic NEW service page with the same topic title.
+			if ( null === $seed ) {
+				foreach ( $group['articles'] as $i => $article ) {
+					if ( 'planned' === ( $article['status'] ?? '' ) &&
+						strtolower( trim( (string) $article['title'] ) ) === strtolower( trim( (string) $service_name ) ) ) {
+						$seed = $article;
+						unset( $group['articles'][ $i ] );
+						break;
+					}
+				}
+			}
 			if ( null === $seed ) {
 				$seed = array(
 					'title'           => $service_name,
