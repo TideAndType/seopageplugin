@@ -446,6 +446,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 */
 	public static function parse_streamed_chat( $raw ) {
 		$out = array( 'content' => '', 'input_tokens' => 0, 'output_tokens' => 0, 'complete' => false );
+		$truncated = false;
 		// Some OpenAI-compatible servers ignore stream=true and return regular
 		// chat JSON; preserve compatibility without another outbound request.
 		$full = json_decode( $raw, true );
@@ -472,7 +473,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			}
 			$finish = $event['choices'][0]['finish_reason'] ?? null;
 			if ( 'stop' === $finish ) { $out['complete'] = true; }
-			if ( 'length' === $finish ) { $out['complete'] = false; }
+			if ( 'length' === $finish ) { $out['complete'] = false; $truncated = true; }
 			if ( isset( $event['usage']['prompt_tokens'] ) ) {
 				$out['input_tokens'] = (int) $event['usage']['prompt_tokens'];
 			}
@@ -480,6 +481,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 				$out['output_tokens'] = (int) $event['usage']['completion_tokens'];
 			}
 		}
+		if ( $truncated ) { $out['complete'] = false; }
 		return $out;
 	}
 
@@ -519,7 +521,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 		if ( in_array( (int) $code, array( 520, 522, 523, 524 ), true ) && $is_cf_tunnel ) {
 			return sprintf(
 				/* translators: %d: HTTP status code */
-				__( 'HTTP %d — the request timed out in your Cloudflare tunnel (trycloudflare.com Quick Tunnels drop any request that takes longer than ~100 seconds). Your model did not finish generating in time. Fixes: use a smaller/faster model, lower the target word count, or connect LM Studio directly (or via a tunnel without the 100s limit) instead of a free Cloudflare Quick Tunnel.', 'seo-command-center' ),
+				__( 'HTTP %d — the request timed out in your Cloudflare tunnel (Cloudflare normally enforces a roughly 125-second proxy read timeout when no response data is received). Your model did not finish generating in time. Fixes: use a smaller/faster model, lower the target word count, or connect LM Studio directly (or via a tunnel without the 100s limit) instead of a free Cloudflare Quick Tunnel.', 'seo-command-center' ),
 				(int) $code
 			);
 		}
