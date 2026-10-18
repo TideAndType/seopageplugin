@@ -57,8 +57,9 @@
 
         function run() {
             return next( original ).catch( function ( error ) {
-                if ( ! error || error.code !== 'scc_mac_pending' || ! error.data ||
-                    ! /^ai_[a-f0-9]{32}$/.test( String( error.data.job_id || '' ) ) ) {
+                if ( ! error ||
+                    ( error.code !== 'scc_mac_pending' && error.code !== 'scc_browser_pending' ) ||
+                    ! error.data || ! /^(?:ai|br)_[a-f0-9]{32}$/.test( String( error.data.job_id || '' ) ) ) {
                     throw error;
                 }
                 return poll( error.data.job_id ).then( run );
