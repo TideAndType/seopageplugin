@@ -2927,11 +2927,23 @@
 			out.innerHTML = '';
 			out.hidden = false;
 			var head = el( 'div', null, 'scc-card' );
-			var grounded = ( d.grounded && d.grounded.gsc ) ? 'grounded in your real pages + Search Console demand' : 'grounded in your real pages';
-			if ( ideas.length ) {
-				head.appendChild( el( 'p', ideas.length + ' new page ideas (' + grounded + '). Add any to your Content Plan, or generate a draft now.', 'scc-note' ) );
+			var sources = d.grounded || {};
+			var evidence = 'Checked ' + ( sources.existing_pages || 0 ) + ' WordPress pages/posts';
+			if ( sources.gsc_status === 'ready' ) {
+				evidence += ' and ' + ( sources.gsc_query_count || 0 ) + ' GSC search queries (90 days)';
+			} else if ( sources.gsc_status === 'query_failed' ) {
+				evidence += '. Search Console query failed — check Settings → SEO Connections';
+			} else if ( sources.gsc_status === 'no_query_data' ) {
+				evidence += '. Search Console returned no queries for the last 90 days';
 			} else {
-				head.appendChild( el( 'p', 'No new ideas this time — everything suggested is already in your plan or live on your site.', 'scc-note' ) );
+				evidence += '. Connect Search Console in Settings → SEO Connections for query evidence';
+			}
+			evidence += '; filtered ' + ( sources.duplicates_removed || 0 ) + ' duplicate suggestion(s).';
+			head.appendChild( el( 'p', evidence, 'scc-note' ) );
+			if ( ideas.length ) {
+				head.appendChild( el( 'p', ideas.length + ' genuinely new ideas. Save any to Planned Content or generate a draft now.', 'scc-note' ) );
+			} else {
+				head.appendChild( el( 'p', d.notes || 'No genuinely new ideas found. Already covered or planned topics were excluded.', 'scc-note' ) );
 			}
 			if ( d.notes ) { head.appendChild( el( 'p', d.notes, 'scc-note' ) ); }
 

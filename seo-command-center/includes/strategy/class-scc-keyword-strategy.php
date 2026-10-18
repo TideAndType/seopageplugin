@@ -123,15 +123,22 @@ class SCC_Keyword_Strategy {
 	 * @return array {connected:bool, top_queries:array, quick_wins:array}
 	 */
 	public static function gsc_signals() {
-		$out = array( 'connected' => false, 'top_queries' => array(), 'quick_wins' => array(), 'untapped' => array() );
+		$out = array( 'connected' => false, 'status' => 'not_connected', 'top_queries' => array(), 'quick_wins' => array(), 'untapped' => array() );
 		if ( ! class_exists( 'SCC_GSC' ) || ! SCC_GSC::is_connected() ) {
 			return $out;
 		}
+		$out['connected'] = true;
 		$rows = SCC_GSC::query( '', array( 'query' ), 90, 500 );
-		if ( is_wp_error( $rows ) || empty( $rows ) ) {
+		if ( is_wp_error( $rows ) ) {
+			$out['status'] = 'query_failed';
+			$out['error'] = $rows->get_error_message();
 			return $out;
 		}
-		$out['connected'] = true;
+		if ( empty( $rows ) ) {
+			$out['status'] = 'no_query_data';
+			return $out;
+		}
+		$out['status'] = 'ready';
 
 		$queries = array();
 		foreach ( $rows as $row ) {
@@ -167,6 +174,37 @@ class SCC_Keyword_Strategy {
 		usort( $untapped, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
 		$out['untapped'] = array_slice( array_values( $untapped ), 0, 25 );
 
+		// Query alone does not tell us which URL ranks for it. Join with the
+		// page dimension so the AI can favor improving Google's current page
+		// rather than suggesting a second URL for the same search intent.
+		$out['ranking_pages'] = array();
+		$page_rows = SCC_GSC::query( '', array( 'query', 'page' ), 90, 2000 );
+		if ( ! is_wp_error( $page_rows ) ) {
+			$top = array();
+			foreach ( $out['top_queries'] as $item ) {
+				$top[ strtolower( $item['query'] ) ] = true;
+			}
+			$host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+			$ranked = array();
+			foreach ( (array) $page_rows as $row ) {
+				$query = SCC_Security::sanitize_text( $row['keys'][0] ?? '' );
+				$url = esc_url_raw( $row['keys'][1] ?? '' );
+				$page_host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				if ( '' === $query || '' === $url || ! isset( $top[ strtolower( $query ) ] ) || ! $host || $host !== $page_host ) { continue; }
+				$impressions = (int) ( $row['impressions'] ?? 0 );
+				$key = strtolower( $query );
+				if ( ! isset( $ranked[ $key ] ) || $impressions > $ranked[ $key ]['impressions'] ) {
+					$ranked[ $key ] = array(
+						'query' => $query,
+						'page' => $url,
+						'impressions' => $impressions,
+						'position' => round( (float) ( $row['position'] ?? 0 ), 1 ),
+					);
+				}
+			}
+			$out['ranking_pages'] = array_slice( array_values( $ranked ), 0, 40 );
+		}
+
 		return $out;
 	}
 
@@ -179,25 +217,39 @@ class SCC_Keyword_Strategy {
 	 */
 	public static function existing_site_pages( $limit = 200 ) {
 		$pages = array();
-		$q     = new WP_Query( array(
+		$limit = max( 1, min( 2000, (int) $limit ) );
+		// WordPress knows the actual post type. Avoid guessing blog vs service
+		// from URL depth, and include recently written drafts so an unpublished
+		// page cannot be recommended over and over again.
+		$q = new WP_Query( array(
 			'post_type'      => array( 'page', 'post' ),
-			'post_status'    => 'publish',
-			'posts_per_page' => (int) $limit,
+			'post_status'    => array( 'publish', 'draft', 'pending', 'private', 'future' ),
+			'posts_per_page' => $limit,
 			'no_found_rows'  => true,
-			'orderby'        => 'menu_order title',
-			'order'          => 'ASC',
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
 			'fields'         => 'ids',
 		) );
 		$seen = array();
 		foreach ( $q->posts as $pid ) {
+			$post  = get_post( $pid );
+			if ( ! $post || ! in_array( $post->post_type, array( 'page', 'post' ), true ) ) { continue; }
 			$title = trim( (string) get_the_title( $pid ) );
-			$path  = wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH );
-			$path  = self::normalize_site_path( (string) $path );
-			if ( '' === $title || '' === $path || isset( $seen[ $path ] ) ) {
-				continue;
+			$path  = self::normalize_site_path( (string) wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH ) );
+			if ( '' === $title ) { continue; }
+			// Unsaved permalink structures can return /?p=ID for a draft.
+			// Never merge unrelated draft ideas into one '/' inventory entry.
+			if ( '/' === $path && 'publish' !== $post->post_status ) {
+				$path = '/__draft-' . (int) $pid . '/';
 			}
-			$seen[ $path ]  = true;
-			$pages[]        = array( 'title' => $title, 'path' => $path );
+			if ( '' === $path || isset( $seen[ $path ] ) ) { continue; }
+			$seen[ $path ] = true;
+			$pages[] = array(
+				'title' => $title, 'path' => $path,
+				'post_type' => (string) $post->post_type,
+				'post_status' => (string) $post->post_status,
+				'post_id' => (int) $pid,
+			);
 		}
 
 		// Also merge any URLs the site's sitemap exposes but WP_Query missed
@@ -211,6 +263,8 @@ class SCC_Keyword_Strategy {
 				continue;
 			}
 			$seen[ $sp['path'] ] = true;
+			$sp['post_type'] = 'unknown';
+			$sp['post_status'] = 'publish';
 			$pages[]             = $sp;
 		}
 		return $pages;
@@ -425,7 +479,9 @@ class SCC_Keyword_Strategy {
 			. 'treat them as evidence of demand, NOT proof that a new URL is needed. EXISTING-PAGE-FIRST: before '
 			. 'proposing any GSC-driven new page, check the supplied existing_site_pages for a page that can satisfy '
 			. 'the same intent. Prefer expanding that existing page. Only propose a NEW URL when the query represents '
-			. 'a materially different user task/search intent that the existing page should not absorb. Mark strong '
+			. 'a materially different user task/search intent that the existing page should not absorb. '
+			. 'If gsc_ranking_pages shows Google already ranks an existing URL for a query, recommend optimizing that URL '
+			. 'and NEVER offer a duplicate standalone page for the same task. Mark strong '
 			. 'measured opportunities high priority and prefer real query phrasing where natural. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
@@ -434,8 +490,11 @@ class SCC_Keyword_Strategy {
 			. '"subtopics":[{"title":str,"primary_keyword":str,"intent":str,"recommended_url":str,"meta_title":str,'
 			. '"content_nodes":[str]}]}],"entities":[str],"notes":str}';
 
-		$existing = self::existing_site_pages();
-		$inputs['existing_site_pages'] = $existing;
+		$existing = self::existing_site_pages( 1000 );
+		// The full site is checked deterministically after generation, while
+		// the AI only receives a bounded inventory to protect local LM Studio
+		// context windows from thousands of titles.
+		$inputs['existing_site_pages'] = array_slice( $existing, 0, 180 );
 
 		// Real Search Console demand, if the caller supplied it (see generate()).
 		if ( ! empty( $inputs['gsc_top_queries'] ) ) {
@@ -443,6 +502,9 @@ class SCC_Keyword_Strategy {
 		}
 		if ( ! empty( $inputs['gsc_quick_wins'] ) ) {
 			$inputs['gsc_quick_wins'] = array_slice( (array) $inputs['gsc_quick_wins'], 0, 30 );
+		}
+		if ( ! empty( $inputs['gsc_ranking_pages'] ) ) {
+			$inputs['gsc_ranking_pages'] = array_slice( (array) $inputs['gsc_ranking_pages'], 0, 30 );
 		}
 		if ( ! empty( $inputs['gsc_untapped'] ) ) {
 			$inputs['gsc_untapped'] = array_slice( (array) $inputs['gsc_untapped'], 0, 25 );
@@ -491,6 +553,9 @@ class SCC_Keyword_Strategy {
 		if ( ! empty( $gsc['untapped'] ) ) {
 			$inputs['gsc_untapped'] = $gsc['untapped'];
 		}
+		if ( ! empty( $gsc['ranking_pages'] ) ) {
+			$inputs['gsc_ranking_pages'] = $gsc['ranking_pages'];
+		}
 
 		$response = $this->ai->complete( $this->build_prompt( $inputs ), 'keyword-strategy' );
 		if ( $response->is_error() ) {
@@ -525,6 +590,10 @@ class SCC_Keyword_Strategy {
 		// Attach the real Search Console quick-win opportunities (measured data)
 		// so the map can surface them alongside the AI suggestions.
 		$map['gsc_connected']  = ! empty( $gsc['connected'] );
+		$map['gsc_status']     = (string) ( $gsc['status'] ?? 'not_connected' );
+		$map['gsc_error']      = isset( $gsc['error'] ) ? (string) $gsc['error'] : '';
+		$map['gsc_queries_used'] = count( (array) ( $gsc['top_queries'] ?? array() ) );
+		$map['gsc_ranking_pages'] = count( (array) ( $gsc['ranking_pages'] ?? array() ) );
 		$map['gsc_quick_wins'] = isset( $gsc['quick_wins'] ) ? $gsc['quick_wins'] : array();
 
 		$strategy_id = SCC_DB::insert(
@@ -624,7 +693,7 @@ class SCC_Keyword_Strategy {
 	 * @return array
 	 */
 	protected function reconcile_with_site( array $map ) {
-		$pages = static::existing_site_pages();
+		$pages = static::existing_site_pages( 1000 );
 		if ( empty( $pages ) ) {
 			return $map; // Nothing to anchor to (e.g. brand-new site).
 		}
@@ -632,7 +701,7 @@ class SCC_Keyword_Strategy {
 		// Index existing pages by normalized path.
 		$by_path = array();
 		foreach ( $pages as $p ) {
-			$by_path[ $p['path'] ] = $p['title'];
+			$by_path[ $p['path'] ] = $p;
 		}
 
 		$clusters = isset( $map['clusters'] ) ? $map['clusters'] : array();
@@ -644,7 +713,7 @@ class SCC_Keyword_Strategy {
 			$path  = self::normalize_site_path( $c['recommended_url'] );
 			$match = null;
 			if ( isset( $by_path[ $path ] ) ) {
-				$match = array( 'path' => $path, 'title' => $by_path[ $path ], 'match_type' => 'path', 'score' => 1.0 );
+				$match = array( 'path' => $path, 'title' => $by_path[ $path ]['title'], 'match_type' => 'path', 'score' => 1.0 );
 			} else {
 				$match = self::match_existing_topic(
 					array(
@@ -661,6 +730,9 @@ class SCC_Keyword_Strategy {
 				$c['recommended_url']        = $match['path'];
 				$c['matched_existing_title'] = $match['title'];
 				$c['coverage_match']         = $match['match_type'];
+				$c['wp_post_type']           = $by_path[ $match['path'] ]['post_type'] ?? 'unknown';
+				if ( 'post' === $c['wp_post_type'] ) { $c['page_type'] = 'article'; }
+				$c['wp_post_status']         = $by_path[ $match['path'] ]['post_status'] ?? 'publish';
 				$seen[ $match['path'] ]      = true;
 			} else {
 				$c['status'] = 'new';
@@ -671,7 +743,7 @@ class SCC_Keyword_Strategy {
 					$spath  = self::normalize_site_path( $s['recommended_url'] ?? '' );
 					$smatch = null;
 					if ( '' !== $spath && isset( $by_path[ $spath ] ) ) {
-						$smatch = array( 'path' => $spath, 'title' => $by_path[ $spath ], 'match_type' => 'path', 'score' => 1.0 );
+						$smatch = array( 'path' => $spath, 'title' => $by_path[ $spath ]['title'], 'match_type' => 'path', 'score' => 1.0 );
 					} else {
 						$smatch = self::match_existing_topic(
 							array(
@@ -687,6 +759,7 @@ class SCC_Keyword_Strategy {
 						$s['recommended_url']        = $smatch['path'];
 						$s['matched_existing_title'] = $smatch['title'];
 						$s['coverage_match']         = $smatch['match_type'];
+						$s['wp_post_type']           = $by_path[ $smatch['path'] ]['post_type'] ?? 'unknown';
 						$seen[ $smatch['path'] ]      = true;
 					} else {
 						$s['status'] = 'new';
@@ -698,7 +771,8 @@ class SCC_Keyword_Strategy {
 		unset( $c );
 
 		// Inject any real page the model left out, anchored to its true URL.
-		foreach ( $by_path as $path => $title ) {
+		foreach ( $by_path as $path => $site_page ) {
+			$title = $site_page['title'];
 			if ( isset( $seen[ $path ] ) ) {
 				continue;
 			}
@@ -707,12 +781,14 @@ class SCC_Keyword_Strategy {
 				'location'         => '',
 				'primary_keyword'  => $title,
 				'supporting_terms' => array(),
-				'intent'           => 'commercial',
+				'intent'           => ( 'post' === ( $site_page['post_type'] ?? '' ) ? 'informational' : 'commercial' ),
 				'recommended_url'  => $path,
 				'meta_title'       => '',
 				'priority'         => 'medium',
 				'related'          => array(),
-				'page_type'        => $this->guess_page_type( $path ),
+				'page_type'        => 'post' === ( $site_page['post_type'] ?? '' ) ? 'article' : ( 'page' === ( $site_page['post_type'] ?? '' ) ? 'service' : $this->guess_page_type( $path ) ),
+				'wp_post_type'     => $site_page['post_type'] ?? 'unknown',
+				'wp_post_status'   => $site_page['post_status'] ?? 'publish',
 				'status'           => 'existing',
 				'rationale'        => __( 'Existing page on your site.', 'seo-command-center' ),
 				'subtopics'        => array(),
@@ -721,10 +797,38 @@ class SCC_Keyword_Strategy {
 			$clusters[] = $injected;
 		}
 
-		// Existing pages first, then recommended gaps.
+		// A content plan entry is not another SEO gap. Distinguish planned
+		// content from live pages so the user never sees the same "new" suggestion
+		// simply because the draft has not been published.
+		if ( class_exists( 'SCC_Content_Plan' ) ) {
+			$taken = SCC_Content_Plan::taken_signatures();
+			foreach ( $clusters as &$cluster ) {
+				if ( 'new' === ( $cluster['status'] ?? '' ) && SCC_Content_Plan::is_taken( array(
+					'title' => $cluster['service'] ?? '',
+					'primary_keyword' => $cluster['primary_keyword'] ?? '',
+					'url' => $cluster['recommended_url'] ?? '',
+				), $taken ) ) {
+					$cluster['status'] = 'planned';
+					$cluster['rationale'] = __( 'Already saved in Planned Content; no duplicate needed.', 'seo-command-center' );
+				}
+				foreach ( (array) ( $cluster['subtopics'] ?? array() ) as $j => $subtopic ) {
+					if ( 'new' === ( $subtopic['status'] ?? '' ) && SCC_Content_Plan::is_taken( array(
+						'title' => $subtopic['title'] ?? '',
+						'primary_keyword' => $subtopic['primary_keyword'] ?? '',
+						'url' => $subtopic['recommended_url'] ?? '',
+					), $taken ) ) {
+						$cluster['subtopics'][ $j ]['status'] = 'planned';
+					}
+				}
+			}
+			unset( $cluster );
+		}
+
+		// Existing pages first, then planned entries, then genuinely new gaps.
 		usort( $clusters, function ( $a, $b ) {
-			$ax = ( 'existing' === $a['status'] ) ? 0 : 1;
-			$bx = ( 'existing' === $b['status'] ) ? 0 : 1;
+			$order = array( 'existing' => 0, 'planned' => 1, 'new' => 2 );
+			$ax = isset( $order[ $a['status'] ] ) ? $order[ $a['status'] ] : 2;
+			$bx = isset( $order[ $b['status'] ] ) ? $order[ $b['status'] ] : 2;
 			return $ax <=> $bx;
 		} );
 
@@ -732,21 +836,27 @@ class SCC_Keyword_Strategy {
 
 		// Counts span pillars AND subtopics (topicalmap-style topic totals).
 		$existing = 0;
+		$planned = 0;
 		$total    = 0;
 		foreach ( $clusters as $c ) {
 			$total++;
 			if ( 'existing' === $c['status'] ) {
 				$existing++;
+			} elseif ( 'planned' === $c['status'] ) {
+				$planned++;
 			}
 			foreach ( (array) ( $c['subtopics'] ?? array() ) as $s ) {
 				$total++;
 				if ( isset( $s['status'] ) && 'existing' === $s['status'] ) {
 					$existing++;
+				} elseif ( 'planned' === ( $s['status'] ?? '' ) ) {
+					$planned++;
 				}
 			}
 		}
 		$map['existing_count'] = $existing;
-		$map['new_count']      = $total - $existing;
+		$map['planned_count']  = $planned;
+		$map['new_count']      = $total - $existing - $planned;
 		$map['pillar_count']   = count( $clusters );
 		return $map;
 	}
