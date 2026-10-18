@@ -227,6 +227,10 @@ class SCC_Local_Bridge {
                 update_option( 'scc_mac_models_cache', array( 'models' => $models, 'updated' => time() ), false );
             }
         }
+        $browser_job = SCC_Local_Bridge_Browser::next();
+        if ( $browser_job ) {
+            return self::response( array( 'job' => $browser_job ) );
+        }
         $generic = SCC_Local_Bridge_Async::next();
         if ( $generic ) {
             return self::response( array( 'job' => $generic ) );
@@ -267,6 +271,9 @@ class SCC_Local_Bridge {
 
     public static function complete( WP_REST_Request $request ) {
         $raw_id = (string) $request->get_param( 'id' );
+        if ( 0 === strpos( $raw_id, 'br_' ) ) {
+            return SCC_Local_Bridge_Browser::complete_job( $request );
+        }
         if ( 0 === strpos( $raw_id, 'ai_' ) ) {
             return SCC_Local_Bridge_Async::complete_job( $request );
         }
