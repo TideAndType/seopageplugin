@@ -54,7 +54,13 @@ struct BridgeView: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(agent.website.isEmpty || agent.pairCode.count != 6 || agent.pairing)
                     }
-                    Text("Only your website address and pairing code are needed. TideBridge stores its private token in macOS Keychain.")
+                    HStack {
+                        Button("Test WordPress Connection") { agent.testWordPress() }
+                            .disabled(!agent.connected || agent.testingWP)
+                        Text(agent.wpStatus).font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                    Text("Pairing is not the same as a healthy connection. Run both connection tests before generating.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(8)
             }
@@ -66,7 +72,17 @@ struct BridgeView: View {
                         TextField("http://127.0.0.1:1234/v1", text: $agent.localServer)
                             .textFieldStyle(.roundedBorder)
                     }
-                    Text("Start the LM Studio local server in its Developer tab. The connection never exposes this address to the internet.")
+                    HStack {
+                        Button("Test LM Studio") { agent.testLMStudio() }
+                            .disabled(agent.testingLM)
+                        Button("Open LM Studio") { agent.openLMStudio() }
+                        Spacer()
+                    }
+                    Text(agent.lmStatus)
+                        .font(.caption)
+                        .foregroundStyle(agent.lmHealthy ? Color.green : Color.secondary)
+                        .textSelection(.enabled)
+                    Text("LM Studio → Developer → Start Server. Confirm the port (usually 1234) and load your model. TideBridge only connects to this Mac.")
                         .font(.caption).foregroundStyle(.secondary)
                 }.padding(8)
             }
@@ -157,6 +173,11 @@ final class BridgeAgent: ObservableObject {
     @Published var lastJob = ""
     @Published var connected = SecureToken.read() != nil
     @Published var pairing = false
+    @Published var testingLM = false
+    @Published var testingWP = false
+    @Published var lmHealthy = false
+    @Published var lmStatus = "Not tested. Select Test LM Studio."
+    @Published var wpStatus = "Not tested. Select Test WordPress Connection."
 
     private var polling: Task<Void, Never>?
     private let redirects = NoRedirects()
@@ -197,7 +218,9 @@ final class BridgeAgent: ObservableObject {
                 UserDefaults.standard.set(localServer, forKey: "server")
                 pairCode = ""
                 connected = true
-                status = "Connected. Checking TideOrbit for work."
+                status = "Paired. Checking both connections…"
+                testWordPress()
+                testLMStudio()
                 start()
             } catch {
                 status = "Pairing failed: \(error.localizedDescription)"
@@ -219,7 +242,13 @@ final class BridgeAgent: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let secret = secret { request.setValue(secret, forHTTPHeaderField: "X-TideBridge-Key") }
         request.httpBody = try JSONSerialization.data(withJSONObject: values)
-        let (body, response) = try await session.data(for: request)
+        let body: Data
+        let response: URLResponse
+        do {
+            (body, response) = try await session.data(for: request)
+        } catch {
+            throw BridgeProblem.message(describeConnectionError(error, service: "WordPress", address: url.absoluteString))
+        }
         guard let http = response as? HTTPURLResponse else {
             throw BridgeProblem.message("No response from WordPress.")
         }
@@ -274,7 +303,7 @@ final class BridgeAgent: ObservableObject {
                     lastJob = "Article #\(id) saved to WordPress as post #\(saved["post_id"] ?? 0)."
                     status = "Connected. Waiting for another TideOrbit article…"
                 } else {
-                    status = (saved["error"] as? String) ?? "WordPress did not finish saving the article."
+                    status = "WordPress did not finish saving: " + ((saved["error"] as? String) ?? "Unknown save error.")
                 }
             } catch {
                 status = "Saving article #\(id): \(error.localizedDescription). Retrying…"
@@ -315,13 +344,146 @@ final class BridgeAgent: ObservableObject {
         }
     }
 
+    // Do not rely on the "paired" badge: it only means a Keychain token exists.
+    // These explicit checks tell the user exactly which server/port is failing.
+    func testWordPress() {
+        guard !testingWP else { return }
+        guard connected, let root = rootURL(), let token = SecureToken.read() else {
+            wpStatus = "Not paired. Pair your WordPress website first."
+            return
+        }
+        testingWP = true
+        wpStatus = "Checking WordPress REST API…"
+        Task {
+            defer { testingWP = false }
+            do {
+                _ = try await post(root: root, path: "status", values: ["id": 0], secret: token)
+                wpStatus = "Connected. WordPress accepts TideBridge requests."
+            } catch {
+                wpStatus = "WordPress test failed: " + error.localizedDescription
+            }
+        }
+    }
+
+    func testLMStudio() {
+        guard !testingLM else { return }
+        testingLM = true
+        lmHealthy = false
+        lmStatus = "Checking local LM Studio server…"
+        Task {
+            defer { testingLM = false }
+            do {
+                let models = try await fetchLMModels()
+                lmHealthy = true
+                if models.isEmpty {
+                    lmStatus = "Server reachable, but no models were listed. Load a model in LM Studio."
+                } else {
+                    lmStatus = "Connected to LM Studio. Available models: " + models.prefix(3).joined(separator: ", ")
+                }
+            } catch {
+                lmStatus = error.localizedDescription
+                lmHealthy = false
+            }
+        }
+    }
+
+    func openLMStudio() {
+        let paths = ["/Applications/LM Studio.app", NSHomeDirectory() + "/Applications/LM Studio.app"]
+        for path in paths where FileManager.default.fileExists(atPath: path) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            status = "Open LM Studio → Developer → Start Server, then click Test LM Studio."
+            return
+        }
+        status = "Open LM Studio from Applications → Developer → Start Server."
+    }
+
+    private func localBase() throws -> URL {
+        let local = localServer.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: local),
+              url.scheme == "http",
+              ["127.0.0.1", "localhost", "::1"].contains(url.host ?? ""),
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+              (url.path == "/v1" || url.path == "") else {
+            throw BridgeProblem.message("LM Studio address must be http://127.0.0.1:1234/v1 (or your actual localhost port).")
+        }
+        UserDefaults.standard.set(local, forKey: "server")
+        return url
+    }
+
+    private func fetchLMModels() async throws -> [String] {
+        let base = try localBase()
+        let suffix = base.path == "/v1" ? "/models" : "/v1/models"
+        guard let url = URL(string: base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + suffix) else {
+            throw BridgeProblem.message("Cannot build the LM Studio models address.")
+        }
+        let conf = URLSessionConfiguration.ephemeral
+        conf.timeoutIntervalForRequest = 12
+        conf.timeoutIntervalForResource = 16
+        let client = URLSession(configuration: conf, delegate: redirects, delegateQueue: nil)
+        defer { client.invalidateAndCancel() }
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await client.data(from: url)
+        } catch {
+            throw BridgeProblem.message(describeConnectionError(error, service: "LM Studio", address: url.absoluteString))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw BridgeProblem.message("LM Studio returned no HTTP response from " + url.absoluteString)
+        }
+        if http.statusCode == 401 || http.statusCode == 403 {
+            throw BridgeProblem.message("LM Studio at " + url.absoluteString +
+                " requires authentication. Disable 'Require Authentication' for localhost in LM Studio's Server Settings, or configure a local API key.")
+        }
+        guard http.statusCode == 200 else {
+            throw BridgeProblem.message("LM Studio at " + url.absoluteString + " returned HTTP " + String(http.statusCode) +
+                ". Check LM Studio → Developer → Server Settings.")
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawModels = json["data"] as? [[String: Any]] else {
+            throw BridgeProblem.message("LM Studio responded, but /v1/models did not return a valid list. Check the URL and port.")
+        }
+        return rawModels.compactMap { $0["id"] as? String }
+    }
+
+    private func describeConnectionError(_ error: Error, service: String, address: String) -> String {
+        let nsError = error as NSError
+        let code = nsError.code
+        if nsError.domain == NSURLErrorDomain {
+            if code == NSURLErrorCannotConnectToHost || code == NSURLErrorCannotFindHost {
+                if service == "LM Studio" {
+                    return "Cannot connect to LM Studio at " + address +
+                        ". Open LM Studio → Developer → Start Server, check its port, and press Test LM Studio."
+                }
+                return "Cannot connect to WordPress at " + address + ". Check your website address and internet connection."
+            }
+            if code == NSURLErrorTimedOut {
+                return service + " timed out at " + address + ". Check that the server is running and responding."
+            }
+            if code == NSURLErrorAppTransportSecurityRequiresSecureConnection {
+                return service + " was blocked by macOS network security at " + address + ". Check the server address and local network permissions."
+            }
+            if code == NSURLErrorNotConnectedToInternet {
+                return service + " connection failed because this Mac is offline."
+            }
+        }
+        return service + " request to " + address + " failed (" + nsError.domain +
+            " " + String(code) + "): " + error.localizedDescription
+    }
+
     private func generate(_ job: [String: Any]) async throws -> String {
-        let local = localServer.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let localURL = URL(string: local), localURL.scheme == "http",
-              ["127.0.0.1", "localhost", "::1"].contains(localURL.host ?? ""),
-              localURL.user == nil, localURL.password == nil,
-              let url = URL(string: local + "/chat/completions") else {
-            throw BridgeProblem.message("LM Studio must run locally, such as http://127.0.0.1:1234/v1.")
+        let base = try localBase()
+        let local = base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let urlPath = base.path == "/v1" ? "/chat/completions" : "/v1/chat/completions"
+        guard let url = URL(string: local + urlPath) else {
+            throw BridgeProblem.message("Invalid LM Studio chat URL.")
+        }
+        // Confirm the local port and server are reachable before committing
+        // to a potentially hours-long generation call.
+        let availableModels = try await fetchLMModels()
+        if availableModels.isEmpty {
+            throw BridgeProblem.message("LM Studio is running, but it has no models available. Load your model first.")
         }
         var messages: [[String: Any]] = []
         if let system = job["system"] as? String, !system.isEmpty {
@@ -352,18 +514,29 @@ final class BridgeAgent: ObservableObject {
         conf.timeoutIntervalForResource = 7200
         let localSession = URLSession(configuration: conf, delegate: redirects, delegateQueue: nil)
         defer { localSession.invalidateAndCancel() }
-        var (data, response) = try await localSession.data(for: req)
+        let dataInitial: Data
+        let responseInitial: URLResponse
+        do {
+            (dataInitial, responseInitial) = try await localSession.data(for: req)
+        } catch {
+            throw BridgeProblem.message(describeConnectionError(error, service: "LM Studio", address: url.absoluteString))
+        }
+        var (data, response) = (dataInitial, responseInitial)
         // Older LM Studio models sometimes reject sampling options. The
         // WordPress provider already retries without them, so keep parity.
         if let http = response as? HTTPURLResponse, http.statusCode == 400,
            payload["temperature"] != nil {
             payload.removeValue(forKey: "temperature")
             req.httpBody = try JSONSerialization.data(withJSONObject: payload)
-            (data, response) = try await localSession.data(for: req)
+            do {
+                (data, response) = try await localSession.data(for: req)
+            } catch {
+                throw BridgeProblem.message(describeConnectionError(error, service: "LM Studio", address: url.absoluteString))
+            }
         }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let msg = String(data: data.prefix(450), encoding: .utf8) ?? "No response"
-            throw BridgeProblem.message("LM Studio failed: \(msg)")
+            throw BridgeProblem.message("LM Studio " + url.absoluteString + " failed: \(msg)")
         }
         guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = decoded["choices"] as? [[String: Any]],
