@@ -174,6 +174,37 @@ class SCC_Keyword_Strategy {
 		usort( $untapped, function ( $a, $b ) { return $b['impressions'] <=> $a['impressions']; } );
 		$out['untapped'] = array_slice( array_values( $untapped ), 0, 25 );
 
+		// Query alone does not tell us which URL ranks for it. Join with the
+		// page dimension so the AI can favor improving Google's current page
+		// rather than suggesting a second URL for the same search intent.
+		$out['ranking_pages'] = array();
+		$page_rows = SCC_GSC::query( '', array( 'query', 'page' ), 90, 2000 );
+		if ( ! is_wp_error( $page_rows ) ) {
+			$top = array();
+			foreach ( $out['top_queries'] as $item ) {
+				$top[ strtolower( $item['query'] ) ] = true;
+			}
+			$host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+			$ranked = array();
+			foreach ( (array) $page_rows as $row ) {
+				$query = SCC_Security::sanitize_text( $row['keys'][0] ?? '' );
+				$url = esc_url_raw( $row['keys'][1] ?? '' );
+				$page_host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+				if ( '' === $query || '' === $url || ! isset( $top[ strtolower( $query ) ] ) || ! $host || $host !== $page_host ) { continue; }
+				$impressions = (int) ( $row['impressions'] ?? 0 );
+				$key = strtolower( $query );
+				if ( ! isset( $ranked[ $key ] ) || $impressions > $ranked[ $key ]['impressions'] ) {
+					$ranked[ $key ] = array(
+						'query' => $query,
+						'page' => $url,
+						'impressions' => $impressions,
+						'position' => round( (float) ( $row['position'] ?? 0 ), 1 ),
+					);
+				}
+			}
+			$out['ranking_pages'] = array_slice( array_values( $ranked ), 0, 40 );
+		}
+
 		return $out;
 	}
 
@@ -448,7 +479,9 @@ class SCC_Keyword_Strategy {
 			. 'treat them as evidence of demand, NOT proof that a new URL is needed. EXISTING-PAGE-FIRST: before '
 			. 'proposing any GSC-driven new page, check the supplied existing_site_pages for a page that can satisfy '
 			. 'the same intent. Prefer expanding that existing page. Only propose a NEW URL when the query represents '
-			. 'a materially different user task/search intent that the existing page should not absorb. Mark strong '
+			. 'a materially different user task/search intent that the existing page should not absorb. '
+			. 'If gsc_ranking_pages shows Google already ranks an existing URL for a query, recommend optimizing that URL '
+			. 'and NEVER offer a duplicate standalone page for the same task. Mark strong '
 			. 'measured opportunities high priority and prefer real query phrasing where natural. '
 			. 'Return JSON with this exact shape: '
 			. '{"clusters":[{"service":str,"location":str|null,"primary_keyword":str,"supporting_terms":[str],'
@@ -469,6 +502,9 @@ class SCC_Keyword_Strategy {
 		}
 		if ( ! empty( $inputs['gsc_quick_wins'] ) ) {
 			$inputs['gsc_quick_wins'] = array_slice( (array) $inputs['gsc_quick_wins'], 0, 30 );
+		}
+		if ( ! empty( $inputs['gsc_ranking_pages'] ) ) {
+			$inputs['gsc_ranking_pages'] = array_slice( (array) $inputs['gsc_ranking_pages'], 0, 30 );
 		}
 		if ( ! empty( $inputs['gsc_untapped'] ) ) {
 			$inputs['gsc_untapped'] = array_slice( (array) $inputs['gsc_untapped'], 0, 25 );
@@ -517,6 +553,9 @@ class SCC_Keyword_Strategy {
 		if ( ! empty( $gsc['untapped'] ) ) {
 			$inputs['gsc_untapped'] = $gsc['untapped'];
 		}
+		if ( ! empty( $gsc['ranking_pages'] ) ) {
+			$inputs['gsc_ranking_pages'] = $gsc['ranking_pages'];
+		}
 
 		$response = $this->ai->complete( $this->build_prompt( $inputs ), 'keyword-strategy' );
 		if ( $response->is_error() ) {
@@ -554,6 +593,7 @@ class SCC_Keyword_Strategy {
 		$map['gsc_status']     = (string) ( $gsc['status'] ?? 'not_connected' );
 		$map['gsc_error']      = isset( $gsc['error'] ) ? (string) $gsc['error'] : '';
 		$map['gsc_queries_used'] = count( (array) ( $gsc['top_queries'] ?? array() ) );
+		$map['gsc_ranking_pages'] = count( (array) ( $gsc['ranking_pages'] ?? array() ) );
 		$map['gsc_quick_wins'] = isset( $gsc['quick_wins'] ) ? $gsc['quick_wins'] : array();
 
 		$strategy_id = SCC_DB::insert(
