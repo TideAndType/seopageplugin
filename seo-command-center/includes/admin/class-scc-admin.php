@@ -301,6 +301,16 @@ class SCC_Admin {
 			return;
 		}
 
+		// First-party Mac queue middleware loads before all TideOrbit controllers.
+		// Other provider connections and standard WordPress screens are unchanged.
+		wp_enqueue_script(
+			'scc-tidebridge-client',
+			SCC_PLUGIN_URL . 'assets/js/tidebridge-client.js',
+			array( 'wp-api-fetch' ),
+			SCC_VERSION,
+			true
+		);
+
 		// Editor screens only need the SEO meta-box controller and its scoped
 		// styles. Loading the entire dashboard JS/CSS on every post edit is
 		// unnecessary and slows down Gutenberg and the classic editor.
@@ -314,7 +324,7 @@ class SCC_Admin {
 			wp_enqueue_script(
 				'scc-editor',
 				SCC_PLUGIN_URL . 'assets/js/editor.js',
-				array( 'wp-api-fetch' ),
+				array( 'scc-tidebridge-client' ),
 				SCC_VERSION,
 				true
 			);
@@ -357,7 +367,7 @@ class SCC_Admin {
 		wp_enqueue_script(
 			$admin_handle,
 			SCC_PLUGIN_URL . 'assets/js/' . $admin_script,
-			array( 'wp-api-fetch' ),
+			array( 'scc-tidebridge-client' ),
 			SCC_VERSION,
 			true
 		);
