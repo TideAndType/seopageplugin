@@ -179,25 +179,33 @@ class SCC_Keyword_Strategy {
 	 */
 	public static function existing_site_pages( $limit = 200 ) {
 		$pages = array();
-		$q     = new WP_Query( array(
+		$limit = max( 1, min( 2000, (int) $limit ) );
+		// WordPress knows the actual post type. Avoid guessing blog vs service
+		// from URL depth, and include recently written drafts so an unpublished
+		// page cannot be recommended over and over again.
+		$q = new WP_Query( array(
 			'post_type'      => array( 'page', 'post' ),
-			'post_status'    => 'publish',
-			'posts_per_page' => (int) $limit,
+			'post_status'    => array( 'publish', 'draft', 'pending', 'private', 'future' ),
+			'posts_per_page' => $limit,
 			'no_found_rows'  => true,
-			'orderby'        => 'menu_order title',
-			'order'          => 'ASC',
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
 			'fields'         => 'ids',
 		) );
 		$seen = array();
 		foreach ( $q->posts as $pid ) {
+			$post  = get_post( $pid );
+			if ( ! $post || ! in_array( $post->post_type, array( 'page', 'post' ), true ) ) { continue; }
 			$title = trim( (string) get_the_title( $pid ) );
-			$path  = wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH );
-			$path  = self::normalize_site_path( (string) $path );
-			if ( '' === $title || '' === $path || isset( $seen[ $path ] ) ) {
-				continue;
-			}
-			$seen[ $path ]  = true;
-			$pages[]        = array( 'title' => $title, 'path' => $path );
+			$path  = self::normalize_site_path( (string) wp_parse_url( (string) get_permalink( $pid ), PHP_URL_PATH ) );
+			if ( '' === $title || '' === $path || isset( $seen[ $path ] ) ) { continue; }
+			$seen[ $path ] = true;
+			$pages[] = array(
+				'title' => $title, 'path' => $path,
+				'post_type' => (string) $post->post_type,
+				'post_status' => (string) $post->post_status,
+				'post_id' => (int) $pid,
+			);
 		}
 
 		// Also merge any URLs the site's sitemap exposes but WP_Query missed
@@ -211,6 +219,8 @@ class SCC_Keyword_Strategy {
 				continue;
 			}
 			$seen[ $sp['path'] ] = true;
+			$sp['post_type'] = 'unknown';
+			$sp['post_status'] = 'publish';
 			$pages[]             = $sp;
 		}
 		return $pages;
@@ -434,8 +444,11 @@ class SCC_Keyword_Strategy {
 			. '"subtopics":[{"title":str,"primary_keyword":str,"intent":str,"recommended_url":str,"meta_title":str,'
 			. '"content_nodes":[str]}]}],"entities":[str],"notes":str}';
 
-		$existing = self::existing_site_pages();
-		$inputs['existing_site_pages'] = $existing;
+		$existing = self::existing_site_pages( 1000 );
+		// The full site is checked deterministically after generation, while
+		// the AI only receives a bounded inventory to protect local LM Studio
+		// context windows from thousands of titles.
+		$inputs['existing_site_pages'] = array_slice( $existing, 0, 180 );
 
 		// Real Search Console demand, if the caller supplied it (see generate()).
 		if ( ! empty( $inputs['gsc_top_queries'] ) ) {
@@ -624,7 +637,7 @@ class SCC_Keyword_Strategy {
 	 * @return array
 	 */
 	protected function reconcile_with_site( array $map ) {
-		$pages = static::existing_site_pages();
+		$pages = static::existing_site_pages( 1000 );
 		if ( empty( $pages ) ) {
 			return $map; // Nothing to anchor to (e.g. brand-new site).
 		}
@@ -632,7 +645,7 @@ class SCC_Keyword_Strategy {
 		// Index existing pages by normalized path.
 		$by_path = array();
 		foreach ( $pages as $p ) {
-			$by_path[ $p['path'] ] = $p['title'];
+			$by_path[ $p['path'] ] = $p;
 		}
 
 		$clusters = isset( $map['clusters'] ) ? $map['clusters'] : array();
@@ -644,7 +657,7 @@ class SCC_Keyword_Strategy {
 			$path  = self::normalize_site_path( $c['recommended_url'] );
 			$match = null;
 			if ( isset( $by_path[ $path ] ) ) {
-				$match = array( 'path' => $path, 'title' => $by_path[ $path ], 'match_type' => 'path', 'score' => 1.0 );
+				$match = array( 'path' => $path, 'title' => $by_path[ $path ]['title'], 'match_type' => 'path', 'score' => 1.0 );
 			} else {
 				$match = self::match_existing_topic(
 					array(
@@ -661,6 +674,8 @@ class SCC_Keyword_Strategy {
 				$c['recommended_url']        = $match['path'];
 				$c['matched_existing_title'] = $match['title'];
 				$c['coverage_match']         = $match['match_type'];
+				$c['wp_post_type']           = $by_path[ $match['path'] ]['post_type'] ?? 'unknown';
+				$c['wp_post_status']         = $by_path[ $match['path'] ]['post_status'] ?? 'publish';
 				$seen[ $match['path'] ]      = true;
 			} else {
 				$c['status'] = 'new';
@@ -671,7 +686,7 @@ class SCC_Keyword_Strategy {
 					$spath  = self::normalize_site_path( $s['recommended_url'] ?? '' );
 					$smatch = null;
 					if ( '' !== $spath && isset( $by_path[ $spath ] ) ) {
-						$smatch = array( 'path' => $spath, 'title' => $by_path[ $spath ], 'match_type' => 'path', 'score' => 1.0 );
+						$smatch = array( 'path' => $spath, 'title' => $by_path[ $spath ]['title'], 'match_type' => 'path', 'score' => 1.0 );
 					} else {
 						$smatch = self::match_existing_topic(
 							array(
@@ -687,6 +702,7 @@ class SCC_Keyword_Strategy {
 						$s['recommended_url']        = $smatch['path'];
 						$s['matched_existing_title'] = $smatch['title'];
 						$s['coverage_match']         = $smatch['match_type'];
+						$s['wp_post_type']           = $by_path[ $smatch['path'] ]['post_type'] ?? 'unknown';
 						$seen[ $smatch['path'] ]      = true;
 					} else {
 						$s['status'] = 'new';
@@ -698,7 +714,8 @@ class SCC_Keyword_Strategy {
 		unset( $c );
 
 		// Inject any real page the model left out, anchored to its true URL.
-		foreach ( $by_path as $path => $title ) {
+		foreach ( $by_path as $path => $site_page ) {
+			$title = $site_page['title'];
 			if ( isset( $seen[ $path ] ) ) {
 				continue;
 			}
@@ -707,12 +724,14 @@ class SCC_Keyword_Strategy {
 				'location'         => '',
 				'primary_keyword'  => $title,
 				'supporting_terms' => array(),
-				'intent'           => 'commercial',
+				'intent'           => ( 'post' === ( $site_page['post_type'] ?? '' ) ? 'informational' : 'commercial' ),
 				'recommended_url'  => $path,
 				'meta_title'       => '',
 				'priority'         => 'medium',
 				'related'          => array(),
-				'page_type'        => $this->guess_page_type( $path ),
+				'page_type'        => 'post' === ( $site_page['post_type'] ?? '' ) ? 'article' : ( 'page' === ( $site_page['post_type'] ?? '' ) ? 'service' : $this->guess_page_type( $path ) ),
+				'wp_post_type'     => $site_page['post_type'] ?? 'unknown',
+				'wp_post_status'   => $site_page['post_status'] ?? 'publish',
 				'status'           => 'existing',
 				'rationale'        => __( 'Existing page on your site.', 'seo-command-center' ),
 				'subtopics'        => array(),
