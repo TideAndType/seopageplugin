@@ -71,19 +71,9 @@ $field = function ( $field, $label, $hints ) {
 			<span class="scc-inline-status" id="scc-test-status"></span>
 		</p>
 
-		<h2><?php esc_html_e( 'LM Studio (local, optional)', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'Run models on your own computer with LM Studio — free and private. Enter the address WordPress should contact below.', 'seo-command-center' ); ?></p>
-		<div class="notice notice-warning inline" style="margin:8px 0;">
-			<p><?php echo wp_kses_post( __( '<strong>Different machines?</strong> If LM Studio runs on your laptop and this site is hosted elsewhere (e.g. IONOS), the hosted server <em>cannot</em> reach “localhost” or your home network. You must expose LM Studio with a tunnel and paste that public URL here — for example a <a href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" target="_blank" rel="noopener">Cloudflare Tunnel</a> or <a href="https://ngrok.com/" target="_blank" rel="noopener">ngrok</a> address like <code>https://your-tunnel.trycloudflare.com/v1</code>. “localhost” only works when WordPress runs on the same machine as LM Studio.', 'seo-command-center' ) ); ?></p>
-		</div>
+		<h2><?php esc_html_e( 'LM Studio through TideBridge Mac', 'seo-command-center' ); ?></h2>
+		<p class="scc-note"><?php esc_html_e( 'Your WordPress site sends AI work to the paired TideBridge app. LM Studio stays private on your Mac; no tunnel URL or inbound connection is required.', 'seo-command-center' ); ?> <a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-mac' ) ); ?>">Connect my Mac</a></p>
 		<table class="form-table" role="presentation">
-			<tr>
-				<th scope="row"><label for="scc-lmstudio-base"><?php esc_html_e( 'Server URL', 'seo-command-center' ); ?></label></th>
-				<td>
-					<input type="text" class="regular-text code" id="scc-lmstudio-base" value="<?php echo esc_attr( isset( $data['lmstudio_base_url'] ) ? $data['lmstudio_base_url'] : '' ); ?>" placeholder="http://localhost:1234/v1  or  https://your-tunnel.trycloudflare.com/v1">
-					<p class="description"><?php esc_html_e( 'The base URL of your LM Studio server, ending in /v1. This is the address the plugin contacts — not the API key.', 'seo-command-center' ); ?></p>
-				</td>
-			</tr>
 			<tr>
 				<th scope="row"><label for="scc-lmstudio-model-select"><?php esc_html_e( 'Model', 'seo-command-center' ); ?></label></th>
 				<td>
@@ -101,26 +91,21 @@ $field = function ( $field, $label, $hints ) {
 					<input type="hidden" id="scc-lmstudio-model" value="<?php echo esc_attr( $saved_model ); ?>">
 					<datalist id="scc-lmstudio-model-list"></datalist>
 					<p class="description">
-						<?php esc_html_e( 'Enter the Server URL above, then click “Detect models” to list the models loaded in LM Studio and pick one.', 'seo-command-center' ); ?><br>
+						<?php esc_html_e( 'Open TideBridge and select Test LM Studio. Then click “Detect models” to choose from models reported by your Mac.', 'seo-command-center' ); ?><br>
 						<label><?php esc_html_e( 'Or type a model id:', 'seo-command-center' ); ?>
 							<input type="text" id="scc-lmstudio-model-custom" class="regular-text" value="" placeholder="<?php echo esc_attr( '' !== $saved_model ? $saved_model : 'e.g. google/gemma-4-e4b' ); ?>">
 						</label>
 					</p>
 				</td>
 			</tr>
-			<?php
-			$field( 'lmstudio_key', __( 'LM Studio API key (optional)', 'seo-command-center' ), $hints );
-			?>
 		</table>
-		<p class="scc-note"><?php esc_html_e( 'An API key is optional; only add one if you configured LM Studio to require it. These settings also appear under Settings → AI.', 'seo-command-center' ); ?></p>
+		<p class="scc-note"><?php esc_html_e( 'TideBridge keeps the pairing token in macOS Keychain. You do not need an LM Studio public URL or an API key in WordPress.', 'seo-command-center' ); ?></p>
 
 		</div>
 		<div class="scc-connection-seo-group">
 		<h2><?php esc_html_e( 'Google Maps Rank Tracker / Browser Runtime', 'seo-command-center' ); ?></h2>
-		<p class="scc-note"><?php esc_html_e( 'Connect the GBP Rank Tracker desktop app through a Cloudflare Tunnel. Automatic mode uses your local Chromium scanner first and falls back to DataForSEO if the scanner is offline.', 'seo-command-center' ); ?></p>
-		<div class="notice notice-info inline" style="margin:8px 0;">
-			<p><?php echo wp_kses_post( __( 'In the desktop app open <strong>Settings → TideOrbit</strong>, copy the pairing key, and point Cloudflare at <code>http://127.0.0.1:4317</code>. Paste the public HTTPS tunnel URL and pairing key here.', 'seo-command-center' ) ); ?></p>
-		</div>
+		<p class="scc-note"><?php esc_html_e( 'The paired TideBridge Mac app contacts your Google Maps Rank Tracker on local port 4317. Automatic mode tries the local scanner first, then DataForSEO if the scanner is unavailable. No public URL is necessary.', 'seo-command-center' ); ?></p>
+		<div class="notice notice-info inline" style="margin:8px 0;"><p><?php esc_html_e( 'In the Rank Tracker desktop app open Settings → TideOrbit and copy its pairing key below. Run the scanner and TideBridge on the same Mac. TideBridge sends requests to 127.0.0.1:4317 securely.', 'seo-command-center' ); ?></p></div>
 		<table class="form-table" role="presentation">
 			<tr>
 				<th scope="row"><label for="scc-browser-runtime-mode"><?php esc_html_e( 'Execution mode', 'seo-command-center' ); ?></label></th>
@@ -131,13 +116,6 @@ $field = function ( $field, $label, $hints ) {
 						<option value="browser" <?php selected( $browser_mode, 'browser' ); ?>><?php esc_html_e( 'Rank Tracker only', 'seo-command-center' ); ?></option>
 						<option value="dataforseo" <?php selected( $browser_mode, 'dataforseo' ); ?>><?php esc_html_e( 'DataForSEO only', 'seo-command-center' ); ?></option>
 					</select>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="scc-browser-runtime-url"><?php esc_html_e( 'Cloudflare Tunnel URL', 'seo-command-center' ); ?></label></th>
-				<td>
-					<input type="url" class="regular-text code" id="scc-browser-runtime-url" value="<?php echo esc_attr( isset( $data['browser_runtime_url'] ) ? $data['browser_runtime_url'] : '' ); ?>" placeholder="https://your-tunnel.trycloudflare.com">
-					<p class="description"><?php esc_html_e( 'This should be the public URL for the tunnel that points to 127.0.0.1:4317 on the machine running GBP Rank Tracker.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 			<?php $field( 'browser_runtime_key', __( 'Rank Tracker pairing key', 'seo-command-center' ), $hints ); ?>
