@@ -53,7 +53,7 @@ class SCC_Content_Ideas {
 		$previous = self::sanitize_ideas( array( 'ideas' => is_array( $previous ) ? $previous : array() ) );
 
 		// Real site context — never invent what the site is or already has.
-		$existing = class_exists( 'SCC_Keyword_Strategy' ) ? SCC_Keyword_Strategy::existing_site_pages( 200 ) : array();
+		$existing = class_exists( 'SCC_Keyword_Strategy' ) ? SCC_Keyword_Strategy::existing_site_pages( 1000 ) : array();
 
 		// Pages already IN THE CONTENT PLAN (added but not yet published). The AI
 		// must not re-propose these, and we also filter them out deterministically
@@ -91,7 +91,8 @@ class SCC_Content_Ideas {
 				'region'        => (string) ( $business['region'] ?? '' ),
 				'service_areas' => array_slice( (array) ( $business['service_areas'] ?? array() ), 0, 20 ),
 			),
-			'existing_pages'   => array_slice( $existing, 0, 150 ),
+			'existing_pages'   => array_slice( $existing, 0, 180 ),
+			'site_pages_checked' => count( $existing ),
 			'planned_pages'    => $planned_ctx,
 			'pillars'          => array_values( array_unique( $pillars ) ),
 			'gsc_top_queries'  => array_slice( (array) ( $gsc['top_queries'] ?? array() ), 0, 40 ),
@@ -150,32 +151,52 @@ class SCC_Content_Ideas {
 			return new WP_Error( 'scc_no_ideas', __( 'No ideas came back. Try rephrasing your request.', 'seo-command-center' ), array( 'status' => 502 ) );
 		}
 
-		// Deterministically drop anything the user has already planned or that is
-		// already a live page — so refining never re-surfaces ideas already added.
+		// Check the entire real WordPress inventory, not just the truncated AI
+		// prompt. Also remove near-identical titles/keywords, plus repeats WITHIN
+		// this response. Relying only on the LLM to honor the prompt caused pages
+		// already created by the user to reappear as new recommendations.
+		$filtered = 0;
 		if ( class_exists( 'SCC_Content_Plan' ) ) {
 			$taken = SCC_Content_Plan::taken_signatures( $existing );
-			$ideas = array_values( array_filter( $ideas, function ( $idea ) use ( $taken ) {
-				return ! SCC_Content_Plan::is_taken( $idea, $taken );
-			} ) );
-			if ( empty( $ideas ) ) {
-				return array(
-					'ideas'    => array(),
-					'notes'    => __( 'Every idea that came back is already in your plan or live on your site. Try a different angle, or ask for more.', 'seo-command-center' ),
-					'grounded' => array(
-						'gsc'            => ! empty( $gsc['connected'] ),
-						'existing_pages' => count( $existing ),
-					),
-				);
+			$unique = array();
+			foreach ( $ideas as $idea ) {
+				$matched = class_exists( 'SCC_Keyword_Strategy' )
+					? SCC_Keyword_Strategy::match_existing_topic( $idea, $existing ) : null;
+				if ( SCC_Content_Plan::is_taken( $idea, $taken ) || $matched ) {
+					$filtered++;
+					continue;
+				}
+				$unique[] = $idea;
+				// Newly accepted ideas also become taken during this same run.
+				$title = SCC_Content_Plan::norm_text( $idea['title'] ?? '' );
+				$kw    = SCC_Content_Plan::norm_text( $idea['primary_keyword'] ?? '' );
+				$slug  = SCC_Content_Plan::norm_slug( $idea['recommended_url'] ?? '' );
+				if ( $title ) { $taken['titles'][ $title ] = true; }
+				if ( $kw ) { $taken['keywords'][ $kw ] = true; }
+				if ( $slug ) { $taken['slugs'][ $slug ] = true; }
 			}
+			$ideas = $unique;
+		}
+		$grounded = array(
+			'gsc'              => ! empty( $gsc['connected'] ),
+			'gsc_status'       => (string) ( $gsc['status'] ?? 'not_connected' ),
+			'gsc_query_count'  => count( (array) ( $gsc['top_queries'] ?? array() ) ),
+			'existing_pages'   => count( $existing ),
+			'planned_pages'    => count( $planned_ctx ),
+			'duplicates_removed' => $filtered,
+		);
+		if ( empty( $ideas ) ) {
+			return array(
+				'ideas' => array(),
+				'notes' => __( 'No genuinely new ideas were found. Generated topics were already present on the website or in Planned Content. Try a different search intent instead of creating competing pages.', 'seo-command-center' ),
+				'grounded' => $grounded,
+			);
 		}
 
 		return array(
 			'ideas'    => $ideas,
 			'notes'    => isset( $parsed['notes'] ) ? SCC_Security::sanitize_text( $parsed['notes'] ) : '',
-			'grounded' => array(
-				'gsc'            => ! empty( $gsc['connected'] ),
-				'existing_pages' => count( $existing ),
-			),
+			'grounded' => $grounded,
 		);
 	}
 
