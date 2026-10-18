@@ -36,7 +36,6 @@ if ( 'POST' === (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) && isset( $_POST['
 				SCC_Settings::update(
 					array(
 						'browser_runtime_mode' => sanitize_key( wp_unslash( $_POST['browser_runtime_mode'] ?? 'auto' ) ),
-						'browser_runtime_url'  => esc_url_raw( trim( wp_unslash( $_POST['browser_runtime_url'] ?? '' ) ) ),
 					)
 				);
 				SCC_Settings::update_credentials(
@@ -83,7 +82,6 @@ $last_grid = class_exists( 'SCC_Local_Grid' ) ? SCC_Local_Grid::last() : null;
 $runtime_status = class_exists( 'SCC_Browser_Runtime' ) ? SCC_Browser_Runtime::last_status() : array();
 $runtime_jobs = class_exists( 'SCC_Browser_Runtime' ) ? SCC_Browser_Runtime::active_jobs() : array();
 $runtime_mode = class_exists( 'SCC_Browser_Runtime' ) ? SCC_Browser_Runtime::mode() : 'dataforseo';
-$runtime_url = (string) SCC_Settings::get( 'browser_runtime_url', '' );
 $credential_hints = SCC_Settings::credential_hints();
 $runtime_key_hint = (string) ( $credential_hints['browser_runtime_key']['hint'] ?? '' );
 $runtime_key_configured = ! empty( $credential_hints['browser_runtime_key']['configured'] );
@@ -189,7 +187,7 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 		<div class="scc-card__head">
 			<div>
 				<h2><?php esc_html_e( 'TideOrbit Browser Runtime', 'seo-command-center' ); ?></h2>
-				<p class="scc-note"><?php esc_html_e( 'Automatic mode uses your Cloudflare-tunneled local Chromium scanner first and falls back to DataForSEO if the tunnel/browser is unavailable.', 'seo-command-center' ); ?></p>
+				<p class="scc-note"><?php esc_html_e( 'Automatic mode asks TideBridge on your Mac to use the local Rank Tracker, and falls back to DataForSEO if it is unavailable. No public scanner URL is needed.', 'seo-command-center' ); ?></p>
 			</div>
 			<?php if ( ! empty( $runtime_status['state'] ) ) : ?>
 				<strong><?php echo esc_html( strtoupper( (string) $runtime_status['state'] ) ); ?></strong>
@@ -208,10 +206,6 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 					</select></label>
 				</p>
 				<p>
-					<label><strong><?php esc_html_e( 'Cloudflare Tunnel URL', 'seo-command-center' ); ?></strong><br>
-					<input type="url" name="browser_runtime_url" class="regular-text" value="<?php echo esc_attr( $runtime_url ); ?>" placeholder="https://your-tunnel.trycloudflare.com"></label>
-				</p>
-				<p>
 					<label><strong><?php esc_html_e( 'Pairing key', 'seo-command-center' ); ?></strong><br>
 					<input type="password" name="browser_runtime_key" class="regular-text" value="" placeholder="<?php echo esc_attr( $runtime_key_configured ? $runtime_key_hint : 'Paste key from Google Maps SERP → Settings → TideOrbit' ); ?>"></label>
 				</p>
@@ -221,16 +215,17 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 				<?php if ( $runtime_key_configured ) : ?><span class="scc-note"><?php echo esc_html( sprintf( __( 'Pairing key saved: %s', 'seo-command-center' ), $runtime_key_hint ) ); ?></span><?php endif; ?>
 			</p>
 		</form>
-		<form method="post" style="margin-top:8px">
+		<form method="post" id="scc-growth-runtime-test-form" style="margin-top:8px">
 			<?php wp_nonce_field( 'scc_growth_lab', 'scc_growth_nonce' ); ?>
 			<input type="hidden" name="scc_growth_action" value="runtime_test">
 			<button class="button"><?php esc_html_e( 'Test Browser Bridge', 'seo-command-center' ); ?></button>
+			<span class="scc-inline-status" id="scc-growth-runtime-status"></span>
 			<?php if ( $runtime_jobs ) : ?>
 				<span class="scc-note"><?php echo esc_html( sprintf( _n( '%d browser scan active', '%d browser scans active', count( $runtime_jobs ), 'seo-command-center' ), count( $runtime_jobs ) ) ); ?></span>
 			<?php endif; ?>
 		</form>
 		<?php if ( 'runtime_test' === $action && is_array( $result ) && ! empty( $result['ok'] ) ) : ?>
-			<p class="scc-ok"><?php esc_html_e( 'Connected. The tunneled Playwright scanner is online and accepting jobs.', 'seo-command-center' ); ?></p>
+			<p class="scc-ok"><?php esc_html_e( 'Connected. The Rank Tracker is reachable through TideBridge Mac and accepting jobs.', 'seo-command-center' ); ?></p>
 		<?php elseif ( 'runtime_settings' === $action && is_array( $result ) && ! empty( $result['saved'] ) ) : ?>
 			<p class="scc-ok"><?php echo esc_html( $result['message'] ); ?></p>
 		<?php elseif ( ! empty( $runtime_status['message'] ) ) : ?>
@@ -241,7 +236,7 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 	<div class="scc-card">
 		<h2><?php esc_html_e( 'Local Map Grid', 'seo-command-center' ); ?></h2>
 		<p class="scc-note"><?php esc_html_e( 'See how your business ranks across the area around you. Enter a keyword and a city/address — TideOrbit handles the map coordinates automatically.', 'seo-command-center' ); ?></p>
-		<form method="post">
+		<form method="post" id="scc-growth-grid-form">
 			<?php wp_nonce_field( 'scc_growth_lab', 'scc_growth_nonce' ); ?>
 			<input type="hidden" name="scc_growth_action" value="local_grid">
 			<div class="scc-columns">
@@ -275,6 +270,7 @@ $page_options = function ( $published_only = false ) use ( $pages ) {
 				</div>
 			</details>
 			<button class="button button-primary"><?php esc_html_e( 'Check my map rankings', 'seo-command-center' ); ?></button>
+			<p class="scc-inline-status" id="scc-growth-grid-status"></p>
 		</form>
 		<?php
 		$queued_grid = 'local_grid' === $action && is_array( $result ) && ! empty( $result['queued'] );
