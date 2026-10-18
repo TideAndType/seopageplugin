@@ -22,9 +22,23 @@ class SCC_Local_Bridge {
     const MAX_JOBS = 30;
 
     public static function register() {
+        // Keep bootstrap hook-only: REST and WP options APIs are not guaranteed
+        // to exist during the lazy-boot contract test or early WP plugin load.
+        add_action( 'init', array( __CLASS__, 'cleanup_legacy_urls' ), 30 );
         add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
         add_filter( 'rest_pre_dispatch', array( __CLASS__, 'intercept_generate' ), 30, 3 );
         add_action( 'admin_menu', array( __CLASS__, 'admin_menu' ), 99 );
+    }
+
+    /** Remove obsolete public AI and scanner addresses after WordPress loads. */
+    public static function cleanup_legacy_urls() {
+        if ( ! get_option( self::TOKEN_KEY, '' ) ) { return; }
+        $settings = get_option( 'scc_settings', array() );
+        if ( is_array( $settings ) &&
+            ( isset( $settings['lmstudio_base_url'] ) || isset( $settings['browser_runtime_url'] ) ) ) {
+            unset( $settings['lmstudio_base_url'], $settings['browser_runtime_url'] );
+            update_option( 'scc_settings', $settings, false );
+        }
     }
 
     public static function admin_menu() {
@@ -94,6 +108,10 @@ class SCC_Local_Bridge {
     public static function routes() {
         register_rest_route( self::NS, '/mac/pair', array(
             'methods' => 'POST', 'callback' => array( __CLASS__, 'pair' ), 'permission_callback' => '__return_true',
+        ) );
+        register_rest_route( self::NS, '/mac/async-status', array(
+            'methods' => 'POST', 'callback' => array( 'SCC_Local_Bridge_Async', 'status' ),
+            'permission_callback' => array( 'SCC_Security', 'rest_permission' ),
         ) );
         foreach ( array( 'next', 'complete', 'finalize', 'status' ) as $name ) {
             register_rest_route( self::NS, '/mac/' . $name, array(
@@ -212,6 +230,25 @@ class SCC_Local_Bridge {
 
     public static function next( WP_REST_Request $request ) {
         update_option( 'scc_mac_last_seen', time(), false );
+        // TideBridge discovers models on the same Mac, never via a public
+        // WordPress-to-LM-Studio URL. Cache the list for the Settings dropdown.
+        $models = $request->get_param( 'models' );
+        if ( is_array( $models ) && count( $models ) <= 100 ) {
+            $models = array_values( array_filter( array_unique( array_map( 'sanitize_text_field', $models ) ) ) );
+            $saved = get_option( 'scc_mac_models_cache', array() );
+            if ( ! is_array( $saved ) || $models !== (array) ( $saved['models'] ?? array() ) ||
+                time() - (int) ( $saved['updated'] ?? 0 ) > 45 ) {
+                update_option( 'scc_mac_models_cache', array( 'models' => $models, 'updated' => time() ), false );
+            }
+        }
+        $browser_job = SCC_Local_Bridge_Browser::next();
+        if ( $browser_job ) {
+            return self::response( array( 'job' => $browser_job ) );
+        }
+        $generic = SCC_Local_Bridge_Async::next();
+        if ( $generic ) {
+            return self::response( array( 'job' => $generic ) );
+        }
         foreach ( self::job_ids() as $id ) {
             $job = self::job( $id );
             if ( ! $job ) { continue; }
@@ -247,7 +284,14 @@ class SCC_Local_Bridge {
     }
 
     public static function complete( WP_REST_Request $request ) {
-        $id = absint( $request->get_param( 'id' ) );
+        $raw_id = (string) $request->get_param( 'id' );
+        if ( 0 === strpos( $raw_id, 'br_' ) ) {
+            return SCC_Local_Bridge_Browser::complete_job( $request );
+        }
+        if ( 0 === strpos( $raw_id, 'ai_' ) ) {
+            return SCC_Local_Bridge_Async::complete_job( $request );
+        }
+        $id = absint( $raw_id );
         $lease = (string) $request->get_param( 'lease' );
         $job = self::job( $id );
         if ( ! $job || ! $lease || ! hash_equals( (string) ( $job['lease'] ?? '' ), $lease ) ) {

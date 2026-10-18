@@ -98,6 +98,16 @@ class SCC_REST {
 
 		register_rest_route(
 			self::NS,
+			'/local-grid/start',
+			array(
+				'methods'             => WP_REST_Server::CREATABLE,
+				'callback'            => array( $this, 'local_grid_start' ),
+				'permission_callback' => $perm,
+			)
+		);
+
+		register_rest_route(
+			self::NS,
 			'/browser-runtime/test',
 			array(
 				'methods'             => WP_REST_Server::CREATABLE,
@@ -1321,6 +1331,33 @@ class SCC_REST {
 	}
 
 	/**
+	 * Start a local Maps grid through TideBridge's short, resumable REST jobs.
+	 * Uses exactly the same argument sanitization as the legacy Growth Lab form.
+	 * The shared admin client retries this request after each local scanner
+	 * response until the grid is submitted (or DataForSEO handles a fallback).
+	 */
+	public function local_grid_start( WP_REST_Request $request ) {
+		if ( ! class_exists( 'SCC_Local_Grid' ) ) {
+			return $this->fail( 'scc_grid_unavailable', __( 'Local Maps Grid is unavailable.', 'seo-command-center' ), 500 );
+		}
+		$p = $request->get_json_params();
+		$p = is_array( $p ) ? $p : $request->get_params();
+		$r = SCC_Local_Grid::scan(
+			array(
+				'keyword'       => sanitize_text_field( (string) ( $p['keyword'] ?? '' ) ),
+				'business_name' => sanitize_text_field( (string) ( $p['business_name'] ?? '' ) ),
+				'location'      => sanitize_text_field( (string) ( $p['location'] ?? '' ) ),
+				'coverage'      => sanitize_key( (string) ( $p['coverage'] ?? 'city' ) ),
+				'domain'        => sanitize_text_field( (string) ( $p['domain'] ?? '' ) ),
+				'place_id'      => sanitize_text_field( (string) ( $p['place_id'] ?? '' ) ),
+			),
+			true
+		);
+		if ( is_wp_error( $r ) ) { return $r; }
+		return $this->ok( $r );
+	}
+
+	/**
 	 * POST /browser-runtime/test.
 	 *
 	 * @return WP_REST_Response|WP_Error
@@ -1331,6 +1368,9 @@ class SCC_REST {
 		}
 		$result = SCC_Browser_Runtime::health();
 		if ( is_wp_error( $result ) ) {
+			// Preserve the job id and 503 status so the TideBridge admin client
+			// can resume the scanner health test after the Mac replies.
+			if ( 'scc_browser_pending' === $result->get_error_code() ) { return $result; }
 			return $this->fail( $result->get_error_code(), $result->get_error_message(), 502 );
 		}
 		return $this->ok( $result );
@@ -1344,6 +1384,18 @@ class SCC_REST {
 	 */
 	public function test_ai( WP_REST_Request $request ) {
 		$provider_id = $request->get_param( 'provider' );
+		if ( 'lmstudio' === $provider_id && class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured() ) {
+			$cache = get_option( 'scc_mac_models_cache', array() );
+			$active = time() - (int) ( is_array( $cache ) ? ( $cache['updated'] ?? 0 ) : 0 ) < 90;
+			if ( ! $active ) {
+				return $this->fail( 'scc_mac_offline', __( 'TideBridge Mac is not reporting its local model. Open TideBridge and select Test LM Studio.', 'seo-command-center' ), 503 );
+			}
+			return $this->ok( array(
+				'reply' => 'TideBridge is connected to your Mac. Models are discovered locally.',
+				'model' => implode( ', ', (array) ( $cache['models'] ?? array() ) ),
+				'latency_ms' => 0,
+			) );
+		}
 		$provider    = $this->ai()->get_provider( $provider_id );
 
 		if ( ! $provider ) {
@@ -1403,6 +1455,19 @@ class SCC_REST {
 		$params = is_array( $params ) ? $params : array();
 		$base   = isset( $params['base_url'] ) ? esc_url_raw( trim( (string) $params['base_url'] ) ) : '';
 
+		// When paired, models are discovered locally by the native Mac agent.
+		// Never contact an old public LM Studio endpoint from WordPress.
+		if ( class_exists( 'SCC_Local_Bridge_Async' ) && SCC_Local_Bridge_Async::configured() ) {
+			$cache = get_option( 'scc_mac_models_cache', array() );
+			$models = is_array( $cache ) ? (array) ( $cache['models'] ?? array() ) : array();
+			$recent = is_array( $cache ) && time() - (int) ( $cache['updated'] ?? 0 ) < 90;
+			return $this->ok( array(
+					'ok' => (bool) $recent,
+					'models' => $recent ? $models : array(),
+					'base' => 'TideBridge Mac',
+					'error' => $recent ? '' : __( 'Open TideBridge on your Mac and select Test LM Studio to refresh the available models.', 'seo-command-center' ),
+			) );
+		}
 		$provider = $this->ai()->get_provider( 'lmstudio' );
 		if ( ! $provider ) {
 			return $this->fail( 'no_provider', __( 'LM Studio provider unavailable.', 'seo-command-center' ), 500 );

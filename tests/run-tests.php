@@ -2985,6 +2985,29 @@ assert_true( false !== strpos( $publishing_src, 'SCC_Preflight::evaluate' ), 'Ti
 $admin_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/class-scc-admin.php' );
 assert_true( false !== strpos( $admin_src, "'growth'") && false !== strpos( $admin_src, 'render_growth_lab' ), 'Growth Lab is wired into Opportunities' );
 
+echo "\n== TideBridge unified AI and scanner contract ==\n";
+require_once __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge-async.php';
+require_once __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge-browser.php';
+$async_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge-async.php' );
+$browser_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge-browser.php' );
+$manager_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php' );
+$bridge_rest = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge.php' );
+$bridge_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/tidebridge-client.js' );
+$mac_source_path = __DIR__ . '/../mac/TideBridgeApp.swift';
+$bridge_mac = is_file( $mac_source_path ) ? (string) file_get_contents( $mac_source_path ) : null;
+$settings_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/settings.php' );
+$connections_view = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/connections.php' );
+assert_true( false !== strpos( $manager_source, 'SCC_Local_Bridge_Async::complete(' ), 'Every routed local AI operation enters the TideBridge async queue' );
+assert_true( false !== strpos( $bridge_js, "error.code !== 'scc_mac_pending'" ), 'WordPress admin retries local AI requests after Mac results' );
+assert_true( false !== strpos( $bridge_js, "error.code !== 'scc_browser_pending'" ), 'WordPress admin retries Rank Tracker requests after Mac results' );
+assert_true( false !== strpos( $bridge_rest, '/mac/async-status' ), 'Authenticated generic job-status endpoint exists' );
+assert_true( null === $bridge_mac || ( false !== strpos( $bridge_mac, 'handleAsyncAI(' ) && false !== strpos( $bridge_mac, 'handleBrowser(' ) ), 'Native Mac app runs AI and scanner jobs when desktop source is included' );
+assert_true( false !== strpos( $browser_source, 'SCC_Local_Bridge_Async::configured()' ) && ( null === $bridge_mac || false !== strpos( $bridge_mac, '127.0.0.1:4317' ) ), 'scanner never needs public inbound access' );
+assert_true( false === strpos( $settings_view, 'name="lmstudio_base_url"' ), 'General settings no longer asks for a public LM Studio endpoint' );
+assert_true( false === strpos( $connections_view, 'scc-browser-runtime-url' ) && false === strpos( $connections_view, 'scc-lmstudio-base' ), 'Connection tabs have no Cloudflare address fields' );
+assert_true( false === strpos( $connections_view, 'trycloudflare' ), 'Settings never recommends Cloudflare Quick Tunnels' );
+assert_true( false !== strpos( $async_source, 'hash_hmac' ), 'AI bridge queue uses per-user signed idempotency keys' );
+
 echo "\n== TideOrbit 1.84 Browser Runtime ==\n";
 $browser_job = array(
 	'scan_id' => 'scan-abc',
@@ -3029,7 +3052,7 @@ $browser_scan = array(
 );
 $normalized_browser = SCC_Browser_Runtime::normalize_grid_result( $browser_scan, $browser_job );
 assert_eq( 'browser', $normalized_browser['engine'], 'browser bridge results identify their execution engine' );
-assert_eq( 'TideOrbit Browser via Cloudflare Tunnel', $normalized_browser['provider'], 'browser bridge result records the tunnel provider' );
+assert_eq( 'TideOrbit Browser via TideBridge Mac', $normalized_browser['provider'], 'browser bridge result records first-party TideBridge provider' );
 assert_eq( 9, $normalized_browser['total_points'], 'browser result preserves the expected 3x3 geometry even when some point rows are absent' );
 assert_eq( 1, $normalized_browser['found_points'], 'browser result counts only measured target ranks' );
 assert_eq( 2, $normalized_browser['points'][0]['rank'], 'browser point rank maps back to the correct grid coordinate' );
@@ -3045,7 +3068,9 @@ assert_eq( null, $empty_browser['visibility_pct'], 'no measured grid points do n
 
 $runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/intelligence/class-scc-browser-runtime.php' );
 assert_true( false !== strpos( $runtime_src, "'auto' === self::mode()") && false !== strpos( $runtime_src, 'scan_dataforseo' ), 'Automatic Browser Runtime contains a DataForSEO failure fallback' );
-assert_true( false !== strpos( $runtime_src, 'X-TideOrbit-Key' ), 'browser bridge requests carry the pairing key header' );
+$mac_app_source = is_file( $mac_source_path ) ? (string) file_get_contents( $mac_source_path ) : null;
+assert_true( null === $mac_app_source || ( false !== strpos( $mac_app_source, 'X-TideOrbit-Key' ) && false !== strpos( $mac_app_source, '127.0.0.1:4317' ) ), 'paired Mac calls scanner loopback with scanner pairing header when desktop source is included' );
+assert_true( false === strpos( $runtime_src, 'wp_safe_remote_request(' ), 'WordPress never sends scanner requests to public tunnel URLs' );
 $main_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/seo-command-center.php' );
 assert_true( false !== strpos( $main_src, 'SCC_Browser_Runtime::CRON_HOOK' ), 'async browser polling is registered with WordPress cron' );
 $grid_view_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/growth-lab.php' );
@@ -3056,7 +3081,7 @@ $connections_src = (string) file_get_contents( __DIR__ . '/../seo-command-center
 assert_true( false !== strpos( $connections_src, 'Google Maps Rank Tracker / Browser Runtime' ), 'Rank Tracker pairing is discoverable under Connections' );
 assert_true( false !== strpos( $connections_src, '127.0.0.1:4317' ), 'Connections screen documents the secure local bridge port' );
 $admin_js_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin-settings.js' );
-assert_true( false !== strpos( $admin_js_src, 'browser_runtime_mode' ) && false !== strpos( $admin_js_src, 'browser_runtime_url' ), 'Connections form saves Browser Runtime settings' );
+assert_true( false !== strpos( $admin_js_src, 'browser_runtime_mode' ) && false === strpos( $admin_js_src, 'browser_runtime_url' ), 'Connections form saves mode but never accepts an external scanner URL' );
 assert_true( false !== strpos( $admin_js_src, "/browser-runtime/test" ), 'Connections screen can test the Rank Tracker bridge' );
 assert_true( false !== strpos( $admin_js_src, 'bindSettingsTabs()' ), 'settings tabs initialized' );
 $layout_js_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin-layout.js' );
@@ -3083,6 +3108,22 @@ assert_eq(
 	'business schema address becomes the default human-friendly Local Grid location'
 );
 $grid_view_simple = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/growth-lab.php' );
+
+assert_true( false === strpos( $grid_view_simple, 'trycloudflare.com' ) &&
+    false === strpos( $grid_view_simple, 'Cloudflare Tunnel URL' ), 'Growth Lab has no Cloudflare URL field or instructions' );
+assert_true( false !== strpos( $grid_view_simple, 'scc-growth-grid-form' ) &&
+    false !== strpos( $grid_view_simple, 'scc-growth-runtime-test-form' ),
+    'Growth Lab scanner forms have async TideBridge hooks' );
+$admin_growth_js = (string) file_get_contents( __DIR__ . '/../seo-command-center/assets/js/admin.js' );
+assert_true( false !== strpos( $admin_growth_js, '/local-grid/start' ), 'Growth Lab invokes async REST endpoint instead of blocking full page POST' );
+$rest_growth_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/rest/class-scc-rest.php' );
+assert_true( false !== strpos( $rest_growth_src, "'/local-grid/start'" ) &&
+    false !== strpos( $rest_growth_src, 'public function local_grid_start(' ), 'Local grid REST route and handler are registered' );
+$grid_runtime_src = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/local/class-scc-local-grid.php' );
+assert_true( false !== strpos( $grid_runtime_src, "'scc_browser_pending' === \$browser->get_error_code()" ) &&
+    false !== strpos( $grid_runtime_src, "'scc_browser_pending' === \$resolved->get_error_code()" ),
+    'In-flight local scanner jobs never trigger premature DataForSEO fallback' );
+
 assert_true( false !== strpos( $grid_view_simple, 'Where should we scan?' ), 'Local Grid asks for a human-friendly scan area' );
 assert_true( false !== strpos( $grid_view_simple, 'Check my map rankings' ), 'Local Grid has a simple action label' );
 assert_true( false === strpos( $grid_view_simple, "name=\"lat\"" ) && false === strpos( $grid_view_simple, "name=\"lng\"" ), 'Local Grid no longer exposes latitude/longitude inputs' );

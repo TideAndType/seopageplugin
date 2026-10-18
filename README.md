@@ -1,5 +1,14 @@
 # TideOrbit
 
+## TideBridge 1.1.0 (TideOrbit 1.99.9) — no public AI or Rank Tracker tunnel
+
+TideOrbit now uses the paired **TideBridge Mac** application for local LM Studio inference across WordPress admin AI tasks, plus the separately keyed Google Maps Rank Tracker scanner on the **same Mac**. WordPress queues a request; the Mac polls outbound over HTTPS, performs inference or scanner work on `127.0.0.1`, and returns the result. No public local service URL is configured in WordPress.
+
+The old `lmstudio_base_url` and `browser_runtime_url` fields have been retired from the UI and settings API and are automatically cleared from an already-paired site's saved settings. The **Rank Tracker pairing key** and hosted Claude/OpenAI/Gemini configurations remain unchanged. Existing references in older release history below describe superseded implementations.
+
+Set up **TideOrbit → Settings → Connect my Mac**, then run **TideBridge 1.1.0**. See [Mac instructions](mac/README.md). Test staged WordPress operations and the local Rank Tracker if you use it; noninteractive WordPress cron AI jobs still need a separate resume-capable worker and do not fall back to public URLs.
+
+
 An AI-powered SEO operating system for WordPress + Elementor. It analyzes a
 WordPress site, helps you decide what it should rank for, plans the pages and
 articles it needs, and (in later phases) generates them using your Elementor

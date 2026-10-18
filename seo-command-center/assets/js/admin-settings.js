@@ -174,9 +174,9 @@
 
 		btn.addEventListener( 'click', function () {
 			var baseEl = document.getElementById( 'scc-lmstudio-base' );
-			var base = baseEl ? baseEl.value : '';
+			var base = ''; // The paired Mac reports models through TideBridge.
 			btn.disabled = true;
-			setStatus( status, 'Contacting LM Studio…' );
+			setStatus( status, 'Checking TideBridge Mac…' );
 			request( '/lmstudio/models', { method: 'POST', data: { base_url: base } } )
 				.then( function ( res ) {
 					btn.disabled = false;
@@ -288,10 +288,6 @@
 			if ( gscSite ) {
 				settings.gsc_site_url = gscSite.value;
 			}
-			var lmBase = document.getElementById( 'scc-lmstudio-base' );
-			if ( lmBase ) {
-				settings.lmstudio_base_url = lmBase.value;
-			}
 			var lmModel = document.getElementById( 'scc-lmstudio-model' );
 			if ( lmModel ) {
 				settings.lmstudio_model = lmModel.value;
@@ -299,10 +295,6 @@
 			var browserMode = document.getElementById( 'scc-browser-runtime-mode' );
 			if ( browserMode ) {
 				settings.browser_runtime_mode = browserMode.value;
-			}
-			var browserUrl = document.getElementById( 'scc-browser-runtime-url' );
-			if ( browserUrl ) {
-				settings.browser_runtime_url = browserUrl.value;
 			}
 			payload.settings = settings;
 			setStatus( status, '…' );

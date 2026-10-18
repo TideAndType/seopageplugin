@@ -176,6 +176,7 @@ final class BridgeAgent: ObservableObject {
     @Published var testingLM = false
     @Published var testingWP = false
     @Published var lmHealthy = false
+    @Published var lmModels: [String] = []
     @Published var lmStatus = "Not tested. Select Test LM Studio."
     @Published var wpStatus = "Not tested. Select Test WordPress Connection."
 
@@ -188,7 +189,7 @@ final class BridgeAgent: ObservableObject {
         return URLSession(configuration: configuration, delegate: redirects, delegateQueue: nil)
     }()
 
-    func resumeIfPaired() { if connected { start() } }
+    func resumeIfPaired() { if connected { testLMStudio(); start() } }
     func disconnect() {
         polling?.cancel()
         polling = nil
@@ -273,7 +274,7 @@ final class BridgeAgent: ObservableObject {
             status = "Connected. Checking for new WordPress jobs…"
             while !Task.isCancelled {
                 do {
-                    let data = try await post(root: root, path: "next", values: [:], secret: token)
+                    let data = try await post(root: root, path: "next", values: ["models": lmModels], secret: token)
                     if let job = data["job"] as? [String: Any] {
                         await handle(job, root: root, token: token)
                     } else {
@@ -288,7 +289,107 @@ final class BridgeAgent: ObservableObject {
         }
     }
 
+    private func handleBrowser(_ job: [String: Any], root: URL, token: String) async {
+        guard let id = job["id"] as? String, id.hasPrefix("br_"),
+              let lease = job["lease"] as? String,
+              let request = job["request"] as? [String: Any] else {
+            status = "Invalid local Rank Tracker request from WordPress."
+            return
+        }
+        status = "TideBridge is contacting the local Google Maps Rank Tracker…"
+        var reply: [String: Any] = ["id": id, "lease": lease]
+        do {
+            reply["content"] = try await fetchLocalScanner(request)
+            _ = try await post(root: root, path: "complete", values: reply, secret: token)
+            status = "Local Rank Tracker response delivered."
+        } catch {
+            status = "Local Rank Tracker: " + error.localizedDescription
+            lastJob = status
+            reply["error"] = status
+            _ = try? await post(root: root, path: "complete", values: reply, secret: token)
+        }
+    }
+
+    private func fetchLocalScanner(_ request: [String: Any]) async throws -> String {
+        guard let path = request["path"] as? String,
+              path.hasPrefix("/api/tideorbit/"),
+              !path.contains(".."),
+              let components = URLComponents(string: "http://127.0.0.1:4317" + path),
+              components.host == "127.0.0.1",
+              let url = components.url,
+              let method = request["method"] as? String,
+              method == "GET" || method == "POST",
+              let key = request["key"] as? String,
+              !key.isEmpty else {
+            throw BridgeProblem.message("Invalid local scanner job, path or pairing key.")
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = method
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(key, forHTTPHeaderField: "X-TideOrbit-Key")
+        if method == "POST" {
+            req.httpBody = try JSONSerialization.data(withJSONObject: request["body"] ?? [:])
+        }
+        let conf = URLSessionConfiguration.ephemeral
+        conf.timeoutIntervalForRequest = 25
+        conf.timeoutIntervalForResource = 40
+        let client = URLSession(configuration: conf, delegate: redirects, delegateQueue: nil)
+        defer { client.invalidateAndCancel() }
+        let body: Data
+        let response: URLResponse
+        do {
+            (body, response) = try await client.data(for: req)
+        } catch {
+            throw BridgeProblem.message(describeConnectionError(error, service: "Rank Tracker on your Mac (127.0.0.1:4317)", address: url.absoluteString))
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw BridgeProblem.message("Rank Tracker did not return an HTTP response on localhost:4317.")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw BridgeProblem.message("Rank Tracker on localhost:4317 returned HTTP \(http.statusCode). Check the desktop scanner and pairing key.")
+        }
+        guard let value = try? JSONSerialization.jsonObject(with: body), JSONSerialization.isValidJSONObject(value),
+              let result = String(data: body, encoding: .utf8) else {
+            throw BridgeProblem.message("Rank Tracker returned invalid JSON.")
+        }
+        return result
+    }
+
+    private func handleAsyncAI(_ job: [String: Any], root: URL, token: String) async {
+        guard let id = job["id"] as? String, id.hasPrefix("ai_"),
+              let lease = job["lease"] as? String,
+              let request = job["request"] as? [String: Any] else {
+            status = "WordPress returned an invalid TideBridge AI job."
+            return
+        }
+        status = "LM Studio is processing TideOrbit's " + (request["model"] as? String ?? "local") + " request…"
+        var reply: [String: Any] = ["id": id, "lease": lease]
+        do {
+            let result = try await generate(request)
+            reply["content"] = result
+            _ = try await post(root: root, path: "complete", values: reply, secret: token)
+            status = "TideOrbit AI result delivered. Waiting for another request…"
+        } catch {
+            let detail = "Local AI job: " + error.localizedDescription
+            status = detail
+            lastJob = detail
+            reply["error"] = detail
+            // WordPress stores the error for the browser to show; do not
+            // silently leave an AI job spinning forever on local model failure.
+            _ = try? await post(root: root, path: "complete", values: reply, secret: token)
+        }
+    }
+
     private func handle(_ job: [String: Any], root: URL, token: String) async {
+        if job["kind"] as? String == "browser" {
+            await handleBrowser(job, root: root, token: token)
+            return
+        }
+        if job["kind"] as? String == "ai" {
+            await handleAsyncAI(job, root: root, token: token)
+            return
+        }
         guard let id = job["id"] as? Int,
               let lease = job["lease"] as? String else {
             status = "WordPress returned an invalid job."
@@ -375,6 +476,7 @@ final class BridgeAgent: ObservableObject {
             do {
                 let models = try await fetchLMModels()
                 lmHealthy = true
+                lmModels = models
                 if models.isEmpty {
                     lmStatus = "Server reachable, but no models were listed. Load a model in LM Studio."
                 } else {
@@ -383,6 +485,7 @@ final class BridgeAgent: ObservableObject {
             } catch {
                 lmStatus = error.localizedDescription
                 lmHealthy = false
+                lmModels = []
             }
         }
     }
@@ -487,7 +590,8 @@ final class BridgeAgent: ObservableObject {
         }
         var messages: [[String: Any]] = []
         if let system = job["system"] as? String, !system.isEmpty {
-            messages.append(["role": "system", "content": system])
+            let format = (job["json"] as? Bool == true) ? "\n\nRespond ONLY with valid JSON." : ""
+            messages.append(["role": "system", "content": system + format])
         }
         if let history = job["messages"] as? [[String: Any]] {
             for msg in history {
@@ -542,7 +646,7 @@ final class BridgeAgent: ObservableObject {
               let choices = decoded["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String,
-              content.count > 100 else {
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw BridgeProblem.message("LM Studio returned no usable article. Check the model and LM Studio server.")
         }
         return content

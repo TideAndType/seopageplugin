@@ -7,8 +7,8 @@ The TideOrbit admin menu now has **Settings** as the single visible configuratio
 | Settings tab | Purpose |
 | --- | --- |
 | **General** | Default content/AI providers, task routing, site-wide optimization, publishing and spending settings |
-| **SEO Connections** | Google Search Console OAuth/property, DataForSEO credentials, Google PageSpeed key, Google Maps/GBP rank-tracker browser runtime, Google Business Profile OAuth/location, Bing Webmaster Tools |
-| **AI Connections** | Anthropic/OpenAI/Gemini generation keys, LM Studio tunnel URL/model/key and model test controls, Perplexity Agent citation API key, independently scoped Gemini grounding citation API key, brand identity/aliases, comparison domains |
+| **SEO Connections** | Google Search Console OAuth/property, DataForSEO credentials, Google PageSpeed key, Google Maps/GBP rank-tracker scanner through TideBridge Mac, Google Business Profile OAuth/location, Bing Webmaster Tools |
+| **AI Connections** | Anthropic/OpenAI/Gemini generation keys, TideBridge Mac pairing/model detection, Perplexity Agent citation API key, independently scoped Gemini grounding citation API key, brand identity/aliases, comparison domains |
 | **Analytics & CRM** | Google Analytics 4 reporting OAuth/property, Microsoft Clarity Data Export, GoHighLevel opportunities attribution |
 
 **SEO Campaign** now focuses on campaign planning, paid AI citation *measurements*, report-month SERP checks, evidence, deliverables, and reviews rather than inviting users to enter credentials there.
@@ -37,3 +37,7 @@ On staging, visit each tab, save an AI key and an SEO key independently, check t
 4. WordPress plugins on a real site can coexist with the Settings tabs; the code does not require any JavaScript framework or external stylesheet.
 
 The code tests cannot verify your live WordPress page and OAuth/provider credentials. Perform a staging check before upgrading a client's production WordPress site.
+
+## Superseding update: TideOrbit 1.99.9
+
+Public LM Studio and Rank Tracker tunnel URLs are no longer configured in WordPress. Pair the TideBridge Mac app under Settings → Connect my Mac; models come from the Mac heartbeat. The local scanner uses the paired Mac and keeps its own scanner pairing key. Previous references to remote local-AI URLs are historical only.

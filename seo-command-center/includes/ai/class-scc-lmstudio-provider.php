@@ -5,7 +5,7 @@
  * LM Studio exposes an OpenAI-compatible API (default
  * http://localhost:1234/v1). Runs on the user's own machine, so there is no
  * per-token cost and the API key is optional. The base URL is configurable so
- * WordPress can reach LM Studio on localhost, a LAN IP, or a tunnel.
+ * WordPress can reach co-hosted LM Studio on loopback; hosted WordPress uses TideBridge Mac.
  *
  * @see https://lmstudio.ai/docs/app/api/endpoints/openai
  * @package SEO_Command_Center
@@ -43,9 +43,15 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * @return string
 	 */
 	protected function base_url() {
-		$base = (string) SCC_Settings::get( 'lmstudio_base_url', self::DEFAULT_BASE );
-		$base = trim( $base );
-		return '' !== $base ? untrailingslashit( $base ) : self::DEFAULT_BASE;
+		// WordPress never contacts remote/local-model tunnel URLs. When LM Studio
+		// runs on another machine, the paired TideBridge Mac app is required.
+		// Retain loopback compatibility for a genuine co-hosted WordPress install.
+		$base = trim( (string) SCC_Settings::get( 'lmstudio_base_url', self::DEFAULT_BASE ) );
+		$host = wp_parse_url( $base, PHP_URL_HOST );
+		if ( ! in_array( strtolower( (string) $host ), array( 'localhost', '127.0.0.1', '::1' ), true ) ) {
+			return self::DEFAULT_BASE;
+		}
+		return untrailingslashit( $base );
 	}
 
 	/**
@@ -113,7 +119,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 				'base'   => $base,
 				'error'  => sprintf(
 					/* translators: %s: error */
-					__( 'Could not reach LM Studio at %1$s (%2$s). Make sure the server is running and the URL is reachable from your WordPress host (a hosted site cannot reach localhost — use a tunnel).', 'seo-command-center' ),
+					__( 'Could not reach LM Studio at %1$s (%2$s). Make sure the server is running and the URL is reachable from your WordPress host (a hosted site should use TideBridge Mac instead).', 'seo-command-center' ),
 					$base,
 					$response->get_error_message()
 				),
@@ -221,18 +227,18 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			return $response;
 		}
 
-		// Resilient send. A tunnel in front of LM Studio (e.g. Pangolin) can blip
+		// Resilient send. A connection in front of LM Studio (e.g. reverse proxy) can blip
 		// for ~1s and re-establish on its own, cutting a request off mid-response
 		// (cURL 56 "unexpected eof"). The request itself is fine, so on a transport
-		// failure we wait for the tunnel to heal and resend the whole request a few
+		// failure we wait for the connection to heal and resend the whole request a few
 		// times — a brief blip then only kills generation if it recurs on every
 		// attempt. Retries stay internal, so generation is still one synchronous
 		// call from the caller's side.
-		// A failed attempt from a tunnel blip returns quickly (at the drop), and the
-		// tunnel reconnects within ~1s, so the next attempt starts with a fresh,
+		// A failed attempt from a connection blip returns quickly (at the drop), and the
+		// connection reconnects within ~1s, so the next attempt starts with a fresh,
 		// usually-clean window. Five tries with a growing wait rides out several
-		// blips; to fail, the tunnel has to drop during every attempt in a row.
-		// Filterable if a very unstable tunnel needs even more.
+		// blips; to fail, the connection has to drop during every attempt in a row.
+		// Filterable if a very unstable connection needs even more.
 		$attempts = (int) apply_filters( 'scc_lmstudio_max_attempts', 5 );
 		$attempts = max( 1, min( 10, $attempts ) );
 		$http     = null;
@@ -248,16 +254,16 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 					break;
 				}
 				if ( $i < $attempts ) {
-					sleep( min( 12, 1 + $i * 2 ) ); // 3s, 5s, 7s, 9s … let the tunnel reconnect.
+					sleep( min( 12, 1 + $i * 2 ) ); // 3s, 5s, 7s, 9s … let the connection reconnect.
 				}
 				continue;
 			}
 
-			// A tunnel/proxy often answers a mid-flight drop with a transient gateway
+			// A connection/proxy often answers a mid-flight drop with a transient gateway
 			// error (502/503/504) rather than a clean disconnect — also worth resending.
 			$try_code = (int) wp_remote_retrieve_response_code( $http );
 			if ( in_array( $try_code, array( 502, 503, 504 ), true ) && $i < $attempts ) {
-				SCC_Logger::error( 'lmstudio', sprintf( 'Gateway HTTP %d (attempt %d/%d) — tunnel likely dropped; retrying', $try_code, $i, $attempts ) );
+				SCC_Logger::error( 'lmstudio', sprintf( 'Gateway HTTP %d (attempt %d/%d) — connection likely dropped; retrying', $try_code, $i, $attempts ) );
 				sleep( min( 12, 1 + $i * 2 ) );
 				continue;
 			}
@@ -282,7 +288,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 				'scc_transport',
 				sprintf(
 					/* translators: %1$d: attempt count, %2$s: error message */
-					__( 'Could not reach LM Studio after %1$d attempts (%2$s). If LM Studio is behind a tunnel (Pangolin/Cloudflare), the tunnel is dropping the connection mid-response — stabilise it (wired connection, persistent keepalive, or a relayed instead of hole-punched tunnel). Otherwise make sure the local server is running and reachable from your WordPress host.', 'seo-command-center' ),
+					__( 'Could not reach LM Studio after %1$d attempts (%2$s). If LM Studio is behind a connection (reverse proxy/external proxy), the connection is dropping the connection mid-response — stabilise it (wired connection, persistent keepalive, or a relayed instead of hole-punched connection). Otherwise make sure the local server is running and reachable from your WordPress host.', 'seo-command-center' ),
 					$attempts,
 					$http->get_error_message()
 				)
@@ -319,7 +325,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 			if ( ! $streamed['complete'] || '' === trim( $streamed['content'] ) ) {
 				$response->error = new WP_Error(
 					'scc_stream_incomplete',
-					__( 'LM Studio streaming did not return a complete answer. If Cloudflare is still timing out, the model may be taking too long to produce its first token (disable thinking or use a faster model). No partial WordPress draft was saved.', 'seo-command-center' ),
+					__( 'LM Studio streaming did not return a complete answer. If external proxy is still timing out, the model may be taking too long to produce its first token (disable thinking or use a faster model). No partial WordPress draft was saved.', 'seo-command-center' ),
 					array( 'status' => 502 )
 				);
 				return $response;
@@ -345,7 +351,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * Permanent: cURL 6 (unknown host), 7 (refused / no route), 28 (the model
 	 * ran past the timeout — resending would only repeat the wait), and TLS
 	 * failures (35, 51, 58, 60). Anything else — cURL 18/52/55/56, "unexpected
-	 * eof", "connection reset", "empty reply" — is treated as a tunnel blip.
+	 * eof", "connection reset", "empty reply" — is treated as a connection blip.
 	 *
 	 * @param string $message Transport error message.
 	 * @return bool
@@ -413,7 +419,7 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 
 		// WP HTTP can stream an SSE response to a temporary file using its own
 		// validated transport. This avoids buffering every token at LM Studio
-		// before the Cloudflare proxy receives a single response byte, while
+		// before the external proxy proxy receives a single response byte, while
 		// preserving the existing synchronous WordPress create-draft contract.
 		$tmp = tempnam( get_temp_dir(), 'tideorbit-sse-' );
 		if ( ! $tmp ) {
@@ -511,19 +517,10 @@ class SCC_LMStudio_Provider implements SCC_AI_Provider_Interface {
 	 * @return string
 	 */
 	protected function extract_error( $data, $raw, $code ) {
-		// Cloudflare tunnel timeouts (520-524, most often 524) mean the model took
-		// longer than the tunnel allows for one request — trycloudflare.com "Quick
-		// Tunnels" cut off any request after ~100 seconds. This is by far the most
-		// common LM Studio failure for long generations, so give a specific, useful
-		// message instead of dumping Cloudflare's HTML error page.
-		$is_cf_tunnel = ( '' !== (string) $raw && false !== stripos( (string) $raw, 'cloudflare' ) )
-			|| ( '' !== (string) $raw && false !== stripos( (string) $raw, 'trycloudflare' ) );
-		if ( in_array( (int) $code, array( 520, 522, 523, 524 ), true ) && $is_cf_tunnel ) {
-			return sprintf(
-				/* translators: %d: HTTP status code */
-				__( 'HTTP %d — the request timed out in your Cloudflare tunnel (Cloudflare normally enforces a roughly 125-second proxy read timeout when no response data is received). Your model did not finish generating in time. Fixes: use a smaller/faster model, lower the target word count, or connect LM Studio directly (or via a tunnel without the 100s limit) instead of a free Cloudflare Quick Tunnel.', 'seo-command-center' ),
-				(int) $code
-			);
+		// TideBridge Mac is the supported connection for remote WordPress sites.
+		// Older endpoints receive gateway diagnostics instead of suggesting a public URL.
+		if ( in_array( (int) $code, array( 520, 522, 523, 524 ), true ) ) {
+			return sprintf( __( 'HTTP %d — the upstream gateway did not finish the request. Pair TideBridge Mac under TideOrbit Settings to run the local model without a public connection.', 'seo-command-center' ), (int) $code );
 		}
 
 		if ( is_array( $data ) ) {

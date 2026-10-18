@@ -36,6 +36,8 @@ jobs:
         run: |
           node --check seo-command-center/assets/js/admin.js
           node --check seo-command-center/assets/js/editor.js
+          node --check seo-command-center/assets/js/tidebridge-client.js
+          node tests/run-tidebridge-client.js
 
       - name: Unit tests
         run: php tests/run-tests.php

@@ -21,7 +21,7 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 
 	<form id="scc-settings-form" class="scc-card">
 		<h2><?php esc_html_e( 'AI', 'seo-command-center' ); ?></h2>
-		<div class="notice notice-info inline"><p><strong>Run LM Studio on your Mac with no tunnel.</strong> <a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-mac' ) ); ?>">Connect my Mac</a> TideBridge uses this WordPress site as its secure job inbox, so there is no Cloudflare proxy, VPS, port forwarding or other tunnel software. It currently handles Create Content → Planned Content → Generate draft.</p></div>
+		<div class="notice notice-info inline"><p><strong>Use TideBridge to run LM Studio directly on your Mac.</strong> <a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-mac' ) ); ?>">Connect my Mac</a> TideBridge handles locally selected AI operations and the local Rank Tracker via your paired Mac. No public tunnel URL is needed.</p></div>
 		<table class="form-table" role="presentation">
 			<tr>
 				<th scope="row"><label for="scc-default-provider"><?php esc_html_e( 'Primary provider', 'seo-command-center' ); ?></label></th>
@@ -79,27 +79,13 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 				</td>
 			</tr>
 			<tr>
-				<th scope="row"><label for="scc-lmstudio-base"><?php esc_html_e( 'LM Studio server URL', 'seo-command-center' ); ?></label></th>
-				<td>
-					<input type="url" class="regular-text" id="scc-lmstudio-base" name="lmstudio_base_url" value="<?php echo esc_attr( $s['lmstudio_base_url'] ); ?>" placeholder="http://localhost:1234/v1">
-					<p class="description"><?php esc_html_e( 'The OpenAI-compatible endpoint LM Studio exposes (Developer → Start Server). If WordPress runs on a different machine than LM Studio, use your computer’s LAN IP or a tunnel instead of localhost.', 'seo-command-center' ); ?></p>
-				</td>
-			</tr>
-			<tr>
 				<th scope="row"><label for="scc-lmstudio-model"><?php esc_html_e( 'LM Studio model', 'seo-command-center' ); ?></label></th>
 				<td>
 					<input type="text" class="regular-text" id="scc-lmstudio-model" name="lmstudio_model" value="<?php echo esc_attr( $s['lmstudio_model'] ); ?>" placeholder="local-model" list="scc-lmstudio-model-list">
 					<datalist id="scc-lmstudio-model-list"></datalist>
 					<button type="button" class="button" id="scc-lmstudio-detect"><?php esc_html_e( 'Detect models', 'seo-command-center' ); ?></button>
 					<span class="scc-inline-status" id="scc-lmstudio-detect-status"></span>
-					<p class="description"><?php esc_html_e( 'Click “Detect models” to pull the loaded model IDs from your LM Studio server (this also confirms the URL is reachable). “local-model” uses whatever model is currently loaded.', 'seo-command-center' ); ?></p>
-				</td>
-			</tr>
-			<tr>
-				<th scope="row"><label for="scc-lmstudio-timeout"><?php esc_html_e( 'LM Studio timeout (seconds)', 'seo-command-center' ); ?></label></th>
-				<td>
-					<input type="number" class="small-text" id="scc-lmstudio-timeout" name="lmstudio_timeout" min="60" max="1800" step="30" value="<?php echo esc_attr( isset( $s['lmstudio_timeout'] ) && (int) $s['lmstudio_timeout'] > 0 ? (int) $s['lmstudio_timeout'] : 600 ); ?>">
-					<p class="description"><?php esc_html_e( 'How long to wait for the local model to finish one generation. Large models (for example a 27B) writing a long article can take several minutes — raise this if you see a timeout (cURL error 28). Max 1800 (30 min). Generation keeps running on the server even if your browser disconnects; the draft appears when it finishes.', 'seo-command-center' ); ?></p>
+					<p class="description"><?php esc_html_e( 'Click “Detect models” to see models reported by your paired TideBridge Mac. Start LM Studio on your Mac first; WordPress never contacts your local server directly.', 'seo-command-center' ); ?></p>
 				</td>
 			</tr>
 			<tr>
