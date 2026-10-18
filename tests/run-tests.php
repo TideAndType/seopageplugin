@@ -674,6 +674,27 @@ class SCC_KS_Test extends SCC_Keyword_Strategy {
 }
 
 $ks = new SCC_KS_Test( new SCC_Test_Manager( array() ) );
+echo "\n== Site-aware topical-map dedupe and WordPress content types ==\n";
+SCC_KS_Test::$pages = array(
+    array( 'title' => 'Managed IT Services', 'path' => '/services/managed-it/', 'post_type' => 'page', 'post_status' => 'publish', 'post_id' => 31 ),
+    array( 'title' => 'How to Choose Managed IT Support', 'path' => '/blog/choose-it-support/', 'post_type' => 'post', 'post_status' => 'draft', 'post_id' => 32 ),
+);
+$actual_map = $ks->reconcile_public( array(
+    'clusters' => array(
+        array( 'service' => 'Managed IT Services', 'primary_keyword' => 'managed it services', 'recommended_url' => '/managed-it-services/', 'status' => 'new', 'page_type' => 'service', 'intent' => 'commercial', 'subtopics' => array() ),
+        array( 'service' => 'How to Choose Managed IT Support', 'primary_keyword' => 'how to choose managed it support', 'recommended_url' => '/how-to-choose-managed-it-support/', 'status' => 'new', 'page_type' => 'service', 'intent' => 'informational', 'subtopics' => array() ),
+    ),
+) );
+assert_eq( 0, $actual_map['new_count'], 'Already published or drafted topics are not returned as new gaps after regeneration' );
+assert_eq( 2, $actual_map['existing_count'], 'Published page and draft blog both counted as covered' );
+$mapped_by_title = array();
+foreach ( $actual_map['clusters'] as $actual_node ) { $mapped_by_title[ $actual_node['service'] ] = $actual_node; }
+assert_eq( '/services/managed-it/', $mapped_by_title['Managed IT Services']['recommended_url'], 'Reuses existing service page URL when AI invents another slug' );
+assert_eq( 'post', $mapped_by_title['How to Choose Managed IT Support']['wp_post_type'], 'Keeps actual WordPress post type, not a URL-depth guess' );
+assert_eq( 'article', $mapped_by_title['How to Choose Managed IT Support']['page_type'], 'A real WordPress blog draft is classified as article, not service' );
+assert_eq( 'draft', $mapped_by_title['How to Choose Managed IT Support']['wp_post_status'], 'Draft status is preserved for coverage' );
+SCC_KS_Test::$pages = array();
+
 
 echo "\n== Intent-aware architecture consolidation ==\n";
 SCC_Analyzer::$latest = array(
@@ -779,6 +800,12 @@ assert_true( is_array( $match ), 'semantic page matcher catches same topic on a 
 assert_eq( '/managed-it-services/24-7-monitoring-alerting/', $match['path'], 'semantic matcher returns the existing page path' );
 
 SCC_Analyzer::$latest = null;
+
+$planned_tree = $arch->build( array( 'clusters' => array(
+    array( 'service' => 'Cloud Migration FAQ', 'primary_keyword' => 'cloud migration faq', 'intent' => 'informational', 'recommended_url' => '/cloud-migration-faq/', 'page_type' => 'article', 'status' => 'planned', 'subtopics' => array() ),
+) ) );
+assert_eq( false, $planned_tree['pillars'][0]['page_candidate'], 'Already planned topical-map idea cannot be seeded into Content Plan again' );
+assert_eq( 'planned', $planned_tree['pillars'][0]['status'], 'Site Structure keeps the planned state distinct from published pages' );
 
 echo "\n== SEO Architecture Brain ==\n";
 $brain_engine = new SCC_Architecture_Brain();
@@ -1582,6 +1609,16 @@ assert_true( $all_unavail, 'every provider reports not-connected (no fabricated 
 echo "\n== Automation modes ==\n";
 assert_eq( 'assisted', SCC_Action_Queue::automation_mode(), 'default automation mode is assisted' );
 assert_true( in_array( 'autopilot', SCC_Action_Queue::MODES, true ), 'autopilot is a valid mode' );
+
+echo "\n== Search Console and duplicate-suggestion UX contracts ==\n";
+$keyword_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/strategy/class-scc-keyword-strategy.php' );
+$ideas_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/generation/class-scc-content-ideas.php' );
+$topical_view_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/admin/views/partials/topical-map.php' );
+assert_true( false !== strpos( $keyword_source, "array( 'query', 'page' )" ), 'GSC query-to-ranking URL lookup is available to site strategy' );
+assert_true( false !== strpos( $keyword_source, "'gsc_status'" ), 'GSC status is recorded in generated maps' );
+assert_true( false !== strpos( $ideas_source, 'SCC_Keyword_Strategy::match_existing_topic' ), 'Ideas have a semantic duplicate check, not only exact slugs' );
+assert_true( false !== strpos( $topical_view_source, 'Review existing coverage' ), 'GSC quick wins no longer offer blind Create page CTA' );
+assert_true( false === strpos( $topical_view_source, 'scc-gsc-plan-btn' ), 'GSC query table has no direct duplicate creating button' );
 
 echo "\n== Content Ideas (sanitize) ==\n";
 $ideas = SCC_Content_Ideas::sanitize_ideas( array( 'ideas' => array(
