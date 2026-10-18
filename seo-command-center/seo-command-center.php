@@ -3,7 +3,7 @@
  * Plugin Name:       TideOrbit
  * Plugin URI:        https://tideandtype.com/seo-command-center
  * Description:       TideOrbit — AI-powered SEO + AEO for WordPress and Elementor: analyze your site, architect future growth, improve AI citation readiness, and generate on-brand content with draft-first live-page safety.
- * Version:           1.99.7
+ * Version:           1.99.8
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Tide & Type
@@ -36,7 +36,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 // Constants (guarded so a same-file re-include never re-defines them).
 // ---------------------------------------------------------------------------
 if ( ! defined( 'SCC_VERSION' ) ) {
-	define( 'SCC_VERSION', '1.99.7' );
+	define( 'SCC_VERSION', '1.99.8' );
 	define( 'SCC_DB_VERSION', '1.21.0' );
 	define( 'SCC_PLUGIN_FILE', __FILE__ );
 	define( 'SCC_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -71,6 +71,8 @@ require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-openai-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-gemini-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-lmstudio-provider.php';
 require_once SCC_PLUGIN_DIR . 'includes/ai/class-scc-ai-manager.php';
+require_once SCC_PLUGIN_DIR . 'includes/bridge/class-scc-local-bridge.php';
+SCC_Local_Bridge::register();
 
 require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-seo-meta.php';
 require_once SCC_PLUGIN_DIR . 'includes/analysis/class-scc-crawler.php';

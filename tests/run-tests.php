@@ -621,6 +621,32 @@ if ( ! class_exists( 'SCC_AI_Usage' ) ) {
 }
 require_once __DIR__ . '/../seo-command-center/includes/ai/class-scc-ai-manager.php';
 
+echo "\n== TideBridge Mac: no-tunnel authenticated job contract ==\n";
+// The bridge is intentionally only loaded after the AI manager interface.
+if ( ! class_exists( 'SCC_Local_Bridge' ) ) {
+    require_once __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge.php';
+}
+$first_party_bridge = new SCC_Local_Bridge_Capture_Manager();
+$queue_answer = $first_party_bridge->complete( array(
+    'system' => "Only the WordPress site's selected prompt",
+    'messages' => array( array( 'role' => 'user', 'content' => 'Write an article' ) ),
+), 'content-generation' );
+assert_eq( 'scc_mac_queued', $queue_answer->error->get_error_code(), 'Capturing a TideOrbit generation never calls a remote AI server' );
+assert_eq( 'Only the WordPress site\'s selected prompt', $first_party_bridge->request['system'], 'Mac queue retains original content-generation system prompt' );
+$finished_bridge = new SCC_Local_Bridge_Results_Manager( '{"title":"Test","content_html":"<p>Test body</p>"}' );
+$finished_answer = $finished_bridge->complete( array(), 'content-generation' );
+assert_eq( 'lmstudio', $finished_answer->provider, 'Bridge result retains local provider attribution' );
+assert_true( false === $finished_answer->is_error(), 'Completed Mac result bypasses network when creating WordPress draft' );
+assert_eq( 'Test', $finished_answer->json()['title'], 'Completed Mac JSON can be processed by existing TideOrbit draft flow' );
+$extra_ai_step = $finished_bridge->complete( array(), 'other-operation' );
+assert_true( $extra_ai_step->is_error(), 'Bridge finalizer never calls external AI for optional follow-up steps' );
+$bridge_source = (string) file_get_contents( __DIR__ . '/../seo-command-center/includes/bridge/class-scc-local-bridge.php' );
+assert_true( false !== strpos( $bridge_source, '/mac/pair' ), 'Pairing endpoint exists' );
+assert_true( false !== strpos( $bridge_source, 'hash_equals' ), 'Mac secret and pairing checks are timing-safe' );
+assert_true( false !== strpos( $bridge_source, 'intercept_generate' ), 'Native generate route can enqueue Mac job without Cloudflare request' );
+
+
+
 /**
  * Fake provider for manager routing tests. `$ok` decides success vs error.
  */

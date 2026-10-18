@@ -21,6 +21,7 @@ $s = isset( $data['settings'] ) ? $data['settings'] : array();
 
 	<form id="scc-settings-form" class="scc-card">
 		<h2><?php esc_html_e( 'AI', 'seo-command-center' ); ?></h2>
+		<div class="notice notice-info inline"><p><strong>Run LM Studio on your Mac with no tunnel.</strong> <a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=seo-command-center-mac' ) ); ?>">Connect my Mac</a> TideBridge uses this WordPress site as its secure job inbox, so there is no Cloudflare proxy, VPS, port forwarding or other tunnel software. It currently handles Create Content → Planned Content → Generate draft.</p></div>
 		<table class="form-table" role="presentation">
 			<tr>
 				<th scope="row"><label for="scc-default-provider"><?php esc_html_e( 'Primary provider', 'seo-command-center' ); ?></label></th>
